@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Search, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-react';
 import Badge from '../common/Badge';
-import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
+import { Card, ErrorState, SectionHeader, Skeleton, StatTile } from '../../design-system';
 import { useDistrictIntelligence } from '../../hooks/useMasterPlan';
 
 const fmt = (value, fractionDigits = 0) => {
@@ -31,16 +31,16 @@ const SORT_OPTIONS = [
 function PanelSkeleton() {
   return (
     <Card elevated className="p-6">
-      <div className="space-y-3 animate-pulse motion-reduce:animate-none">
-        <div className="h-3 w-40 rounded bg-bg-secondary" />
-        <div className="h-5 w-2/3 rounded bg-bg-secondary" />
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-40 rounded" />
+        <Skeleton className="h-5 w-2/3 rounded" />
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3">
-          <div className="h-20 rounded bg-bg-secondary" />
-          <div className="h-20 rounded bg-bg-secondary" />
-          <div className="h-20 rounded bg-bg-secondary" />
-          <div className="h-20 rounded bg-bg-secondary" />
+          <Skeleton className="h-20 rounded" />
+          <Skeleton className="h-20 rounded" />
+          <Skeleton className="h-20 rounded" />
+          <Skeleton className="h-20 rounded" />
         </div>
-        <div className="h-96 rounded bg-bg-secondary" />
+        <Skeleton className="h-96 rounded" />
       </div>
       <span className="sr-only">Loading district intelligence</span>
     </Card>

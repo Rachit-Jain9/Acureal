@@ -3,7 +3,7 @@ import {
   Target, ArrowRight, AlertCircle, CheckCircle2, Sparkles,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { Card, SectionHeader } from '../../design-system';
+import { Card, SectionHeader, Skeleton } from '../../design-system';
 import EmptyState from '../common/EmptyState';
 import { usePortfolioReadiness } from '../../hooks/useDashboard';
 
@@ -164,15 +164,15 @@ export default function PortfolioReadinessWidget() {
       />
       <div className="px-4 sm:px-5 pb-4 space-y-4">
         {isLoading && (
-          <div className="space-y-3 animate-pulse motion-reduce:animate-none">
-            <div className="h-2 bg-bg-secondary rounded-full" />
+          <div className="space-y-3">
+            <Skeleton className="h-2 rounded-full" ariaLabel={null} role="presentation" />
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div className="h-14 bg-bg-secondary rounded" />
-              <div className="h-14 bg-bg-secondary rounded" />
-              <div className="h-14 bg-bg-secondary rounded" />
-              <div className="h-14 bg-bg-secondary rounded" />
+              <Skeleton className="h-14 rounded" ariaLabel={null} role="presentation" />
+              <Skeleton className="h-14 rounded" ariaLabel={null} role="presentation" />
+              <Skeleton className="h-14 rounded" ariaLabel={null} role="presentation" />
+              <Skeleton className="h-14 rounded" ariaLabel={null} role="presentation" />
             </div>
-            <div className="h-32 bg-bg-secondary rounded" />
+            <Skeleton className="h-32 rounded" ariaLabel={null} role="presentation" />
           </div>
         )}
         {isError && !isLoading && (

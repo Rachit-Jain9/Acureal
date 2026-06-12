@@ -17,6 +17,7 @@ import {
 import { clsx } from 'clsx';
 import Badge from '../common/Badge';
 import EmptyState from '../common/EmptyState';
+import { Skeleton } from '../../design-system';
 import {
   useMasterPlanDocuments,
   useUploadMasterPlanDocument,
@@ -77,14 +78,14 @@ function SourceDocumentsSkeleton() {
       <div className="rounded-lg border border-hairline bg-bg-elevated p-4">
         <div className="mb-4 flex items-start justify-between gap-3">
           <div className="space-y-2">
-            <div className="h-4 w-36 rounded bg-bg-secondary animate-pulse" />
-            <div className="h-3 w-80 max-w-full rounded bg-bg-secondary animate-pulse" />
+            <Skeleton className="h-4 w-36 rounded" />
+            <Skeleton className="h-3 w-80 max-w-full rounded" />
           </div>
-          <div className="h-6 w-20 rounded bg-bg-secondary animate-pulse" />
+          <Skeleton className="h-6 w-20 rounded" />
         </div>
         <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
           {[0, 1, 2, 3].map((item) => (
-            <div key={item} className="h-10 rounded-lg bg-bg-secondary animate-pulse" />
+            <Skeleton key={item} className="h-10 w-full rounded-lg" />
           ))}
         </div>
       </div>
@@ -92,7 +93,7 @@ function SourceDocumentsSkeleton() {
         {[0, 1, 2].map((row) => (
           <div key={row} className="grid grid-cols-1 gap-3 border-b border-hairline px-4 py-3 last:border-b-0 md:grid-cols-[minmax(260px,1.4fr),minmax(160px,0.9fr),minmax(180px,0.9fr),minmax(150px,0.7fr)]">
             {[0, 1, 2, 3].map((item) => (
-              <div key={item} className="h-12 rounded bg-bg-secondary animate-pulse" />
+              <Skeleton key={item} className="h-12 w-full rounded" />
             ))}
           </div>
         ))}

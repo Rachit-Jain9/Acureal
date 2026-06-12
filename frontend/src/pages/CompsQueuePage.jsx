@@ -5,7 +5,7 @@ import { Inbox, Mail, FileText, Globe, Upload, ArrowRight, Clock, AlertTriangle,
 import { clsx } from 'clsx';
 import PageHeader from '../components/common/PageHeader';
 import Badge from '../components/common/Badge';
-import { Card, SectionHeader, SkeletonList, ErrorState, confirm } from '../design-system';
+import { Card, SectionHeader, SkeletonList, Skeleton, ErrorState, confirm } from '../design-system';
 import {
   useCompsReviewQueueList,
   useProcessPendingBatch,
@@ -997,7 +997,7 @@ export default function CompsQueuePage() {
                   Assign to
                 </label>
                 {usersQuery.isLoading ? (
-                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+                  <Skeleton className="h-8 w-full rounded" />
                 ) : usersQuery.isError ? (
                   <p className="text-sm text-data-negative">Couldn't load users — try closing and re-opening this dialog.</p>
                 ) : (

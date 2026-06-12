@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { Layers, AlertTriangle, ArrowUpRight, MapPin, Trees, Compass, Landmark } from 'lucide-react';
-import { Card, ErrorState, SectionHeader } from '../../design-system';
+import { Card, ErrorState, SectionHeader, Skeleton } from '../../design-system';
 import { useLandUseIntelligence } from '../../hooks/useMasterPlan';
 import RmpStatusBanner from '../masterplan/RmpStatusBanner';
 
@@ -37,14 +37,14 @@ function CalloutTile({ icon: Icon, label, value, hint, tone = 'neutral' }) {
 function PanelSkeleton() {
   return (
     <Card elevated className="p-5">
-      <div className="space-y-3 animate-pulse motion-reduce:animate-none">
-        <div className="h-3 w-40 rounded bg-bg-secondary" />
-        <div className="h-5 w-2/3 rounded bg-bg-secondary" />
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-40 rounded" ariaLabel={null} role="presentation" />
+        <Skeleton className="h-5 w-2/3 rounded" ariaLabel={null} role="presentation" />
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 pt-3">
-          <div className="h-20 rounded bg-bg-secondary" />
-          <div className="h-20 rounded bg-bg-secondary" />
-          <div className="h-20 rounded bg-bg-secondary" />
-          <div className="h-20 rounded bg-bg-secondary" />
+          <Skeleton className="h-20 rounded" ariaLabel={null} role="presentation" />
+          <Skeleton className="h-20 rounded" ariaLabel={null} role="presentation" />
+          <Skeleton className="h-20 rounded" ariaLabel={null} role="presentation" />
+          <Skeleton className="h-20 rounded" ariaLabel={null} role="presentation" />
         </div>
       </div>
       <span className="sr-only">Loading planning context</span>

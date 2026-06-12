@@ -14,12 +14,23 @@ import clsx from 'clsx';
 // ── Skeleton ───────────────────────────────────────────────────────────────
 // Base block. Pass any height/width via className. Defaults to a single line
 // of body text height (1rem).
-export function Skeleton({ className, style, role = 'status', ariaLabel = 'Loading', ...rest }) {
+//
+// DECORATIVE BY DEFAULT (role="presentation" + aria-hidden). A skeleton bar is
+// a visual placeholder; the LOADING STATE is announced by the surrounding
+// region — wrap a cluster in a `<div role="status" aria-busy="true">` with an
+// sr-only "Loading X" label (the SkeletonKpi/SkeletonCard/SkeletonList wrappers
+// below already do this). That keeps a multi-bar loading cluster to a SINGLE
+// status landmark instead of one "Loading" announcement per bar (a11y noise),
+// per FRONTEND_GUIDELINES §4. For a STANDALONE skeleton that is itself the only
+// loading indicator, opt in with role="status" (+ optional ariaLabel).
+export function Skeleton({ className, style, role = 'presentation', ariaLabel, ...rest }) {
+  const status = role === 'status';
   return (
     <div
-      role={role}
-      aria-label={ariaLabel}
-      aria-busy="true"
+      role={status ? 'status' : 'presentation'}
+      aria-label={status ? (ariaLabel ?? 'Loading') : undefined}
+      aria-busy={status ? true : undefined}
+      aria-hidden={status ? undefined : true}
       className={clsx('redip-skeleton h-4 w-full', className)}
       style={style}
       {...rest}

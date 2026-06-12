@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { FileText, Loader2, RefreshCw, X } from 'lucide-react';
 import Badge from '../common/Badge';
-import { ErrorState } from '../../design-system';
+import { ErrorState, Skeleton } from '../../design-system';
 import { formatPercent, pageStatusTone } from '../../utils/masterPlanHelpers';
 import useFocusTrap from '../../hooks/useFocusTrap';
 import useScrollLock from '../../hooks/useScrollLock';
@@ -83,11 +83,11 @@ export default function SourcePagesModal({
           <div role="status" aria-busy="true" className="space-y-3">
             {[0, 1, 2].map((item) => (
               <div key={item} className="rounded-lg border border-hairline bg-bg-elevated p-3">
-                <div className="h-3 w-28 rounded bg-bg-secondary animate-pulse" />
+                <Skeleton className="h-3 w-28 rounded" />
                 <div className="mt-3 grid grid-cols-3 gap-2">
-                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
-                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
-                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+                  <Skeleton className="h-8 rounded" />
+                  <Skeleton className="h-8 rounded" />
+                  <Skeleton className="h-8 rounded" />
                 </div>
               </div>
             ))}

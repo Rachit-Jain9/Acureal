@@ -19,7 +19,9 @@ describe('PortfolioReadinessWidget', () => {
   it('renders the loading skeleton', () => {
     usePortfolioReadinessMock.mockReturnValue({ data: null, isLoading: true, isError: false });
     const { container } = render(wrap(<PortfolioReadinessWidget />));
-    expect(container.querySelector('.animate-pulse')).not.toBeNull();
+    // Loading state now uses the design-system Skeleton primitive (redip-skeleton
+    // shimmer) instead of a raw animate-pulse box (FRONTEND_GUIDELINES §4).
+    expect(container.querySelector('.redip-skeleton')).not.toBeNull();
   });
 
   it('renders error state', () => {

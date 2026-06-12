@@ -94,7 +94,7 @@ export function AreaBreakdown({ areas, assetClass }) {
         {rows.filter((r) => r.value && r.value !== '-').map((row) => (
           <div key={row.label} className="flex justify-between text-sm">
             <span className="text-content-muted">{row.label}</span>
-            <span className="font-medium text-content-primary">{row.value}</span>
+            <span className="font-medium text-content-primary tabular-nums">{row.value}</span>
           </div>
         ))}
       </div>
@@ -127,12 +127,12 @@ export function CostBreakdown({ costs, assetClass }) {
         {rows.map((row) => (
           <div key={row.label} className="flex justify-between text-sm">
             <span className="text-content-muted">{row.label}</span>
-            <span className="font-medium text-content-primary">{formatCrores(row.value)}</span>
+            <span className="font-medium text-content-primary tabular-nums">{formatCrores(row.value)}</span>
           </div>
         ))}
         <div className="border-t border-hairline pt-2 flex justify-between text-sm font-semibold">
           <span className="text-content-secondary">Total Cost</span>
-          <span className="text-content-primary">{formatCrores(costs.total)}</span>
+          <span className="text-content-primary tabular-nums">{formatCrores(costs.total)}</span>
         </div>
       </div>
     </Card>
@@ -182,7 +182,7 @@ export function RevenuePanel({ revenue, kpis, assetClass }) {
         {rows.filter((r) => r.value && r.value !== '-').map((row) => (
           <div key={row.label} className="flex justify-between text-sm">
             <span className="text-content-muted">{row.label}</span>
-            <span className="font-medium text-content-primary">{row.value}</span>
+            <span className="font-medium text-content-primary tabular-nums">{row.value}</span>
           </div>
         ))}
       </div>

@@ -185,19 +185,19 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
       <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className="bg-bg-secondary rounded-lg border border-hairline p-4">
           <div className="text-[11px] font-semibold uppercase text-content-muted tracking-wide">Terminal Value</div>
-          <div className="mt-1 text-2xl font-bold text-content-primary">{formatCrores(tv)}</div>
+          <div className="mt-1 text-2xl font-bold text-content-primary tabular-nums">{formatCrores(tv)}</div>
           <div className="mt-1 text-[11px] text-content-secondary">At end of hold (Y{Math.round(hold)})</div>
         </div>
 
         <div className="bg-bg-secondary rounded-lg border border-hairline p-4">
           <div className="text-[11px] font-semibold uppercase text-content-muted tracking-wide">PV of Terminal Value</div>
-          <div className="mt-1 text-2xl font-bold text-content-primary">{formatCrores(tvPv)}</div>
+          <div className="mt-1 text-2xl font-bold text-content-primary tabular-nums">{formatCrores(tvPv)}</div>
           <div className="mt-1 text-[11px] text-content-secondary">Discounted at {discountPct.toFixed(1)}% to t=0</div>
         </div>
 
         <div className="bg-bg-secondary rounded-lg border border-hairline p-4">
           <div className="text-[11px] font-semibold uppercase text-content-muted tracking-wide">% of NPV from TV</div>
-          <div className="mt-1 text-2xl font-bold text-content-primary">
+          <div className="mt-1 text-2xl font-bold text-content-primary tabular-nums">
             {kpis?.npv && tvPv ? `${((tvPv / (Number(kpis.npv) + tvPv)) * 100).toFixed(1)}%` : '-'}
           </div>
           <div className="mt-1 text-[11px] text-content-secondary">Dependency on exit assumption</div>
@@ -217,7 +217,7 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
             <div className="text-[11px] font-semibold uppercase tracking-wider text-content-secondary">Method Comparison</div>
             {capBenchmark > 0 && (
               <div className="text-[11px] text-content-secondary">
-                Cap-rate benchmark: <span className="font-semibold text-content-primary">{formatCrores(capBenchmark)}</span>
+                Cap-rate benchmark: <span className="font-semibold text-content-primary tabular-nums">{formatCrores(capBenchmark)}</span>
               </div>
             )}
           </div>

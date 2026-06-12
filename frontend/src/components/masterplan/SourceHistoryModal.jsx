@@ -1,7 +1,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { X } from 'lucide-react';
 import Badge from '../common/Badge';
-import { ErrorState } from '../../design-system';
+import { ErrorState, Skeleton } from '../../design-system';
 import {
   formatHistoryDate,
   formatHistoryField,
@@ -78,10 +78,10 @@ export default function SourceHistoryModal({
           <div role="status" aria-busy="true" className="space-y-3">
             {[0, 1, 2].map((item) => (
               <div key={item} className="rounded-lg border border-hairline bg-bg-elevated p-3">
-                <div className="h-3 w-36 rounded bg-bg-secondary animate-pulse" />
+                <Skeleton className="h-3 w-36 rounded" />
                 <div className="mt-3 grid grid-cols-2 gap-2">
-                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
-                  <div className="h-8 rounded bg-bg-secondary animate-pulse" />
+                  <Skeleton className="h-8 rounded" />
+                  <Skeleton className="h-8 rounded" />
                 </div>
               </div>
             ))}

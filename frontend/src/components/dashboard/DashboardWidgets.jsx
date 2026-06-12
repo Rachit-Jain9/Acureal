@@ -10,7 +10,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import Badge from '../common/Badge';
 import EmptyState from '../common/EmptyState';
-import { Card, SectionHeader, MetricTile, Button } from '../../design-system';
+import { Card, SectionHeader, MetricTile, Button, Skeleton } from '../../design-system';
 import { adminAPI } from '../../services/api';
 import {
   formatCrores, formatPct, formatRelativeTime, STAGE_CONFIG,
@@ -280,7 +280,7 @@ export function AiCostSummaryWidget() {
       {isLoading ? (
         // PR-NX60: a11y per FRONTEND_GUIDELINES §9 — loading indicators
         // get role="status" + aria-busy so screen readers announce them.
-        <div className="h-24 bg-bg-secondary rounded animate-pulse" role="status" aria-busy="true" aria-label="Loading AI cost summary" />
+        <Skeleton className="h-24 rounded" role="status" ariaLabel="Loading AI cost summary" />
       ) : !summary ? (
         <EmptyState
           size="sm"
@@ -365,10 +365,12 @@ export function AuditTrailTailWidget() {
         // (50-80ms across siblings) to feel alive — done via animation-delay.
         <div className="space-y-2" role="status" aria-busy="true" aria-label="Loading recent audit events">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div
+            <Skeleton
               key={i}
-              className="h-10 bg-bg-secondary rounded animate-pulse"
+              className="h-10 rounded"
               style={{ animationDelay: `${i * 60}ms` }}
+              ariaLabel={null}
+              role="presentation"
             />
           ))}
         </div>

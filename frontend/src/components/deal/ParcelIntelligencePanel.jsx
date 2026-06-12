@@ -15,7 +15,7 @@ import {
   Trash2,
   Upload,
 } from 'lucide-react';
-import { Card, CollapsibleCard, ErrorState, SectionHeader } from '../../design-system';
+import { Card, CollapsibleCard, ErrorState, SectionHeader, Skeleton } from '../../design-system';
 import Badge from '../common/Badge';
 import {
   useParcelIntelligence,
@@ -798,10 +798,10 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
   if (isLoading) {
     return (
       <div className="space-y-5">
-        <div className="h-28 rounded-editorial bg-bg-secondary animate-pulse" />
+        <Skeleton className="h-28 w-full rounded-editorial" />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {[1, 2, 3, 4].map((item) => (
-            <div key={item} className="h-32 rounded-editorial bg-bg-secondary animate-pulse" />
+            <Skeleton key={item} className="h-32 w-full rounded-editorial" />
           ))}
         </div>
       </div>

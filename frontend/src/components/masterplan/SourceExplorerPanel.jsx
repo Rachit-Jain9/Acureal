@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Search, FileText, AlertTriangle, ExternalLink, BookOpen, ChevronRight } from 'lucide-react';
 import Badge from '../common/Badge';
-import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
+import { Card, ErrorState, SectionHeader, Skeleton, StatTile } from '../../design-system';
 import { useSourceExplorer } from '../../hooks/useMasterPlan';
 
 const fmt = (value) => {
@@ -42,17 +42,17 @@ function shortValue(value) {
 function PanelSkeleton() {
   return (
     <Card elevated className="p-6">
-      <div className="space-y-3 animate-pulse motion-reduce:animate-none">
-        <div className="h-3 w-40 rounded bg-bg-secondary" />
-        <div className="h-5 w-2/3 rounded bg-bg-secondary" />
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-40 rounded" />
+        <Skeleton className="h-5 w-2/3 rounded" />
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-3">
-          <div className="h-20 rounded bg-bg-secondary" />
-          <div className="h-20 rounded bg-bg-secondary" />
-          <div className="h-20 rounded bg-bg-secondary" />
+          <Skeleton className="h-20 w-full rounded" />
+          <Skeleton className="h-20 w-full rounded" />
+          <Skeleton className="h-20 w-full rounded" />
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 pt-3">
-          <div className="h-96 rounded bg-bg-secondary lg:col-span-1" />
-          <div className="h-96 rounded bg-bg-secondary lg:col-span-2" />
+          <Skeleton className="h-96 w-full rounded lg:col-span-1" />
+          <Skeleton className="h-96 w-full rounded lg:col-span-2" />
         </div>
       </div>
       <span className="sr-only">Loading source explorer</span>

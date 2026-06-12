@@ -2,7 +2,7 @@ import ParcelIntelligencePanel from './ParcelIntelligencePanel';
 import MasterPlanZonePanel from './MasterPlanZonePanel';
 import DealPlanningContextCard from './DealPlanningContextCard';
 import DealStreetLookupCard from './DealStreetLookupCard';
-import { ErrorState } from '../../design-system';
+import { ErrorState, Skeleton } from '../../design-system';
 import { useProperty } from '../../hooks/useProperties';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 
@@ -56,8 +56,8 @@ export default function ZoningTab({ setTab }) {
   if (propertyStub?.id && propertyLoading && !hydratedProperty) {
     return (
       <div className="space-y-5" role="status" aria-busy="true" aria-label="Loading zoning context">
-        <div className="h-44 rounded-editorial border border-hairline bg-bg-secondary/30 animate-pulse motion-reduce:animate-none" />
-        <div className="h-32 rounded-editorial border border-hairline bg-bg-secondary/30 animate-pulse motion-reduce:animate-none" />
+        <Skeleton className="h-44 w-full rounded-editorial border border-hairline" />
+        <Skeleton className="h-32 w-full rounded-editorial border border-hairline" />
       </div>
     );
   }

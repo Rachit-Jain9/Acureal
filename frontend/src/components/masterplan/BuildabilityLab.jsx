@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Trophy, AlertTriangle, RotateCcw } from 'lucide-react';
 import Badge from '../common/Badge';
-import { Card, ErrorState, SectionHeader } from '../../design-system';
+import { Card, ErrorState, SectionHeader, Skeleton } from '../../design-system';
 import { useZones } from '../../hooks/useMasterPlan';
 import { calculateBuildEnvelope } from '../../utils/buildEnvelope';
 
@@ -243,13 +243,13 @@ export default function BuildabilityLab() {
   if (isLoading) {
     return (
       <Card elevated className="p-6">
-        <div className="space-y-3 animate-pulse motion-reduce:animate-none">
-          <div className="h-3 w-40 rounded bg-bg-secondary" />
-          <div className="h-5 w-2/3 rounded bg-bg-secondary" />
+        <div className="space-y-3">
+          <Skeleton className="h-3 w-40 rounded" />
+          <Skeleton className="h-5 w-2/3 rounded" />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 pt-3">
-            <div className="h-72 rounded bg-bg-secondary" />
-            <div className="h-72 rounded bg-bg-secondary" />
-            <div className="h-72 rounded bg-bg-secondary" />
+            <Skeleton className="h-72 rounded" />
+            <Skeleton className="h-72 rounded" />
+            <Skeleton className="h-72 rounded" />
           </div>
         </div>
         <span className="sr-only">Loading buildability lab</span>

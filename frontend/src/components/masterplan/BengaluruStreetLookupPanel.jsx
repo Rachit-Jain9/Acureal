@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Search, MapPin, FileText, AlertTriangle, BookOpen } from 'lucide-react';
 import Badge from '../common/Badge';
-import { Card, ErrorState, SectionHeader, StatTile } from '../../design-system';
+import { Card, ErrorState, SectionHeader, Skeleton, StatTile } from '../../design-system';
 import { useStreetLookup } from '../../hooks/useMasterPlan';
 
 // 200ms debounce keeps the panel responsive while reducing dead-on-arrival
@@ -24,11 +24,11 @@ const fmt = (value) => {
 function PanelSkeleton() {
   return (
     <Card elevated className="p-6">
-      <div className="space-y-3 animate-pulse motion-reduce:animate-none">
-        <div className="h-3 w-40 rounded bg-bg-secondary" />
-        <div className="h-5 w-2/3 rounded bg-bg-secondary" />
-        <div className="h-12 rounded bg-bg-secondary" />
-        <div className="h-72 rounded bg-bg-secondary" />
+      <div className="space-y-3">
+        <Skeleton className="h-3 w-40 rounded" />
+        <Skeleton className="h-5 w-2/3 rounded" />
+        <Skeleton className="h-12 rounded" />
+        <Skeleton className="h-72 rounded" />
       </div>
       <span className="sr-only">Loading Bengaluru street lookup</span>
     </Card>
