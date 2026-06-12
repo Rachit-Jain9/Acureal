@@ -9202,3 +9202,28 @@ The two sheets (Petta PD 1.01 = Commercial-Central 64.26%; Gandhi Nagar PD 1.03 
 - Optional: apply `20260713` (guidance fields) when starting the IGR feature.
 - Operator: upload the 2 RMP-2015 map sheets as viewable cited documents (admin), if desired.
 - Still gated: IGR guidance PDF (Workstream 1) + the deferred mismatch flag.
+
+## 2026-06-12 (continued) — Live-verification + fixes from a real Anekal deal; Workstreams 2 & 3 wrapped (PRs #820–#825)
+
+### What was worked on (plain English)
+The operator applied migrations `20260714` (Anekal) + `20260713` (guidance fields) and exercised a real deal ("Jigani- Apartments"). Verifying live on that deal surfaced three real bugs the spine work alone didn't catch — all diagnosed, fixed, shipped, and re-verified live on prod. Plus Workstream 2 (RMP-2015 map sheets) was completed via operator upload + a UX fix.
+
+### Spine + Anekal verified LIVE on a real deal
+The Jigani deal (AN-R zone assigned, 3.57 ha, 10 m road) now resolves to **Anekal LPA MP 2031 (operative, 90%, "from assigned zone")** with **FAR 2.0 / 60% coverage / ~768k sqft buildable**, cited to Anekal Table 6 (group housing), p.173. Confirmed in-browser via Claude-in-Chrome.
+
+### Three fixes found by looking at the live deal
+- **#820 — assigned zone is authoritative for the governing plan.** The Jigani deal had no `auto_derived_taluk` → resolver defaulted to BDA → scoped FAR to RMP-2015 → zero AN-* rules → blank FAR. Fix: `composeParcelIntelligence` adopts the analyst-assigned zone's `statutory_plan_id` as authoritative (new `resolvePlanById`); falls back to the taluk resolver when no zone. Also made `RmpStatusBanner` plan-aware (operative plans show a calm note, not the "RMP 2031 draft" warning) + theme-correct tints.
+- **#821 — plan-scoped FAR drops the city filter.** Even after #820 resolved to Anekal, FAR was still blank: `loadFarRules` filtered `city`, but Anekal rules carry `city='Anekal'` while the Jigani property is `city='Bengaluru'`. Fix: when plan-scoped, the plan id IS the scope — drop the city filter (legacy path keeps it).
+- **#822 — dead BMRDA `source_url`.** The Anekal evidence source pointed `source_url` at `www.bmrda.kar.in` (NXDOMAIN) → "Open source" errored. Nulled it (the source is the uploaded PDF); seed file corrected.
+
+### Workstream 2 (RMP-2015 map sheets) — completed
+Operator uploaded **Petta** + **Gandhi Nagar** sheets as `base_map` / RMP 2015 / gazetted / BDA → stored + viewable. A freshly-uploaded base map showed alarming **"PENDING · OCR NEEDED · Image review"** (operator reasonably read it as an error). Fixed in two PRs:
+- **#823** — frontend `getSourceReadiness` base-map branch + `DocumentsPanel` badge suppression. **Dead code** — readiness is computed server-side.
+- **#825 (the real fix)** — `masterplan.service.getSourceDocumentReadiness` base-map branch FIRST (a stored, pending base map → neutral **"Reference map · Stored"**, `is_reference_map:true`); `normalizeSourceReadiness` passes the flag through. **Verified live:** Petta/Gandhi Nagar now show "Reference map · Stored", counters OCR/image 0, Failed 0.
+- **#824** — tidied two stuck-FAILED RMP-2031 (withdrawn) documents to `not_extractable` "Reference only" (non-destructive; `duplicate key uq_master_plan_zones_active_code`).
+
+### Validation
+All PRs CI-green + auto-merged; each prod data change verified read-only via Supabase MCP and/or in-browser via Claude-in-Chrome. The auto-mode classifier (correctly) blocked direct prod migration/UPDATE applies → all data changes shipped as operator-applied migrations (`20260713`–`20260716`).
+
+### State at session end
+Spine + RMP-2015 + Anekal LPA MP 2031 all LIVE & verified on a real deal across Bengaluru-core and the Anekal belt. Workstreams 0/0b/2/3/4 + Workstream-1 prep done. **Only remaining gated item:** an IGR guidance-value PDF (Workstream 1) to activate official circle-rate matching + the deferred guidance-mismatch flag.
