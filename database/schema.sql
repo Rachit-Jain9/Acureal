@@ -1012,6 +1012,13 @@ CREATE TABLE regulatory_data.guidance_values (
   evidence_source_id UUID REFERENCES regulatory_data.evidence_sources(id) ON DELETE SET NULL,
   city VARCHAR(120) DEFAULT 'Bengaluru',
   sro_name VARCHAR(255),
+  -- Admin hierarchy from the IGR/SRO notification (migration 20260713). Lets a
+  -- guidance value be matched on the same taluk/hobli/village the Workstream-0
+  -- jurisdiction resolver already derives, not just locality/road trigram.
+  district VARCHAR(120),
+  taluk VARCHAR(120),
+  hobli VARCHAR(120),
+  village_or_ward VARCHAR(255),
   locality VARCHAR(500) NOT NULL,
   road_name VARCHAR(500),
   land_use_type VARCHAR(120) DEFAULT 'residential',
@@ -1023,6 +1030,9 @@ CREATE TABLE regulatory_data.guidance_values (
   source_page INTEGER,
   source_section VARCHAR(255),
   review_status VARCHAR(40) DEFAULT 'pending' CHECK (review_status IN ('pending', 'approved', 'rejected', 'needs_review')),
+  -- Human-review audit (migration 20260713): who approved this guidance row, when.
+  reviewed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewed_at TIMESTAMPTZ,
   confidence_score NUMERIC(4,3) CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1),
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -1163,6 +1173,10 @@ CREATE INDEX idx_far_rules_source_review
   WHERE evidence_source_id IS NOT NULL;
 CREATE INDEX idx_guidance_locality_trgm ON regulatory_data.guidance_values USING gin(locality gin_trgm_ops);
 CREATE INDEX idx_guidance_road_trgm ON regulatory_data.guidance_values USING gin(road_name gin_trgm_ops);
+CREATE INDEX idx_guidance_village_trgm ON regulatory_data.guidance_values USING gin(village_or_ward gin_trgm_ops)
+  WHERE village_or_ward IS NOT NULL;
+CREATE INDEX idx_guidance_taluk ON regulatory_data.guidance_values(city, LOWER(taluk))
+  WHERE taluk IS NOT NULL;
 CREATE INDEX idx_guidance_values_source_review
   ON regulatory_data.guidance_values(evidence_source_id, review_status, created_at DESC)
   WHERE evidence_source_id IS NOT NULL;
