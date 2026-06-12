@@ -4,6 +4,17 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-12 (Cinematic compliance pass — tabular numbers + Skeleton primitive adoption) (PR #811 — merged + deployed; master green)
+
+A frontend polish pass bringing two FRONTEND_GUIDELINES non-negotiables to compliance on the highest-visibility surfaces. A deep review first (re-using the prior 7-agent survey + verifying every candidate against the code) found that 3 of the 5 nominal "cinematic gaps" were ALREADY DONE (recharts already lazy-loaded off FinancialsPage; FinancialVisualizationLayer already animates via useChartAnim; CashFlowChart toggles already have four states) — so no wasted work.
+
+- **#811 — §7 tabular numbers + §4 skeletons.** (a) ResultPanels (Area/Cost/Revenue + Total) and FinancialVisualizationLayer (Terminal Value, PV, cap benchmark) now use tabular-nums so financial digits column-align. (b) 50 animate-pulse loading placeholders across 30 files → the design-system Skeleton primitive (layout-matched), converted by a 6-agent file-partitioned workflow; 8 non-loading animate-pulse uses correctly LEFT (streaming carets, in-button spinners, route-level Suspense fallback, live "Computing…" indicator). (c) a11y: the base `Skeleton` is now DECORATIVE by default (role="presentation" + aria-hidden) so a multi-bar cluster announces ONCE via its wrapping role="status"/aria-busy region, not once per bar; standalone skeletons opt into status via role="status". Verified: full frontend suite 143 files / 1191 tests pass; build clean.
+
+### Skeleton primitive contract (for future UI work)
+Base `<Skeleton>` is presentational/decorative. To announce a loading state to screen readers, wrap the cluster in `<div role="status" aria-busy="true" aria-label="Loading X">` (or use the SkeletonKpi/SkeletonCard/SkeletonList composites, which carry their own status wrapper). Only a STANDALONE skeleton that is the sole loading indicator should pass `role="status"`. Do NOT put role="status" on every inner bar — that creates redundant "Loading" announcements.
+
+---
+
 ## 2026-06-12 (BBMP UAV street-register top-up loaded to prod + atomic loader) (prod data load + loader PR; master green)
 
 Loaded the staged BBMP UAV street-register top-up to production — but only after a rigorous pre-load verification, because the load is destructive (it deletes the non-residential rows and re-inserts). Treated the staged data as guilty until proven a strict improvement.
