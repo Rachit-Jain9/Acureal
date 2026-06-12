@@ -18,6 +18,7 @@ const {
   resolveStatutoryPlan,
   logJurisdictionResolution,
 } = require('./regulatory/resolveStatutoryPlan');
+const { deriveConfidenceTier, deriveRoadWidthBasis } = require('../utils/confidenceLadder');
 const { EVENTS, publish } = require('../lib/eventBus');
 
 const VERIFICATION_LINKS = {
@@ -582,7 +583,7 @@ const buildVerdict = ({ status, confidence, redFlags, buckets, verificationLinks
   };
 };
 
-const buildConfidence = ({ zone, buildability, guidance, kgis }) => {
+const buildConfidence = ({ zone, buildability, guidance, kgis, jurisdiction = null }) => {
   const zoning = zone?.zone_code ? 0.7 : 0;
   const buildabilityScore =
     buildability?.status === 'reference_match' ? 0.78 : buildability?.rule ? 0.62 : 0;
@@ -597,6 +598,9 @@ const buildConfidence = ({ zone, buildability, guidance, kgis }) => {
     buildability: round(buildabilityScore, 2),
     guidance: round(guidanceScore, 2),
     kgis: round(kgisScore, 2),
+    // Workstream 0b — one labelled rung (Verified/High/Indicative/Low/Not-reliable)
+    // gated by review state so "Verified" is an earned, conflict-free state.
+    tier: deriveConfidenceTier({ overall, zone, buildability, jurisdiction }),
   };
 };
 
@@ -781,6 +785,14 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
   const osmCache = refresh && osmLive ? null : await getCachedOsmRoad(property);
   const osmRoad = formatOsmRoad(osmCache, osmLive);
 
+  // Workstream 0b — surface the BASIS of the road width that bands FAR. Operator-
+  // entered widths are not authority-verified; OSM is reference-only and never
+  // sets FAR. Attached here (after osmRoad) so the snapshot can flag inferred/
+  // unverified widths instead of presenting them as official.
+  if (buildability && typeof buildability === 'object') {
+    buildability.road_width_basis = deriveRoadWidthBasis({ property, osmRoad });
+  }
+
   // T8 — Cross-deal locality intelligence. Aggregate within-tenant prior
   // signal for the same locality (other deals, approved guidance, recurring
   // red flags). Best-effort: never blocks the snapshot if the lookup fails,
@@ -815,7 +827,7 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
     ...(osmRoad.citations || []),
   ];
   const redFlags = runParcelRedFlags({ property, zone, buildability, guidance, kgis, landeed, snapshot: { generated_at: previousMeta?.generated_at || null } });
-  const confidence = buildConfidence({ zone, buildability, guidance, kgis });
+  const confidence = buildConfidence({ zone, buildability, guidance, kgis, jurisdiction });
   const buckets = buildBuckets({ property, zone, buildability, guidance, kgis, landeed });
   const verdict = buildVerdict({
     status: redFlags.some((flag) => flag.severity === 'high') ? 'needs_verification' : 'reference_ready',
