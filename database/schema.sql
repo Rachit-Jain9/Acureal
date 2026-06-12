@@ -1057,6 +1057,100 @@ CREATE TABLE regulatory_data.parcel_intelligence_snapshots (
   generated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- ── Statutory-plan registry (Workstream 0 — migration 20260712) ─────────────
+-- Resolve WHICH planning authority + WHICH operative master plan govern a parcel
+-- so FAR rules can be scoped to the correct rulebook (e.g. an Anekal parcel must
+-- not pick up BDA RMP-2015 rules). taluk_aliases drives tabular-first resolution.
+CREATE TABLE regulatory_data.planning_authorities (
+  id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id           UUID REFERENCES organizations(id) ON DELETE CASCADE,  -- NULL = global reference
+  authority_code   TEXT NOT NULL,
+  authority_name   TEXT NOT NULL,
+  authority_kind   TEXT NOT NULL DEFAULT 'lpa'
+                     CHECK (authority_kind IN ('lpa','umbrella','corridor','industrial_board','corporation')),
+  parent_code      TEXT,
+  status           TEXT NOT NULL DEFAULT 'active'
+                     CHECK (status IN ('active','transitioning','superseded')),
+  status_note      TEXT,
+  taluk_aliases    TEXT[] NOT NULL DEFAULT '{}',
+  source_notification TEXT,
+  confidence_score NUMERIC(4,3) CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1),
+  review_status    TEXT NOT NULL DEFAULT 'pending'
+                     CHECK (review_status IN ('pending','approved','rejected','needs_review')),
+  effective_from   DATE,
+  effective_to     DATE,
+  last_verified_at TIMESTAMPTZ,
+  next_review_due  DATE,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX idx_planning_authorities_code
+  ON regulatory_data.planning_authorities
+     (COALESCE(org_id, '00000000-0000-0000-0000-000000000000'::uuid), authority_code);
+
+CREATE TABLE regulatory_data.statutory_plans (
+  id                 UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id             UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  authority_id       UUID NOT NULL REFERENCES regulatory_data.planning_authorities(id) ON DELETE CASCADE,
+  plan_code          TEXT NOT NULL,
+  plan_name          TEXT NOT NULL,
+  legal_status       TEXT NOT NULL DEFAULT 'operative'
+                       CHECK (legal_status IN ('operative','provisional','withdrawn','draft','superseded')),
+  version_label      TEXT,
+  horizon_year       INT,
+  supersedes_plan_id UUID REFERENCES regulatory_data.statutory_plans(id) ON DELETE SET NULL,
+  source_notification TEXT,
+  evidence_source_id UUID REFERENCES regulatory_data.evidence_sources(id) ON DELETE SET NULL,
+  effective_from     DATE,
+  effective_to       DATE,
+  review_status      TEXT NOT NULL DEFAULT 'pending'
+                       CHECK (review_status IN ('pending','approved','rejected','needs_review')),
+  confidence_score   NUMERIC(4,3) CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1),
+  last_verified_at   TIMESTAMPTZ,
+  next_review_due    DATE,
+  notes              TEXT,
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX idx_statutory_plans_code
+  ON regulatory_data.statutory_plans
+     (COALESCE(org_id, '00000000-0000-0000-0000-000000000000'::uuid), authority_id, plan_code);
+CREATE INDEX idx_statutory_plans_authority
+  ON regulatory_data.statutory_plans (authority_id, legal_status);
+
+CREATE TABLE regulatory_data.jurisdiction_resolution_log (
+  id                       UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  org_id                   UUID DEFAULT current_organization_id(),
+  property_id              UUID REFERENCES properties(id) ON DELETE CASCADE,
+  inputs                   JSONB NOT NULL,
+  resolved_authority_id    UUID REFERENCES regulatory_data.planning_authorities(id) ON DELETE SET NULL,
+  resolved_authority_code  TEXT,
+  resolved_plan_id         UUID REFERENCES regulatory_data.statutory_plans(id) ON DELETE SET NULL,
+  resolved_plan_code       TEXT,
+  method                   TEXT,
+  confidence               NUMERIC(4,3) CHECK (confidence IS NULL OR confidence BETWEEN 0 AND 1),
+  basis                    TEXT,
+  needs_authority_confirmation BOOLEAN NOT NULL DEFAULT false,
+  alternates               JSONB,
+  resolved_by              UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at               TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_jurisdiction_log_property
+  ON regulatory_data.jurisdiction_resolution_log (org_id, property_id, created_at DESC);
+
+-- far_rules / master_plan_zones link to their governing plan (nullable; resolver
+-- scopes global rules to the resolved plan, org manual rules survive when NULL).
+ALTER TABLE regulatory_data.far_rules
+  ADD COLUMN IF NOT EXISTS statutory_plan_id UUID
+    REFERENCES regulatory_data.statutory_plans(id) ON DELETE SET NULL;
+ALTER TABLE regulatory_data.master_plan_zones
+  ADD COLUMN IF NOT EXISTS statutory_plan_id UUID
+    REFERENCES regulatory_data.statutory_plans(id) ON DELETE SET NULL;
+CREATE INDEX idx_far_rules_statutory_plan
+  ON regulatory_data.far_rules (statutory_plan_id) WHERE statutory_plan_id IS NOT NULL;
+CREATE INDEX idx_master_plan_zones_statutory_plan
+  ON regulatory_data.master_plan_zones (statutory_plan_id) WHERE statutory_plan_id IS NOT NULL;
+
 CREATE INDEX idx_mpz_code_city ON regulatory_data.master_plan_zones(zone_code, city);
 CREATE INDEX idx_properties_zone ON properties(zone_id) WHERE zone_id IS NOT NULL;
 CREATE INDEX idx_properties_survey_city ON properties(organization_id, city, survey_number) WHERE survey_number IS NOT NULL;
@@ -1144,6 +1238,23 @@ CREATE POLICY kgis_cache_org_only ON regulatory_data.kgis_cache
   USING (org_id = current_organization_id())
   WITH CHECK (org_id = current_organization_id());
 CREATE POLICY parcel_snapshots_org_only ON regulatory_data.parcel_intelligence_snapshots
+  USING (org_id = current_organization_id())
+  WITH CHECK (org_id = current_organization_id());
+
+-- Statutory-plan registry RLS. Read: global reference rows + own org overrides.
+-- Write: own-org rows ONLY — tenants can never write a global (org_id NULL)
+-- reference row (global rows are migration-seeded; the owner role bypasses RLS).
+ALTER TABLE regulatory_data.planning_authorities        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE regulatory_data.statutory_plans             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE regulatory_data.jurisdiction_resolution_log ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY planning_authorities_rw ON regulatory_data.planning_authorities
+  USING (org_id IS NULL OR org_id = current_organization_id())
+  WITH CHECK (org_id = current_organization_id());
+CREATE POLICY statutory_plans_rw ON regulatory_data.statutory_plans
+  USING (org_id IS NULL OR org_id = current_organization_id())
+  WITH CHECK (org_id = current_organization_id());
+CREATE POLICY jurisdiction_resolution_log_org ON regulatory_data.jurisdiction_resolution_log
   USING (org_id = current_organization_id())
   WITH CHECK (org_id = current_organization_id());
 

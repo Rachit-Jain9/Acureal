@@ -19,6 +19,23 @@ jest.mock('../src/services/adapters/osmRoadWidth.adapter', () => ({
   fetchRoadWidth: jest.fn(),
 }));
 
+// Mock the statutory-plan resolver so its own DB reads don't perturb the
+// order-dependent `query` mock sequences below. `resolved:false` keeps the
+// pre-registry behaviour: no plan scoping on loadFarRules, no audit write.
+jest.mock('../src/services/regulatory/resolveStatutoryPlan', () => ({
+  resolveStatutoryPlan: jest.fn().mockResolvedValue({
+    resolved: false,
+    authority: null,
+    plan: null,
+    method: 'unresolved',
+    confidence: 0,
+    basis: 'mock',
+    needs_authority_confirmation: true,
+    alternates: [],
+  }),
+  logJurisdictionResolution: jest.fn().mockResolvedValue(null),
+}));
+
 const { query } = require('../src/config/database');
 const guidanceService = require('../src/services/guidance.service');
 const landeedAdapter = require('../src/services/adapters/landeed.adapter');
@@ -167,6 +184,36 @@ describe('parcelIntelligence.service', () => {
     expect(result.guidance_value.selected.value_inr_per_sqft).toBe(12000);
     expect(result.kgis.status).toBe('matched');
     expect(result.buckets.verified.some((item) => item.label === 'Reviewed FAR matrix rule')).toBe(true);
+  });
+
+  test('scopes FAR rules to the resolved statutory plan and surfaces the jurisdiction block', async () => {
+    const { resolveStatutoryPlan } = require('../src/services/regulatory/resolveStatutoryPlan');
+    resolveStatutoryPlan.mockResolvedValueOnce({
+      resolved: true,
+      authority: { id: 'auth-bda', code: 'BDA', name: 'Bangalore Development Authority', kind: 'lpa', status: 'active', status_note: 'note' },
+      plan: { id: 'plan-rmp2015', code: 'RMP_2015', name: 'Revised Master Plan 2015 — Volume III', legal_status: 'operative', version_label: 'base-2007', notes: null },
+      method: 'taluk_alias',
+      confidence: 0.85,
+      basis: 'K-GIS taluk = Bangalore South → Bangalore Development Authority',
+      needs_authority_confirmation: false,
+      alternates: [],
+    });
+    query
+      .mockResolvedValueOnce({ rows: [{ ...baseProperty, zone: residentialZone, auto_derived_taluk: 'Bangalore South' }] }) // property
+      .mockResolvedValueOnce({ rows: [farRule] })  // far rules (must carry the plan filter)
+      .mockResolvedValueOnce({ rows: [] })         // snapshot meta
+      .mockResolvedValueOnce({ rows: [] })         // kgis cache
+      .mockResolvedValueOnce({ rows: [] });        // osm cache
+
+    const result = await parcelIntelligenceService.getParcelIntelligence('prop-1', 'user-1');
+
+    // far_rules is the 2nd query call; the resolved plan id must be threaded as $4.
+    const farCall = query.mock.calls[1];
+    expect(farCall[0]).toContain('fr.statutory_plan_id = $4');
+    expect(farCall[1]).toContain('plan-rmp2015');
+    expect(result.statutory_plan.plan_code).toBe('RMP_2015');
+    expect(result.statutory_plan.authority_code).toBe('BDA');
+    expect(result.statutory_plan.method).toBe('taluk_alias');
   });
 
   test('refresh calls vendor and K-GIS adapters, caches context, and writes snapshot', async () => {
