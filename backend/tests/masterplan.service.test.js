@@ -323,6 +323,30 @@ describe('masterplan.service source intake and zone assignment', () => {
     expect(pending).toMatchObject({ key: 'ocr', label: 'OCR review', can_extract: false });
   });
 
+  test('presents a stored base map as a settled "Reference map", not OCR/pending', () => {
+    const refMap = service.getSourceDocumentReadiness({
+      source_role: 'base_map',
+      processing_mode: 'image_review',
+      ocr_required: true,
+      extraction_status: 'pending',
+    });
+    expect(refMap).toMatchObject({
+      key: 'manual',
+      label: 'Reference map',
+      tone: 'neutral',
+      can_extract: false,
+      is_reference_map: true,
+    });
+    // A base map that has actually been extracted keeps its normal readiness.
+    const extracted = service.getSourceDocumentReadiness({
+      source_role: 'base_map',
+      processing_mode: 'image_review',
+      ocr_required: true,
+      extraction_status: 'completed',
+    });
+    expect(extracted.is_reference_map).toBeUndefined();
+  });
+
   test('lists page-level source records for a reviewed document', async () => {
     query
       .mockResolvedValueOnce({

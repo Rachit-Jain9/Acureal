@@ -234,6 +234,26 @@ const getSourceMetadataGaps = (doc = {}) => SOURCE_METADATA_FIELDS
 
 const getSourceDocumentReadiness = (doc = {}) => {
   const mode = doc?.processing_mode;
+  // A base map (land-use / planning map sheet) is a VIEWABLE reference, not an
+  // extraction target. Without this it falls into the OCR/image-review branch
+  // below and reads as a broken or incomplete upload — exactly how an operator
+  // misreads a freshly-uploaded map. Present a stored, not-yet-extracted base map
+  // as a settled "Reference map". Once facts are manually extracted from it,
+  // extraction_status moves off 'pending' and the normal readiness applies.
+  if (doc?.source_role === 'base_map'
+      && (!doc?.extraction_status || doc.extraction_status === 'pending')) {
+    return {
+      key: 'manual',
+      label: 'Reference map',
+      tone: 'neutral',
+      description: 'Viewable reference map — stored, not auto-extracted.',
+      can_extract: false,
+      action_label: 'Reference',
+      block_reason: 'Map sheets are stored as viewable references; automated extraction is not applied.',
+      missing_fields: [],
+      is_reference_map: true,
+    };
+  }
   if (doc?.ocr_required || mode === 'ocr_required' || mode === 'image_review') {
     // An OCR/image-review source that has ALREADY been extracted (manual or
     // page-review path) must say so — showing "required before extraction"
