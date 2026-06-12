@@ -109,14 +109,24 @@ const loadFarRules = async ({ property, zone, statutoryPlanId = null }) => {
   // safe; when null we fall back to the pre-registry behaviour (no plan filter),
   // keeping this code correct before the migration lands. An org's own manually
   // authored rules (statutory_plan_id NULL, org-scoped) always survive.
-  const params = [property.city || 'Bengaluru', zone.zone_code || null, zone.planning_zone || null];
-  let planClause = '';
+  const params = [zone.zone_code || null, zone.planning_zone || null];
+  let scopeClause;
   if (statutoryPlanId) {
+    // Plan-scoped: the resolved statutory plan IS the authoritative scope. Do NOT
+    // also filter by city — Anekal far_rules carry city='Anekal' while a Jigani
+    // property is commonly cited as 'Bengaluru' (it sits in Bengaluru Urban
+    // district). Keeping the city filter here excluded every Anekal rule and left
+    // FAR blank even though the rulebook was correctly resolved. The plan id
+    // uniquely scopes the rulebook; city is redundant once it's known.
     params.push(statutoryPlanId);
-    planClause = `AND (
-         fr.statutory_plan_id = $4
+    scopeClause = `AND (
+         fr.statutory_plan_id = $3
          OR (fr.statutory_plan_id IS NULL AND fr.org_id = current_organization_id())
        )`;
+  } else {
+    // Legacy path (registry absent / plan unresolved): scope by city as before.
+    params.push(property.city || 'Bengaluru');
+    scopeClause = `AND LOWER(COALESCE(fr.city, 'bengaluru')) = LOWER($3)`;
   }
 
   const result = await query(
@@ -128,16 +138,15 @@ const loadFarRules = async ({ property, zone, statutoryPlanId = null }) => {
      FROM regulatory_data.far_rules fr
      LEFT JOIN regulatory_data.evidence_sources es ON es.id = fr.evidence_source_id
      WHERE fr.review_status = 'approved'
-       AND LOWER(COALESCE(fr.city, 'bengaluru')) = LOWER($1)
        AND (
-         fr.zone_code = $2
+         fr.zone_code = $1
          OR (
            fr.planning_zone IS NOT NULL
-           AND fr.planning_zone = COALESCE($3, fr.planning_zone)
-           AND $2 IS NULL
+           AND fr.planning_zone = COALESCE($2, fr.planning_zone)
+           AND $1 IS NULL
          )
        )
-       ${planClause}
+       ${scopeClause}
      ORDER BY (fr.org_id IS NOT NULL) DESC, fr.plot_area_min_sqm ASC, fr.road_width_min_m ASC`,
     params
   );
