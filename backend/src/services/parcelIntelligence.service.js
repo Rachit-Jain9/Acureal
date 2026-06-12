@@ -16,6 +16,7 @@ const { buildVerificationLinks } = require('../utils/parcelVerificationLinks');
 const { runParcelRedFlags } = require('../engines/parcelRedFlags.engine');
 const {
   resolveStatutoryPlan,
+  resolvePlanById,
   logJurisdictionResolution,
 } = require('./regulatory/resolveStatutoryPlan');
 const { deriveConfidenceTier, deriveRoadWidthBasis } = require('../utils/confidenceLadder');
@@ -682,14 +683,39 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
   // an Anekal parcel never picks up BDA RMP-2015 rows. The resolver no-ops
   // (resolved:false) until the registry migration is applied, preserving the
   // pre-registry behaviour exactly.
-  const jurisdiction = await resolveStatutoryPlan({
+  let jurisdiction = await resolveStatutoryPlan({
     taluk: property.auto_derived_taluk || null,
     village: property.auto_derived_village || null,
     lat: property.lat,
     lng: property.lng,
     city: property.city || null,
   });
-  const statutoryPlanId = jurisdiction.resolved ? jurisdiction.plan?.id || null : null;
+
+  // The analyst-assigned zone carries its OWN governing plan
+  // (master_plan_zones.statutory_plan_id) — a human-reviewed signal that is
+  // authoritative and overrides the taluk-based default. Without this, an Anekal
+  // (AN-*) zone on a deal that never ran the K-GIS auto-derive (so it has no
+  // taluk) would default to BDA/RMP-2015, scope FAR to RMP-2015, find zero AN-*
+  // rules, and show blank FAR — the exact symptom seen on the Jigani deal. When
+  // the zone pins a different plan, adopt it as the governing plan.
+  if (zone?.statutory_plan_id && zone.statutory_plan_id !== jurisdiction.plan?.id) {
+    const byZone = await resolvePlanById(zone.statutory_plan_id);
+    if (byZone?.plan) {
+      jurisdiction = {
+        resolved: true,
+        authority: byZone.authority,
+        plan: byZone.plan,
+        method: 'assigned_zone',
+        confidence: 0.9,
+        basis: `Governing plan from the analyst-assigned zone (${zone.zone_code}).`,
+        needs_authority_confirmation: false,
+        alternates: jurisdiction.alternates || [],
+      };
+    }
+  }
+
+  const statutoryPlanId = zone?.statutory_plan_id
+    || (jurisdiction.resolved ? jurisdiction.plan?.id || null : null);
 
   const farRules = await loadFarRules({ property, zone, statutoryPlanId });
   const previousMeta = await loadLatestSnapshotMeta(propertyId);

@@ -200,6 +200,44 @@ async function resolveStatutoryPlan(input = {}) {
 }
 
 /**
+ * Resolve a specific plan (+ its authority) by id. Used when the analyst-assigned
+ * zone already pins a `statutory_plan_id` — that human-reviewed assignment is the
+ * strongest signal of the governing plan and overrides the taluk-based default.
+ * Returns { authority, plan } or null. Never throws.
+ */
+async function resolvePlanById(planId) {
+  if (!planId) return null;
+  try {
+    const result = await query(
+      `SELECT
+          sp.id            AS plan_id,
+          sp.plan_code,
+          sp.plan_name,
+          sp.legal_status  AS plan_legal_status,
+          sp.version_label AS plan_version_label,
+          sp.notes         AS plan_notes,
+          pa.id            AS authority_id,
+          pa.authority_code,
+          pa.authority_name,
+          pa.authority_kind,
+          pa.status        AS authority_status,
+          pa.status_note
+        FROM regulatory_data.statutory_plans sp
+        JOIN regulatory_data.planning_authorities pa ON pa.id = sp.authority_id
+       WHERE sp.id = $1
+         AND (sp.org_id IS NULL OR sp.org_id = current_organization_id())
+       LIMIT 1`,
+      [planId],
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return { authority: toAuthorityShape(row), plan: toPlanShape(row) };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Best-effort audit write. Records HOW the authority/plan was decided for a
  * parcel. Never throws (a missing table or RLS hiccup must not break a refresh).
  */
@@ -244,6 +282,7 @@ async function logJurisdictionResolution({ propertyId, inputs = {}, resolution, 
 
 module.exports = {
   resolveStatutoryPlan,
+  resolvePlanById,
   logJurisdictionResolution,
   // exported for unit tests
   _internal: { norm, DEFAULT_AUTHORITY_CODE },
