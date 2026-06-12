@@ -509,14 +509,21 @@ export default function DocumentsPanel({ canEdit }) {
                           {doc.authority_name}
                         </span>
                       )}
-                      {doc.ocr_required && <Badge tone="warn">OCR needed</Badge>}
-                      {textCoverage && <Badge tone="neutral">Text {textCoverage}</Badge>}
+                      {doc.ocr_required && !readiness.isReferenceMap && <Badge tone="warn">OCR needed</Badge>}
+                      {textCoverage && !readiness.isReferenceMap && <Badge tone="neutral">Text {textCoverage}</Badge>}
                       <Badge tone={readiness.tone}>{readiness.label}</Badge>
                     </div>
                   </div>
 
                   <div className="space-y-1">
-                    <SourceStatusBadge status={doc.extraction_status} />
+                    {readiness.isReferenceMap ? (
+                      <Badge tone="success" className="gap-1">
+                        <CheckCircle2 size={11} />
+                        stored
+                      </Badge>
+                    ) : (
+                      <SourceStatusBadge status={doc.extraction_status} />
+                    )}
                     <div className="text-xs text-content-muted">{formatDocType(doc.doc_type)}</div>
                     <div className="text-xs text-content-muted">{readiness.description}</div>
                     {doc.extraction_error && (

@@ -197,6 +197,30 @@ describe('masterPlanHelpers — readiness normalisation', () => {
     expect(r.key).toBe('review');
     expect(r.actionLabel).toBe('Re-extract');
   });
+
+  it('getSourceReadiness presents a stored base map as a settled "Reference map"', () => {
+    const r = getSourceReadiness({
+      source_role: 'base_map',
+      processing_mode: 'image_review',
+      ocr_required: true,
+      extraction_status: 'pending',
+    });
+    expect(r.label).toBe('Reference map');
+    expect(r.tone).toBe('neutral');
+    expect(r.isReferenceMap).toBe(true);
+    expect(r.canExtract).toBe(false);
+    expect(r.key).toBe('manual'); // counts under the "Manual / reference" filter
+  });
+
+  it('getSourceReadiness does NOT override a base map once it has been extracted', () => {
+    const r = getSourceReadiness({
+      source_role: 'base_map',
+      processing_mode: 'image_review',
+      ocr_required: true,
+      extraction_status: 'completed',
+    });
+    expect(r.isReferenceMap).toBeUndefined();
+  });
 });
 
 describe('masterPlanHelpers — history-modal formatters', () => {

@@ -158,6 +158,27 @@ export function getSourceReadiness(doc) {
   const serverReadiness = normalizeSourceReadiness(doc?.source_readiness || doc?.sourceReadiness);
   if (serverReadiness) return serverReadiness;
 
+  // A base map (land-use / planning map sheet) is a VIEWABLE reference, not an
+  // extraction target. A freshly-uploaded one would otherwise fall into the
+  // "OCR review / pending" branch below and read as a broken or incomplete
+  // upload — which is exactly how an operator misreads it. Present a stored map
+  // as a settled "Reference map". Once someone manually extracts facts from it,
+  // extraction_status moves off 'pending' and the normal readiness applies.
+  const status = doc?.extraction_status;
+  if (doc?.source_role === 'base_map' && (!status || status === 'pending')) {
+    return {
+      key: 'manual',
+      label: 'Reference map',
+      tone: 'neutral',
+      description: 'Viewable reference map — stored, not auto-extracted.',
+      canExtract: false,
+      actionLabel: 'Reference',
+      blockReason: 'Map sheets are stored as viewable references; automated extraction is not applied.',
+      missingFields: [],
+      isReferenceMap: true,
+    };
+  }
+
   const mode = doc?.processing_mode;
   if (doc?.ocr_required || mode === 'ocr_required' || mode === 'image_review') {
     return {
