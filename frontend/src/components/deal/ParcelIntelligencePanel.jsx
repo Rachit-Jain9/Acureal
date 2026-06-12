@@ -11,6 +11,7 @@ import {
   Layers3,
   MapPin,
   RefreshCw,
+  Ruler,
   ShieldCheck,
   Trash2,
   Upload,
@@ -191,6 +192,92 @@ function VerdictBanner({ verdict }) {
   );
 }
 
+const LEGAL_STATUS_TONE = {
+  operative: 'success',
+  withdrawn: 'danger',
+  superseded: 'neutral',
+  draft: 'warn',
+  provisional: 'warn',
+};
+
+// Workstream 0 surfacing — the resolved governing planning authority + operative
+// statutory plan. Renders nothing until the statutory-plan registry exists
+// (intelligence.statutory_plan is null), so it is invisible pre-migration.
+export function GoverningPlanStrip({ plan }) {
+  if (!plan) return null;
+  const statusTone = LEGAL_STATUS_TONE[plan.plan_legal_status] || 'neutral';
+  const needsConfirm = Boolean(plan.needs_authority_confirmation);
+  const accent =
+    plan.note || needsConfirm
+      ? 'border-l-amber-500'
+      : statusTone === 'danger'
+        ? 'border-l-rose-500'
+        : 'border-l-emerald-500';
+  const confidencePct =
+    plan.confidence !== null && plan.confidence !== undefined
+      ? Math.round(Number(plan.confidence) * 100)
+      : null;
+
+  return (
+    <div className={clsx('rounded-editorial border border-hairline border-l-4 bg-bg-elevated p-4', accent)}>
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex min-w-0 gap-3">
+          <Landmark size={18} className="mt-0.5 shrink-0 text-content-muted" />
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
+              Governing plan
+            </div>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-content-primary">{plan.plan_name || '—'}</span>
+              {plan.plan_legal_status ? (
+                <Badge tone={statusTone} className="text-[10px]">{plan.plan_legal_status}</Badge>
+              ) : null}
+            </div>
+            <div className="mt-0.5 text-xs text-content-secondary">
+              {plan.authority_name || 'Authority unresolved'}
+              {confidencePct != null ? ` · ${confidencePct}% confidence` : ''}
+            </div>
+            {plan.basis ? (
+              <div className="mt-1 text-[11px] leading-relaxed text-content-muted">{plan.basis}</div>
+            ) : null}
+          </div>
+        </div>
+        {needsConfirm ? (
+          <Badge tone="warn" className="shrink-0 gap-1 text-[10px]">
+            <AlertTriangle size={11} />
+            Confirm authority
+          </Badge>
+        ) : null}
+      </div>
+      {plan.note ? (
+        <div className="mt-3 flex items-start gap-2 rounded-editorial border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-content-secondary">
+          <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-600" />
+          <span>{plan.note}</span>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Workstream 0b — the BASIS of the road width that bands FAR. An operator-entered
+// or OSM-inferred width is not authority-verified; surface that honestly so an
+// inferred-width FAR is never read as official.
+export function RoadWidthBasisNote({ basis }) {
+  if (!basis || basis.basis === 'missing') return null;
+  const inferred = basis.basis === 'inferred';
+  return (
+    <div className="flex items-start gap-2 rounded-editorial border border-hairline-soft bg-bg-secondary px-3 py-2">
+      <Ruler size={13} className={clsx('mt-0.5 shrink-0', inferred ? 'text-amber-600' : 'text-content-muted')} />
+      <div className="min-w-0 text-[11px] leading-relaxed text-content-secondary">
+        <span className="font-medium text-content-primary">
+          Road width {basis.width_m !== null && basis.width_m !== undefined ? `${basis.width_m} m` : '—'} · {basis.label}
+        </span>
+        {basis.note ? <span className="text-content-muted"> — {basis.note}</span> : null}
+      </div>
+    </div>
+  );
+}
+
 function MetricTile({ label, value, unit, citation, onCitationSelect }) {
   const isMissing = value === null || value === undefined || value === '';
 
@@ -251,6 +338,7 @@ const buildPillarDetails = (key, intelligence) => {
       { label: 'Source', value: b?.source?.replace(/_/g, ' ') || '—' },
       { label: 'Base FAR', value: b?.values?.base_far ?? '—' },
       { label: 'Max FAR', value: b?.values?.max_far ?? '—' },
+      { label: 'Road width basis', value: b?.road_width_basis?.label || '—' },
       { label: 'Setback inputs', value: b?.values?.setback_input_status?.replace(/_/g, ' ') || '—' },
     ];
     const rationale = b?.status === 'reference_match'
@@ -319,18 +407,28 @@ function ConfidenceMeter({ confidence, intelligence }) {
   const detail = openPillar ? buildPillarDetails(openPillar, intelligence) : null;
   const openLabel = openPillar ? CONFIDENCE_PILLARS.find((p) => p.key === openPillar)?.label : null;
 
+  // Workstream 0b — one labelled rung for the overall score, gated by review
+  // state server-side (a parcel cannot read "Verified" on unreviewed inputs).
+  const tier = confidence?.tier;
+  const TIER_TONE = { success: 'success', warning: 'warn', danger: 'danger' };
+
   return (
     <Card className="p-5">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
-            Reference confidence
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[10px] uppercase tracking-[0.12em] font-semibold text-content-muted">
+              Reference confidence
+            </span>
+            {tier?.label ? (
+              <Badge tone={TIER_TONE[tier.band] || 'neutral'} className="text-[10px]">{tier.label}</Badge>
+            ) : null}
           </div>
-          <div className="mt-1 text-xs text-content-secondary">
-            Quality across zoning, buildability, guidance, and K-GIS. Click a pillar for detail.
+          <div className="mt-1 text-xs text-content-secondary leading-relaxed">
+            {tier?.rationale || 'Quality across zoning, buildability, guidance, and K-GIS. Click a pillar for detail.'}
           </div>
         </div>
-        <div className="font-display text-3xl font-semibold text-content-primary tabular-nums">
+        <div className="font-display text-3xl font-semibold text-content-primary tabular-nums shrink-0">
           {Math.round(overall * 100)}
           <span className="text-base text-content-muted">%</span>
         </div>
@@ -631,6 +729,15 @@ function KgisMapCard({ intelligence, propertyId, canEdit }) {
             {kgis.message}
           </div>
         ) : null}
+        {/* Workstream 0b — explicit scope line: K-GIS is context, not final zoning. */}
+        <div className="flex items-start gap-2 rounded-editorial border border-hairline-soft bg-bg-secondary px-3 py-2 text-[11px] leading-relaxed text-content-muted">
+          <ShieldCheck size={13} className="mt-0.5 shrink-0 text-content-muted" />
+          <span>
+            K-GIS is for jurisdiction and survey identification only. Final zoning and buildability
+            depend on the applicable statutory plan, the sanctioning authority&apos;s interpretation,
+            and reviewed sources. K-GIS geometry is representational, not legally valid.
+          </span>
+        </div>
       </div>
     </CollapsibleCard>
   );
@@ -862,6 +969,8 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
         </div>
       </Card>
 
+      <GoverningPlanStrip plan={intelligence?.statutory_plan} />
+
       <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-5">
         <div className="space-y-5">
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
@@ -890,6 +999,8 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
               onCitationSelect={setActiveCitation}
             />
           </div>
+
+          <RoadWidthBasisNote basis={buildability?.road_width_basis} />
 
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
             <MetricTile
