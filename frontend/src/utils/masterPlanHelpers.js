@@ -151,6 +151,7 @@ export function normalizeSourceReadiness(readiness) {
     actionLabel: readiness.action_label || readiness.actionLabel || 'Extract',
     blockReason: readiness.block_reason || readiness.blockReason || null,
     missingFields: readiness.missing_fields || readiness.missingFields || [],
+    isReferenceMap: readiness.is_reference_map ?? readiness.isReferenceMap ?? false,
   };
 }
 
