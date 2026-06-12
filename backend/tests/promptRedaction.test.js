@@ -39,6 +39,23 @@ describe('promptRedaction.redactText', () => {
     expect(r.text).not.toMatch(/AAAAA9999A/);
   });
 
+  test('masks an email address', () => {
+    const r = redactText('Contact the owner at ramesh.rao@gmail.com for a site visit.');
+    expect(r.text).toBe(`Contact the owner at ${REDACTED} for a site visit.`);
+    expect(r.count).toBe(1);
+  });
+
+  test('masks a +91-anchored mobile in common formats', () => {
+    expect(redactText('Call +91 9876543210 now').text).toBe(`Call ${REDACTED} now`);
+    expect(redactText('Call +91-98765-43210 now').count).toBe(1);
+    expect(redactText('Reach +919876543210').count).toBe(1);
+  });
+
+  test('still does NOT mask a bare 10-digit number without the +91 anchor', () => {
+    expect(redactText('Call 9876543210 for details').count).toBe(0);
+    expect(redactText('Registration 9876543210123').count).toBe(0);
+  });
+
   test('passes non-strings through untouched', () => {
     expect(redactText(null)).toEqual({ text: null, count: 0 });
     expect(redactText(undefined)).toEqual({ text: undefined, count: 0 });
@@ -89,6 +106,32 @@ describe('promptRedaction.redactFields', () => {
     const input = { aadhaar: '123456789012' };
     redactFields(input);
     expect(input.aadhaar).toBe('123456789012');
+  });
+
+  test('masks values under contact-channel keys but never name fields (precision)', () => {
+    const r = redactFields({
+      seller_mobile: '9876543210',
+      phone: '080-12345678',
+      email_id: 'a@b.com',
+      whatsapp_no: 9988776655,
+      contact_person: 'A. Rao',
+      owner_name: 'B. Singh',
+      khata_number: '4567',
+    });
+    expect(r.fields.seller_mobile).toBe(REDACTED);
+    expect(r.fields.phone).toBe(REDACTED);
+    expect(r.fields.email_id).toBe(REDACTED);
+    expect(r.fields.whatsapp_no).toBe(REDACTED);
+    // names and product data stay intact
+    expect(r.fields.contact_person).toBe('A. Rao');
+    expect(r.fields.owner_name).toBe('B. Singh');
+    expect(r.fields.khata_number).toBe('4567');
+  });
+
+  test('masks an email or +91 mobile appearing inside any string value', () => {
+    const r = redactFields({ notes: 'Owner ramesh@x.com / +91 9988776655 — call before visit.' });
+    expect(r.fields.notes).toBe(`Owner ${REDACTED} / ${REDACTED} — call before visit.`);
+    expect(r.count).toBe(2);
   });
 
   test('leaves a clean extraction untouched', () => {
