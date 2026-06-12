@@ -14,6 +14,10 @@ const osmRoadAdapter = require('./adapters/osmRoadWidth.adapter');
 const localityIntelligenceService = require('./localityIntelligence.service');
 const { buildVerificationLinks } = require('../utils/parcelVerificationLinks');
 const { runParcelRedFlags } = require('../engines/parcelRedFlags.engine');
+const {
+  resolveStatutoryPlan,
+  logJurisdictionResolution,
+} = require('./regulatory/resolveStatutoryPlan');
 const { EVENTS, publish } = require('../lib/eventBus');
 
 const VERIFICATION_LINKS = {
@@ -81,7 +85,7 @@ const loadPropertyWithZone = async (propertyId) => {
   return result.rows[0];
 };
 
-const loadFarRules = async ({ property, zone }) => {
+const loadFarRules = async ({ property, zone, statutoryPlanId = null }) => {
   if (!zone?.zone_code) return [];
 
   // Match candidate rules on zone_code — the authoritative join key in the
@@ -95,6 +99,24 @@ const loadFarRules = async ({ property, zone }) => {
   // labels for any non-residential zone — silently returning zero rules for
   // every commercial, industrial, mixed-use, dev-plan and large-residential
   // parcel while the zone itself resolved fine. Key on the zone, band by area.
+  //
+  // STATUTORY-PLAN SCOPING (Workstream 0). When the jurisdiction resolver pins a
+  // plan, scope global rules to it: an Anekal parcel must NOT pick up BDA's
+  // RMP-2015 rows (and vice-versa). `statutoryPlanId` is non-null only when the
+  // registry exists (migration applied) — so referencing fr.statutory_plan_id is
+  // safe; when null we fall back to the pre-registry behaviour (no plan filter),
+  // keeping this code correct before the migration lands. An org's own manually
+  // authored rules (statutory_plan_id NULL, org-scoped) always survive.
+  const params = [property.city || 'Bengaluru', zone.zone_code || null, zone.planning_zone || null];
+  let planClause = '';
+  if (statutoryPlanId) {
+    params.push(statutoryPlanId);
+    planClause = `AND (
+         fr.statutory_plan_id = $4
+         OR (fr.statutory_plan_id IS NULL AND fr.org_id = current_organization_id())
+       )`;
+  }
+
   const result = await query(
     `SELECT
        fr.*,
@@ -113,12 +135,9 @@ const loadFarRules = async ({ property, zone }) => {
            AND $2 IS NULL
          )
        )
+       ${planClause}
      ORDER BY (fr.org_id IS NOT NULL) DESC, fr.plot_area_min_sqm ASC, fr.road_width_min_m ASC`,
-    [
-      property.city || 'Bengaluru',
-      zone.zone_code || null,
-      zone.planning_zone || null,
-    ]
+    params
   );
 
   return result.rows;
@@ -651,7 +670,24 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
   const property = await loadPropertyWithZone(propertyId);
   const zone = property.zone || null;
   const landUseFamily = normalizeLandUseFamily(property, zone);
-  const farRules = await loadFarRules({ property, zone });
+
+  // Workstream 0 — resolve the governing planning authority + operative statutory
+  // plan from the parcel's K-GIS admin hierarchy (persisted on the property by
+  // the auto-derive flow). Tabular-first (taluk/village name → planning_authorities
+  // .taluk_aliases); degrades honestly. Scopes FAR rules to the correct rulebook so
+  // an Anekal parcel never picks up BDA RMP-2015 rows. The resolver no-ops
+  // (resolved:false) until the registry migration is applied, preserving the
+  // pre-registry behaviour exactly.
+  const jurisdiction = await resolveStatutoryPlan({
+    taluk: property.auto_derived_taluk || null,
+    village: property.auto_derived_village || null,
+    lat: property.lat,
+    lng: property.lng,
+    city: property.city || null,
+  });
+  const statutoryPlanId = jurisdiction.resolved ? jurisdiction.plan?.id || null : null;
+
+  const farRules = await loadFarRules({ property, zone, statutoryPlanId });
   const previousMeta = await loadLatestSnapshotMeta(propertyId);
   const { rule, reason: farReason } = selectFarRule(farRules, {
     landAreaSqft: property.land_area_sqft,
@@ -826,6 +862,35 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
       plan_status: zone?.plan_status || buildability.rule?.plan_status || 'needs_verification',
       notes: property.zone_notes || null,
     },
+    // Workstream 0 — the resolved governing authority + operative statutory plan.
+    // Informational (not a red flag): surfaces "likely applicable plan: X
+    // (confidence N%, verify with authority)" framing, never "verified zoning".
+    statutory_plan: jurisdiction.resolved
+      ? {
+          authority_code: jurisdiction.authority?.code || null,
+          authority_name: jurisdiction.authority?.name || null,
+          authority_status: jurisdiction.authority?.status || null,
+          authority_note: jurisdiction.authority?.status_note || null,
+          plan_code: jurisdiction.plan?.code || null,
+          plan_name: jurisdiction.plan?.name || null,
+          plan_legal_status: jurisdiction.plan?.legal_status || null,
+          method: jurisdiction.method,
+          confidence: jurisdiction.confidence,
+          basis: jurisdiction.basis,
+          needs_authority_confirmation: jurisdiction.needs_authority_confirmation,
+          rules_available: zone?.zone_code ? farRules.length > 0 : null,
+          // Honest signal for an operative-but-not-yet-ingested rulebook (e.g.
+          // Anekal LPA MP 2031): do NOT silently fall back to another plan's FAR.
+          note:
+            jurisdiction.method !== 'default_bda'
+            && zone?.zone_code
+            && farRules.length === 0
+            && jurisdiction.plan?.legal_status === 'operative'
+              ? `${jurisdiction.plan?.name} is operative but its zoning/FAR rules are not yet loaded into REDIP — FAR cannot be computed against this rulebook yet.`
+              : null,
+          alternates: jurisdiction.alternates || [],
+        }
+      : null,
     buildability,
     guidance_value: {
       official: guidance,
@@ -843,7 +908,10 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
     // that only need the bare URLs).
     verification_links: buildVerificationLinks({ property, kgis }),
     source_versions: {
-      rmp: buildability.rule?.plan_version || 'RMP 2031 Draft',
+      // Prefer the matched rule's plan, then the resolved statutory plan; never
+      // fall back to the withdrawn 'RMP 2031 Draft' (provisional approval pulled
+      // Jul 2020) — leave null when genuinely unknown.
+      rmp: buildability.rule?.plan_version || jurisdiction.plan?.name || null,
       guidance: guidance.selected?.effective_from || null,
       kgis: kgis.refreshed_at || null,
       landeed: landeed.status,
@@ -857,6 +925,22 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
     const { id: newId, signature } = await saveSnapshot({ propertyId, output, userId });
     output.snapshot_id = newId || previousMeta?.id || null;
     output.signature = signature || null;
+    // Audit how the governing authority/plan was decided for this parcel
+    // (best-effort; logJurisdictionResolution never throws or blocks).
+    if (jurisdiction.resolved) {
+      await logJurisdictionResolution({
+        propertyId,
+        inputs: {
+          taluk: property.auto_derived_taluk || null,
+          village: property.auto_derived_village || null,
+          lat: property.lat,
+          lng: property.lng,
+          city: property.city || null,
+        },
+        resolution: jurisdiction,
+        userId,
+      });
+    }
   } else {
     output.snapshot_id = previousMeta?.id || null;
     output.signature = null;
