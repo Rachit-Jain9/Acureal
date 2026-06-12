@@ -208,9 +208,11 @@ describe('parcelIntelligence.service', () => {
 
     const result = await parcelIntelligenceService.getParcelIntelligence('prop-1', 'user-1');
 
-    // far_rules is the 2nd query call; the resolved plan id must be threaded as $4.
+    // far_rules is the 2nd query call; the resolved plan id is threaded as $3
+    // (plan-scoped path drops the city filter, so the plan id is param 3).
     const farCall = query.mock.calls[1];
-    expect(farCall[0]).toContain('fr.statutory_plan_id = $4');
+    expect(farCall[0]).toContain('fr.statutory_plan_id = $3');
+    expect(farCall[0]).not.toMatch(/LOWER\(COALESCE\(fr\.city/); // city filter dropped when plan-scoped
     expect(farCall[1]).toContain('plan-rmp2015');
     expect(result.statutory_plan.plan_code).toBe('RMP_2015');
     expect(result.statutory_plan.authority_code).toBe('BDA');
