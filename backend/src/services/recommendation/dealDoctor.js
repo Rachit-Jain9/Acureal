@@ -95,6 +95,23 @@ const DIAGNOSTIC_RULES = [
     },
   },
   {
+    id: 'land-rate-below-guidance-benchmark',
+    topic: 'land_price',
+    verb: 'Below benchmark',
+    evaluate: (signals) => {
+      const s = findSignal(signals, 'land_rate_vs_guidance');
+      if (!s) return null;
+      const where = s.meta.locality ? ` for ${s.meta.locality}` : '';
+      return {
+        finding: `Assumed land rate is below the official guidance benchmark — ₹${s.meta.assumed.toLocaleString('en-IN')}/sqft vs the State guidance value of ₹${s.meta.guidance.toLocaleString('en-IN')}/sqft${where} (${s.meta.shortfall_pct}% below).`,
+        why_it_matters: `Stamp duty is levied on the higher guidance value regardless of the contract price, so a sub-guidance land input understates the true acquisition cost driving the model — and can mask an off-record component or a unit/area error. Reconcile the land basis against the guidance band before the model locks.`,
+        severity: s.meta.severity_hint || 3,
+        evidence: s.evidence,
+        signals: [s.kind],
+      };
+    },
+  },
+  {
     id: 'irr-lacks-support-vs-hurdle',
     topic: 'capital_stack',
     verb: 'Lacks support',

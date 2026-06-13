@@ -30,6 +30,12 @@
  */
 
 const { percentile } = require('../../utils/percentile');
+const {
+  evaluateLandRateVsGuidance,
+  deriveAssumedLandRatePerSqft,
+} = require('../../utils/landRateVsGuidance');
+
+const formatInr = (n) => Math.round(n).toLocaleString('en-IN');
 
 const num = (v) => {
   const n = Number(v);
@@ -88,6 +94,60 @@ const extractLandCostShareOfGdv = (ws) => {
       { ref: 'kernel:revenue', label: `GDV ₹${revenueCr.toFixed(2)} Cr` },
     ],
     meta: { landCr, revenueCr, ratio_pct: Math.round(value * 1000) / 10 },
+  };
+};
+
+/**
+ * Assumed land-acquisition rate (₹/sqft) vs the matched official IGR guidance
+ * (circle-rate) value for the parcel's locality. Fires only when the deal is
+ * priced materially BELOW the State guidance floor — an unusual posture, since
+ * arm's-length Bengaluru land almost always transacts above the guidance value
+ * (it is the stamp-duty floor). A sub-guidance input can signal an undervalued
+ * land assumption, an off-record component, or a unit/area data-entry error.
+ *
+ * The ₹/sqft rate comes from the canonical `calculateLandPricing` normalizer
+ * (via deriveAssumedLandRatePerSqft) — no re-derivation — and the comparison is
+ * gated on a confident (`matched`, ≥0.55) guidance result, so deals outside the
+ * seeded SRO localities never produce a spurious flag.
+ */
+const extractLandRateVsGuidanceBand = (ws) => {
+  const deal = getDeal(ws);
+  const guidance = ws?.guidance || null;
+  if (!deal || !guidance) return null;
+
+  const assumedRatePerSqft = deriveAssumedLandRatePerSqft(deal);
+  const evald = evaluateLandRateVsGuidance({ assumedRatePerSqft, guidance });
+  if (evald.status !== 'below_guidance') return null;
+
+  const where = evald.locality
+    ? `${evald.locality}${evald.roadName ? `, ${evald.roadName}` : ''}`
+    : null;
+  const page = evald.citation && evald.citation.page ? `, p.${evald.citation.page}` : '';
+  const guidanceLabel = `Official IGR guidance ₹${formatInr(evald.guidanceValuePerSqft)}/sqft${where ? ` — ${where}` : ''}${page}`;
+  const guidanceRef = evald.citation && evald.citation.id ? `guidance:${evald.citation.id}` : 'guidance:value';
+  const shortfallPct = Math.round(evald.shortfallPct * 1000) / 10;
+
+  return {
+    kind: 'land_rate_vs_guidance',
+    value: {
+      assumed: Math.round(evald.assumedRatePerSqft),
+      guidance: Math.round(evald.guidanceValuePerSqft),
+      shortfall_pct: shortfallPct,
+      locality: evald.locality,
+      confidence: evald.guidanceConfidence,
+    },
+    evidence: [
+      { ref: 'deal:land_price_rate', label: `Assumed land rate ₹${formatInr(evald.assumedRatePerSqft)}/sqft` },
+      { ref: guidanceRef, label: guidanceLabel },
+    ],
+    meta: {
+      assumed: Math.round(evald.assumedRatePerSqft),
+      guidance: Math.round(evald.guidanceValuePerSqft),
+      shortfall_pct: shortfallPct,
+      locality: evald.locality,
+      road_name: evald.roadName,
+      severity_hint: evald.severityHint,
+    },
   };
 };
 
@@ -491,6 +551,7 @@ const extractOpenRiskFlagsCount = (ws) => {
 
 const EXTRACTORS = [
   extractLandCostShareOfGdv,
+  extractLandRateVsGuidanceBand,
   extractIrrVsHurdle,
   extractEquityMultipleVsTarget,
   extractDscrBreach,
@@ -528,6 +589,7 @@ const extractAllSignals = (workspace) => {
 module.exports = {
   // Individual extractors — exported for unit tests + targeted use.
   extractLandCostShareOfGdv,
+  extractLandRateVsGuidanceBand,
   extractIrrVsHurdle,
   extractEquityMultipleVsTarget,
   extractDscrBreach,

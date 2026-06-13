@@ -43,6 +43,7 @@ const complianceCalendar = require('./rera/complianceCalendar');
 const signoffService = require('./signoff.service');
 const icReadiness = require('./icReadiness.service');
 const compsService = require('./comps.service');
+const guidanceService = require('./guidance.service');
 const promoterProfileService = require('./promoterProfile.service');
 const toneClassifier = require('./ai/toneClassifier');
 const dealWorkspaceCache = require('./dealWorkspaceCache.service');
@@ -143,6 +144,7 @@ async function getDealWorkspace(dealId, options = {}) {
     waterfalls,
     promoterData,
     nearbyComps,
+    guidanceMatch,
   ] = await Promise.all([
     // Reuse the financials row getDealById already loaded + authorized — no
     // extra `INNER JOIN deals` re-fetch. The scenarios / graph / audit slices
@@ -184,6 +186,26 @@ async function getDealWorkspace(dealId, options = {}) {
       const nearby = await compsService.getCompsNearLocation(lat, lng, 5, projectType);
       return Array.isArray(nearby) ? nearby : [];
     }, 'nearbyComps'),
+    // Official IGR guidance (circle-rate) match for the parcel's locality.
+    // Feeds the deterministic land-rate-vs-guidance signal (recommendation +
+    // Deal Doctor) so the live deal page flags a land input priced below the
+    // State stamp-duty floor. Built from the property fields the deal read-
+    // model already exposes (no extra property fetch). Fully migration-
+    // tolerant: findGuidanceMatches returns `not_configured` (never throws)
+    // when the regulatory_data tables aren't seeded, and `needs_input` when
+    // there's no address — both degrade the downstream signal to silent.
+    optional(async () => {
+      const propertyForGuidance = {
+        address: deal.property_address,
+        city: deal.city,
+        state: deal.state,
+        pincode: deal.pincode,
+        zoning: deal.zoning,
+        property_type: deal.property_type,
+      };
+      if (!propertyForGuidance.address && !propertyForGuidance.city) return null;
+      return guidanceService.findGuidanceMatches(propertyForGuidance);
+    }, 'guidance'),
   ]);
 
   // Normalised, single-source views the slices below read from. Computing
@@ -243,6 +265,10 @@ async function getDealWorkspace(dealId, options = {}) {
     // (`ws.comps.entries`) — parity with the export path so price / absorption
     // / cap-rate recommendation + deal-doctor cards fire on the live page too.
     comps: { entries: compsEntries },
+    // Official guidance (circle-rate) match for the parcel — read by the
+    // land-rate-vs-guidance signal extractor. `null` when unavailable /
+    // unconfigured; the extractor degrades to silent.
+    guidance: guidanceMatch || null,
     documents: documents || { documents: [], grouped: {} },
     activities: activities || [],
     waterfall: {
