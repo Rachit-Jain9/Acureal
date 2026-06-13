@@ -92,6 +92,24 @@ const RULES = [
     },
   },
   {
+    id: 'land-rate-below-guidance',
+    topic: 'land_price',
+    verb: 'Re-examine',
+    requires: ['land_rate_vs_guidance'],
+    evaluate: (signals) => {
+      const s = findSignal(signals, 'land_rate_vs_guidance');
+      if (!s) return null;
+      const where = s.meta.locality ? ` for ${s.meta.locality}` : '';
+      return {
+        headline: `Re-examine the land basis — assumed ₹${s.meta.assumed.toLocaleString('en-IN')}/sqft is ${s.meta.shortfall_pct}% below the official IGR guidance value of ₹${s.meta.guidance.toLocaleString('en-IN')}/sqft${where}.`,
+        detail: `A land input below the State guidance (circle-rate) value is unusual — Bengaluru land typically transacts above it, and stamp duty is levied on the guidance value regardless. A wide gap can indicate an undervalued land assumption, an off-record component, or a unit/area data-entry error. Verify the land basis, the entered extent, and the unit before underwriting locks.`,
+        severity: s.meta.severity_hint || 3,
+        evidence: s.evidence,
+        signals: [s.kind],
+      };
+    },
+  },
+  {
     id: 'irr-below-hurdle',
     topic: 'capital_stack',
     verb: 'Re-examine',

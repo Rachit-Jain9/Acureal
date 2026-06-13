@@ -46,6 +46,9 @@ const EXACT_MAP = {
   'deal:exit_cap_rate_pct':            { tab: 'overview', scrollTo: 'deal-exit-cap' },
   'deal:saleable_sqft':                { tab: 'overview', scrollTo: 'deal-saleable' },
   'deal:hurdle_irr_pct':               { tab: 'overview', scrollTo: 'deal-hurdle' },
+  // Land-rate-vs-guidance evidence — the assumed land rate routes to the land
+  // cost on the Financial tab (reuses the kernel:landCr anchor).
+  'deal:land_price_rate':              { tab: 'financial', scrollTo: 'cost-land' },
 
   // Approvals + DD
   'approvals:list':         { tab: 'dd', scrollTo: 'approvals-list' },
@@ -66,6 +69,9 @@ const PREFIX_MAP = {
   comp:      { tab: 'comps' },
   promoter:  { tab: 'risk', scrollTo: 'promoter-profile' },
   risk:      { tab: 'risk', scrollTo: 'risk-flags' },
+  // Official IGR guidance (circle-rate) citation → Parcel / Site tab, where
+  // the guidance band renders in the parcel-intelligence snapshot.
+  guidance:  { tab: 'parcel' },
 };
 
 /**

@@ -18,6 +18,10 @@ describe('parseEvidenceRef — exact mappings', () => {
     expect(parseEvidenceRef('deal:saleable_sqft')).toEqual({ tab: 'overview', scrollTo: 'deal-saleable' });
   });
 
+  it('maps the assumed land rate to the land cost on the financial tab', () => {
+    expect(parseEvidenceRef('deal:land_price_rate')).toEqual({ tab: 'financial', scrollTo: 'cost-land' });
+  });
+
   it('maps approvals + DD refs to the DD tab', () => {
     expect(parseEvidenceRef('approvals:list')).toEqual({ tab: 'dd', scrollTo: 'approvals-list' });
     expect(parseEvidenceRef('dd:overdue')).toEqual({ tab: 'dd', scrollTo: 'dd-overdue' });
@@ -41,6 +45,11 @@ describe('parseEvidenceRef — prefix fallbacks (dynamic ids)', () => {
 
   it('maps comp:<id> to comps tab', () => {
     expect(parseEvidenceRef('comp:some-comp-id')).toEqual({ tab: 'comps' });
+  });
+
+  it('maps guidance:<citation-id> to the parcel tab (circle-rate band)', () => {
+    expect(parseEvidenceRef('guidance:guidance-value-gv-1')).toEqual({ tab: 'parcel' });
+    expect(parseEvidenceRef('guidance:value')).toEqual({ tab: 'parcel' });
   });
 });
 

@@ -39,6 +39,13 @@ const computeSnapshotHash = (workspace) => {
       stage: deal.stage,
       land_ask_price_cr: deal.land_ask_price_cr,
       negotiated_price_cr: deal.negotiated_price_cr,
+      // Land-basis inputs that drive the land-rate-vs-guidance signal — a
+      // change to any of them must bust the recommendation dedup cache.
+      land_pricing_basis: deal.land_pricing_basis,
+      land_price_rate_inr: deal.land_price_rate_inr,
+      land_extent_input_value: deal.land_extent_input_value,
+      land_extent_input_unit: deal.land_extent_input_unit,
+      land_area_sqft: deal.land_area_sqft,
       saleable_sqft: deal.saleable_sqft,
       extracted_saleable_sqft: deal.extracted_saleable_sqft,
       sales_price_per_sqft: deal.sales_price_per_sqft,
@@ -48,6 +55,15 @@ const computeSnapshotHash = (workspace) => {
       target_equity_multiple: deal.target_equity_multiple,
     },
     kpis: workspace?.financial?.summary?.kpis || null,
+    // Guidance-match fingerprint — the matched circle-rate value feeds the
+    // land-rate-vs-guidance signal; a different match (or value) is a new state.
+    guidance: workspace?.guidance?.selected
+      ? {
+          id: workspace.guidance.selected.id,
+          value: workspace.guidance.selected.value_inr_per_sqft,
+          status: workspace.guidance.status,
+        }
+      : null,
     n_comps: Array.isArray(workspace?.comps?.entries) ? workspace.comps.entries.length : 0,
     n_dd: Array.isArray(workspace?.dd?.items) ? workspace.dd.items.length : 0,
     n_approvals: Array.isArray(workspace?.approvals) ? workspace.approvals.length : 0,
