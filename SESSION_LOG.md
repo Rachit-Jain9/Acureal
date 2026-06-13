@@ -9227,3 +9227,25 @@ All PRs CI-green + auto-merged; each prod data change verified read-only via Sup
 
 ### State at session end
 Spine + RMP-2015 + Anekal LPA MP 2031 all LIVE & verified on a real deal across Bengaluru-core and the Anekal belt. Workstreams 0/0b/2/3/4 + Workstream-1 prep done. **Only remaining gated item:** an IGR guidance-value PDF (Workstream 1) to activate official circle-rate matching + the deferred guidance-mismatch flag.
+
+## 2026-06-13 — Workstream 1 complete: IGR guidance values live + the land-rate-vs-guidance flag (PRs #827–#828)
+
+### What was worked on (plain English)
+The last gated item — official government circle-rate (guidance) intelligence — went fully live, and the deferred "is this land priced below the legal floor?" warning was built on top of it. The whole 6-workstream regulatory plan is now shipped and verified.
+
+### #827 — IGR guidance values seeded (Workstream 1)
+Migration `20260717_igr_gandhinagara_guidance_values_seed.sql`: 1 evidence source + **634 guidance_values** for the Bengaluru **Gandhinagara SRO** (21 central localities — Akkipete, Chickpete, Cottonpete, Gandhinagar, Kumara Park, Vasanthanagara…). Source: Karnataka Gazette Part III, 30-Sep-2023 (Notification Ke&Mu/PaVaSa/99/2023-24), block 2023-24, effective 01-10-2023. **Deterministically parsed** from the gazette text layer (English street names + digit rates → higher fidelity than AI OCR, zero hallucination); per-sq.m → ₹/sqft via ÷10.76391. **Adversarially verified** (3 agents vs source, 0 discrepancies after fixing wrapped-PID + missing-serial edge cases). Parser/migration builders: `scripts/parse-igr-gandhinagara.py`, `scripts/build-igr-gandhinagara-migration.py`. Operator-applied to prod ("Success"). **Verified live:** a deal on *Dhanwanthari Road* resolves to its exact official value **₹20,009/sqft**, match score **1.00** (634 rows, 21 localities queryable).
+
+### #828 — Land-rate-below-guidance flag (the deferred mismatch signal)
+Now that real circle-rate data exists, activated the warning. When a deal's assumed land-acquisition rate is **15%+ below** the matched official guidance value for its locality, the live deal page surfaces a deterministic, evidence-linked card on **both** the Recommendations panel and the Deal Doctor.
+- **New pure util** `backend/src/utils/landRateVsGuidance.js` — derives assumed ₹/sqft via the canonical `calculateLandPricing` normalizer (no re-derivation of kernel math), compares vs a confidence-gated (`matched`, ≥0.55) guidance result. Fail-open; WARN-grade severity only (2–4, never a blocker).
+- **Workspace** — `dealWorkspace.service` threads a migration-tolerant `guidance` slice into the composed read-model (built from property fields already on the deal; silent when tables unseeded or no address).
+- **One signal extractor + one rule** (`land_price` / `Re-examine`, AI-narratable — financial lane, not legal-four) **+ one Deal Doctor twin** (`Below benchmark`). Land-basis + guidance fields added to the recommendation snapshot hash. evidenceRef router: `deal:land_price_rate` → Financial/`cost-land`, `guidance:*` → Parcel tab.
+- **Tests:** 28 new (util + extractor + rule + doctor + end-to-end through `generateForWorkspace`). Full backend **3343 green**; frontend evidenceRef **16 green**; frontend build clean. CI green; squash-merged.
+
+### State at session end
+**All six workstreams (0/0b/1/2/3/4) are shipped, applied to prod, and verified on real data.** Zoning intelligence across Bengaluru-core + the Anekal belt, plus official circle-rate intelligence for central Bengaluru with an automated sub-guidance land-price warning. No regulatory-plan items remain gated.
+
+### What's left to do next
+- To SEE the new flag on screen, a deal in a Gandhinagara-SRO locality priced 15%+ below its circle rate is needed (the operator's current deals are Anekal/Whitefield, outside the seeded SRO) — it will surface automatically the first time such a deal is entered.
+- Future (deferred, not gated): seed additional SRO guidance gazettes to widen coverage beyond central Bengaluru; richer ₹/acre handling already supported by the kernel normalizer.
