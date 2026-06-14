@@ -9249,3 +9249,25 @@ Now that real circle-rate data exists, activated the warning. When a deal's assu
 ### What's left to do next
 - To SEE the new flag on screen, a deal in a Gandhinagara-SRO locality priced 15%+ below its circle rate is needed (the operator's current deals are Anekal/Whitefield, outside the seeded SRO) — it will surface automatically the first time such a deal is entered.
 - Future (deferred, not gated): seed additional SRO guidance gazettes to widen coverage beyond central Bengaluru; richer ₹/acre handling already supported by the kernel normalizer.
+
+## 2026-06-14 — IGR circle rates extended to the Anekal belt (Anekal / Attibele / Jigani SROs) (PR #830)
+
+### What was worked on (plain English)
+The operator provided the official guidance-value gazettes for the three registrar offices that cover the team's real deals (Anekal, Attibele, Jigani). These were extracted, verified, seeded, and applied to prod — so the circle-rate intelligence now covers the Anekal belt, not just central Bengaluru.
+
+### #830 — Anekal-belt guidance values (679 rows, applied to prod)
+Migration `20260718_igr_anekal_belt_guidance_values_seed.sql`: **679 guidance_values** — Anekal 271 (₹251–3,052/sqft), Attibele 125 (₹818–3,252), Jigani 283 (₹446–3,530). Source: Karnataka IGR (Central Valuation Committee) gazettes, block 2023-24, Anekal taluk / Bengaluru Urban. Operator applied it ("Success. No rows returned").
+
+These gazettes were **much richer than the Gandhinagara file** — full 8-column tables (developed-land per-sq.m columns + an agricultural per-acre column + an apartment column), Kannada+English interleaved names, an embedded apartment ready-reckoner, and Jigani starting mid-table. Method:
+- **Numbers — deterministic by column position** (PyMuPDF word coordinates; developed-land columns only; agricultural per-acre + apartment columns excluded by position + magnitude). Per sq.m → ₹/sqft via ÷10.76391.
+- **Names — AI vision** read off rendered pages (107 page-agents), with each row's value independently re-read as a cross-check (631/654 = 96% agreed first pass).
+- **Disagreements — adjudicated**: all 83 disagreeing rows re-read against the source (correct value picked; developed-land vs agricultural vs apartment classified; clean name confirmed). Agricultural / apartment / header rows dropped.
+- **Match cleanup**: PID/survey boilerplate stripped from localities (kept in notes); "(… Road)" qualifiers lifted into road_name.
+- Reproducible scripts committed: parse-igr-anekal-belt.py, merge-igr-anekal.py, gen-resolve-workflow.py, build-igr-anekal-migration.py.
+
+### Verified live (read-only)
+679 rows loaded; clean locality matches score 0.75–0.93 (Anekal Kasaba ₹836, Bommasandra ₹2,676, Jigani Industrial Area ₹1,793, Attibele Industrial Area ₹1,394). End-to-end on the 3 actual deals: none fire the flag yet, all for correct reasons — Pointec is priced **above** the circle rate (₹5,250 vs ₹1,282), Jigani has no land price entered (₹0), Gattahalli's saved address is too generic to pin to an Anekal locality. The infrastructure is correct; firing needs a clean address + a land rate + rate-below-guidance.
+
+### What's left to do next
+- Optional: seed additional SRO gazettes (operator has ~257 total) only for areas where new deals appear — same deterministic pipeline.
+- Deal-data nudge (operator): the Jigani deal has no land price and the Gattahalli/Jigani addresses are locality-sparse; entering a land rate + a cleaner locality would let the flag evaluate them.
