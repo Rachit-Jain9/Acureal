@@ -9271,3 +9271,24 @@ These gazettes were **much richer than the Gandhinagara file** — full 8-column
 ### What's left to do next
 - Optional: seed additional SRO gazettes (operator has ~257 total) only for areas where new deals appear — same deterministic pipeline.
 - Deal-data nudge (operator): the Jigani deal has no land price and the Gattahalli/Jigani addresses are locality-sparse; entering a land rate + a cleaner locality would let the flag evaluate them.
+
+## 2026-06-15 — Bengaluru Master Plan map integration (PRs #832, #833, #835)
+
+### What was worked on (plain English)
+The operator pointed at an external master-plan viewer (datsvarun.github.io/master-plan-viewer) and asked to integrate it. Instead of embedding that site, we brought its value into REDIP natively: the official BDA Revised Master Plan 2015 land-use map now overlays REDIP's own maps as a labeled reference layer, and there's a new city-wide Master Plan Explorer.
+
+### Approach (deep technical review first; plan approved + ChatGPT cross-check)
+- Investigated the viewer: OpenLayers over georeferenced rasters; for Bengaluru it exposes RMP 2015 as a plain **XYZ tile template** (Map Warper layer 2147 = "Bengaluru RMP2015 PLU", BDA base-2007, 77 rectified sheets, bbox W77.379/S12.743/E77.859/N13.191) and RMP 2031 as a COG (withdrawn — excluded). XYZ tiles drop straight into REDIP's existing **Leaflet** stack — no OpenLayers/COG/MapLibre. This is the architecture doc's Phase 3.
+- A ChatGPT review largely validated the plan; its one good addition (a deterministic regulatory-context drawer) was folded in; its one error (a parallel `regulatory_evidence` table) was rejected — REDIP already has `parcel_intelligence_snapshots` + the resolver.
+
+### Shipped
+- **#832 — RMP 2015 overlay on the deal parcel map.** Opacity-controlled reference overlay in a dedicated Leaflet pane (z350: above basemap, below zoning/boundary/pin), wired through the existing `CadastralLayerPanel`/`cadastralLayers.js` layer system (`masterPlanLayer()` + provenance + `isInRmp2015Bounds()`; `MasterPlanRow` toggle + opacity slider). Out-of-bbox parcels (Anekal belt) → honest "Outside mapped area · see Zoning tab". Reference-only labeling (amber, never "verified", "verify against the official sheet").
+- **#833 — cinematic Master Plan Explorer** (`/dashboard/master-plan`, primary sidebar "Master Plan", analyst-visible): full-screen map, basemap toggle, RMP overlay + opacity, address search → flyTo, deal pins (stage-coloured), and a deterministic regulatory-context drawer on click (bbox coverage + the operative-plan fact + a link to the deal's real parcel intelligence — no AI, no new endpoint/table).
+- **#835 — the fix that made it actually work.** Live prod verification showed the same-origin tile proxy returning blank: **Map Warper 403s server-side / datacenter fetches (Vercel's egress included)** — a residential IP + browser UA gets 200, Vercel gets blocked. Fixed by loading tiles **client-side** (the user's browser fetches Map Warper from the user's own IP, exactly like the source viewer), with `mapwarper.net` added to the CSP `img-src`. (#834, a User-Agent fix, was necessary but not sufficient — superseded by #835.) The backend tile proxy + `MASTER_PLAN_RMP2015_TILE_BASE` are kept (dormant) as the path for REDIP-self-hosted tiles.
+
+### Verification
+Backend suite 3357 green + 11 new tile-proxy tests; frontend build clean + 9 new + existing 146 files green. Live prod: tile-proxy validation paths (400/204) confirmed; **CSP now allow-lists mapwarper.net** (deploy live); Map Warper serves browser-UA requests (200, ~200KB tiles). Visual in-browser screenshot was pending — the operator's Chrome was logged out and credentials are never entered by the assistant.
+
+### What's left to do next
+- **Production-reliability follow-up (recommended):** re-host the rectified RMP-2015 tiles on REDIP-owned storage (Supabase Storage / Vercel Blob — which Vercel CAN fetch; Map Warper exposes WMS/KML/GeoTIFF export), then point `MASTER_PLAN_RMP2015_TILE_BASE` + `VITE_MASTER_PLAN_TILE_URL` at the dormant proxy → same-origin, CDN-cached, Map-Warper-independent overlay.
+- Operator: log in + open **Master Plan** to see the overlay render (and toggle it on any deal's Parcel/Site map).
