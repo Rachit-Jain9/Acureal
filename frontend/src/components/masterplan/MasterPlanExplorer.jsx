@@ -232,7 +232,7 @@ export default function MasterPlanExplorer() {
   const base = BASEMAPS[basemap];
 
   return (
-    <div className="relative h-[calc(100vh-8.5rem)] min-h-[520px] overflow-hidden rounded-editorial border border-hairline bg-bg-secondary">
+    <div className="relative h-full min-h-[460px] overflow-hidden rounded-editorial border border-hairline bg-bg-secondary">
       <MapContainer
         center={BENGALURU_CENTER}
         zoom={EXPLORER_ZOOM}
