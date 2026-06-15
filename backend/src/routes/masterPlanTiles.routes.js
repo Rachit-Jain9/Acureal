@@ -45,6 +45,11 @@ const MIN_Z = 9;
 const MAX_Z = 19;
 const UPSTREAM_TIMEOUT_MS = 8000;
 
+// Map Warper returns 403 to the default Node/undici `User-Agent: node`. A polite,
+// identifying Mozilla-compatible UA is accepted (verified) — we are proxying
+// public reference tiles on behalf of a browser map.
+const UPSTREAM_USER_AGENT = 'Mozilla/5.0 (compatible; REDIP-tile-proxy/1.0; +https://redip.vercel.app)';
+
 // Web-Mercator XYZ tile → lon/lat of its NW corner.
 const tileNwLonLat = (x, y, z) => {
   const n = 2 ** z;
@@ -106,7 +111,7 @@ router.get('/rmp2015/:z/:x/:y.png', async (req, res) => {
   try {
     const upstream = await fetch(`${RMP2015_TILE_BASE}/${zi}/${xi}/${yi}.png`, {
       signal: controller.signal,
-      headers: { Accept: 'image/png,image/*' },
+      headers: { Accept: 'image/png,image/*', 'User-Agent': UPSTREAM_USER_AGENT },
     });
     if (!upstream.ok) {
       // Upstream miss/blank (often 404 for unrectified tiles) → transparent.
