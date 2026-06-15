@@ -10,8 +10,11 @@ import MasterPlanExplorer from '../components/masterplan/MasterPlanExplorer';
  */
 export default function MasterPlanExplorerPage() {
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-start justify-between gap-3">
+    // Fill the dashboard content area so the map gets the remaining height and
+    // all its corner controls (search, controls, drawer) stay on-screen without
+    // a page scroll. `min-h-0` lets the flex child shrink so the map can size.
+    <div className="flex h-full min-h-[560px] flex-col gap-3">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-2.5">
           <span className="mt-0.5 rounded-md bg-accent-soft p-1.5 text-accent">
             <Map size={18} />
@@ -27,9 +30,11 @@ export default function MasterPlanExplorerPage() {
         </div>
       </header>
 
-      <MasterPlanExplorer />
+      <div className="min-h-0 flex-1">
+        <MasterPlanExplorer />
+      </div>
 
-      <p className="text-[11px] leading-snug text-content-muted">
+      <p className="shrink-0 text-[11px] leading-snug text-content-muted">
         Reference overlay only — RMP 2015 Proposed Land Use (BDA, base year 2007), community-georeferenced via Map Warper. Verify against the official sheet; the authoritative zone, FAR and guidance for a parcel are resolved deterministically on its linked property.
       </p>
     </div>
