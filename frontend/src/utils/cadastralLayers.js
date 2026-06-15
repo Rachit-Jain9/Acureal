@@ -58,6 +58,18 @@ export const RMP2015_LEAFLET_BOUNDS = [
 
 export const DEFAULT_MASTER_PLAN_OPACITY = 0.6;
 
+// Tile URL for the RMP 2015 raster. Loaded CLIENT-SIDE (the user's browser
+// fetches the tiles from their own IP, which Map Warper serves) — Map Warper's
+// community server blocks server-side / datacenter fetches, so the same-origin
+// proxy (backend/src/routes/masterPlanTiles.routes.js) can't reach it from
+// Vercel. The proxy + `MASTER_PLAN_RMP2015_TILE_BASE` remain the path for
+// REDIP-self-hosted tiles: host them, then set `VITE_MASTER_PLAN_TILE_URL` to
+// `/api/master-plan-tiles/rmp2015/{z}/{x}/{y}.png`. (Map Warper is allow-listed
+// in vercel.json `img-src` for the direct load.)
+export const RMP2015_TILE_URL =
+  (import.meta.env && import.meta.env.VITE_MASTER_PLAN_TILE_URL)
+  || 'https://mapwarper.net/layers/tile/2147/{z}/{x}/{y}.png';
+
 // Pure point-in-bbox test — drives the honest "outside mapped area" state so a
 // blank overlay is never mistaken for "no zoning here".
 export function isInRmp2015Bounds(lat, lng) {

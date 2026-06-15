@@ -21,6 +21,7 @@ import { toast } from '../common/Toast';
 import {
   isInRmp2015Bounds,
   RMP2015_LEAFLET_BOUNDS,
+  RMP2015_TILE_URL,
   DEFAULT_MASTER_PLAN_OPACITY,
   MASTER_PLAN_PROVENANCE,
 } from '../../utils/cadastralLayers';
@@ -235,13 +236,12 @@ export default function MasterPlanExplorer() {
             <TileLayer
               key={`mp-${mpEnabled}`}
               pane="masterPlanPane"
-              url="/api/master-plan-tiles/rmp2015/{z}/{x}/{y}.png"
+              url={RMP2015_TILE_URL}
               opacity={mpOpacity}
               minZoom={9}
               maxZoom={19}
               bounds={RMP2015_LEAFLET_BOUNDS}
               attribution="RMP 2015 PLU — BDA / Map Warper (reference)"
-              eventHandlers={{ tileerror: () => setMpError(true) }}
             />
           )}
         </Pane>
