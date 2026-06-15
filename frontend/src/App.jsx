@@ -49,6 +49,7 @@ const TeamPage = lazy(() => import('./pages/TeamPage'));
 const PrivacyCentrePage = lazy(() => import('./pages/PrivacyCentrePage'));
 const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
 const MasterPlanAdminPage = lazy(() => import('./pages/MasterPlanAdminPage'));
+const MasterPlanExplorerPage = lazy(() => import('./pages/MasterPlanExplorerPage'));
 const ParcelIntelligenceAdminPage = lazy(() => import('./pages/ParcelIntelligenceAdminPage'));
 const CompsQueuePage = lazy(() => import('./pages/CompsQueuePage'));
 const CompsQueueDetailPage = lazy(() => import('./pages/CompsQueueDetailPage'));
@@ -161,6 +162,8 @@ export default function App() {
           <Route path="properties" element={<Navigate to="/dashboard/deals" replace />} />
           <Route path="properties/:id" element={withSuspense(<PropertyDetailPage />)} />
           <Route path="map" element={withSuspense(<MapPage />)} />
+          {/* Master Plan Explorer — analyst-visible, read-only RMP 2015 reference map */}
+          <Route path="master-plan" element={withSuspense(<MasterPlanExplorerPage />)} />
           <Route path="financials/:dealId" element={withSuspense(<FinancialsPage />)} />
           <Route path="comps" element={withSuspense(<CompsPage />)} />
           <Route path="intelligence" element={withSuspense(<IntelligencePage />)} />
