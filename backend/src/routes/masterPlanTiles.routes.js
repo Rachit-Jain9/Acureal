@@ -9,15 +9,18 @@
  * zone source (CLAUDE.md: master-plan visuals are reference, verify against the
  * official sheet; the deterministic resolver remains the source of truth).
  *
- * Why a proxy (not a direct Leaflet TileLayer to the upstream):
- *   1. CSP. `vercel.json` `img-src` allow-lists OSM + Esri + Vercel blob only —
- *      a cross-origin tile host would be blocked in production. Same-origin
- *      `/api/...` is covered by `'self'`.
- *   2. Reliability + ownership. The upstream base is a single swappable env var
- *      (`MASTER_PLAN_RMP2015_TILE_BASE`); production can later point at REDIP-
- *      owned tiles (Supabase Storage / Vercel Blob) without any frontend change.
- *   3. Caching. We set long `s-maxage` so Vercel's CDN serves repeat tiles —
- *      the serverless-friendly "cache" (no long-lived worker).
+ * NOTE on the current default: the FRONTEND loads the Map Warper RMP-2015 tiles
+ * CLIENT-SIDE (Map Warper's community server returns 403 to server-side/datacenter
+ * fetches — including Vercel's egress — so this proxy can't reach it from prod;
+ * the browser fetches them from the user's own IP, which Map Warper serves). Map
+ * Warper is allow-listed in vercel.json `img-src` for that direct load.
+ *
+ * This proxy remains the path for REDIP-SELF-HOSTED tiles: host the rectified
+ * tiles on REDIP storage (Supabase Storage / Vercel Blob — which Vercel CAN
+ * fetch), set `MASTER_PLAN_RMP2015_TILE_BASE` to that base, and point the
+ * frontend `VITE_MASTER_PLAN_TILE_URL` at `/api/master-plan-tiles/rmp2015/...`.
+ * Its advantages then: same-origin (CSP-clean), CDN `s-maxage` caching, and a
+ * single swappable upstream env — without re-hitting Map Warper per user.
  *
  * Public + unauthenticated by design: tiles are loaded as plain <img> GETs that
  * cannot carry the org header, and a public government raster holds no tenant
