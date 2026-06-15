@@ -9292,3 +9292,29 @@ Backend suite 3357 green + 11 new tile-proxy tests; frontend build clean + 9 new
 ### What's left to do next
 - **Production-reliability follow-up (recommended):** re-host the rectified RMP-2015 tiles on REDIP-owned storage (Supabase Storage / Vercel Blob — which Vercel CAN fetch; Map Warper exposes WMS/KML/GeoTIFF export), then point `MASTER_PLAN_RMP2015_TILE_BASE` + `VITE_MASTER_PLAN_TILE_URL` at the dormant proxy → same-origin, CDN-cached, Map-Warper-independent overlay.
 - Operator: log in + open **Master Plan** to see the overlay render (and toggle it on any deal's Parcel/Site map).
+
+## 2026-06-15 (continued) — Master Plan map: live verification + adversarial-review fixes (PR #837)
+
+### What was worked on (plain English)
+With the master-plan map shipped, I verified it on the live site in the operator's browser, ran a multi-angle automated review of the new code, and fixed the real issues it found.
+
+### Live in-browser verification (prod, logged in)
+The Master Plan Explorer renders the RMP 2015 land-use colours over the satellite map; the network showed 24 Map Warper tile requests all returning 200, with zero security-policy errors; the new "Master Plan" sidebar entry is active. (A deal page showed "Failed to load deal details" during the check — diagnosed as unrelated: that deal lives in a different workspace and is correctly hidden by tenant isolation.)
+
+### Adversarial review (workflow: 4 lenses → verify) + fixes (#837)
+8 confirmed findings (2 dismissed as false positives during the verify pass). Fixed 7:
+- **a11y:** search input had no visible focus outline (WCAG 2.4.7) → the search pill now rings on focus; the click-info panel is now a proper dialog (labelled, Escape-to-close, focus-trapped/restored via the house `useFocusTrap` hook).
+- **performance:** the Explorer was loading the full heavy deal projection (~11 correlated subqueries + the recommendation batch per deal, up to 500) just to draw pins → switched to `fields:'summary'` (lat/lng/area/name only), matching MapPage.
+- **security:** stored-XSS in the RMP zoning popup (admin-authored zone name → HTML string → Leaflet innerHTML) → rebuilt with DOM APIs + textContent.
+- **UX:** opening the context drawer used to unmount the entire controls panel (couldn't adjust opacity while inspecting) → controls stay mounted; drawer anchored bottom-left.
+- **cleanup:** removed the dead `mpError`/"tiles unavailable" state on both map surfaces (no tileerror handler after the client-side pivot; gap tiles legitimately 404 and can't be told apart from an outage, so re-wiring would false-flag the periphery).
+- Bumped form-data → 4.0.6 + react-router-dom → 6.30.4 to clear a newly-published high-severity advisory tripping the repo-wide CI npm-audit gate.
+
+**Deferred (not fabricated):** a land-use colour legend — the colour→class key must come from the verified official BDA RMP-2015 legend; guessing it would violate the no-fabricated-GIS-facts rule. Flagged as a follow-up.
+
+### Verification
+Cadastral tests updated + green; full frontend suite 146 files green; backend suite green; build clean. CI green; squash-merged.
+
+### What's left to do next
+- **Land-use legend** (needs the official BDA RMP-2015 legend source).
+- **Production tile reliability** (recommended): re-host the rectified RMP-2015 tiles on REDIP-owned storage and point `VITE_MASTER_PLAN_TILE_URL` at the dormant proxy — removes the runtime Map Warper dependency. Blocked on storage write credentials (operator).
