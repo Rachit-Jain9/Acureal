@@ -200,7 +200,7 @@ function zoningLayer(zoning = {}) {
 }
 
 // RMP 2015 land-use raster — a user-toggleable reference overlay with an
-// opacity control. States: off / error / out-of-bounds / on. Never "verified".
+// opacity control. States: off / out-of-bounds / on. Never "verified".
 function masterPlanLayer(mp = {}) {
   const opacity = num(mp.opacity);
   const base = {
@@ -218,15 +218,6 @@ function masterPlanLayer(mp = {}) {
       statusLabel: 'Off',
       tone: 'muted',
       provenance: 'BDA RMP 2015 Proposed Land Use raster. Toggle to load (reference overlay).',
-    };
-  }
-  if (mp.error) {
-    return {
-      ...base,
-      status: 'error',
-      statusLabel: 'Unavailable',
-      tone: 'error',
-      provenance: 'Master-plan tiles failed to load. Toggle off and on to retry.',
     };
   }
   if (mp.inBounds === false) {
@@ -301,7 +292,7 @@ function pinLayer(geocodeStatus) {
  * @param {boolean} input.hasBoundary          a parcel polygon is drawn
  * @param {boolean} input.boundaryApproximate  the polygon is a placeholder
  * @param {object}  input.zoning               { enabled, loading, error, featureCount }
- * @param {object}  input.masterPlan           { enabled, error, inBounds, opacity }
+ * @param {object}  input.masterPlan           { enabled, inBounds, opacity }
  * @param {string}  input.geocodeStatus        the pin's geocode status
  * @returns {Array<object>} ordered layer descriptors (basemap, boundary,
  *          zoning, master plan, pin) — never null; always five entries.

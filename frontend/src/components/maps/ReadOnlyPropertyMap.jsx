@@ -122,13 +122,13 @@ export default function ReadOnlyPropertyMap({
   const [zoningLoading, setZoningLoading] = useState(false);
   const [zoningError, setZoningError] = useState(null);
 
-  // Master-plan (RMP 2015) reference overlay — same-origin proxied raster
-  // tiles. Opacity-controlled; bounds-limited so tiles only load over the BDA
-  // extent. `mpError` flips on a real tileerror (blank tiles return 204 and are
-  // treated as empty, not errored).
+  // Master-plan (RMP 2015) reference overlay — Map Warper raster tiles loaded
+  // client-side, opacity-controlled, bounds-limited to the BDA extent. Tiles
+  // outside the 77 rectified sheets legitimately 404 (a normal gap, rendered
+  // transparent by Leaflet), so there is no per-tile "error" state — a wider
+  // outage simply leaves the overlay blank, consistent with its reference label.
   const [mpEnabled, setMpEnabled] = useState(false);
   const [mpOpacity, setMpOpacity] = useState(DEFAULT_MASTER_PLAN_OPACITY);
-  const [mpError, setMpError] = useState(false);
 
   // T6.1 — pin relocation state
   const [relocateMode, setRelocateMode] = useState(false);
@@ -175,7 +175,6 @@ export default function ReadOnlyPropertyMap({
         },
         masterPlan: {
           enabled: mpEnabled,
-          error: mpError,
           inBounds: mpInBounds,
           opacity: mpOpacity,
         },
@@ -189,7 +188,6 @@ export default function ReadOnlyPropertyMap({
       zoningError,
       zoningGeo,
       mpEnabled,
-      mpError,
       mpInBounds,
       mpOpacity,
       geocodeStatus,
@@ -391,15 +389,36 @@ export default function ReadOnlyPropertyMap({
             }}
             onEachFeature={(feature, layer) => {
               const p = feature?.properties || {};
-              const html = `
-                <div style="font-family: inherit; font-size: 12px; min-width: 160px">
-                  <div style="font-weight: 600; margin-bottom: 4px">${p.zone_code || 'Zone'}</div>
-                  ${p.zone_name ? `<div style="color: #475569; margin-bottom: 4px">${p.zone_name}</div>` : ''}
-                  ${p.permissible_fsi_max ? `<div>Max FSI: <b>${p.permissible_fsi_max}</b></div>` : ''}
-                  ${p.permissible_fsi_base ? `<div>Base FSI: ${p.permissible_fsi_base}</div>` : ''}
-                </div>
-              `;
-              layer.bindPopup(html);
+              // Build the popup with DOM APIs + textContent — never an HTML
+              // string — so admin-authored zone_code/zone_name can't inject
+              // markup (Leaflet bindPopup(string) sets innerHTML; bindPopup(node)
+              // does not). Guards a stored-XSS path from the zone editor.
+              const root = document.createElement('div');
+              root.style.cssText = 'font-family:inherit;font-size:12px;min-width:160px';
+              const code = document.createElement('div');
+              code.style.cssText = 'font-weight:600;margin-bottom:4px';
+              code.textContent = p.zone_code || 'Zone';
+              root.appendChild(code);
+              if (p.zone_name) {
+                const name = document.createElement('div');
+                name.style.cssText = 'color:#475569;margin-bottom:4px';
+                name.textContent = p.zone_name;
+                root.appendChild(name);
+              }
+              if (p.permissible_fsi_max != null && p.permissible_fsi_max !== '') {
+                const m = document.createElement('div');
+                m.textContent = 'Max FSI: ';
+                const b = document.createElement('b');
+                b.textContent = String(p.permissible_fsi_max);
+                m.appendChild(b);
+                root.appendChild(m);
+              }
+              if (p.permissible_fsi_base != null && p.permissible_fsi_base !== '') {
+                const base = document.createElement('div');
+                base.textContent = `Base FSI: ${p.permissible_fsi_base}`;
+                root.appendChild(base);
+              }
+              layer.bindPopup(root);
             }}
           />
         )}
@@ -517,10 +536,7 @@ export default function ReadOnlyPropertyMap({
             layers={cadastralLayers}
             onBasemapChange={setActiveLayer}
             onToggleZoning={() => setZoningEnabled((on) => !on)}
-            onToggleMasterPlan={() => {
-              setMpError(false);
-              setMpEnabled((on) => !on);
-            }}
+            onToggleMasterPlan={() => setMpEnabled((on) => !on)}
             onMasterPlanOpacity={setMpOpacity}
           />
         </div>
