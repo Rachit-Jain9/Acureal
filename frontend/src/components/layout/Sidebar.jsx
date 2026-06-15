@@ -18,6 +18,7 @@ const primaryNavItems = [
   { to: '/dashboard',              icon: LayoutDashboard, label: 'Dashboard',            tourId: 'nav-dashboard' },
   { to: '/dashboard/deals',        icon: Briefcase,        label: 'Deals',               tourId: 'nav-deals' },
   { to: '/dashboard/intelligence', icon: Brain,            label: 'Market Intelligence', tourId: 'nav-intelligence' },
+  { to: '/dashboard/master-plan',  icon: Map,              label: 'Master Plan',         tourId: 'nav-master-plan-explorer' },
   { to: '/dashboard/comps',        icon: BarChart3,        label: 'Comps',               tourId: 'nav-comps' },
   { to: '/dashboard/reports',      icon: FileBarChart2,    label: 'Reports / Exports',   tourId: 'nav-reports' },
 ];
