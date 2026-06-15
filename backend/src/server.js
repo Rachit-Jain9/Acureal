@@ -38,6 +38,7 @@ const adminRoutes = require('./routes/admin.routes');
 const searchRoutes = require('./routes/search.routes');
 const localityIntelligenceRoutes = require('./routes/localityIntelligence.routes');
 const masterPlanRoutes = require('./routes/masterplan.routes');
+const masterPlanTilesRoutes = require('./routes/masterPlanTiles.routes');
 const parcelIntelligenceRoutes = require('./routes/parcelIntelligence.routes');
 const evidenceLinksRoutes = require('./routes/evidenceLinks.routes');
 const legalRoutes = require('./routes/legal.routes');
@@ -154,11 +155,28 @@ const generalLimiter = rateLimit({
   skip: () => process.env.NODE_ENV === 'test',
 });
 
+// Map tiles: one map view fetches 20–60 tiles and panning fires bursts, so the
+// 120/min general cap would throttle the master-plan overlay. A dedicated
+// relaxed limiter, mounted (with its public route) BEFORE the general /api
+// limiter so the tile handler responds first and never reaches generalLimiter.
+const tileLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many tile requests. Please slow down.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+
 app.use('/api/auth', authLimiter);
 app.use('/api/intelligence', heavyLimiter);
 app.use('/api/exports', heavyLimiter);
 app.use('/api/extraction', heavyLimiter);
 app.use('/api/privacy', heavyLimiter);
+// Public, cached master-plan tile proxy — registered before the general limiter
+// + outside the authenticate chain (tiles are anonymous <img> GETs of a public
+// reference raster; no tenant data).
+app.use('/api/master-plan-tiles', tileLimiter, masterPlanTilesRoutes);
 app.use('/api', generalLimiter);
 
 // Body parsing

@@ -4,9 +4,9 @@ import { buildCadastralLayers, LAYER_COLORS } from '../cadastralLayers';
 const byKey = (layers, key) => layers.find((l) => l.key === key);
 
 describe('buildCadastralLayers', () => {
-  it('always returns the four layers in canvas order', () => {
+  it('always returns the five layers in canvas order', () => {
     const layers = buildCadastralLayers();
-    expect(layers.map((l) => l.key)).toEqual(['basemap', 'boundary', 'zoning', 'pin']);
+    expect(layers.map((l) => l.key)).toEqual(['basemap', 'boundary', 'zoning', 'masterPlan', 'pin']);
   });
 
   it('reflects the active basemap and its tile provenance', () => {

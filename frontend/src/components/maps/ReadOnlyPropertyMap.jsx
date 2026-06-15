@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleMarker, GeoJSON, MapContainer, Marker, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, GeoJSON, MapContainer, Marker, Pane, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { Maximize2, Minimize2, MapPin, Check, X as XIcon } from 'lucide-react';
 import clsx from 'clsx';
@@ -7,7 +7,12 @@ import 'leaflet/dist/leaflet.css';
 import api, { propertiesAPI } from '../../services/api';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from '../common/Toast';
-import { buildCadastralLayers } from '../../utils/cadastralLayers';
+import {
+  buildCadastralLayers,
+  isInRmp2015Bounds,
+  RMP2015_LEAFLET_BOUNDS,
+  DEFAULT_MASTER_PLAN_OPACITY,
+} from '../../utils/cadastralLayers';
 import CadastralLayerPanel from './CadastralLayerPanel';
 
 const toNumber = (value) => {
@@ -116,6 +121,14 @@ export default function ReadOnlyPropertyMap({
   const [zoningLoading, setZoningLoading] = useState(false);
   const [zoningError, setZoningError] = useState(null);
 
+  // Master-plan (RMP 2015) reference overlay — same-origin proxied raster
+  // tiles. Opacity-controlled; bounds-limited so tiles only load over the BDA
+  // extent. `mpError` flips on a real tileerror (blank tiles return 204 and are
+  // treated as empty, not errored).
+  const [mpEnabled, setMpEnabled] = useState(false);
+  const [mpOpacity, setMpOpacity] = useState(DEFAULT_MASTER_PLAN_OPACITY);
+  const [mpError, setMpError] = useState(false);
+
   // T6.1 — pin relocation state
   const [relocateMode, setRelocateMode] = useState(false);
   const [pendingPin, setPendingPin] = useState(null); // [lat, lng] | null
@@ -140,6 +153,14 @@ export default function ReadOnlyPropertyMap({
 
   // E1 — the layer descriptor driving the CadastralLayerPanel: one honest
   // legend over what the map is actually painting and where it comes from.
+  // Pure point-in-bbox test — the overlay only covers the BDA extent, so a
+  // parcel outside it gets an honest "outside mapped area" state rather than a
+  // silently blank overlay.
+  const mpInBounds = useMemo(
+    () => (center ? isInRmp2015Bounds(center[0], center[1]) : false),
+    [center],
+  );
+
   const cadastralLayers = useMemo(
     () =>
       buildCadastralLayers({
@@ -151,9 +172,27 @@ export default function ReadOnlyPropertyMap({
           error: zoningError,
           featureCount: zoningGeo?.features?.length ?? null,
         },
+        masterPlan: {
+          enabled: mpEnabled,
+          error: mpError,
+          inBounds: mpInBounds,
+          opacity: mpOpacity,
+        },
         geocodeStatus,
       }),
-    [activeLayer, geometry, zoningEnabled, zoningLoading, zoningError, zoningGeo, geocodeStatus],
+    [
+      activeLayer,
+      geometry,
+      zoningEnabled,
+      zoningLoading,
+      zoningError,
+      zoningGeo,
+      mpEnabled,
+      mpError,
+      mpInBounds,
+      mpOpacity,
+      geocodeStatus,
+    ],
   );
 
   useEffect(() => {
@@ -298,6 +337,25 @@ export default function ReadOnlyPropertyMap({
           url={layer.url}
           maxZoom={layer.maxZoom}
         />
+        {/* RMP 2015 reference overlay — own pane at z350: above the basemap
+            (tilePane 200), below the GeoJSON zoning/boundary (overlayPane 400)
+            and the parcel pin (markerPane 600). Same-origin proxied tiles
+            (CSP-safe); opacity updates live; bounds-limited to the BDA extent. */}
+        <Pane name="masterPlanPane" style={{ zIndex: 350 }}>
+          {mpEnabled && (
+            <TileLayer
+              key={`mp-${mpEnabled}`}
+              pane="masterPlanPane"
+              url="/api/master-plan-tiles/rmp2015/{z}/{x}/{y}.png"
+              opacity={mpOpacity}
+              minZoom={9}
+              maxZoom={19}
+              bounds={RMP2015_LEAFLET_BOUNDS}
+              attribution="RMP 2015 PLU — BDA / Map Warper (reference)"
+              eventHandlers={{ tileerror: () => setMpError(true) }}
+            />
+          )}
+        </Pane>
         <FitToGeometry geometry={geometry} fallbackCenter={center} fallbackZoom={zoom} />
         {geometry && (
           <GeoJSON
@@ -459,6 +517,11 @@ export default function ReadOnlyPropertyMap({
             layers={cadastralLayers}
             onBasemapChange={setActiveLayer}
             onToggleZoning={() => setZoningEnabled((on) => !on)}
+            onToggleMasterPlan={() => {
+              setMpError(false);
+              setMpEnabled((on) => !on);
+            }}
+            onMasterPlanOpacity={setMpOpacity}
           />
         </div>
       )}
