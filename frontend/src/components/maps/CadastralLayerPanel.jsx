@@ -27,10 +27,19 @@ const TONE_BADGE = {
 
 function Swatch({ swatch }) {
   if (!swatch) return null;
-  const style =
-    swatch.type === 'gradient'
-      ? { background: `linear-gradient(135deg, ${swatch.colors.join(', ')})` }
-      : { backgroundColor: swatch.color };
+  let style;
+  if (swatch.type === 'gradient') {
+    style = { background: `linear-gradient(135deg, ${swatch.colors.join(', ')})` };
+  } else if (swatch.type === 'raster') {
+    // A small multi-band chip suggesting a land-use raster (yellow=residential,
+    // red=commercial, purple=public, green=open — purely indicative).
+    style = {
+      background:
+        'linear-gradient(135deg, #fde68a 0 25%, #fca5a5 25% 50%, #c4b5fd 50% 75%, #86efac 75% 100%)',
+    };
+  } else {
+    style = { backgroundColor: swatch.color };
+  }
   return (
     <span
       aria-hidden="true"
@@ -151,10 +160,70 @@ function ZoningRow({ layer, onToggleZoning }) {
   );
 }
 
+// The master-plan row — a switch like zoning, plus an opacity slider shown
+// only when the reference raster is actually painting (status 'on').
+function MasterPlanRow({ layer, onToggleMasterPlan, onMasterPlanOpacity }) {
+  const pct = Math.round((Number(layer.opacity) || 0) * 100);
+  return (
+    <div className="flex flex-col gap-1 px-3 py-2">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2 min-w-0">
+          <Swatch swatch={layer.swatch} />
+          <span className="text-[11px] font-semibold text-content-primary leading-tight">
+            {layer.label}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <StatusBadge tone={layer.tone} label={layer.statusLabel} />
+          <button
+            type="button"
+            role="switch"
+            aria-checked={layer.enabled}
+            aria-label="Toggle RMP 2015 land-use overlay"
+            onClick={() => onToggleMasterPlan?.()}
+            className={clsx(
+              'relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150 ease-out',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+              layer.enabled ? 'bg-primary-600' : 'bg-bg-secondary border border-hairline-strong',
+            )}
+          >
+            <span
+              className={clsx(
+                'absolute top-0.5 h-3 w-3 rounded-full bg-bg-elevated shadow-sm transition-transform duration-150 ease-out',
+                layer.enabled ? 'translate-x-3.5' : 'translate-x-0.5',
+              )}
+            />
+          </button>
+        </div>
+      </div>
+      {layer.enabled && layer.status === 'on' && (
+        <div className="flex items-center gap-2 pl-5">
+          <input
+            type="range"
+            min={0.1}
+            max={1}
+            step={0.05}
+            value={layer.opacity}
+            aria-label="Master-plan overlay opacity"
+            onChange={(e) => onMasterPlanOpacity?.(Number(e.target.value))}
+            className="h-1 flex-1 cursor-pointer accent-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+          />
+          <span className="w-8 shrink-0 text-right text-[10px] font-medium tabular-nums text-content-muted">
+            {pct}%
+          </span>
+        </div>
+      )}
+      <p className="text-[10px] leading-snug text-content-muted">{layer.provenance}</p>
+    </div>
+  );
+}
+
 export default function CadastralLayerPanel({
   layers = [],
   onBasemapChange,
   onToggleZoning,
+  onToggleMasterPlan,
+  onMasterPlanOpacity,
   defaultOpen = true,
   className = '',
 }) {
@@ -168,6 +237,7 @@ export default function CadastralLayerPanel({
     if (l.key === 'basemap' || l.key === 'pin') return true;
     if (l.key === 'boundary') return !!l.drawn;
     if (l.key === 'zoning') return l.status === 'on';
+    if (l.key === 'masterPlan') return l.status === 'on';
     return false;
   }).length;
 
@@ -210,7 +280,7 @@ export default function CadastralLayerPanel({
       <div
         className={clsx(
           'overflow-hidden transition-all duration-200 ease-out',
-          open ? 'max-h-[360px] opacity-100' : 'max-h-0 opacity-0',
+          open ? 'max-h-[520px] opacity-100' : 'max-h-0 opacity-0',
         )}
       >
         <div className="divide-y divide-hairline-soft border-t border-hairline-soft">
@@ -219,6 +289,13 @@ export default function CadastralLayerPanel({
           )}
           {get('boundary') && <DataLayerRow layer={get('boundary')} />}
           {get('zoning') && <ZoningRow layer={get('zoning')} onToggleZoning={onToggleZoning} />}
+          {get('masterPlan') && (
+            <MasterPlanRow
+              layer={get('masterPlan')}
+              onToggleMasterPlan={onToggleMasterPlan}
+              onMasterPlanOpacity={onMasterPlanOpacity}
+            />
+          )}
           {get('pin') && <DataLayerRow layer={get('pin')} />}
         </div>
       </div>
