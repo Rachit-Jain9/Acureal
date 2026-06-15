@@ -8,7 +8,6 @@ import {
   useMap,
   useMapEvents,
 } from 'react-leaflet';
-import L from 'leaflet';
 import { Link } from 'react-router-dom';
 import {
   Search, Layers, Crosshair, MapPin, X as XIcon, ExternalLink, Info,
@@ -26,6 +25,7 @@ import {
   MASTER_PLAN_PROVENANCE,
 } from '../../utils/cadastralLayers';
 import { getMarkerRadius, STAGE_HEAT_META } from '../map/mapConfig';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 
 // Centre + extent of the BDA RMP 2015 raster (Map Warper layer 2147).
 const BENGALURU_CENTER = [12.9716, 77.5946];
@@ -82,6 +82,8 @@ function MapClickCapture({ onPick }) {
 // zoning — the exact zone/FAR comes from linking a property (the deterministic
 // kernel), which this points to.
 function ContextDrawer({ selected, onClose }) {
+  // Hook must run unconditionally (no-ops when inactive); guard comes after.
+  const trapRef = useFocusTrap(!!selected, { onEscape: onClose });
   if (!selected) return null;
   const isDeal = selected.kind === 'deal';
   const lat = toNum(selected.lat);
@@ -89,13 +91,21 @@ function ContextDrawer({ selected, onClose }) {
   const inBounds = lat !== null && lng !== null && isInRmp2015Bounds(lat, lng);
 
   return (
-    <div className="absolute right-3 top-3 bottom-3 z-[1200] w-[300px] max-w-[82vw] overflow-y-auto rounded-editorial border border-hairline bg-bg-elevated/97 shadow-lg backdrop-blur-sm">
+    // Anchored bottom-left so it never overlaps the controls (top-right) or the
+    // search (top-left); a focus-trapped, Escape-closable dialog.
+    <div
+      ref={trapRef}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="mp-context-title"
+      className="absolute bottom-3 left-3 z-[1200] max-h-[58vh] w-[300px] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-editorial border border-hairline bg-bg-elevated/97 shadow-lg backdrop-blur-sm"
+    >
       <div className="flex items-start justify-between gap-2 border-b border-hairline-soft px-3.5 py-3">
         <div className="min-w-0">
           <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-content-muted">
             {isDeal ? 'Deal' : 'Map point'}
           </p>
-          <h3 className="truncate text-sm font-semibold text-content-primary">
+          <h3 id="mp-context-title" className="truncate text-sm font-semibold text-content-primary">
             {isDeal ? (selected.name || 'Untitled deal') : 'Regulatory context'}
           </h3>
         </div>
@@ -166,16 +176,18 @@ export default function MasterPlanExplorer() {
   const [basemap, setBasemap] = useState('satellite');
   const [mpEnabled, setMpEnabled] = useState(true);
   const [mpOpacity, setMpOpacity] = useState(DEFAULT_MASTER_PLAN_OPACITY + 0.05);
-  const [mpError, setMpError] = useState(false);
   const [selected, setSelected] = useState(null);
   const [search, setSearch] = useState('');
   const [searching, setSearching] = useState(false);
   const [flyTarget, setFlyTarget] = useState(null);
 
-  // The user's deals as pins. Deals carry lat/lng (via the property join).
+  // The user's deals as pins — `fields:'summary'` uses the lightweight
+  // projection (lat/lng/land_area_sqft/name only), skipping the ~11 per-deal
+  // correlated subqueries + the recommendation batch the full projection runs.
+  // Matches the sibling MapPage. We only need coordinates to draw pins.
   const { data: dealsResp } = useQuery({
     queryKey: ['masterplan-explorer-deals'],
-    queryFn: () => dealsAPI.list({ limit: 500 }),
+    queryFn: () => dealsAPI.list({ limit: 500, fields: 'summary' }),
     staleTime: 60_000,
   });
 
@@ -266,10 +278,11 @@ export default function MasterPlanExplorer() {
         })}
       </MapContainer>
 
-      {/* Search — top-left */}
+      {/* Search — top-left. The whole pill rings on focus (the input keeps
+          focus:outline-none so the global :focus-visible outline doesn't clash). */}
       <form
         onSubmit={runSearch}
-        className="absolute left-3 top-3 z-[1000] flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated/95 px-2 py-1.5 shadow-sm backdrop-blur-sm"
+        className="absolute left-3 top-3 z-[1000] flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated/95 px-2 py-1.5 shadow-sm backdrop-blur-sm transition-shadow duration-[80ms] ease-out focus-within:ring-2 focus-within:ring-primary-500/40"
       >
         <Search size={13} className="text-content-muted" aria-hidden="true" />
         <input
@@ -288,9 +301,9 @@ export default function MasterPlanExplorer() {
         </button>
       </form>
 
-      {/* Controls — top-right (hidden while the drawer is open to avoid overlap) */}
-      {!selected && (
-        <div className="absolute right-3 top-3 z-[1000] w-60 max-w-[82vw] overflow-hidden rounded-editorial border border-hairline bg-bg-elevated/95 shadow-sm backdrop-blur-sm">
+      {/* Controls — top-right. Always mounted (the drawer is anchored bottom-left),
+          so the overlay/opacity/basemap stay usable while inspecting a context. */}
+      <div className="absolute right-3 top-3 z-[1000] w-60 max-w-[82vw] overflow-hidden rounded-editorial border border-hairline bg-bg-elevated/95 shadow-sm backdrop-blur-sm">
           <div className="flex items-center gap-1.5 border-b border-hairline-soft px-3 py-2">
             <Layers size={12} className="text-content-secondary" aria-hidden="true" />
             <span className="text-[11px] font-semibold text-content-primary">Master Plan Explorer</span>
@@ -330,7 +343,7 @@ export default function MasterPlanExplorer() {
                 role="switch"
                 aria-checked={mpEnabled}
                 aria-label="Toggle RMP 2015 overlay"
-                onClick={() => { setMpError(false); setMpEnabled((v) => !v); }}
+                onClick={() => setMpEnabled((v) => !v)}
                 className={clsx(
                   'relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
                   mpEnabled ? 'bg-primary-600' : 'bg-bg-secondary border border-hairline-strong',
@@ -341,7 +354,7 @@ export default function MasterPlanExplorer() {
             </div>
 
             {/* Opacity */}
-            {mpEnabled && !mpError && (
+            {mpEnabled && (
               <div className="flex items-center gap-2">
                 <input
                   type="range"
@@ -357,9 +370,6 @@ export default function MasterPlanExplorer() {
                   {Math.round(mpOpacity * 100)}%
                 </span>
               </div>
-            )}
-            {mpEnabled && mpError && (
-              <p className="text-[10px] leading-snug text-rose-600">Overlay tiles unavailable. Toggle off and on to retry.</p>
             )}
 
             {/* Provenance + reset view */}
@@ -381,7 +391,6 @@ export default function MasterPlanExplorer() {
             )}
           </div>
         </div>
-      )}
 
       <ContextDrawer selected={selected} onClose={() => setSelected(null)} />
     </div>

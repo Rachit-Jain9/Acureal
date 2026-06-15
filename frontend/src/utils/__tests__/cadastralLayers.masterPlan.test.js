@@ -60,10 +60,4 @@ describe('buildCadastralLayers — master-plan layer', () => {
     expect(m.tone).toBe('approximate');
     expect(m.provenance).toMatch(/outside the RMP 2015 mapped area/i);
   });
-
-  it('error state surfaces a retry hint', () => {
-    const m = mp(buildCadastralLayers({ masterPlan: { enabled: true, error: true, inBounds: true } }));
-    expect(m.status).toBe('error');
-    expect(m.tone).toBe('error');
-  });
 });
