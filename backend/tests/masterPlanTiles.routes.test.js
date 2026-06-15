@@ -96,6 +96,9 @@ describe('masterPlanTiles — GET handler (mocked upstream)', () => {
     const res = mockRes();
     await handler({ params: { z: '12', x: '2930', y: '1899' } }, res);
     expect(global.fetch).toHaveBeenCalledTimes(1);
+    // Must send a browser-like User-Agent — Map Warper 403s the default Node UA.
+    const fetchOpts = global.fetch.mock.calls[0][1];
+    expect(fetchOpts.headers['User-Agent']).toMatch(/Mozilla\/5\.0/);
     expect(res.statusCode).toBe(200);
     expect(Buffer.isBuffer(res.body)).toBe(true);
     expect(res.headers['content-type']).toBe('image/png');
