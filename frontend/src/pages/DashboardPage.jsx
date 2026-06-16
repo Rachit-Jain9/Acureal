@@ -17,13 +17,13 @@ import PageHeader from '../components/common/PageHeader';
 import { SkeletonKpi, SkeletonCard } from '../design-system';
 import useThemeStore from '../store/themeStore';
 import {
-  KpiStripWidget,
   CompsQueueAlertWidget,
   RecentActivitiesWidget,
   TopDealsIrrWidget,
   AiCostSummaryWidget,
   AuditTrailTailWidget,
 } from '../components/dashboard/DashboardWidgets';
+import DashboardHero from '../components/dashboard/DashboardHero';
 
 // The two recharts-backed widgets are lazy-loaded so the recharts vendor chunk
 // (~115 KB gz) only fetches when the chart blocks mount — not on the dashboard's
@@ -77,7 +77,7 @@ function useTooltipStyle() {
 // in thunks (vs an object of components) keeps the heavy chart deps
 // from rendering when a widget is toggled off.
 const buildWidgetRenderer = ({ data, chartPalette, tooltipStyle, canCurate }) => ({
-  kpi_strip:             () => <KpiStripWidget stats={data?.stats} />,
+  kpi_strip:             () => <DashboardHero stats={data?.stats} />,
   comps_queue_alert:     () => <CompsQueueAlertWidget stats={data?.stats} canCurate={canCurate} />,
   // Self-fetches via usePortfolioRiskRadar — independent of the dashboard
   // stats payload so it can refetch on its own staleTime cadence.
