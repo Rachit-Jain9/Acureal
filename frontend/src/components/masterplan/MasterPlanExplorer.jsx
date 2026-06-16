@@ -109,7 +109,7 @@ function ContextDrawer({ selected, onClose }) {
       role="dialog"
       aria-modal="true"
       aria-labelledby="mp-context-title"
-      className="absolute bottom-3 left-3 z-[1200] max-h-[58vh] w-[300px] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-editorial border border-hairline bg-bg-elevated/97 shadow-lg backdrop-blur-sm"
+      className="absolute bottom-3 left-3 z-[1200] max-h-[58vh] w-[300px] max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-editorial border border-hairline bg-bg-elevated shadow-lg"
     >
       <div className="flex items-start justify-between gap-2 border-b border-hairline-soft px-3.5 py-3">
         <div className="min-w-0">
@@ -293,7 +293,7 @@ export default function MasterPlanExplorer() {
           focus:outline-none so the global :focus-visible outline doesn't clash). */}
       <form
         onSubmit={runSearch}
-        className="absolute left-3 top-3 z-[1000] flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated/95 px-2 py-1.5 shadow-sm backdrop-blur-sm transition-shadow duration-[80ms] ease-out focus-within:ring-2 focus-within:ring-primary-500/40"
+        className="absolute left-3 top-3 z-[1000] flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-2 py-1.5 shadow-md transition-shadow duration-[80ms] ease-out focus-within:ring-2 focus-within:ring-primary-500/40"
       >
         <Search size={13} className="text-content-muted" aria-hidden="true" />
         <input
@@ -316,7 +316,7 @@ export default function MasterPlanExplorer() {
           cards never spill off the map. Always mounted (the drawer is anchored
           bottom-left) so the controls stay usable while inspecting a context. */}
       <div className="absolute right-3 top-3 z-[1000] flex max-h-[calc(100%-1.5rem)] w-60 max-w-[82vw] flex-col gap-2 overflow-y-auto">
-        <div className="shrink-0 overflow-hidden rounded-editorial border border-hairline bg-bg-elevated/95 shadow-sm backdrop-blur-sm">
+        <div className="shrink-0 overflow-hidden rounded-editorial border border-hairline bg-bg-elevated shadow-md">
           <div className="flex items-center gap-1.5 border-b border-hairline-soft px-3 py-2">
             <Layers size={12} className="text-content-secondary" aria-hidden="true" />
             <span className="text-[11px] font-semibold text-content-primary">Master Plan Explorer</span>

@@ -104,7 +104,7 @@ export default function MasterPlanLegend({
   return (
     <div
       className={clsx(
-        'overflow-hidden rounded-editorial border border-hairline bg-bg-elevated/95 shadow-sm backdrop-blur-sm',
+        'overflow-hidden rounded-editorial border border-hairline bg-bg-elevated shadow-md',
         className,
       )}
       data-testid="master-plan-legend"
