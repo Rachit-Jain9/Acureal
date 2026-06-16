@@ -6,6 +6,34 @@ The bar: every panel, page, modal, chart, map, and export must feel **smooth, al
 
 ---
 
+## 0. The trust test — must look human-designed, never "vibe-coded" (TOP PRIORITY, set 2026-06-16)
+
+This rule **supersedes flashiness**. Every surface must look like a real product designer crafted it, **with intention, for humans**. If it looks auto-generated / templated / "vibe-coded," it **destroys user trust** — this is the deciding psychological fact: people do not trust an interface that looks machine-generated, no matter how correct the data underneath is. For an investor-grade tool, trust is the product.
+
+**Dynamic, interactive, lively, cinematic, animated treatments are encouraged wherever applicable — but achieved through CRAFT, never DECORATION.**
+
+| ✅ Craft (human-designed → trustworthy) | ❌ Decoration (vibe-coded → distrust) |
+|---|---|
+| Precise, consistent spacing on one real grid | "Almost-aligned" elements, arbitrary px nudges |
+| A deliberate type scale + weight hierarchy | One size/weight everywhere, or random sizes |
+| A restrained, intentional palette (few colours, used with meaning) | Rainbow accents, a different colour per tile |
+| Motion that represents a real state change (value updates, a save, a reveal) | Motion for its own sake; "look at me" effects |
+| Iconography with consistent stroke + genuine meaning | Mixed icon sets, emoji-as-icons, decorative glyphs |
+| Microcopy + empty/loading/error states that show judgment | Generic placeholder text, lorem-feel copy |
+| Details that reward a second look | Surface polish with nothing underneath |
+
+**Concrete "vibe-coded" tells to AVOID (these read as AI-generated):**
+- Gradient accent **edges/lines** on cards and banners; radial **glows** behind numbers; **neon**.
+- Decorative **pulsing "live" dots**; flashy **dark "spotlight" banner bands** dropped onto a page.
+- Generic **coloured left-stripes** on every tile; saturated chip-soup; anything that screams "an effect was added here."
+- Over-decoration and trying-too-hard. **Restraint reads as confidence; confidence reads as trustworthy.**
+
+**When in doubt, remove the effect.** A calm, precise, editorial surface (the Bloomberg / Stripe / Linear bar) IS the human-designed, trustworthy path — these rules in §1–§13 below are how you get there. This section is the *why*; treat it as the gate every visual change must pass.
+
+*History: set after a "cinematic" dashboard hero (dark band + gradient edge + pulsing dot) was rejected as looking vibe-coded and untrustworthy. The lesson: bolder ≠ flashier. Bolder = more confident, more crafted, more restrained.*
+
+---
+
 ## 1. Motion principles (when to animate, when not)
 
 | Use motion for | Do NOT use motion for |
