@@ -50,7 +50,9 @@ export function Card({ as: As = 'div', elevated = false, className, children, ..
     <As
       className={clsx(
         'bg-bg-elevated border border-hairline rounded-editorial',
-        elevated && 'shadow-editorial',
+        // Subtle, considered depth by default — a real product surface, not a
+        // flat-bordered box. `elevated` lifts it further (modals, hero panels).
+        elevated ? 'shadow-editorial-lg' : 'shadow-editorial',
         className,
       )}
       {...rest}
