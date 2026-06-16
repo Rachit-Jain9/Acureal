@@ -6,10 +6,9 @@ import {
   Moon,
   Activity,
   CheckCircle2,
-  Loader2,
 } from 'lucide-react';
 import { clsx } from 'clsx';
-import { Card, SectionHeader, ErrorState } from '../../design-system';
+import { Card, SectionHeader, ErrorState, Skeleton } from '../../design-system';
 import EmptyState from '../common/EmptyState';
 import { useAttention } from '../../hooks/useDashboard';
 import { usePrefetchDealWorkspace } from '../../hooks/useDeals';
@@ -161,11 +160,24 @@ export default function AttentionPanel() {
         <SectionHeader
           eyebrow="Today"
           title="What needs your attention"
-          className="mb-3"
+          className="mb-4"
         />
-        <div className="flex items-center gap-2 text-xs text-content-tertiary">
-          <Loader2 size={12} className="animate-spin" />
-          Loading…
+        {/* Skeleton that mirrors the final 2-column signal grid (guidelines §4:
+            skeletons, never spinners) so nothing reflows when data lands. */}
+        <div
+          role="status"
+          aria-busy="true"
+          aria-label="Loading today's attention items"
+          className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4"
+        >
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="space-y-2">
+              <Skeleton className="h-2.5 w-28 rounded" />
+              <Skeleton className="h-8 w-full rounded-md" />
+              <Skeleton className="h-8 w-full rounded-md" />
+              <Skeleton className="h-8 w-5/6 rounded-md" />
+            </div>
+          ))}
         </div>
       </Card>
     );
@@ -176,10 +188,20 @@ export default function AttentionPanel() {
       <Card elevated className="p-5">
         <SectionHeader eyebrow="Today" title="What needs your attention" className="mb-3" />
         <ErrorState
+          tone="danger"
           title="Couldn't load the attention list"
-          description="Try again in a moment."
-          onRetry={refetch}
-        />
+          action={(
+            <button
+              type="button"
+              onClick={() => refetch()}
+              className="rounded text-xs font-medium text-accent transition-colors hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+            >
+              Try again
+            </button>
+          )}
+        >
+          Something went wrong fetching today&apos;s items.
+        </ErrorState>
       </Card>
     );
   }

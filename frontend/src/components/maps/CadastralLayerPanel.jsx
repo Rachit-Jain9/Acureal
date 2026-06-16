@@ -278,7 +278,7 @@ export default function CadastralLayerPanel({
   return (
     <div
       className={clsx(
-        'w-60 max-w-[78vw] overflow-hidden rounded-editorial border border-hairline bg-bg-elevated/95 shadow-sm backdrop-blur-sm',
+        'w-60 max-w-[78vw] overflow-hidden rounded-editorial border border-hairline bg-bg-elevated shadow-md',
         className,
       )}
       data-testid="cadastral-layer-panel"
