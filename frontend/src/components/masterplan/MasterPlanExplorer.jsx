@@ -23,9 +23,20 @@ import {
   RMP2015_TILE_URL,
   DEFAULT_MASTER_PLAN_OPACITY,
   MASTER_PLAN_PROVENANCE,
+  RMP2015_LANDUSE_LEGEND,
 } from '../../utils/cadastralLayers';
 import { getMarkerRadius, STAGE_HEAT_META } from '../map/mapConfig';
 import { useFocusTrap } from '../../hooks/useFocusTrap';
+import MasterPlanLegend from './MasterPlanLegend';
+
+// A truthful mini-chip for the overlay toggle: the four most common statutory
+// land-use colours (residential, commercial, industrial, open space), pulled
+// from the source-verified legend so it is never a decorative approximation.
+const TOGGLE_CHIP_GRADIENT = (() => {
+  const by = (code) => RMP2015_LANDUSE_LEGEND.find((g) => g.code === code)?.color;
+  const [r, c, i, p] = [by('R'), by('C'), by('I'), by('P')];
+  return `linear-gradient(135deg, ${r} 0 25%, ${c} 25% 50%, ${i} 50% 75%, ${p} 75% 100%)`;
+})();
 
 // Centre + extent of the BDA RMP 2015 raster (Map Warper layer 2147).
 const BENGALURU_CENTER = [12.9716, 77.5946];
@@ -301,9 +312,11 @@ export default function MasterPlanExplorer() {
         </button>
       </form>
 
-      {/* Controls — top-right. Always mounted (the drawer is anchored bottom-left),
-          so the overlay/opacity/basemap stay usable while inspecting a context. */}
-      <div className="absolute right-3 top-3 z-[1000] w-60 max-w-[82vw] overflow-hidden rounded-editorial border border-hairline bg-bg-elevated/95 shadow-sm backdrop-blur-sm">
+      {/* Controls + legend — top-right, a height-capped scrolling stack so the two
+          cards never spill off the map. Always mounted (the drawer is anchored
+          bottom-left) so the controls stay usable while inspecting a context. */}
+      <div className="absolute right-3 top-3 z-[1000] flex max-h-[calc(100%-1.5rem)] w-60 max-w-[82vw] flex-col gap-2 overflow-y-auto">
+        <div className="shrink-0 overflow-hidden rounded-editorial border border-hairline bg-bg-elevated/95 shadow-sm backdrop-blur-sm">
           <div className="flex items-center gap-1.5 border-b border-hairline-soft px-3 py-2">
             <Layers size={12} className="text-content-secondary" aria-hidden="true" />
             <span className="text-[11px] font-semibold text-content-primary">Master Plan Explorer</span>
@@ -335,7 +348,7 @@ export default function MasterPlanExplorer() {
             {/* RMP overlay toggle */}
             <div className="flex items-center justify-between gap-2">
               <span className="flex items-center gap-1.5 text-[11px] font-medium text-content-secondary">
-                <span aria-hidden="true" className="h-3 w-3 rounded-sm border border-black/10" style={{ background: 'linear-gradient(135deg, #fde68a 0 25%, #fca5a5 25% 50%, #c4b5fd 50% 75%, #86efac 75% 100%)' }} />
+                <span aria-hidden="true" className="h-3 w-3 rounded-sm border border-black/10" style={{ background: TOGGLE_CHIP_GRADIENT }} />
                 RMP 2015 land use
               </span>
               <button
@@ -391,6 +404,9 @@ export default function MasterPlanExplorer() {
             )}
           </div>
         </div>
+
+        <MasterPlanLegend collapsible defaultOpen className="shrink-0" />
+      </div>
 
       <ContextDrawer selected={selected} onClose={() => setSelected(null)} />
     </div>

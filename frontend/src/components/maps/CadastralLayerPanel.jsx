@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, Layers } from 'lucide-react';
 import clsx from 'clsx';
+import MasterPlanLegend from '../masterplan/MasterPlanLegend';
 
 /**
  * CadastralLayerPanel — Workstream E1 (the spatial canvas).
@@ -163,6 +164,7 @@ function ZoningRow({ layer, onToggleZoning }) {
 // The master-plan row — a switch like zoning, plus an opacity slider shown
 // only when the reference raster is actually painting (status 'on').
 function MasterPlanRow({ layer, onToggleMasterPlan, onMasterPlanOpacity }) {
+  const [legendOpen, setLegendOpen] = useState(false);
   const pct = Math.round((Number(layer.opacity) || 0) * 100);
   return (
     <div className="flex flex-col gap-1 px-3 py-2">
@@ -214,6 +216,36 @@ function MasterPlanRow({ layer, onToggleMasterPlan, onMasterPlanOpacity }) {
         </div>
       )}
       <p className="text-[10px] leading-snug text-content-muted">{layer.provenance}</p>
+
+      {/* Land-use colour key — only when the reference raster is actually
+          painting, so a closed legend never implies "no zoning here". */}
+      {layer.enabled && layer.status === 'on' && (
+        <div className="pl-5">
+          <button
+            type="button"
+            onClick={() => setLegendOpen((v) => !v)}
+            aria-expanded={legendOpen}
+            className="inline-flex items-center gap-1 rounded text-[10px] font-medium text-accent transition-colors duration-150 ease-out hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+          >
+            <ChevronDown
+              size={11}
+              aria-hidden="true"
+              className={clsx('transition-transform duration-200 ease-out motion-reduce:transition-none', legendOpen && 'rotate-180')}
+            />
+            {legendOpen ? 'Hide land-use legend' : 'Land-use legend'}
+          </button>
+          <div
+            className={clsx(
+              'overflow-hidden transition-all duration-200 ease-out motion-reduce:transition-none',
+              legendOpen ? 'max-h-[460px] opacity-100' : 'max-h-0 opacity-0',
+            )}
+          >
+            <div className="-mx-3 mt-1 border-t border-hairline-soft">
+              <MasterPlanLegend collapsible={false} compact />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -280,7 +312,7 @@ export default function CadastralLayerPanel({
       <div
         className={clsx(
           'overflow-hidden transition-all duration-200 ease-out',
-          open ? 'max-h-[520px] opacity-100' : 'max-h-0 opacity-0',
+          open ? 'max-h-[820px] opacity-100' : 'max-h-0 opacity-0',
         )}
       >
         <div className="divide-y divide-hairline-soft border-t border-hairline-soft">

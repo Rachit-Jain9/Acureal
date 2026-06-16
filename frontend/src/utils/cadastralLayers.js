@@ -70,6 +70,71 @@ export const RMP2015_TILE_URL =
   (import.meta.env && import.meta.env.VITE_MASTER_PLAN_TILE_URL)
   || 'https://mapwarper.net/layers/tile/2147/{z}/{x}/{y}.png';
 
+// ── RMP 2015 land-use colour key ────────────────────────────────────────────
+// Transcribed from the OFFICIAL BDA source documents, not invented:
+//   • Land-use zone classification (R, C, I, P&SP, T&T, PU, P, UC, AG) — BDA
+//     "Zoning Regulations of Revised Master Plan 2015", Chapter 1.2.
+//   • Swatch colours — sampled directly from the legend ("ZONING CLASSIFICATION")
+//     printed on the BDA "Proposed Land Use Plans" Consolidated Map sheet.
+// Both are published on the Karnataka open-data portal (opencity.in, dataset
+// "BDA Revised Master Plan 2015"). It remains a REFERENCE key: the georeferenced
+// overlay (Map Warper, base year 2007) can read more muted than the printed
+// sheet, so the legend is always labelled "verify against the official sheet"
+// — consistent with MASTER_PLAN_PROVENANCE and the no-fabricated-GIS-facts rule.
+//
+// Grouped by the nine statutory categories; sub-zones carry the map's finer
+// shades so an analyst can read a specific colour off the raster.
+export const RMP2015_LANDUSE_LEGEND = [
+  {
+    category: 'Residential',
+    code: 'R',
+    color: '#FBE496',
+    subzones: [
+      { label: 'Residential (Main)', color: '#F6F0C8' },
+      { label: 'Residential (Mixed)', color: '#FBE496' },
+    ],
+  },
+  {
+    category: 'Commercial',
+    code: 'C',
+    color: '#6CC4EE',
+    subzones: [
+      { label: 'Commercial (Central)', color: '#6CC4EE' },
+      { label: 'Commercial (Business)', color: '#C9E0F1' },
+      { label: 'Commercial axes / Mutation corridor', color: '#31B5EE' },
+    ],
+  },
+  {
+    category: 'Industrial',
+    code: 'I',
+    color: '#C5A5CE',
+    subzones: [
+      { label: 'Industrial (General)', color: '#C5A5CE' },
+      { label: 'Industrial (Hi-Tech)', color: '#DAD5EA' },
+    ],
+  },
+  { category: 'Public & Semi-public', code: 'P&SP', color: '#E99996' },
+  {
+    category: 'Parks & Open Space',
+    code: 'P',
+    color: '#B1D34E',
+    subzones: [
+      { label: 'Parks, playgrounds, cemeteries', color: '#B1D34E' },
+      { label: 'State forest', color: '#40A258' },
+      { label: 'Valley', color: '#46B757' },
+      { label: 'Lake / tank', color: '#CBEAF6' },
+    ],
+  },
+  { category: 'Traffic & Transportation', code: 'T&T', color: '#A6ADB5' },
+  { category: 'Public Utilities', code: 'PU', color: '#E1CFD1' },
+  { category: 'Agricultural land', code: 'AG', color: '#D9ECE7' },
+  { category: 'Unclassified', code: 'UC', color: '#D5D8DD' },
+];
+
+// One-line provenance for the legend itself (distinct from the raster's).
+export const RMP2015_LEGEND_SOURCE =
+  'Key from the official BDA RMP 2015 Proposed Land Use (Consolidated Map) legend + Zoning Regulations. Reference — the scanned overlay can read more muted; verify against the official sheet.';
+
 // Pure point-in-bbox test — drives the honest "outside mapped area" state so a
 // blank overlay is never mistaken for "no zoning here".
 export function isInRmp2015Bounds(lat, lng) {
