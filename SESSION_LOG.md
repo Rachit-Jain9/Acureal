@@ -9318,3 +9318,26 @@ Cadastral tests updated + green; full frontend suite 146 files green; backend su
 ### What's left to do next
 - **Land-use legend** (needs the official BDA RMP-2015 legend source).
 - **Production tile reliability** (recommended): re-host the rectified RMP-2015 tiles on REDIP-owned storage and point `VITE_MASTER_PLAN_TILE_URL` at the dormant proxy — removes the runtime Map Warper dependency. Blocked on storage write credentials (operator).
+
+## 2026-06-16 — Master Plan legend + tile self-host groundwork; a UI/UX direction lesson (human-designed, not vibe-coded)
+
+### What was worked on (plain English)
+A long session across the three arcs the operator asked for: (1) the master-plan map's missing colour legend, (2) "set up" self-hosting the map tiles, (3) a broad UI/UX uplift. The first two shipped cleanly. The third taught a sharp lesson — a "cinematic" dashboard hero was rejected as looking "vibe-coded" / untrustworthy and reverted; the real direction is human-designed craft + restraint, which was then codified as the top design principle. A safe depth refinement shipped; the comprehensive palette/type/spacing pass was deferred pending a concrete taste reference.
+
+### Shipped
+- **#840 — source-verified RMP 2015 land-use colour legend.** Colour key transcribed from the OFFICIAL BDA documents (zone classification from the Zoning Regulations Ch.1.2; swatch colours sampled from the Consolidated Map "ZONING CLASSIFICATION" legend, both on opencity.in). `RMP2015_LANDUSE_LEGEND` + source caveat in `cadastralLayers.js`; new collapsible `MasterPlanLegend` reused on the Explorer + the deal map; 6 tests. Reference-only labelling preserved (no fabricated GIS facts).
+- **#841 — RMP 2015 tile self-hosting groundwork.** Pure tile geometry util (`backend/src/utils/rmp2015Tiles.js`: bbox cull + work-list enumerator, shared with the proxy) + a ready-to-run mirror script (`backend/scripts/mirror-rmp2015-tiles.js`) that fetches Map Warper tiles (this host CAN; Vercel egress is 403'd) and uploads to Vercel Blob. Dry-run verified (z9-11: 14/14 fetchable). Findings: Map Warper sends NO CORS header → a browser-driven mirror is impossible; the server-side mirror is the path; upload is the one credentialed step.
+- **#842 — map-overlay panel legibility + dashboard attention skeleton.** Made the Explorer/deal-map floating panels solid (the vivid raster bled through `/95` + blur and washed out the muted text); replaced a dashboard `Loader2` spinner with a skeleton + fixed the AttentionPanel error branch (passed props `ErrorState` doesn't accept).
+- **#843 — cinematic dashboard hero (REVERTED by #844).** A dark "spotlight" band (gradient accent edge, pulsing dot, count-up). Rejected on sight as vibe-coded.
+- **#844 — revert #843 + codify the anti-vibe-code principle.** Restored the previous KPI strip; added `docs/FRONTEND_GUIDELINES.md` §0 "The trust test": every surface must look human-designed/trustworthy, never auto-generated; dynamic/cinematic only via CRAFT (precise spacing, type hierarchy, restrained palette, state-representing motion), never DECORATION (gradient edges, glows, pulsing dots, spotlight banners). Saved the matching memory.
+- **#845 — considered surface depth.** Refined the light-mode shadow tokens (two-layer contact + ambient) + gave the base `Card` subtle depth by default, so cards read as premium product surfaces, not flat-bordered boxes. Verified live (both themes).
+
+### The UI/UX lesson (codified)
+Bolder ≠ flashier. For an investor-grade tool, trust is the product, and people don't trust interfaces that look machine-generated. The path to "confident / calm / chic / sleek / trustworthy" is human-crafted restraint (the original Bloomberg/Stripe/Linear bar), not decoration. See `docs/FRONTEND_GUIDELINES.md` §0 + memory `feedback_no_vibe_code_human_design.md`.
+
+### Verification
+All PRs: build clean, tests green, CI green, squash-merged. Live in-browser (prod, operator logged in): legend renders on the Explorer with the correct swatches; map panels now solid/legible; dashboard reverted to the KPI strip; card depth visibly premium in both themes.
+
+### What's left to do next
+- **Comprehensive aesthetic pass (palette / typography / spacing)** — deferred pending a concrete reference (operator wants it to match a look they trust; guessing has been costly). When resumed: calibrate to a named reference (Linear / Stripe / Mercury / Ramp / Vercel / etc.), then refine the design tokens + primitives toward it, surface by surface, verifying each on prod, holding to the §0 trust test.
+- **Self-host the RMP 2015 tiles** — run `node backend/scripts/mirror-rmp2015-tiles.js` once storage write access is arranged, then point `MASTER_PLAN_RMP2015_TILE_BASE` + `VITE_MASTER_PLAN_TILE_URL` at the dormant proxy. Removes the Map Warper runtime dependency.
