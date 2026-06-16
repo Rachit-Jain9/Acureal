@@ -30,6 +30,14 @@
  */
 
 const express = require('express');
+const {
+  RMP2015_BBOX,
+  MIN_Z,
+  PROXY_MAX_Z,
+  tileNwLonLat,
+  tileIntersectsBbox,
+  isIntStr,
+} = require('../utils/rmp2015Tiles');
 
 const router = express.Router();
 
@@ -39,13 +47,6 @@ const router = express.Router();
 const RMP2015_TILE_BASE = (process.env.MASTER_PLAN_RMP2015_TILE_BASE
   || 'https://mapwarper.net/layers/tile/2147').replace(/\/+$/, '');
 
-// Coverage bbox (Map Warper layer 2147 extent). Tiles outside it are blank, so
-// we short-circuit them to 204 (Leaflet renders transparent) — saves an
-// upstream hop for the whole rest of the world.
-const RMP2015_BBOX = { west: 77.379326, south: 12.743347, east: 77.859283, north: 13.190987 };
-
-const MIN_Z = 9;
-const MAX_Z = 19;
 const UPSTREAM_TIMEOUT_MS = 8000;
 
 // Map Warper returns 403 to the default Node/undici `User-Agent: node`. A polite,
@@ -53,31 +54,10 @@ const UPSTREAM_TIMEOUT_MS = 8000;
 // public reference tiles on behalf of a browser map.
 const UPSTREAM_USER_AGENT = 'Mozilla/5.0 (compatible; REDIP-tile-proxy/1.0; +https://redip.vercel.app)';
 
-// Web-Mercator XYZ tile → lon/lat of its NW corner.
-const tileNwLonLat = (x, y, z) => {
-  const n = 2 ** z;
-  const lon = (x / n) * 360 - 180;
-  const lat = (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI;
-  return { lon, lat };
-};
-
-// Does tile (z,x,y) intersect the RMP-2015 coverage bbox?
-const tileIntersectsBbox = (z, x, y) => {
-  const nw = tileNwLonLat(x, y, z);
-  const se = tileNwLonLat(x + 1, y + 1, z);
-  const west = nw.lon;
-  const north = nw.lat;
-  const east = se.lon;
-  const south = se.lat;
-  return !(
-    east < RMP2015_BBOX.west
-    || west > RMP2015_BBOX.east
-    || north < RMP2015_BBOX.south
-    || south > RMP2015_BBOX.north
-  );
-};
-
-const isIntStr = (v) => /^\d{1,9}$/.test(String(v));
+// Tile geometry (coverage bbox, zoom band, coord validation) is shared with the
+// mirror script via ../utils/rmp2015Tiles so the two can never drift. Tiles
+// outside the bbox are blank → short-circuited to 204 (Leaflet renders them
+// transparent), saving an upstream hop for the rest of the world.
 
 router.get('/rmp2015/:z/:x/:y.png', async (req, res) => {
   const { z, x, y } = req.params;
@@ -93,7 +73,7 @@ router.get('/rmp2015/:z/:x/:y.png', async (req, res) => {
 
   // 2. Zoom clamp + XY range guard.
   const maxIndex = 2 ** zi;
-  if (zi < MIN_Z || zi > MAX_Z || xi >= maxIndex || yi >= maxIndex) {
+  if (zi < MIN_Z || zi > PROXY_MAX_Z || xi >= maxIndex || yi >= maxIndex) {
     return res.status(204).end();
   }
 
@@ -144,6 +124,6 @@ module.exports.__test = {
   RMP2015_BBOX,
   RMP2015_TILE_BASE,
   MIN_Z,
-  MAX_Z,
+  MAX_Z: PROXY_MAX_Z,
   handler: router.stack.find((l) => l.route)?.route?.stack?.[0]?.handle || null,
 };
