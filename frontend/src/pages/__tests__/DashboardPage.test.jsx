@@ -122,37 +122,25 @@ function renderPage() {
   );
 }
 
-describe('DashboardPage — 4-KPI institutional scan layout', () => {
-  it('renders exactly 4 primary KPI labels (regression guard for PR #44)', () => {
+describe('DashboardPage — cinematic hero', () => {
+  it('renders the live pipeline hero + the four KPI tiles', () => {
     renderPage();
-    expect(screen.getByText('Pipeline Value')).toBeInTheDocument();
-    expect(screen.getByText('Active Deals')).toBeInTheDocument();
+    expect(screen.getByText('Pipeline · live')).toBeInTheDocument();
+    expect(screen.getByText('Active deals')).toBeInTheDocument();
     expect(screen.getByText('Avg IRR')).toBeInTheDocument();
-    expect(screen.getByText('Investor-Grade')).toBeInTheDocument();
+    expect(screen.getByText('Open high risks')).toBeInTheDocument();
+    expect(screen.getByText('Investor-grade')).toBeInTheDocument();
   });
 
-  it('does not render removed secondary KPIs (Total Deals / Documents / Closed value / Open risks tile)', () => {
+  it('tags IRR at/above the benchmark when >= 12% (mock IRR 22.4)', () => {
+    renderPage();
+    expect(screen.getByText('At or above bench')).toBeInTheDocument();
+  });
+
+  it('does not render the legacy secondary KPIs', () => {
     renderPage();
     expect(screen.queryByText('Total Deals')).toBeNull();
     expect(screen.queryByText('Documents')).toBeNull();
     expect(screen.queryByText('Closed value')).toBeNull();
-    // "Open risks" appeared as its own tile title; after migration the signal
-    // is expressed as a delta line under Active Deals, not a standalone tile.
-    expect(screen.queryByText('Open risks')).toBeNull();
-  });
-
-  it('surfaces open-risk signal as a delta under Active Deals when > 0', () => {
-    renderPage();
-    expect(screen.getByText(/2 with open risk/)).toBeInTheDocument();
-  });
-
-  it('surfaces "Above 20% bench" when IRR ≥ 20%', () => {
-    renderPage();
-    expect(screen.getByText(/Above 20% bench/)).toBeInTheDocument();
-  });
-
-  it('surfaces "Ready to deploy" under IC-ready when count > 0', () => {
-    renderPage();
-    expect(screen.getByText(/Ready to deploy/)).toBeInTheDocument();
   });
 });
