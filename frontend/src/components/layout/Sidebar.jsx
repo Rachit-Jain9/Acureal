@@ -62,10 +62,11 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
       data-tour={tourId}
       className={({ isActive }) =>
         clsx(
-          'group flex items-center gap-3 px-3 py-2 rounded-md text-sm transition-colors relative',
+          'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors duration-150 ease-out',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40',
           isActive
             ? 'bg-accent-soft text-accent font-medium'
-            : 'text-content-secondary hover:bg-surface',
+            : 'text-content-secondary hover:bg-surface hover:text-content-primary',
         )
       }
       title={collapsed ? label : undefined}

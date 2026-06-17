@@ -15,6 +15,15 @@ const openCommandPalette = () => {
   window.dispatchEvent(new CustomEvent('redip:cmdk-open'));
 };
 
+// One smooth, tactile treatment for the header's icon buttons — a soft
+// background + ink shift on hover, a subtle press on active, a consistent
+// focus ring. Instant (transition-less) hovers read as cheap; this is the
+// considered version.
+const ICON_BTN =
+  'p-2 rounded-md text-content-secondary transition-colors duration-150 ease-out ' +
+  'hover:bg-surface hover:text-content-primary active:scale-95 ' +
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40';
+
 export default function Header({ onMobileMenuOpen }) {
   const { user } = useAuthStore();
   const mode = useThemeStore((s) => s.mode);
@@ -34,7 +43,7 @@ export default function Header({ onMobileMenuOpen }) {
           <button
             type="button"
             onClick={onMobileMenuOpen}
-            className="p-2 -ml-2 rounded-md hover:bg-surface md:hidden flex-shrink-0 text-content-secondary"
+            className={`${ICON_BTN} -ml-2 md:hidden flex-shrink-0`}
             aria-label="Open menu"
           >
             <Menu size={18} />
@@ -67,7 +76,7 @@ export default function Header({ onMobileMenuOpen }) {
           onClick={() => openGuide()}
           aria-label="Open the guide"
           title="Guide — what everything does"
-          className="p-2 rounded-md hover:bg-surface text-content-secondary"
+          className={ICON_BTN}
         >
           <HelpCircle size={17} />
         </button>
@@ -75,7 +84,7 @@ export default function Header({ onMobileMenuOpen }) {
           onClick={toggleTheme}
           aria-label={mode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
           title={mode === 'dark' ? 'Switch to light (report) mode' : 'Switch to dark (work) mode'}
-          className="p-2 rounded-md hover:bg-surface text-content-secondary"
+          className={ICON_BTN}
         >
           {mode === 'dark' ? <Sun size={17} /> : <Moon size={17} />}
         </button>
