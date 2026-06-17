@@ -53,7 +53,7 @@ export default {
         accent: {
           DEFAULT: 'var(--color-brand-accent)',
           primary: 'var(--color-brand-accent)',
-          hover:   '#2563eb', // accent-600 — one step darker for hover states
+          hover:   'var(--color-brand-accent-hover)', // theme-aware darker shade for primary :hover
           soft:    'var(--color-brand-accent-soft)',
           50:  '#eff6ff',
           100: '#dbeafe',
