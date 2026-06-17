@@ -9341,3 +9341,25 @@ All PRs: build clean, tests green, CI green, squash-merged. Live in-browser (pro
 ### What's left to do next
 - **Comprehensive aesthetic pass (palette / typography / spacing)** — deferred pending a concrete reference (operator wants it to match a look they trust; guessing has been costly). When resumed: calibrate to a named reference (Linear / Stripe / Mercury / Ramp / Vercel / etc.), then refine the design tokens + primitives toward it, surface by surface, verifying each on prod, holding to the §0 trust test.
 - **Self-host the RMP 2015 tiles** — run `node backend/scripts/mirror-rmp2015-tiles.js` once storage write access is arranged, then point `MASTER_PLAN_RMP2015_TILE_BASE` + `VITE_MASTER_PLAN_TILE_URL` at the dormant proxy. Removes the Map Warper runtime dependency.
+
+## 2026-06-17 — Enterprise-premium design pass: foundation → shell → surfaces (human-designed, not vibe-coded)
+
+### What was worked on (plain English)
+A focused, restrained premium-craft pass across the design foundation, the app shell, and the flagship surfaces — applying the codified §0 "human-designed, never vibe-coded" rule (craft, not decoration). Verified where possible: the public login page for foundation/primitives, the live authenticated screens (operator signed in) for the surfaces.
+
+### Shipped
+- **#847 — primitive interactions.** Theme-aware darker-accent primary-button hover (replacing a `filter:brightness()` hack); on-brand autofilled inputs (the 1000px inset-shadow trick — verified the login fields no longer wash blue); refined thin/rounded theme-aware scrollbars.
+- **#848 — shell interactions.** Smooth, tactile header icon buttons + sidebar nav (150ms transitions, hover ink-lift, active press, consistent focus rings) — replacing abrupt transition-less hovers.
+- **#849 — KPI tiles fill their height.** `MetricTile` is now a flex column with the footnote anchored to the base (`mt-auto`, only consumes space when the tile is stretched), killing the dead bottom-space in the dashboard KPI row. Verified live.
+- **#850 — tactile deal-card hover-lift.** Deal cards rise 2px + gain a stronger shadow on hover (motion-safe), signalling the whole tile is clickable. Verified live.
+- (Same block, shipped just before: **#845** considered surface depth — the base `Card` now carries subtle two-layer shadow; cards read as crafted surfaces, not flat-bordered boxes.)
+
+### Method + a stopped audit
+Launched a 6-perspective principal-designer audit workflow over the tokens/primitives; it hung (~25 min) and was stopped — the refinements above were executed on a thorough manual review of the design system instead. (Earlier in the session a "bolder/cinematic" dark hero band was rejected as vibe-coded and reverted, #843/#844; the lesson — bolder = more restrained, not flashier — is codified in `docs/FRONTEND_GUIDELINES.md` §0 + memory.)
+
+### Verification
+All PRs: build clean, tests green (incl. 121 design-system + dashboard), CI green, squash-merged. Live (prod, signed in): autofill on-brand on login; KPI tiles fill; deal cards lift on hover; depth + smooth chrome throughout.
+
+### What's left to do next
+- The design system, primitives, and shell are genuinely mature/well-built; this pass lifted every surface cohesively via the shared foundation. The remaining lever is a distinctive premium IDENTITY (a bolder colour/type POV) — best done with a concrete reference from the operator + live iteration, holding to the §0 trust test.
+- The operator's privacy-first session expires on browser close; keep the browser open for live-verified surface work.
