@@ -1,0 +1,60 @@
+name: Mirror RMP 2015 tiles → Blob (manual)
+
+# Copies the BDA RMP 2015 Proposed-Land-Use tiles from Map Warper into REDIP's
+# own Vercel Blob storage, so the master-plan overlay stops depending on the
+# free community tile server at runtime (it becomes same-origin + CDN-cached).
+# Driver: backend/scripts/mirror-rmp2015-tiles.js. Manual-only — never runs on
+# its own.
+#
+# ── One-time operator setup (all in the browser, no terminal) ────────────────
+#  1. GitHub → this repo → Settings → Secrets and variables → Actions →
+#     "New repository secret":  name = BLOB_READ_WRITE_TOKEN,
+#     value = the token from Vercel (Project → Storage → your Blob store).
+#  2. GitHub → Actions tab → "Mirror RMP 2015 tiles → Blob (manual)" →
+#     "Run workflow" (leave the defaults, or tick Dry run first to preview).
+#  3. When it finishes, open the run log: it prints the Blob base URL + the two
+#     Vercel settings to change. Set them in Vercel and redeploy.
+#       MASTER_PLAN_RMP2015_TILE_BASE = <printed Blob base>
+#       VITE_MASTER_PLAN_TILE_URL     = /api/master-plan-tiles/rmp2015/{z}/{x}/{y}.png
+
+on:
+  workflow_dispatch:
+    inputs:
+      max_zoom:
+        description: 'Max native zoom (15 = sharper, heavier ~250MB; 14 = lighter ~120MB)'
+        required: false
+        default: '15'
+      dry_run:
+        description: 'Dry run — fetch only, no upload (no token needed)'
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci || npm install
+
+      - name: Mirror tiles
+        env:
+          BLOB_READ_WRITE_TOKEN: ${{ secrets.BLOB_READ_WRITE_TOKEN }}
+        run: |
+          FLAGS="--max-zoom=${{ github.event.inputs.max_zoom }}"
+          if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            FLAGS="$FLAGS --dry-run"
+          fi
+          echo "node backend/scripts/mirror-rmp2015-tiles.js $FLAGS"
+          node backend/scripts/mirror-rmp2015-tiles.js $FLAGS
