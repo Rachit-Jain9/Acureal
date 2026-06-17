@@ -25,7 +25,7 @@ const BASE =
 
 const VARIANTS = {
   primary:
-    'bg-accent text-white hover:brightness-110 focus-visible:ring-accent/60',
+    'bg-accent text-white hover:bg-accent-hover focus-visible:ring-accent/60',
   secondary:
     'bg-bg-elevated text-content-primary border border-hairline ' +
     'hover:bg-bg-secondary hover:border-hairline-strong focus-visible:ring-accent/40',
