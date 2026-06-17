@@ -147,7 +147,12 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
         onMouseEnter={() => prefetchWorkspace(deal.id)}
         onFocus={() => prefetchWorkspace(deal.id)}
         className={clsx(
-          'card-editorial hover:shadow-md transition-all cursor-pointer relative group',
+          'card-editorial cursor-pointer relative group',
+          // A subtle, tactile rise on hover — signals the whole card is
+          // clickable. GPU-composited (transform + shadow), motion-safe only.
+          'transition-[transform,box-shadow,border-color] duration-200 ease-out',
+          'hover:-translate-y-0.5 hover:shadow-editorial-lg hover:border-hairline-strong',
+          'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
           selected && 'ring-1 ring-accent/50 bg-accent-soft/20',
         )}
       >
