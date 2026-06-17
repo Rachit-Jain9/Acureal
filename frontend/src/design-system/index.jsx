@@ -186,7 +186,7 @@ export function MetricTile({
       onMouseMove={tiltOn ? handleTilt : undefined}
       onMouseLeave={tiltOn ? resetTilt : undefined}
       className={clsx(
-        'relative bg-bg-elevated border border-hairline rounded-editorial p-4',
+        'relative flex flex-col bg-bg-elevated border border-hairline rounded-editorial p-4',
         'shadow-editorial',
         tiltOn && 'transition-[transform,box-shadow,border-color] duration-200 ease-out will-change-transform hover:shadow-editorial-lg hover:border-hairline-strong',
         className,
@@ -218,7 +218,10 @@ export function MetricTile({
       {delta !== undefined && delta !== null && (
         <div className={clsx('text-xs mt-1.5 tabular-nums', toneClass)}>{delta}</div>
       )}
-      {footnote && <div className="text-[11px] text-content-muted mt-1.5">{footnote}</div>}
+      {/* mt-auto anchors the footnote to the tile's base — it only consumes
+          space when the tile is stretched taller than its content (e.g. a KPI
+          row equalising heights), so denser in-panel tiles are unaffected. */}
+      {footnote && <div className="text-[11px] text-content-muted mt-auto pt-1.5">{footnote}</div>}
       {children}
     </div>
   );
