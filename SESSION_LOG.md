@@ -9363,3 +9363,20 @@ All PRs: build clean, tests green (incl. 121 design-system + dashboard), CI gree
 ### What's left to do next
 - The design system, primitives, and shell are genuinely mature/well-built; this pass lifted every surface cohesively via the shared foundation. The remaining lever is a distinctive premium IDENTITY (a bolder colour/type POV) — best done with a concrete reference from the operator + live iteration, holding to the §0 trust test.
 - The operator's privacy-first session expires on browser close; keep the browser open for live-verified surface work.
+
+## 2026-06-17 (continued) — Deal-open scroll bug fix + one-click tile-mirror Action
+
+### What was worked on (plain English)
+A bug/UX sweep of the surfaces not yet refined (deal workspace, Market Intelligence) and unblocking the "self-host the map tiles" item. Found + fixed a real everyday UX bug, and turned the credential-blocked tile re-host into a few-clicks, no-terminal operation for the operator.
+
+### Shipped
+- **#852 — open a deal at the top.** `DealQaBox` auto-focused its mid-page textarea on mount, which yanked the viewport down to the middle of the Overview (and stole keyboard / screen-reader focus from the deal header) every time a deal opened. Removed the on-mount auto-focus (an anti-pattern for a mid-page input); the box still focuses on click + suggestion-chip. **Verified live: deals now land at the top.**
+- **#853 — one-click tile-mirror GitHub Action** (`.github/workflows/mirror-rmp2015-tiles.yml`). A manual `workflow_dispatch` Action runs the existing `mirror-rmp2015-tiles.js` on a GitHub runner — verified a non-Vercel host fetches Map Warper (HTTP 200; only Vercel's egress is 403'd) — and uploads to Vercel Blob via a `BLOB_READ_WRITE_TOKEN` repo secret. Operator flow: add the secret → Actions → Run workflow → paste the two printed env values into Vercel → redeploy. A "Dry run" input previews the tile count with no token. Unblocks the "make the map bulletproof" item without a terminal.
+
+### Verification
+Both PRs build clean + CI green. Live (prod, signed in): deal pages land at the top; the surfaces (dashboard, deals, market intelligence) are clean with the depth/foundation pass applied; no real app console errors (the 5 observed were Chrome-extension message-channel noise, not REDIP).
+
+### What's left to do next (all operator-gated)
+- **Self-host tiles (item 2):** run the new Action — its file header has the three click-steps + where to copy the `BLOB_READ_WRITE_TOKEN` from Vercel. The map works today off the community server; this is reliability insurance, on your schedule.
+- **Land-rate flag demo (item 3):** enter a land price on the Jigani deal (currently ₹0) + a cleaner Gattahalli locality, or ask for a guided central-Bengaluru test deal, to watch the "land basis looks low" warning fire.
+- **Workspace consolidation (item 5):** needs a product decision (which workspace is primary) + a careful operator-applied data migration — a separate project; plan at `docs/MULTI_TENANCY_RBAC_PLAN.md`.
