@@ -241,12 +241,10 @@ export default function DealQaBox({ dealId }) {
     inputRef.current?.focus();
   };
 
-  // Auto-focus the input on mount so analysts can type immediately.
-  useEffect(() => {
-    // Defer to next tick so this doesn't fight the page's initial scroll.
-    const t = setTimeout(() => inputRef.current?.focus(), 100);
-    return () => clearTimeout(t);
-  }, []);
+  // No auto-focus on mount. The QA box sits mid-page, so focusing it on open
+  // yanked the whole viewport down to it (and stole keyboard / screen-reader
+  // focus away from the deal header) — you'd open a deal and land in the middle
+  // of the Overview. Analysts focus it by clicking, or via a suggestion chip.
 
   // When a fresh history row lands matching the active question, clear
   // the in-flight panel — the persisted row takes over rendering.
