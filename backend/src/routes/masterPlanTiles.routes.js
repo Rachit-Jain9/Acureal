@@ -92,9 +92,16 @@ router.get('/rmp2015/:z/:x/:y.png', async (req, res) => {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   try {
+    const upstreamHeaders = { Accept: 'image/png,image/*', 'User-Agent': UPSTREAM_USER_AGENT };
+    // When the upstream is REDIP-self-hosted tiles on a (private) Vercel Blob
+    // store, authenticate with the Blob token. This runs server-side only — the
+    // browser receives the bytes same-origin and never sees the token.
+    if (/\.blob\.vercel-storage\.com/i.test(RMP2015_TILE_BASE) && process.env.BLOB_READ_WRITE_TOKEN) {
+      upstreamHeaders.Authorization = `Bearer ${process.env.BLOB_READ_WRITE_TOKEN}`;
+    }
     const upstream = await fetch(`${RMP2015_TILE_BASE}/${zi}/${xi}/${yi}.png`, {
       signal: controller.signal,
-      headers: { Accept: 'image/png,image/*', 'User-Agent': UPSTREAM_USER_AGENT },
+      headers: upstreamHeaders,
     });
     if (!upstream.ok) {
       // Upstream miss/blank (often 404 for unrectified tiles) → transparent.
