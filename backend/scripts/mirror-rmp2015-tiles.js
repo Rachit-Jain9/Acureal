@@ -44,6 +44,12 @@ const SOURCE_BASE = (process.env.MASTER_PLAN_MIRROR_SOURCE_BASE
 const UA = 'Mozilla/5.0 (compatible; REDIP-tile-mirror/1.0; +https://redip.vercel.app)';
 const FETCH_TIMEOUT_MS = 15000;
 
+// Blob store access. Starts 'public', but auto-flips to 'private' the first time
+// Vercel rejects a public put (private-only stores — e.g. the one holding
+// private documents). Private tiles are then served via the same-origin proxy,
+// which authenticates to Blob with the token (the browser never sees it).
+let blobAccess = 'public';
+
 const arg = (name, dflt) => {
   const hit = process.argv.find((a) => a.startsWith(`--${name}=`));
   if (!hit) return dflt;
@@ -139,15 +145,22 @@ async function main() {
     if (!buf) { stat.blank += 1; return; }
     if (dryRun) { stat.stored += 1; return; }
     try {
-      const out = await blob.put(key, buf, {
-        access: 'public',
-        addRandomSuffix: false,
-        allowOverwrite: true,
-        contentType: 'image/png',
-        token,
-      });
+      const putOpts = { addRandomSuffix: false, allowOverwrite: true, contentType: 'image/png', token };
+      let out;
+      try {
+        out = await blob.put(key, buf, { ...putOpts, access: blobAccess });
+      } catch (err) {
+        // Private-only store rejects public puts — flip to private + retry (and
+        // every subsequent tile then uploads private without re-erroring).
+        if (blobAccess === 'public' && /private store/i.test(err?.message || '')) {
+          blobAccess = 'private';
+          out = await blob.put(key, buf, { ...putOpts, access: 'private' });
+        } else {
+          throw err;
+        }
+      }
       if (!stat.baseUrl) {
-        // Derive the store's public base from the first upload's URL.
+        // Derive the store base from the first upload's URL.
         stat.baseUrl = out.url.replace(/\/master-plan\/rmp2015\/.*$/, '/master-plan/rmp2015');
       }
       stat.stored += 1;
@@ -163,6 +176,7 @@ async function main() {
   if (!dryRun) {
     console.log(`  already present (skipped): ${stat.skipped}`);
     console.log(`  failed: ${stat.failed}`);
+    console.log(`  store access: ${blobAccess}${blobAccess === 'private' ? ' (served via the same-origin proxy, which reads Blob with the token)' : ''}`);
     if (stat.baseUrl) {
       console.log('\nNext steps:');
       console.log(`  • Set backend env  MASTER_PLAN_RMP2015_TILE_BASE = ${stat.baseUrl}`);
