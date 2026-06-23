@@ -320,41 +320,15 @@ const platformBadge = () =>
 
 const blank = () => new Paragraph({ children: [new TextRun({ text: '' })], spacing: { before: 40, after: 40 } });
 
-// PR-NX69 (2026-05-19) — quota-exceeded callout. When the AI augment layer
-// was bypassed because the caller exhausted their BETA free quota, surface
-// a clear "Premium AI Insights · Quota Exceeded" message in place of the
-// generic "Manual input required" placeholder. Renders nothing for the
-// other deny reasons (unauthenticated, check_failed) — those fall through
-// to the existing placeholder text.
-const augmentQuotaCallout = (envelope) => {
-  if (!envelope || envelope.available) return null;
-  if (envelope.reason !== 'quota_exceeded') return null;
-  return [
-    new Paragraph({
-      children: [
-        new TextRun({
-          text: ' PREMIUM AI INSIGHTS · QUOTA EXCEEDED ',
-          font: FONT,
-          size: 16,
-          bold: true,
-          color: HEX('paperElevated'),
-          shading: { type: ShadingType.CLEAR, fill: HEX('dataWarning') },
-        }),
-      ],
-      spacing: { before: 60, after: 60 },
-    }),
-    new Paragraph({
-      children: [new TextRun({
-        text:
-          'AI-generated market context is a premium feature. You have used your '
-          + `${envelope.quotaUsed || 0} of ${envelope.quotaLimit || 1} free underwriting report${(envelope.quotaLimit || 1) === 1 ? '' : 's'}. `
-          + 'To unlock more AI-generated underwriting reports, contact your REDIP administrator.',
-        font: FONT, size: 18, italics: true, color: HEX('dataWarning'),
-      })],
-      spacing: { before: 40, after: 80 },
-    }),
-  ];
-};
+// AI-disclosure policy (operator override 2026-05-19, reaffirmed by the
+// 2026-06-23 credibility audit): customer-facing exports must NOT surface
+// AI-as-marketing or quota/upsell copy. When the AI augment layer is bypassed
+// for ANY reason (quota, unauthenticated, check_failed), the section falls
+// through to the neutral "manual input required / no verified feed" placeholder
+// below — quota/upsell status stays in the operator-only in-app UI. Kept as a
+// no-op (not deleted) so the five call sites — and any future operator-only
+// variant — remain structurally intact.
+const augmentQuotaCallout = () => null;
 
 // ─────────────────────────────────────────────────────────────────────────
 // Section builders
@@ -720,7 +694,7 @@ const buildDemographics = (ctx) => {
   if (populated) {
     // PR-NX41 (2026-05-18): when a Bengaluru deal has auto_derived_pd_code
     // populated, dealExport.service.fetchDealDemographics joins through to
-    // BBMP RMP-2031 + Census 2011 facts. Surface the PD identity line at
+    // BBMP Planning-District tables + Census 2011 facts. Surface the PD line at
     // the top of the section so the reader sees WHICH planning district
     // these facts describe, then the demographic rows.
     if (demo.pd_name || demo.pd_code) {
@@ -737,7 +711,7 @@ const buildDemographics = (ctx) => {
       // Census-shape fields (existing renderer keys, kept for forward-compat)
       demo.population_total      != null ? labelValueRow('Population (2011 census)',   formatNumber(demo.population_total)) : null,
       demo.population_density    != null ? labelValueRow('Population density',         `${formatNumber(demo.population_density)} / sq km`) : null,
-      // PR-NX41 (2026-05-18) — PD-specific extras (BBMP RMP-2031 facts)
+      // PR-NX41 (2026-05-18) — PD-specific extras (BBMP Planning-District facts)
       demo.area_ha               != null ? labelValueRow('Planning District area',    `${formatNumber(demo.area_ha, 1)} hectares (${formatNumber(demo.area_ha / 100, 2)} km²)`) : null,
       demo.wards_in_pd           != null ? labelValueRow('BBMP wards in PD',          formatNumber(demo.wards_in_pd)) : null,
       demo.villages_count        != null ? labelValueRow('Revenue villages',          formatNumber(demo.villages_count)) : null,
@@ -785,7 +759,7 @@ const buildDemographics = (ctx) => {
       ));
       children.push(bodyPara(
         // PR-NX41 (2026-05-18) — actionable hint for Bengaluru deals
-        'Bengaluru deals: open the Parcel tab → click "Derive parcel context" → Apply → re-download the report. The Planning District code unlocks BBMP RMP-2031 + Census 2011 facts.',
+        'Bengaluru deals: open the Parcel tab → click "Derive parcel context" → Apply → re-download the report. The Planning District code unlocks the BBMP Planning-District demographics + Census 2011 facts.',
         { italic: true, color: HEX('mutedLow') },
       ));
     }
