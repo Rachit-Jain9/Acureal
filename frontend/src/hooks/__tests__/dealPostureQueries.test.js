@@ -91,6 +91,8 @@ describe('canonical key set', () => {
     expect(PORTFOLIO_ROLLUP_KEYS).toEqual([
       'portfolio-risk-radar',
       'dashboard',
+      'dashboard-attention',
+      'portfolio-readiness',
     ]);
   });
 });
