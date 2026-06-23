@@ -20,6 +20,11 @@ export function useCalculateFinancials() {
       qc.invalidateQueries({ queryKey: ['scenarios', dealId] });
       qc.invalidateQueries({ queryKey: ['deal', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
+      // Saving a model changes total_revenue_cr / irr_pct, which the Dashboard's
+      // "Total Pipeline Value" + "Avg IRR" tiles and the by-stage pipeline rollup
+      // are computed from — refresh them so headline numbers move with the model.
+      qc.invalidateQueries({ queryKey: ['dashboard'] });
+      qc.invalidateQueries({ queryKey: ['pipeline'] });
       toast.success('Financials calculated');
     },
     onError: (err) => {
