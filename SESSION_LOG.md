@@ -9380,3 +9380,17 @@ Both PRs build clean + CI green. Live (prod, signed in): deal pages land at the 
 - **Self-host tiles (item 2):** run the new Action — its file header has the three click-steps + where to copy the `BLOB_READ_WRITE_TOKEN` from Vercel. The map works today off the community server; this is reliability insurance, on your schedule.
 - **Land-rate flag demo (item 3):** enter a land price on the Jigani deal (currently ₹0) + a cleaner Gattahalli locality, or ask for a guided central-Bengaluru test deal, to watch the "land basis looks low" warning fire.
 - **Workspace consolidation (item 5):** needs a product decision (which workspace is primary) + a careful operator-applied data migration — a separate project; plan at `docs/MULTI_TENANCY_RBAC_PLAN.md`.
+
+---
+
+## 2026-06-23 (Test deal + workspace verify; self-host tiles hit free-tier wall → reverted) (PR #856 — merged + deployed; master green)
+
+Closed out the operator-gated items from the prior session, then found the self-hosted map tiles had broken the overlay — diagnosed to root cause and reverted cleanly.
+
+- **Workspace consolidation — verified live.** The "xyz" deal (previously stranded in a separate solo workspace by RLS) now appears in the **Default** workspace deals list; pipeline count went 5→6→7 across the session. The earlier operator-applied SQL move worked.
+- **Test deal created (fires the land-rate warning).** Via New Deal → AI-capture: "Land at Kempegowda Road, Gandhinagar" (geocoded 92%), Residential Apartments, **₹5 Cr over 5,000 sqft = ₹10,000/sqft** — well below the ~₹31,250/sqft Gandhinagar IGR guidance, so the deterministic `evaluateLandRateVsGuidance` flags it (deep shortfall, severity 4). Deal id `e91c7d00`.
+- **#856 — restore master-plan overlay (revert self-host).** The self-host path (PRs #853/#855) went live and the overlay rendered **BLANK**. Root cause traced end-to-end: the mirror Action uploaded **2,575 tiles** into the existing **private** Vercel Blob store ("redip-documents"), and those 2,575 one-time `put`s exceeded the **Hobby plan's 2,000 advanced-operations/month cap** → Vercel **SUSPENDED** the store (storage was fine at 151 MB/1 GB — it was the op count) → the same-origin proxy returned `204` for every tile. **Access auto-resumes 2026-07-22.** Reverted the frontend to the proven **client-side Map Warper** load (commented out the `VITE_MASTER_PLAN_TILE_URL` read in `cadastralLayers.js`). **Verified live** (login-independent bundle scan): the deployed JS carries the Map Warper URL, the proxy URL is gone. **Documents UNAFFECTED** — confirmed via `/api/health/detailed` that the app stores them in **Supabase** (bucket `redip-documents`, healthy), not Blob.
+
+### What's left to do next
+- **Self-host tiles (parked, not blocked):** the 2,575 tiles are already uploaded. After the Blob store's monthly allowance resets (**2026-07-22**) — or a Pro upgrade — re-enable by un-commenting one line (`VITE_MASTER_PLAN_TILE_URL`) + redeploy. No re-upload needed. The map works today off Map Warper, so this is optional / reliability-only.
+- **Test deal cleanup:** delete the "TEST - Land-rate flag (Gandhinagar)" deal when the demo is no longer needed.
