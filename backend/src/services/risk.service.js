@@ -112,7 +112,13 @@ async function update(id, data) {
   }
 
   if (setClauses.length === 0) {
-    const existing = await query('SELECT * FROM risk_flags WHERE id = $1', [id]);
+    // Org-scope this read exactly like the UPDATE/DELETE below. The app connects
+    // as the RLS-bypassing role, so this WHERE clause is the ONLY tenant
+    // boundary — without it an empty-body PUT would return another org's flag.
+    const existing = await query(
+      'SELECT * FROM risk_flags WHERE id = $1 AND organization_id = current_organization_id()',
+      [id],
+    );
     return existing.rows[0] || null;
   }
 
