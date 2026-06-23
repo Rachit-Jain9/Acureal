@@ -300,8 +300,16 @@ const DIAGNOSTIC_RULES = [
     evaluate: (signals) => {
       const s = findSignal(signals, 'rera_registration_missing');
       if (!s) return null;
+      // Match the sentence to the evidence: this signal fires for BOTH a missing
+      // entry (reason 'no_entry') and an on-file-but-unvalidated entry (reason
+      // 'not_validated'). Hardcoding "is missing" for the latter would overstate
+      // a worse statutory posture than the data supports — and this is a
+      // legal-four lane, where the card must not assert more than the facts.
+      const notValidated = s.value && s.value.reason === 'not_validated';
       return {
-        finding: `RERA registration is missing for this regulated asset class.`,
+        finding: notValidated
+          ? `RERA registration is on file but not yet validated (status: ${s.value.status || 'pending'}).`
+          : `RERA registration is not on file for this regulated asset class.`,
         why_it_matters: `Marketing or pre-sale activity is restricted under Karnataka RERA Section 3 until the registration is on file and validated.`,
         severity: 5,
         evidence: s.evidence,
