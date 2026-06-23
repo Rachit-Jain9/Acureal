@@ -10,6 +10,7 @@ const log = require('../lib/logger').child({ module: 'intelligence' });
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { getPlatformOrgId } = require('../utils/platformOrg');
 const { formatQuantumCr } = require('../utils/marketUnits');
+const { sanitizeAiProse } = require('../utils/aiLegalProseGuard');
 
 const HEATMAP_MARKETS = [
   'Whitefield',
@@ -470,17 +471,26 @@ const getDealAnalysis = async (dealId) => {
   if (input.error) return { analysis: null, reason: input.error };
 
   try {
+    // Stable system prompt across per-deal analyses → cache it.
+    const raw = await runClaudeReasoning({
+      task: 'reasoning',
+      systemPrompt: input.systemPrompt,
+      cachePrompt: true,
+      payload: input.payload,
+      maxTokens: 600,
+      attach: { dealId },
+      metadata: { stage: 'deal_analysis' },
+    });
+    // Deterministic legal-four + absolute-verb backstop before the prose reaches
+    // the Overview (defense-in-depth behind the prompt's legal carve-out).
+    const guard = sanitizeAiProse(typeof raw === 'string' ? raw : '');
+    if (typeof raw === 'string' && guard.flagged) {
+      log.warn('deal_analysis_prose_sanitized', {
+        deal_id: dealId, stance_rewritten: guard.stanceRewritten, legal_removed: guard.legalRemoved,
+      });
+    }
     return {
-      // Stable system prompt across per-deal analyses → cache it.
-      analysis: await runClaudeReasoning({
-        task: 'reasoning',
-        systemPrompt: input.systemPrompt,
-        cachePrompt: true,
-        payload: input.payload,
-        maxTokens: 600,
-        attach: { dealId },
-        metadata: { stage: 'deal_analysis' },
-      }),
+      analysis: typeof raw === 'string' ? guard.text : raw,
       generatedAt: new Date().toISOString(),
       dealName: input.dealName,
     };
@@ -549,6 +559,19 @@ const streamDealAnalysis = async (dealId) => {
     dealName: input.dealName,
     async done() {
       const final = await stream.done();
+      // Deterministic legal-four + absolute-verb backstop applied ONCE to the
+      // assembled text, so the numerical verifier, the persisted artifact, and
+      // the 'done' frame all see the scrubbed prose (defense-in-depth behind the
+      // prompt's legal carve-out).
+      if (final && typeof final.result === 'string') {
+        const guard = sanitizeAiProse(final.result);
+        if (guard.flagged) {
+          log.warn('deal_analysis_prose_sanitized', {
+            deal_id: dealId, stance_rewritten: guard.stanceRewritten, legal_removed: guard.legalRemoved,
+          });
+          final.result = guard.text;
+        }
+      }
       // Best-effort persistence — failures here NEVER block the user-visible
       // result. saveArtifact swallows missing-table / connection errors and
       // returns null so the SSE 'done' frame still ships on time.
