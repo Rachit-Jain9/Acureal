@@ -66,9 +66,22 @@ export const DEFAULT_MASTER_PLAN_OPACITY = 0.6;
 // REDIP-self-hosted tiles: host them, then set `VITE_MASTER_PLAN_TILE_URL` to
 // `/api/master-plan-tiles/rmp2015/{z}/{x}/{y}.png`. (Map Warper is allow-listed
 // in vercel.json `img-src` for the direct load.)
+//
+// SELF-HOST TEMPORARILY PARKED (2026-06-22): the mirror Action uploaded 2,575
+// tiles into REDIP's existing private Vercel Blob store ("redip-documents"; the
+// mirror auto-flipped to private to match it). Those 2,575 one-time writes blew
+// past the Hobby plan's 2,000 advanced-operations/month cap, so Vercel SUSPENDED
+// the store — access auto-resumes 2026-07-22 (or immediately on a Pro upgrade).
+// A suspended store serves nothing, so the same-origin proxy returned blank
+// tiles and the overlay went dark. Until the store is live again we force the
+// proven client-side Map Warper load so the overlay keeps working. (Documents
+// are unaffected — the app reads/writes them from Supabase Storage, not Blob.)
+// TO RE-ENABLE SELF-HOSTING once the store is live: confirm BLOB_READ_WRITE_TOKEN
+// + MASTER_PLAN_RMP2015_TILE_BASE are set on the Vercel project, then un-comment
+// the VITE_MASTER_PLAN_TILE_URL read below and redeploy.
 export const RMP2015_TILE_URL =
-  (import.meta.env && import.meta.env.VITE_MASTER_PLAN_TILE_URL)
-  || 'https://mapwarper.net/layers/tile/2147/{z}/{x}/{y}.png';
+  // (import.meta.env && import.meta.env.VITE_MASTER_PLAN_TILE_URL) ||
+  'https://mapwarper.net/layers/tile/2147/{z}/{x}/{y}.png';
 
 // ── RMP 2015 land-use colour key ────────────────────────────────────────────
 // Transcribed from the OFFICIAL BDA source documents, not invented:
