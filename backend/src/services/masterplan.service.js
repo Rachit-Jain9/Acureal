@@ -1928,7 +1928,7 @@ async function getDistrictIntelligence() {
       adjacent_authorities: adjacentAuthorities,
       peripheral_ring: peripheralRing,
     },
-    disclaimer: 'AI-extracted from RMP 2031 Volume 4 PDR (per-district demographics) and Existing/Proposed Land Use maps (landmarks, boundaries, callouts). Verify against the published RMP 2031 before quoting in IC memos.',
+    disclaimer: 'AI-extracted from the withdrawn RMP 2031 Volume 4 PDR (per-district demographics) and Existing/Proposed Land Use maps (landmarks, boundaries, callouts). RMP 2031\'s provisional approval was withdrawn in July 2020 — descriptive reference only, not an operative regulatory source. Verify against primary records before quoting in IC memos.',
   };
 }
 
@@ -2564,7 +2564,7 @@ async function getLandUseIntelligence() {
     proposed: proposedShares,
     totals,
     callouts,
-    disclaimer: 'AI-extracted from Volume 4 + Existing Land Use 2015 + Proposed Land Use 2031 maps. Verify against the published RMP 2031 before quoting.',
+    disclaimer: 'AI-extracted from the withdrawn RMP 2031 corpus (Volume 4 + Existing Land Use 2015 + Proposed Land Use 2031 maps). RMP 2031\'s provisional approval was withdrawn in July 2020 — descriptive reference only, not an operative regulatory source. Verify against primary records before quoting.',
   };
 }
 
