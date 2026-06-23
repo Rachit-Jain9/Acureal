@@ -9394,3 +9394,20 @@ Closed out the operator-gated items from the prior session, then found the self-
 ### What's left to do next
 - **Self-host tiles (parked, not blocked):** the 2,575 tiles are already uploaded. After the Blob store's monthly allowance resets (**2026-07-22**) — or a Pro upgrade — re-enable by un-commenting one line (`VITE_MASTER_PLAN_TILE_URL`) + redeploy. No re-upload needed. The map works today off Map Warper, so this is optional / reliability-only.
 - **Test deal cleanup:** delete the "TEST - Land-rate flag (Gandhinagar)" deal when the demo is no longer needed.
+
+---
+
+## 2026-06-23 (Multi-agent correctness & credibility audit — 9 of 31 findings fixed) (PRs #858–#862 — all merged; master green)
+
+Ran a multi-agent audit of the live product (44 agents across 8 dimensions, every finding adversarially re-checked against the real code) and shipped the highest-value fixes as small, reviewed, tested PRs.
+
+- **Audit:** 35 candidates → **31 confirmed real**. Headline: a critical cross-tenant data leak; plus regulatory mis-statements reaching customer exports, unguarded AI legal-four prose, a dead financial guardrail, and broken audit trails.
+- **#858 (critical security) — cross-tenant leak closed.** The empty-body PUT branch of `risk.service.update` / `approvals.service.update` read by id with NO org filter (the app runs as the RLS-bypassing role → that clause is the only tenant boundary), letting a user in org A read org B's risk flags + statutory-approval records. Added `AND organization_id = current_organization_id()` to both + regression test `tenantIsolation.emptyUpdate.test.js`.
+- **#859 — customer DOCX credibility.** Dropped the withdrawn-RMP-2031 citation (→ "BBMP Planning-District + Census 2011"); neutralized the "PREMIUM AI INSIGHTS · QUOTA EXCEEDED" marketing banner (against the export-disclosure policy).
+- **#860 — regulatory wording.** Deal Doctor RERA card now distinguishes "not on file" vs "on file but not yet validated"; two demographics disclaimers note RMP 2031 is withdrawn.
+- **#861 — AI legal-four backstop.** New shared deterministic sanitizer `backend/src/utils/aiLegalProseGuard.js` strips legal-verdict sentences ("title is clear", "RERA-compliant") + rewrites banned absolute IC verbs; wired into the deal-analysis prose (Overview). Reusable for the remaining AI surfaces.
+- **#862 — dashboard freshness.** Headline pipeline-value/IRR tiles + the "Today's Attention" worklist now refresh after re-underwriting or clearing a DD/approval/risk item (were frozen until a hard reload).
+
+### What's left to do next (tracked in memory `project_correctness_audit_2026_06_23`)
+- **~22 confirmed findings remain**, grouped: wire the shared sanitizer into the other AI legal-lane surfaces (#7/#8/#20); immutable audit-trail rows for DD/risk/approval/document mutations + hard-deletes (#11–#19); financial fixes (dead YoC-vs-ExitCap guardrail #10, fail-closed + atomic financial save #13/#14); labeling polish (#26/#27/#31/#28).
+- **Deferred (need care):** #5 (FAR-citation BDA fallback — check the `far_rules` data first to avoid degrading correct citations); **#3 operator-gated** (run the app under a dedicated non-owner DB role so RLS becomes a real backstop — needs a DB-role + connection change).
