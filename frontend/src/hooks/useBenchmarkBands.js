@@ -160,8 +160,17 @@ export function computeKernelWarnings(kpis, inputs, thresholds) {
   }
 
   // YoC vs Exit Cap spread — income family only (yield-on-cost only
-  // meaningful for income-generating assets). Both values are stored as
-  // percentages by the kernel; convert (% - %) → bps via × 100.
+  // meaningful for income-generating assets). Both values are PERCENTS here
+  // (e.g. 9.5 and 7.5) — verified end-to-end (#30): the kernel emits
+  // yieldOnCost as a percent (income.ts ×100), and exitCapRate is the user's
+  // "Exit Cap Rate (%)" input / the kernel echo (the visualization layer renders
+  // both with a trailing % and an `8` default). So (% − %) × 100 → bps is
+  // correct, and the display strings use the values directly (no ×100).
+  //
+  // DO NOT copy the backend export fix (PR #873, which divides yoc by 100): that
+  // path receives exitCapRate as a FRACTION (buildWorkbook's toPctDecimal) and
+  // yoc as a percent — a genuine mismatch. Here BOTH are percents, so dividing
+  // would itself introduce a 100× bug.
   const yocPct = Number(kpis.yieldOnCost);
   const capPct = Number(kpis.exitCapRate ?? inputs?.exitCapRate);
   const minBps = Number(thresholds.yocVsExitCapMinSpreadBps);
@@ -227,6 +236,15 @@ export function computeKernelWarnings(kpis, inputs, thresholds) {
 /**
  * Yield-on-Cost vs Exit Cap spread warning. Income-family only.
  * Mirrors validateYocVsExitCapSpread (PR-NX33).
+ *
+ * NOTE (#30, 2026-06-24): currently UNUSED in the app — the live post-Calculate
+ * path is `computeKernelWarnings` above. This helper assumes yieldOnCost /
+ * exitCapRate are FRACTIONS (0.085 / 0.075 — hence × 10000, and the ×100 in the
+ * display strings), which is INCONSISTENT with the rest of the financials UI,
+ * where both are PERCENTS (the "Exit Cap Rate (%)" field, `kpis.yieldOnCost`
+ * percent). If you ever wire this to live input-time data, convert to fractions
+ * first (value / 100) or it will be 100× off — better, extend
+ * `computeKernelWarnings` (which already handles the live percent units).
  */
 export function computeYocSpreadWarning({ yieldOnCost, exitCapRate }, thresholds) {
   const minBps = thresholds?.yocVsExitCapMinSpreadBps ?? 50;

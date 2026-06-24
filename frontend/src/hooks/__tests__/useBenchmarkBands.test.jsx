@@ -187,6 +187,23 @@ describe('PR-NX56 — computeKernelWarnings (post-Calculate)', () => {
     expect(w[0].severity).toBe('critical');
   });
 
+  // Regression guard (#30): the LIVE path treats yieldOnCost + exitCapRate as
+  // PERCENTS (9.5, 7.5), so spread = (9.5 − 7.5) × 100 = 200 bps. This is the
+  // opposite of the backend export fix (PR #873, which divides yoc by 100 because
+  // its exitCap is a FRACTION). If someone "fixes" this by copying the backend
+  // /100, 9.5/7.5 collapse to ~0.095/0.075 and the spread mis-computes — these
+  // assertions catch that.
+  it('treats kpis.yieldOnCost + exitCapRate as PERCENTS (do not copy the backend /100)', () => {
+    // Healthy 200 bps spread in percent units → silent.
+    expect(computeKernelWarnings({ yieldOnCost: 9.5, exitCapRate: 7.5 }, {}, thresholds)).toEqual([]);
+    // A 0.10-percentage-point shortfall is exactly a 10 bps deficit.
+    const w = computeKernelWarnings({ yieldOnCost: 7.40, exitCapRate: 7.5 }, {}, thresholds);
+    expect(w).toHaveLength(1);
+    expect(w[0].kind).toBe('yoc');
+    expect(w[0].severity).toBe('critical');
+    expect(w[0].label).toMatch(/Negative YoC vs Exit Cap spread \(10 bps deficit\)/);
+  });
+
   it('returns BOTH warnings when DSCR + YoC both trip', () => {
     const kpis = { dscr: 0.95, yieldOnCost: 7.00, exitCapRate: 7.50 }; // both trip
     const w = computeKernelWarnings(kpis, {}, thresholds);
