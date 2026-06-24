@@ -9477,3 +9477,16 @@ The OneDrive `.git` index-lock hazard struck once during a post-merge sync (the 
 - **Labeling #28** (misleading "RLS-scoped" comments — safe, mechanical) and **#30** (frontend YoC-spread units, spawned).
 - **Deferred #5** (FAR-citation fallback) / **#3** (run the app under a non-owner DB role — operator-gated).
 - **Needs operator input:** the website email domain (staff-tier onboarding); whether to move off Vercel Hobby.
+
+---
+
+## 2026-06-24 (Frontend YoC-spread units verified — no bug + a latent-leak finding flagged) (PR #876 — merged; master green)
+
+- **#876 (audit #30) — verified, NO production bug.** Followed up on whether the in-app "yield vs exit cap" warning on the financials screen had the same unit bug as the Excel export (fixed in #873). It does **not**: the screen handles both numbers as **percentages** (the field is literally "Exit Cap Rate (%)"), so its maths is already right — and copying the export's fix would have *introduced* a 100× bug. Documented why, flagged one unused old helper that bakes in the wrong assumption, and added a regression test that locks the correct behaviour in. No behaviour change. (vitest 31 pass; frontend build green.)
+- **Flagged for a deliberate follow-up (audit #28, re-scoped):** while looking at the "RLS-scoped" comments I confirmed a real but **latent** cross-tenant gap — a couple of admin/dashboard `deal_events` queries (incl. the customer-facing recent-events widget) have no app-layer org filter and rely on RLS that the app's DB role bypasses. **No active exposure today** (prod has exactly one org's events). Captured as a scoped task with the exact safe fix (add `organization_id = current_organization_id()`, the #858 pattern) rather than editing security code in an unattended tick.
+
+### What's left to do next
+- **Audit #28** (latent org-filter gap on admin analytics queries — recent-events / audit-trail / aiUsage etc.) — spawned task; highest-value remaining security item, no urgency at 1 org.
+- **AI disclosure #9/#21** — needs an operator rendering decision (gate vs label a low-confidence IC opinion).
+- **Deferred #5** (FAR-citation fallback) / **#3** (non-owner DB role — operator-gated).
+- **Needs operator input:** the website email domain (staff-tier onboarding); whether to move off Vercel Hobby.
