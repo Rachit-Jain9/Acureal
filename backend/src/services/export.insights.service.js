@@ -6,7 +6,7 @@
 // of Claude that previously bypassed the router.
 const { getProviderAvailability } = require('./ai/providerRegistry');
 const { runClaudeReasoning, runAI } = require('./ai/aiRouter');
-const { neutralizeStanceText } = require('../utils/icStanceVerbs');
+const { sanitizeAiProse } = require('../utils/aiLegalProseGuard');
 
 // Hard timeout so export routes never hang on a stalled model call.
 const MODEL_TIMEOUT_MS = 15000;
@@ -184,25 +184,26 @@ Provide 3 top_risks and 3 next_steps. Confidence reflects data completeness: "lo
 // can share the same shape mapping (parse logic was duplicated otherwise).
 const coerceInsightsEnvelope = (parsed, extras = {}) => ({
   available: true,
-  // Defense-in-depth on the closed verb dictionary (CLAUDE.md): neutralize any
-  // banned absolute stance verb the model leads with before it reaches the
-  // customer DOCX Executive Summary. The whole field is a stance opinion, so a
-  // leading-verb rewrite is safe here.
-  ic_opinion: typeof parsed.ic_opinion === 'string' ? neutralizeStanceText(parsed.ic_opinion.trim()) : null,
+  // Defense-in-depth (CLAUDE.md): run every customer-facing AI field through the
+  // shared legal-prose guard — it rewrites banned absolute stance verbs AND
+  // strips any statutory-verdict sentence (title / RERA / encumbrance / approval)
+  // the model may have narrated. The prompt is the primary guard; this is the
+  // deterministic backstop before the text reaches the customer DOCX.
+  ic_opinion: typeof parsed.ic_opinion === 'string' ? sanitizeAiProse(parsed.ic_opinion.trim()).text : null,
   top_risks: Array.isArray(parsed.top_risks)
     ? parsed.top_risks
         .filter((r) => r && (r.title || r.detail))
         .slice(0, 5)
         .map((r) => ({
-          title: String(r.title || '').trim(),
-          detail: String(r.detail || '').trim(),
+          title: sanitizeAiProse(String(r.title || '').trim()).text,
+          detail: sanitizeAiProse(String(r.detail || '').trim()).text,
         }))
     : [],
   next_steps: Array.isArray(parsed.next_steps)
     ? parsed.next_steps
         .filter((s) => typeof s === 'string' && s.trim())
         .slice(0, 5)
-        .map((s) => s.trim())
+        .map((s) => sanitizeAiProse(s.trim()).text)
     : [],
   confidence: ['high', 'medium', 'low'].includes(parsed.confidence)
     ? parsed.confidence
@@ -860,24 +861,26 @@ const buildDocInsightsPayload = ({ deal, extractions }) => {
 const coerceDocInsightsEnvelope = (parsed, extras = {}) => ({
   available: true,
   // Defense-in-depth: these findings cross the legal-four lanes (title / owner /
-  // khata / EC / RERA), so scrub any absolute decision verb (approve / clear /
-  // pass / buy …) the model emitted before the text reaches the customer DOCX.
-  // The prompt is the primary guard; this is the backstop (CLAUDE.md).
+  // khata / EC / RERA), so run every field through the shared legal-prose guard —
+  // it both scrubs absolute decision verbs (approve / clear / pass / buy …) AND
+  // strips any statutory-verdict sentence the model emitted, before the text
+  // reaches the customer DOCX. The prompt is the primary guard; this is the
+  // deterministic backstop (CLAUDE.md).
   summary_paragraph: typeof parsed.summary_paragraph === 'string'
-    ? neutralizeStanceText(parsed.summary_paragraph.trim())
+    ? sanitizeAiProse(parsed.summary_paragraph.trim()).text
     : null,
   findings: Array.isArray(parsed.findings)
     ? parsed.findings
         .filter((f) => f && (f.title || f.description))
         .slice(0, 8)
         .map((f) => ({
-          title: neutralizeStanceText(String(f.title || '').trim()),
+          title: sanitizeAiProse(String(f.title || '').trim()).text,
           severity: ['critical', 'high', 'medium', 'low'].includes(f.severity)
             ? f.severity
             : 'medium',
-          description: neutralizeStanceText(String(f.description || '').trim()),
+          description: sanitizeAiProse(String(f.description || '').trim()).text,
           recommendation: typeof f.recommendation === 'string'
-            ? neutralizeStanceText(f.recommendation.trim())
+            ? sanitizeAiProse(f.recommendation.trim()).text
             : null,
         }))
     : [],
@@ -1013,4 +1016,7 @@ module.exports = {
   buildRiskNarrativePayload, // PR-NX43
   buildSensitivityPayload, // PR-NX44
   buildDocInsightsPayload, // PR-NX45
+  // Internal — exported for the legal-four guard regression tests.
+  coerceInsightsEnvelope,
+  coerceDocInsightsEnvelope,
 };
