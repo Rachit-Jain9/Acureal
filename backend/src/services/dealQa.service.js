@@ -40,6 +40,7 @@ const { getProviderAvailability } = require('./ai/providerRegistry');
 const { runAIWithSchema, runClaudeReasoning, runClaudeReasoningStream, stripJsonFences } = require('./ai/aiRouter');
 const embeddingsService = require('./embeddings.service');
 const numericalVerifier = require('./numericalVerifier.service');
+const { sanitizeAiProse } = require('../utils/aiLegalProseGuard');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 // P7-PR1 (Q&A v2) — pull the full structural workspace (lite mode skips AI
 // narration + persistence + activities) so the Q&A model can cite ANY
@@ -806,6 +807,15 @@ async function askQuestion({ dealId, question, userId = null, organizationId = n
     }
   }
 
+  // Legal-four + closed-verb backstop on the AI answer before it is verified,
+  // persisted, or returned: strip any statutory-verdict sentence (title / RERA /
+  // encumbrance / approval) and rewrite absolute IC verbs — the same guard the
+  // deal-analysis Overview + IC exports use. Prompt is primary; this is the
+  // deterministic backstop (CLAUDE.md legal carve-out).
+  if (modelResult?.answer) {
+    modelResult.answer = sanitizeAiProse(modelResult.answer).text;
+  }
+
   // Numerical verifier — drift bands the same way as deal_analysis. The
   // LLM cited specific numbers; the verifier compares them against the
   // deterministic deal snapshot.
@@ -1003,6 +1013,12 @@ async function streamQuestion({ dealId, question, userId = null, organizationId 
           log.warn('deal_qa_citation_validation_failed', { dealId, invalid_ids });
           modelResult = null;
         }
+      }
+
+      // Legal-four + closed-verb backstop on the streamed answer before it is
+      // verified/persisted — mirrors askQuestion (CLAUDE.md legal carve-out).
+      if (modelResult?.answer) {
+        modelResult.answer = sanitizeAiProse(modelResult.answer).text;
       }
 
       // Numerical verifier — same as askQuestion.
