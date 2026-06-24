@@ -85,8 +85,9 @@ router.get(
 // Accepts the same query params as the list endpoint (status, source,
 // assignedToMe). The export respects the page's current filter
 // combination so analysts can save a queue view, click Export, and
-// get a file with exactly those rows. Org-scoped via RLS on the
-// query; the route also passes req.user.id for the assignedToMe
+// get a file with exactly those rows. Org-scoped at the app layer on the
+// query (the pooled DB role bypasses RLS); the route also passes req.user.id
+// for the assignedToMe
 // path the same way the list endpoint does.
 //
 // Filename uses `.csv` extension (not the dotted `.export.csv`) so

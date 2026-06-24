@@ -22,8 +22,9 @@ router.get('/', authenticate, async (req, res, next) => {
 // Workspace-level rollup of the per-deal Risk Radar. Returns counts of deals
 // by posture (flagged / unverified / cleared), open-severity totals across
 // the portfolio, per-failure-mode breakdowns, the top-5 deals at risk, and
-// the last 5 risk flags raised in the past 7 days. All scoped to the
-// caller's organization via RLS; closed / dead / archived deals are excluded.
+// the last 5 risk flags raised in the past 7 days. All scoped to the caller's
+// organization at the app layer (the pooled DB role bypasses RLS); closed /
+// dead / archived deals are excluded.
 router.get('/portfolio-risk-radar', authenticate, async (req, res, next) => {
   try {
     const radar = await portfolioRiskRadarService.getPortfolioRiskRadar();

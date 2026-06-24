@@ -78,7 +78,7 @@ router.get(
   async (req, res, next) => {
     try {
       const dealId = req.params.dealId;
-      // Fetch deal core (RLS-scoped) and risk items in parallel — both
+      // Fetch deal core (org-scoped at the app layer) and risk items in parallel — both
       // are independent reads.
       const [deal, items] = await Promise.all([
         dealService.getDealById(dealId),

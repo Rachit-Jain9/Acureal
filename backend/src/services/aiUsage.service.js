@@ -14,9 +14,12 @@
  *   • Per-doctype / per-language breakdown when those dimensions are
  *     populated (PR #155)
  *
- * Org-scoped via RLS — the `current_organization_id()` filter lives on the
- * `ai_call_logs` table itself, so this service simply runs SELECT under the
- * caller's session and the rows narrow naturally.
+ * Org-scoped at the APP layer — every aggregate query below carries an explicit
+ * `organization_id = current_organization_id()` filter (matching aiHealth.service).
+ * RLS on `ai_call_logs` is NOT relied upon: the pooled DB role bypasses
+ * row-level security (audit #858/#28), so the explicit WHERE is the only real
+ * tenant boundary. NULL-org platform/cron calls are intentionally excluded from
+ * these per-org rollups; getCostCapStatus scopes separately via request context.
  */
 
 const { query } = require('../config/database');
@@ -56,7 +59,8 @@ const getSummary = async ({ days = DEFAULT_DAYS } = {}) => {
        PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY latency_ms)::int                          AS p50_latency_ms,
        PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY latency_ms)::int                          AS p95_latency_ms
      FROM ai_call_logs
-     WHERE created_at >= NOW() - ($1 || ' days')::interval`,
+     WHERE organization_id = current_organization_id()
+       AND created_at >= NOW() - ($1 || ' days')::interval`,
     [days],
     [],
   );
@@ -92,7 +96,8 @@ const getDailySeries = async ({ days = DEFAULT_DAYS } = {}) => {
        COUNT(*) FILTER (WHERE status = 'cache_hit')::int               AS cache_hits,
        COUNT(*) FILTER (WHERE status NOT IN ('success','cache_hit'))::int AS failures
      FROM ai_call_logs
-     WHERE created_at >= NOW() - ($1 || ' days')::interval
+     WHERE organization_id = current_organization_id()
+       AND created_at >= NOW() - ($1 || ' days')::interval
      GROUP BY 1
      ORDER BY 1 ASC`,
     [days],
@@ -122,7 +127,8 @@ const getByTaskProvider = async ({ days = DEFAULT_DAYS } = {}) => {
        COUNT(*) FILTER (WHERE status = 'cache_hit')::int                           AS cache_hits,
        AVG(latency_ms)::int                                                        AS avg_latency_ms
      FROM ai_call_logs
-     WHERE created_at >= NOW() - ($1 || ' days')::interval
+     WHERE organization_id = current_organization_id()
+       AND created_at >= NOW() - ($1 || ' days')::interval
      GROUP BY task, provider, model
      ORDER BY cost_usd DESC NULLS LAST, calls DESC
      LIMIT 25`,
@@ -155,7 +161,8 @@ const getByDoctype = async ({ days = DEFAULT_DAYS } = {}) => {
        COUNT(*) FILTER (WHERE status = 'error')::int                     AS errors,
        COALESCE(SUM(cost_usd), 0)::numeric(12,4)                        AS cost_usd
      FROM ai_call_logs
-     WHERE created_at >= NOW() - ($1 || ' days')::interval
+     WHERE organization_id = current_organization_id()
+       AND created_at >= NOW() - ($1 || ' days')::interval
        AND (doctype IS NOT NULL OR language IS NOT NULL)
      GROUP BY doctype, language
      ORDER BY calls DESC
@@ -193,7 +200,8 @@ const getTopCostCalls = async ({ days = DEFAULT_DAYS, limit = 20 } = {}) => {
        document_id,
        created_at
      FROM ai_call_logs
-     WHERE created_at >= NOW() - ($1 || ' days')::interval
+     WHERE organization_id = current_organization_id()
+       AND created_at >= NOW() - ($1 || ' days')::interval
        AND cost_usd IS NOT NULL
      ORDER BY cost_usd DESC NULLS LAST
      LIMIT $2`,

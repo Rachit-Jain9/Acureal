@@ -10,7 +10,8 @@
  *
  * Reads are open to any member (transparency: every member may see the
  * organisation's data-governance posture). Writes are owner/admin-only — the
- * route guard is the gate; org scoping happens at the data layer via RLS.
+ * route guard is the gate; org scoping happens at the data layer via app-layer
+ * current_organization_id() filters (the pooled DB role bypasses RLS).
  */
 
 const express = require('express');
@@ -92,7 +93,8 @@ router.put(
 // ============================================================================
 // Team & members — who is in the workspace and at what role. Reads are open to
 // any member (roster transparency); writes are admin/owner. Org scoping is
-// enforced at the data layer (RLS + req.user.organization_id).
+// enforced at the data layer via app-layer current_organization_id() /
+// req.user.organization_id (the pooled DB role bypasses RLS).
 // ============================================================================
 
 // GET /api/organization/members — the workspace roster.
