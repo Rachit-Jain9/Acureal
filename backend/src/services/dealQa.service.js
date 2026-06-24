@@ -135,6 +135,7 @@ async function fetchRiskSummary(dealId) {
        FROM risk_flags
       WHERE deal_id = $1
         AND organization_id = current_organization_id()
+        AND deleted_at IS NULL
         AND status NOT IN ('resolved')
       ORDER BY
         CASE severity

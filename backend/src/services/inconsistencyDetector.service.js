@@ -487,6 +487,7 @@ async function detectAndPersist(dealId, { userId = null, dealName = null, organi
     `SELECT title FROM risk_flags
       WHERE deal_id = $1
         AND organization_id = current_organization_id()
+        AND deleted_at IS NULL
         AND source = 'ai_detector'`,
     [dealId],
   );

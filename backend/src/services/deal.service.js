@@ -173,6 +173,7 @@ const dealSelect = `
     SELECT COUNT(*)
     FROM risk_flags rf
     WHERE rf.deal_id = d.id
+      AND rf.deleted_at IS NULL
       AND rf.status IN ('open', 'flagged')
       AND rf.severity IN ('critical', 'high')
   ) as open_high_risk_count,
@@ -192,6 +193,7 @@ const dealSelect = `
     SELECT COUNT(*)
     FROM risk_flags rf
     WHERE rf.deal_id = d.id
+      AND rf.deleted_at IS NULL
       AND rf.status IN ('open', 'flagged')
       AND rf.created_at > NOW() - INTERVAL '7 days'
   ) as new_risk_flag_count,
@@ -210,6 +212,7 @@ const dealSelect = `
           END AS risk_order
         FROM risk_flags
         WHERE deal_id = d.id
+          AND deleted_at IS NULL
           AND status IN ('open', 'flagged')
         ORDER BY risk_order, created_at DESC
         LIMIT 3
@@ -673,7 +676,7 @@ const getDealById = async (id) => {
     ),
     query('SELECT * FROM dd_items WHERE deal_id = $1 ORDER BY created_at ASC', [id]),
     query('SELECT * FROM approval_items WHERE deal_id = $1 ORDER BY created_at ASC', [id]),
-    query('SELECT * FROM risk_flags WHERE deal_id = $1 ORDER BY created_at DESC', [id]),
+    query('SELECT * FROM risk_flags WHERE deal_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC', [id]),
     query(
       `SELECT doc_category, COUNT(*) AS count
        FROM documents

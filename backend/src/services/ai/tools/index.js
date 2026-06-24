@@ -47,7 +47,7 @@ const TOOLS = {
                 p.city, p.address, p.property_type, p.land_area_acres, p.zoning,
                 f.irr_pct, f.npv_cr, f.equity_multiple, f.gross_margin_pct,
                 f.total_cost_cr, f.total_revenue_cr,
-                (SELECT COUNT(*) FROM risk_flags rf WHERE rf.deal_id = d.id AND rf.status = 'open')::int AS open_risks
+                (SELECT COUNT(*) FROM risk_flags rf WHERE rf.deal_id = d.id AND rf.status = 'open' AND rf.deleted_at IS NULL)::int AS open_risks
            FROM deals d
            LEFT JOIN properties p ON d.property_id = p.id
            LEFT JOIN financials f ON f.deal_id = d.id

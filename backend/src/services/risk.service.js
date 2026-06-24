@@ -2,6 +2,7 @@
 
 const { query } = require('../config/database');
 const { EVENTS, publish } = require('../lib/eventBus');
+const dealAuditLog = require('./dealAuditLog.service');
 
 const normalizeRiskStatus = (value) => {
   const status = String(value || 'open').trim().toLowerCase();
@@ -48,6 +49,7 @@ async function listByDeal(dealId) {
      LEFT JOIN users u ON u.id = r.created_by
      WHERE r.deal_id = $1
        AND r.organization_id = current_organization_id()
+       AND r.deleted_at IS NULL
      ORDER BY
        CASE r.severity
          WHEN 'critical' THEN 1
@@ -92,10 +94,17 @@ async function create(dealId, data, userId) {
     status: row.status,
     userId,
   });
+  await dealAuditLog.recordAudit({
+    dealId,
+    eventType: 'risk_flag_created',
+    actorId: userId || null,
+    after: { category: row.category, severity: row.severity, title: row.title, status: row.status },
+    metadata: { risk_flag_id: row.id },
+  });
   return row;
 }
 
-async function update(id, data) {
+async function update(id, data, actorId = null) {
   const normalizedData = normalizeRiskPayload(data);
   const allowed = ['category', 'severity', 'title', 'description', 'mitigation', 'status', 'source'];
 
@@ -115,18 +124,28 @@ async function update(id, data) {
     // Org-scope this read exactly like the UPDATE/DELETE below. The app connects
     // as the RLS-bypassing role, so this WHERE clause is the ONLY tenant
     // boundary — without it an empty-body PUT would return another org's flag.
+    // `deleted_at IS NULL` keeps a soft-deleted flag invisible here too.
     const existing = await query(
-      'SELECT * FROM risk_flags WHERE id = $1 AND organization_id = current_organization_id()',
+      'SELECT * FROM risk_flags WHERE id = $1 AND organization_id = current_organization_id() AND deleted_at IS NULL',
       [id],
     );
     return existing.rows[0] || null;
   }
+
+  // Snapshot BEFORE state (same org + live scope) so the audit row carries a
+  // real field-level diff.
+  const beforeRes = await query(
+    'SELECT * FROM risk_flags WHERE id = $1 AND organization_id = current_organization_id() AND deleted_at IS NULL',
+    [id],
+  );
+  const beforeRow = beforeRes.rows[0] || null;
 
   values.push(id);
   const result = await query(
     `UPDATE risk_flags SET ${setClauses.join(', ')}, updated_at = NOW()
      WHERE id = $${paramIndex}
        AND organization_id = current_organization_id()
+       AND deleted_at IS NULL
      RETURNING *`,
     values,
   );
@@ -140,15 +159,56 @@ async function update(id, data) {
       status: row.status,
     });
   }
+  // Append-only audit with the changed-field diff. Skip when nothing actually
+  // changed (mirrors deal.service diff-skip), so an idempotent PATCH is silent.
+  if (row && beforeRow) {
+    const before = {};
+    const after = {};
+    for (const field of allowed) {
+      if (Object.prototype.hasOwnProperty.call(normalizedData, field) && beforeRow[field] !== row[field]) {
+        before[field] = beforeRow[field];
+        after[field] = row[field];
+      }
+    }
+    if (Object.keys(after).length > 0) {
+      await dealAuditLog.recordAudit({
+        dealId: row.deal_id,
+        eventType: 'risk_flag_updated',
+        actorId,
+        before,
+        after,
+        metadata: { risk_flag_id: row.id, title: row.title },
+      });
+    }
+  }
   return row;
 }
 
-async function deleteRiskFlag(id) {
+async function deleteRiskFlag(id, actorId = null) {
+  // Soft-delete: hide the flag immediately from every read path; a daily cron
+  // hard-purges rows whose deleted_at is older than the retention window. The
+  // tombstone lets the 'risk_flag_deleted' audit row carry real before-state
+  // and makes an accidental delete recoverable for 15 days.
   const result = await query(
-    'DELETE FROM risk_flags WHERE id = $1 AND organization_id = current_organization_id() RETURNING id',
-    [id]
+    `UPDATE risk_flags
+        SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
+      WHERE id = $1
+        AND organization_id = current_organization_id()
+        AND deleted_at IS NULL
+      RETURNING id, deal_id, category, severity, title, status`,
+    [id, actorId || null],
   );
-  return result.rows[0] || null;
+  const row = result.rows[0] || null;
+  if (row) {
+    await dealAuditLog.recordAudit({
+      dealId: row.deal_id,
+      eventType: 'risk_flag_deleted',
+      actorId,
+      before: { category: row.category, severity: row.severity, title: row.title, status: row.status },
+      metadata: { risk_flag_id: row.id },
+    });
+  }
+  return row ? { id: row.id } : null;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -163,6 +223,7 @@ async function getRiskScore(dealId) {
      FROM risk_flags
      WHERE deal_id = $1
        AND organization_id = current_organization_id()
+       AND deleted_at IS NULL
        AND status IN ('open', 'flagged')
      GROUP BY severity`,
     [dealId],
@@ -191,7 +252,8 @@ async function getRiskScore(dealId) {
        COUNT(*) FILTER (WHERE severity = 'high')         AS high_total
      FROM risk_flags
      WHERE deal_id = $1
-       AND organization_id = current_organization_id()`,
+       AND organization_id = current_organization_id()
+       AND deleted_at IS NULL`,
     [dealId],
   );
 

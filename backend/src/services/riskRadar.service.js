@@ -213,7 +213,8 @@ const getRiskRadar = async (dealId) => {
     query(
       `SELECT category, severity, status
          FROM risk_flags
-        WHERE deal_id = $1 AND organization_id = current_organization_id()`,
+        WHERE deal_id = $1 AND organization_id = current_organization_id()
+          AND deleted_at IS NULL`,
       [dealId]
     ),
     query(

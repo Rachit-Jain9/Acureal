@@ -614,13 +614,14 @@ const getDealExportContext = async (dealId, options = {}) => {
         COUNT(*) FILTER (WHERE status IN ('open', 'flagged') AND severity = 'medium') AS medium,
         COUNT(*) FILTER (WHERE status IN ('open', 'flagged') AND severity = 'low') AS low
        FROM risk_flags
-       WHERE deal_id = $1`,
+       WHERE deal_id = $1
+         AND deleted_at IS NULL`,
       [dealId]
     ),
     query(
       `SELECT title, severity, category, status, description, mitigation
        FROM risk_flags
-       WHERE deal_id = $1 AND status IN ('open', 'flagged')
+       WHERE deal_id = $1 AND deleted_at IS NULL AND status IN ('open', 'flagged')
         ORDER BY CASE severity
           WHEN 'critical' THEN 1
           WHEN 'high' THEN 2

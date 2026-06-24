@@ -48,6 +48,13 @@ const SUPPORTED_EVENT_TYPES = new Set([
   'bulk_reassigned',
   'bulk_stage_changed',
   'bulk_deleted',
+  // Deal child-entity mutations (audit-trail completeness — soft-delete + audit).
+  // One row per create / update / soft-delete so the Audit tab shows the full
+  // lifecycle of a deal's risk flags, approvals, DD items, and documents.
+  'risk_flag_created', 'risk_flag_updated', 'risk_flag_deleted',
+  'approval_created', 'approval_updated', 'approval_deleted',
+  'dd_item_created', 'dd_item_updated', 'dd_item_deleted',
+  'document_deleted', 'document_purged',
 ]);
 
 // Postgres error codes we treat as "feature gracefully unavailable"
