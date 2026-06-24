@@ -9,6 +9,7 @@ const express = require('express');
 const { requireCronAuth } = require('../middleware/cronAuth');
 const { runSweep } = require('../services/parcelCacheSweep.service');
 const { runSweep: runRetentionSweep } = require('../services/retentionSweep.service');
+const { runSweep: runEntityPurge } = require('../services/entityPurge.service');
 const queueService = require('../services/compsReviewQueue.service');
 const abEvalPersistence = require('../services/ai/abEvalPersistence.service');
 
@@ -31,6 +32,24 @@ router.get('/parcel-cache-sweep/daily', requireCronAuth, async (req, res, next) 
 router.get('/retention-sweep/daily', requireCronAuth, async (req, res, next) => {
   try {
     const summary = await runRetentionSweep();
+    // Same daily slot also enforces the 15-day hard-purge of soft-deleted deal
+    // child entities (risk flags / approvals / DD items / documents). Folded in
+    // here rather than a 6th Vercel cron entry — Hobby caps the cron count, and
+    // runEntityPurge is fail-open (never throws), so it can't break retention.
+    const entityPurge = await runEntityPurge();
+    res.json({ success: true, scheduled: true, ...summary, entity_purge: entityPurge });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/cron/entity-purge/daily
+// Standalone trigger for the 15-day soft-delete purge (also runs inside
+// retention-sweep/daily). Intentionally NOT in the Vercel crons array — exposed
+// for manual or external-scheduler invocation. Cron-secret-gated.
+router.get('/entity-purge/daily', requireCronAuth, async (req, res, next) => {
+  try {
+    const summary = await runEntityPurge();
     res.json({ success: true, scheduled: true, ...summary });
   } catch (error) {
     next(error);

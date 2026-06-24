@@ -137,6 +137,7 @@ const dealSelect = `
     SELECT COUNT(*)
     FROM documents doc
     WHERE doc.deal_id = d.id
+      AND doc.deleted_at IS NULL
   ) as document_count,
   (
     SELECT COUNT(*)
@@ -686,6 +687,7 @@ const getDealById = async (id) => {
       `SELECT doc_category, COUNT(*) AS count
        FROM documents
        WHERE deal_id = $1
+         AND deleted_at IS NULL
        GROUP BY doc_category`,
       [id]
     ),

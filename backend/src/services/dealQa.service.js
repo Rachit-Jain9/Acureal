@@ -231,7 +231,7 @@ async function assembleContext({ dealId, question, topK = DEFAULT_TOP_K, deal: d
     const docIds = [...new Set(retrievedChunks.map((c) => c.document_id).filter(Boolean))];
     if (docIds.length > 0) {
       const meta = await query(
-        `SELECT id, name FROM documents WHERE id = ANY($1::uuid[])`,
+        `SELECT id, name FROM documents WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL`,
         [docIds],
       );
       documentMeta = new Map(meta.rows.map((r) => [r.id, r]));
