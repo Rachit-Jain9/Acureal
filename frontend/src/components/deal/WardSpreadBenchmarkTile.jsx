@@ -132,7 +132,7 @@ export default function WardSpreadBenchmarkTile({ propertyId, currentDealSpreadP
       )}
 
       <p className="text-[10px] text-content-muted mt-3 uppercase tracking-wider">
-        AI-assisted benchmark — verify against IGR sale-deed comps before quoting in IC.
+        Ward benchmark — verify against IGR sale-deed comps before quoting in IC.
       </p>
     </Card>
   );

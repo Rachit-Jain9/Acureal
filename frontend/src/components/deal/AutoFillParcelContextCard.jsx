@@ -571,7 +571,7 @@ function buildFieldRows(data) {
       chipExtras: [
         { label: 'Match', value: pd.source },
         { label: 'PD code', value: pd.pd_code },
-        { label: 'Population', value: pd.population_2011?.toLocaleString?.('en-IN') },
+        { label: 'Population (2011)', value: pd.population_2011?.toLocaleString?.('en-IN') },
         { label: 'Area', value: pd.area_ha ? `${pd.area_ha} ha` : null },
         { label: 'Density', value: pd.gross_density_pph ? `${pd.gross_density_pph} PPH` : null },
       ],
