@@ -9453,3 +9453,27 @@ An investor-grade tool can now answer "what changed on this deal, and who change
 - **AI disclosure #9/#21** — rendering decision (gate vs label low-confidence IC opinion; per-row provenance vs the single-quiet-disclaimer export policy).
 - **Labeling #28** (misleading "RLS-scoped" comments) and **deferred #5** (FAR-citation fallback) / **#3** (run the app under a non-owner DB role).
 - **Needs operator input:** the website email domain (staff-tier onboarding); whether to move off Vercel Hobby.
+
+---
+
+## 2026-06-24 (Financial-engine correctness — dead spread guard + atomic fail-closed save) (PRs #873, #874 — merged; master green)
+
+Took on the financial-engine items, starting with the one I'd earlier flagged as "not a clean fix." Ran a 2-independent-trace **adversarial** review first (so I'd never change underwriting math on a contested unit conclusion) — both traces independently reached the same root cause, which gave the confidence to fix it.
+
+- **#873 — a safety check that was silently broken is now working.** The Excel export has a check that's meant to warn when an income deal's yield-on-cost is barely above (or below) its exit cap rate — i.e. the developer is taking construction risk for almost no extra reward, a real IC red flag. Two numbers it compared were in different units (one read as "9.5" = 9.5%, the other as "0.075" = 7.5%), so the maths always produced a giant fake gap and **the warning never fired** (and would have printed "950.00%" if it had). Fixed the unit; the warning now fires correctly. **No actual financial number changed** — only this one internal comparison. Re-verified all eight threshold cases.
+- **#874 — saving a financial model is now all-or-nothing and always audited.** A save does three writes (scenario rows, the main numbers, and a tamper-proof audit receipt). Before, a failed audit receipt was swallowed (numbers saved with no proof of origin), and the three writes weren't grouped (a mid-save failure could leave them inconsistent). Now they're one atomic operation: everything saves together or nothing does, and a save that can't produce its audit receipt is rejected rather than silently kept. Normal saves are unchanged.
+
+Both verified the full way: full backend suite green at each step (final **211 suites / 3418 tests**), CI green, squash-merged + deployed. New tests `marketBenchmarkValidator` (updated) + `financial.calculateAndSave.test.js`.
+
+### Decisions
+- **#29 investigated → not a real bug** (no "merchant-mode" path neuters the equity-multiple<1.0× guard; it fires for all asset classes). Excluded.
+- **#30 deferred to a spawned follow-up task** — the *frontend* yield-vs-exit-cap check may have a similar issue, but the frontend handles units differently, so copying this fix there would INTRODUCE a bug. It needs its own verification + a frontend regression test.
+
+### Recovery note
+The OneDrive `.git` index-lock hazard struck once during a post-merge sync (the merge succeeded on GitHub; the local pull aborted with "unable to write new index file"). Recovered by `git reset --hard origin/master` — local work was already safely in the remote.
+
+### What's left to do next
+- **AI disclosure #9/#21** — rendering decision (gate vs label a low-confidence IC opinion; per-row provenance vs the single-quiet-disclaimer export policy).
+- **Labeling #28** (misleading "RLS-scoped" comments — safe, mechanical) and **#30** (frontend YoC-spread units, spawned).
+- **Deferred #5** (FAR-citation fallback) / **#3** (run the app under a non-owner DB role — operator-gated).
+- **Needs operator input:** the website email domain (staff-tier onboarding); whether to move off Vercel Hobby.
