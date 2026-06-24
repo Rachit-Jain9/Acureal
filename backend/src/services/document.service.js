@@ -3,6 +3,7 @@ const { createError } = require('../middleware/errorHandler');
 const { uploadFile, createUploadUrl, getDownloadUrl, getStoredObjectSize, fetchStoredFile, deleteStorageFile } = require('../config/storage');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { EVENTS, publish } = require('../lib/eventBus');
+const dealAuditLog = require('./dealAuditLog.service');
 const path = require('path');
 const log = require('../lib/logger').child({ module: 'document.service' });
 
@@ -304,7 +305,7 @@ const getDocuments = async (dealId, category = null) => {
     throw createError('Deal not found.', 404);
   }
 
-  const conditions = ['d.deal_id = $1'];
+  const conditions = ['d.deal_id = $1', 'd.deleted_at IS NULL'];
   const values = [dealId];
   let paramCount = 2;
 
@@ -352,7 +353,8 @@ const deleteDocument = async (documentId, userId, dealId = null) => {
      FROM documents doc
      LEFT JOIN deals ON deals.id = doc.deal_id
      WHERE doc.id = $1
-       AND doc.organization_id = current_organization_id()`,
+       AND doc.organization_id = current_organization_id()
+       AND doc.deleted_at IS NULL`,
     [documentId]
   );
 
@@ -377,14 +379,25 @@ const deleteDocument = async (documentId, userId, dealId = null) => {
     throw createError('Cannot delete documents from a dead deal.', 409);
   }
 
-  try {
-    await deleteStorageFile(doc.file_url);
-  } catch (error) {
-    log.warn('document_storage_delete_failed', { documentId, fileUrl: doc.file_url, error: error.message });
-    // Continue with DB deletion even if storage deletion fails
-  }
+  // SOFT delete — hide the document immediately but KEEP the stored bytes. The
+  // file is only removed when the daily purge cron hard-deletes the tombstone
+  // after the retention window, so an accidental delete is recoverable for 15
+  // days. (Deleting storage here would break that promise.)
+  await query(
+    `UPDATE documents SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
+      WHERE id = $1
+        AND organization_id = current_organization_id()
+        AND deleted_at IS NULL`,
+    [documentId, userId || null],
+  );
 
-  await query('DELETE FROM documents WHERE id = $1', [documentId]);
+  await dealAuditLog.recordAudit({
+    dealId: doc.deal_id,
+    eventType: 'document_deleted',
+    actorId: userId || null,
+    before: { name: doc.name, doc_category: doc.doc_category },
+    metadata: { document_id: documentId, file_url: doc.file_url },
+  });
 
   return { deleted: true, id: documentId };
 };
@@ -414,7 +427,8 @@ const getSignedUrl = async (documentId, dealId = null, accessContext = {}) => {
      FROM documents doc
      LEFT JOIN deals ON deals.id = doc.deal_id
      WHERE doc.id = $1
-       AND doc.organization_id = current_organization_id()`,
+       AND doc.organization_id = current_organization_id()
+       AND doc.deleted_at IS NULL`,
     [documentId]
   );
 
@@ -456,7 +470,8 @@ const streamDownload = async (documentId, res, dealId = null, accessContext = {}
      FROM documents doc
      LEFT JOIN deals ON deals.id = doc.deal_id
      WHERE doc.id = $1
-       AND doc.organization_id = current_organization_id()`,
+       AND doc.organization_id = current_organization_id()
+       AND doc.deleted_at IS NULL`,
     [documentId]
   );
 

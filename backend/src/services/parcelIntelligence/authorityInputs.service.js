@@ -73,6 +73,7 @@ const loadDealAuthorityContext = async (client, dealId) => {
          FROM documents doc
          WHERE doc.deal_id = d.id
            AND doc.organization_id = current_organization_id()
+           AND doc.deleted_at IS NULL
          ORDER BY doc.created_at DESC
          LIMIT 1
        ) AS document_id

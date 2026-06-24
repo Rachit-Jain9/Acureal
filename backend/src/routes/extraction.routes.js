@@ -38,7 +38,8 @@ router.post('/documents/:documentId/extract', authenticate, requireAdminOrAnalys
        LEFT JOIN deals d ON d.id = doc.deal_id
        LEFT JOIN properties p ON p.id = d.property_id
        WHERE doc.id = $1
-         AND doc.organization_id = current_organization_id()`,
+         AND doc.organization_id = current_organization_id()
+         AND doc.deleted_at IS NULL`,
       [documentId],
     );
 

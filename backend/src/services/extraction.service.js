@@ -860,6 +860,7 @@ async function getDealExtractionFailures(dealId) {
        JOIN documents d ON d.id = de.document_id
       WHERE de.deal_id = $1
         AND de.organization_id = current_organization_id()
+        AND d.deleted_at IS NULL
         AND de.extraction_status IN ('failed','processing')
       ORDER BY de.document_id, de.created_at DESC`,
     [dealId],
@@ -905,6 +906,7 @@ async function getDealExtractions(dealId) {
        FROM document_extractions de
        JOIN documents d ON d.id = de.document_id
       WHERE de.deal_id = $1
+        AND d.deleted_at IS NULL
         AND de.extraction_status IN ('completed','partial','reviewed')
       ORDER BY de.document_id, de.created_at DESC`,
     [dealId],

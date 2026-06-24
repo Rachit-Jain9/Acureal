@@ -646,6 +646,7 @@ const getDealExportContext = async (dealId, options = {}) => {
       `SELECT id, name, file_type, doc_category, description, created_at
        FROM documents
        WHERE deal_id = $1
+         AND deleted_at IS NULL
        ORDER BY created_at DESC`,
       [dealId]
     ),
