@@ -9411,3 +9411,24 @@ Ran a multi-agent audit of the live product (44 agents across 8 dimensions, ever
 ### What's left to do next (tracked in memory `project_correctness_audit_2026_06_23`)
 - **~22 confirmed findings remain**, grouped: wire the shared sanitizer into the other AI legal-lane surfaces (#7/#8/#20); immutable audit-trail rows for DD/risk/approval/document mutations + hard-deletes (#11–#19); financial fixes (dead YoC-vs-ExitCap guardrail #10, fail-closed + atomic financial save #13/#14); labeling polish (#26/#27/#31/#28).
 - **Deferred (need care):** #5 (FAR-citation BDA fallback — check the `far_rules` data first to avoid degrading correct citations); **#3 operator-gated** (run the app under a dedicated non-owner DB role so RLS becomes a real backstop — needs a DB-role + connection change).
+
+---
+
+## 2026-06-24 (Security & credibility hardening block — 3 PRs shipped) (PRs #864, #865, #866 — all merged; master green)
+
+A focused block hardening the operator boundary and the legal-four guarantee, plus credibility labeling. Each item was deep-reviewed before any code changed, fully tested, and merged only after CI went green.
+
+- **#864 (security) — platform-operator boundary now server-enforced.** The operator-only `/api/admin/*` surfaces were gated only by `requireRole('admin','analyst')`, which every signup satisfies for their own workspace — so any org admin could reach platform-operator tooling. Two were real holes: `PUT /admin/ai-routing/:task` (mutates the GLOBAL AI provider-routing config) and `POST /admin/ab-eval/*` (spends shared platform AI budget). New `requirePlatformAdmin` middleware (reuses the existing `PLATFORM_ADMIN_EMAILS` allowlist — zero-config, falls back to the founding operator) now guards the 11 operator-only endpoints. Deliberately left `/users`, `/recent-events`, `/ai-usage` on org-role: they back customer dashboards + the Deals assignee picker with org-scoped data, so locking them would 403 normal users. Test `requirePlatformAdmin.middleware.test.js`. This is the documented prerequisite before any teammate can be added to an operator tier (`project_user_tier_model`).
+- **#865 (credibility) — legal-four prose guard wired into the last 3 AI surfaces (closes audit #7/#8/#20).** The shared `sanitizeAiProse` (strips narrated title/RERA/encumbrance/approval verdicts + rewrites absolute IC verbs) previously ran only on the deal Overview. Wired it into the `export.insights` IC envelope (ic_opinion + the previously-UNGUARDED top_risks/next_steps), the doc-insights envelope (summary_paragraph + findings), and both deal-Q&A answer paths (non-streaming + streaming). Dropped the now-redundant `neutralizeStanceText` import (sanitize is a strict superset). Test `export.insights.legalGuard.test.js`.
+- **#866 (credibility) — accurate labels (closes audit #27/#31).** Relabelled a deterministic ward-median statistic from "AI-assisted benchmark" → "Ward benchmark" (it is not an AI output); dated the Census figure "Population" → "Population (2011)" across the parcel chip + the District Intelligence panel (sort option + column header). Updated the panel's sort test for the new header.
+
+Verification: backend 205 suites / 3386 tests green; frontend build + affected vitest suites green; every PR CI-green before squash-merge. **No manual/ops action required for any of the three (all zero-config).**
+
+### Notable decision — financial #10 deferred, not shipped
+The "dead YoC-vs-ExitCap guard" turned out NOT to be a clean fix. The export-QA validator (`exports/xlsx/v2/marketBenchmarkValidator.js`) and its tests are self-consistent for FRACTIONS (`(yoc-exitCap)*10000` = correct bps for 0.09-style inputs; tests pass). A naive "×100" change would break passing tests and risk FALSE underwriting warnings on customer exports. The real question is a cross-layer unit mismatch (the frontend kernel KPI treats yield-on-cost as a percentage; the export path treats it as a fraction) that needs a deliberate units audit first. Refined the flag in memory rather than guess — quality over a fast patch.
+
+### What's left to do next
+- **Audit-trail rows (#11–#19)** for DD/risk/approval/document mutations + a soft-vs-hard-delete policy — highest-value remaining; multi-service and needs a delete-policy decision.
+- **Financial #10/#13/#14** — needs the units audit above, plus fail-closed + atomic financial save.
+- **AI disclosure #9/#21** — needs a rendering decision (gate vs label a low-confidence IC opinion; per-row provenance vs the single-quiet-disclaimer export policy).
+- **Needs operator input:** the website email domain (staff-tier onboarding); the two "Needs Attention" Vercel secrets (`JWT_SECRET`, `BLOB_READ_WRITE_TOKEN` → mark Sensitive); whether to move off Vercel Hobby before the anonymized-benchmark/aggregation work.
