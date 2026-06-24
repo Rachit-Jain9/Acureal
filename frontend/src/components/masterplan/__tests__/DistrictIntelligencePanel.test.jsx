@@ -119,7 +119,7 @@ describe('DistrictIntelligencePanel', () => {
 
   it('sorts by population descending when the population header is clicked', () => {
     render(<DistrictIntelligencePanel />);
-    const popHeader = screen.getByText('Population').closest('th');
+    const popHeader = screen.getByText('Population (2011)').closest('th');
     fireEvent.click(popHeader);
     const rows = screen.getAllByRole('row').slice(1); // skip header
     // Largest population (CBD = 5.94 L) first
