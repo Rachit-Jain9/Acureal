@@ -270,14 +270,19 @@ const validateYocVsExitCapSpread = (ctx, core, addIssue) => {
   if (yoc === null || exitCap === null) return;
   if (yoc <= 0 || exitCap <= 0) return; // can't compute meaningful spread
 
-  const spreadBps = Math.round((yoc - exitCap) * 10000);
+  // `yoc` arrives as a PERCENT (the kernel emits stabilised-NOI / cost × 100,
+  // surfaced via deal.yield_on_cost_pct); `exitCap` arrives as a FRACTION
+  // (buildWorkbook's toPctDecimal). Normalise yoc → fraction before differencing,
+  // else e.g. (9.5 − 0.075) × 10000 ≈ 94,000 bps and this guard never fires.
+  const yocFraction = yoc / 100;
+  const spreadBps = Math.round((yocFraction - exitCap) * 10000);
 
   if (spreadBps < 0) {
     addIssue(
       'warn',
       'Yield-on-Cost vs Exit Cap',
       'ExitCapRate',
-      `NEGATIVE spread: stabilised Yield-on-Cost ${(yoc * 100).toFixed(2)}% is BELOW Exit Cap Rate ${(exitCap * 100).toFixed(2)}% (${Math.abs(spreadBps)} bps deficit). The developer earns LESS than a passive buyer of a stabilised asset — there's no economic reward for taking development risk.`,
+      `NEGATIVE spread: stabilised Yield-on-Cost ${(yocFraction * 100).toFixed(2)}% is BELOW Exit Cap Rate ${(exitCap * 100).toFixed(2)}% (${Math.abs(spreadBps)} bps deficit). The developer earns LESS than a passive buyer of a stabilised asset — there's no economic reward for taking development risk.`,
       `Either lower the build-cost basis (TotalCost), raise stabilised income (BaseRentPerSqftMonth × OccupancyPct), or revise the Exit Cap Rate assumption. Income deals typically need ≥150-200 bps positive YoC-vs-Exit-Cap spread to clear IC.`,
       'income asset classes',
     );
@@ -286,7 +291,7 @@ const validateYocVsExitCapSpread = (ctx, core, addIssue) => {
       'warn',
       'Yield-on-Cost vs Exit Cap',
       'ExitCapRate',
-      `THIN development premium: Yield-on-Cost ${(yoc * 100).toFixed(2)}% vs Exit Cap ${(exitCap * 100).toFixed(2)}% leaves only ${spreadBps} bps of spread. Conventional IC threshold is 150–200 bps for income deals — a thin spread leaves no margin for cost overruns, lease-up delays, or cap-rate widening.`,
+      `THIN development premium: Yield-on-Cost ${(yocFraction * 100).toFixed(2)}% vs Exit Cap ${(exitCap * 100).toFixed(2)}% leaves only ${spreadBps} bps of spread. Conventional IC threshold is 150–200 bps for income deals — a thin spread leaves no margin for cost overruns, lease-up delays, or cap-rate widening.`,
       `Stress-test the build cost (typically +10% contingency) and re-check the spread. If the spread compresses below zero on a reasonable downside, the development premium is illusory.`,
       'income asset classes',
     );
