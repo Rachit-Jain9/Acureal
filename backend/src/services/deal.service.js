@@ -157,12 +157,14 @@ const dealSelect = `
     SELECT COUNT(*)
     FROM approval_items ai
     WHERE ai.deal_id = d.id
+      AND ai.deleted_at IS NULL
       AND ai.is_required = TRUE
   ) as required_approval_count,
   (
     SELECT COUNT(*)
     FROM approval_items ai
     WHERE ai.deal_id = d.id
+      AND ai.deleted_at IS NULL
       AND ai.is_required = TRUE
       AND (
         ai.is_validated = TRUE
@@ -675,7 +677,7 @@ const getDealById = async (id) => {
       [id]
     ),
     query('SELECT * FROM dd_items WHERE deal_id = $1 ORDER BY created_at ASC', [id]),
-    query('SELECT * FROM approval_items WHERE deal_id = $1 ORDER BY created_at ASC', [id]),
+    query('SELECT * FROM approval_items WHERE deal_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC', [id]),
     query('SELECT * FROM risk_flags WHERE deal_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC', [id]),
     query(
       `SELECT doc_category, COUNT(*) AS count

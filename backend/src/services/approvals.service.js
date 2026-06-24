@@ -3,6 +3,7 @@
 const { query } = require('../config/database');
 const { EVENTS, publish } = require('../lib/eventBus');
 const dealStructureMatrix = require('../utils/dealStructureMatrix');
+const dealAuditLog = require('./dealAuditLog.service');
 
 const normalizeApprovalStatus = (value) => {
   const status = String(value || 'pending').trim().toLowerCase();
@@ -242,13 +243,14 @@ async function listByDeal(dealId) {
      LEFT JOIN documents d ON d.id = a.document_id
      WHERE a.deal_id = $1
        AND a.organization_id = current_organization_id()
+       AND a.deleted_at IS NULL
      ORDER BY a.approval_type, a.created_at`,
     [dealId],
   );
   return result.rows;
 }
 
-async function create(dealId, data) {
+async function create(dealId, data, actorId = null) {
   const normalized = normalizeApprovalPayload(data);
   const {
     approval_type,
@@ -280,10 +282,18 @@ async function create(dealId, data) {
       status, notes, next_action,
     ],
   );
-  return result.rows[0];
+  const row = result.rows[0];
+  await dealAuditLog.recordAudit({
+    dealId,
+    eventType: 'approval_created',
+    actorId,
+    after: { approval_type: row.approval_type, name: row.name, status: row.status, is_validated: row.is_validated },
+    metadata: { approval_id: row.id },
+  });
+  return row;
 }
 
-async function update(id, data) {
+async function update(id, data, actorId = null) {
   const normalizedData = normalizeApprovalPayload(data);
   const allowed = [
     'approval_type', 'name', 'is_required', 'is_available', 'is_uploaded', 'is_validated',
@@ -307,19 +317,28 @@ async function update(id, data) {
     // Org-scope this read exactly like the UPDATE/DELETE below. The app connects
     // as the RLS-bypassing role, so this WHERE clause is the ONLY tenant
     // boundary — without it an empty-body PUT would return another org's
-    // statutory-approval record (one of the legal-four lanes).
+    // statutory-approval record (one of the legal-four lanes). `deleted_at IS
+    // NULL` keeps a soft-deleted approval invisible here too.
     const existing = await query(
-      'SELECT * FROM approval_items WHERE id = $1 AND organization_id = current_organization_id()',
+      'SELECT * FROM approval_items WHERE id = $1 AND organization_id = current_organization_id() AND deleted_at IS NULL',
       [id],
     );
     return existing.rows[0] || null;
   }
+
+  // Snapshot BEFORE state (same org + live scope) for the audit diff.
+  const beforeRes = await query(
+    'SELECT * FROM approval_items WHERE id = $1 AND organization_id = current_organization_id() AND deleted_at IS NULL',
+    [id],
+  );
+  const beforeRow = beforeRes.rows[0] || null;
 
   values.push(id);
   const result = await query(
     `UPDATE approval_items SET ${setClauses.join(', ')}, updated_at = NOW()
      WHERE id = $${paramIndex}
        AND organization_id = current_organization_id()
+       AND deleted_at IS NULL
      RETURNING *`,
     values,
   );
@@ -332,15 +351,57 @@ async function update(id, data) {
       status: row.status,
     });
   }
+  // Append-only audit with a string-normalized field diff — dates come back as
+  // Date objects, so compare via String() to avoid reference-inequality false
+  // positives. Skip when nothing actually changed.
+  if (row && beforeRow) {
+    const before = {};
+    const after = {};
+    for (const field of allowed) {
+      if (Object.prototype.hasOwnProperty.call(normalizedData, field)
+          && String(beforeRow[field] ?? '') !== String(row[field] ?? '')) {
+        before[field] = beforeRow[field];
+        after[field] = row[field];
+      }
+    }
+    if (Object.keys(after).length > 0) {
+      await dealAuditLog.recordAudit({
+        dealId: row.deal_id,
+        eventType: 'approval_updated',
+        actorId,
+        before,
+        after,
+        metadata: { approval_id: row.id, name: row.name },
+      });
+    }
+  }
   return row;
 }
 
-async function deleteApprovalItem(id) {
+async function deleteApprovalItem(id, actorId = null) {
+  // Soft-delete: hide immediately, purge after the retention window. Keeps the
+  // tombstone so the 'approval_deleted' audit row carries real before-state and
+  // an accidental delete of a statutory-approval record is recoverable.
   const result = await query(
-    'DELETE FROM approval_items WHERE id = $1 AND organization_id = current_organization_id() RETURNING id',
-    [id]
+    `UPDATE approval_items
+        SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
+      WHERE id = $1
+        AND organization_id = current_organization_id()
+        AND deleted_at IS NULL
+      RETURNING id, deal_id, approval_type, name, status`,
+    [id, actorId || null],
   );
-  return result.rows[0] || null;
+  const row = result.rows[0] || null;
+  if (row) {
+    await dealAuditLog.recordAudit({
+      dealId: row.deal_id,
+      eventType: 'approval_deleted',
+      actorId,
+      before: { approval_type: row.approval_type, name: row.name, status: row.status },
+      metadata: { approval_id: row.id },
+    });
+  }
+  return row ? { id: row.id } : null;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -376,7 +437,7 @@ async function seedForDeal(dealId, assetClass = 'residential_apartments', dealSt
 
   // Avoid duplicate seeding
   const existing = await query(
-    'SELECT name FROM approval_items WHERE deal_id = $1 AND organization_id = current_organization_id()',
+    'SELECT name FROM approval_items WHERE deal_id = $1 AND organization_id = current_organization_id() AND deleted_at IS NULL',
     [dealId]
   );
   const existingNames = new Set(existing.rows.map((r) => r.name));

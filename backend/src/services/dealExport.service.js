@@ -636,6 +636,7 @@ const getDealExportContext = async (dealId, options = {}) => {
        FROM approval_items a
        LEFT JOIN documents d ON d.id = a.document_id
        WHERE a.deal_id = $1
+         AND a.deleted_at IS NULL
        ORDER BY a.approval_type, a.created_at`,
       [dealId]
     ),

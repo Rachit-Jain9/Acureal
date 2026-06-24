@@ -90,6 +90,7 @@ const getExpiringApprovals = () =>
        FROM approval_items ap
        JOIN deals d ON d.id = ap.deal_id
       WHERE ap.organization_id = current_organization_id()
+        AND ap.deleted_at IS NULL
         AND d.is_archived = FALSE
         AND d.stage = ANY($1::deal_stage[])
         AND ap.is_required = TRUE

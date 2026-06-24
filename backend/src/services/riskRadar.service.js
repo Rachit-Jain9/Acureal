@@ -226,7 +226,8 @@ const getRiskRadar = async (dealId) => {
     query(
       `SELECT is_required, is_validated, status, expiry_date
          FROM approval_items
-        WHERE deal_id = $1 AND organization_id = current_organization_id()`,
+        WHERE deal_id = $1 AND organization_id = current_organization_id()
+          AND deleted_at IS NULL`,
       [dealId]
     ),
     query(
