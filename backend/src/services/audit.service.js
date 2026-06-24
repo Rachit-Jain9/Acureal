@@ -157,7 +157,7 @@ const recordEvent = async ({
   outputs,
   actorId = null,
   metadata = {},
-}) => {
+}, exec = query) => {
   if (!dealId) throw createError('recordEvent: dealId is required', 400);
   if (!eventType || !SUPPORTED_EVENT_TYPES.has(eventType)) {
     throw createError(`recordEvent: unsupported eventType "${eventType}"`, 400);
@@ -174,7 +174,7 @@ const recordEvent = async ({
   const outputsHash = hashOutputs(outputs);
   const signature = signEvent({ inputsHash, outputsHash, engineVersion });
 
-  const result = await query(
+  const result = await exec(
     `INSERT INTO deal_events (
        deal_id, organization_id, actor_id,
        event_type, engine_version, asset_class,

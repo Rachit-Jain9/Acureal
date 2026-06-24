@@ -1,4 +1,4 @@
-const { query } = require('../config/database');
+const { query, transaction } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const {
   computeFullFinancials,
@@ -20,7 +20,7 @@ const SCENARIO_MULTIPLIERS = {
   bear: { revenue: 0.88, cost: 1.10, duration: 1.20 },
 };
 
-const persistScenarios = async (dealId, scenarios) => {
+const persistScenarios = async (dealId, scenarios, exec = query) => {
   if (!scenarios || typeof scenarios !== 'object') return;
 
   // Collect every scenario row, then write them in ONE multi-row upsert instead
@@ -62,7 +62,7 @@ const persistScenarios = async (dealId, scenarios) => {
     return `($1, (SELECT organization_id FROM deals WHERE id = $1), ${ph})`;
   });
 
-  await query(
+  await exec(
     `INSERT INTO financial_scenarios (
        deal_id, organization_id, scenario, label,
        revenue_multiplier, cost_multiplier, duration_multiplier,
@@ -179,20 +179,24 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
     leg.discount_rate_pct              ?? null,
   ];
 
-  // Persist scenarios to first-class table so they are queryable without
-  // deserializing model_params. Non-fatal — model_params still holds the
-  // authoritative snapshot in case the table write is rolled back / skipped.
-  try {
-    await persistScenarios(dealId, scenarios);
-  } catch (err) {
-    console.warn('[financial.service] persistScenarios failed:', err.message);
-  }
+  // Persist scenarios + the financials row + the immutable HMAC-signed audit
+  // record in ONE transaction (correctness audit #13/#14). All three writes run
+  // on the SAME pooled connection (exec → client.query) so they commit or roll
+  // back together: a financial calc that cannot produce its signed audit record
+  // must NOT silently persist (fail-CLOSED, #13), and a mid-save failure must
+  // not leave financial_scenarios and financials inconsistent (#14). The
+  // CPU-heavy compute above stays OUTSIDE the txn, so the held-connection window
+  // is just the three fast writes (respects the serverless pool budget).
+  const result = await transaction(async (client) => {
+    const exec = (text, p) => client.query(text, p);
 
-  const existing = await query('SELECT id FROM financials WHERE deal_id = $1', [dealId]);
+    await persistScenarios(dealId, scenarios, exec);
 
-  let result;
-  if (existing.rows.length > 0) {
-    result = await query(
+    const existing = await exec('SELECT id FROM financials WHERE deal_id = $1', [dealId]);
+
+    let upserted;
+    if (existing.rows.length > 0) {
+      upserted = await exec(
       `UPDATE financials SET
         asset_class = $1, model_params = $2,
         land_cost_cr = $3, plot_area_sqft = $4, fsi = $5,
@@ -212,9 +216,9 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
        WHERE deal_id = $41
        RETURNING *`,
       [...params, dealId]
-    );
-  } else {
-    result = await query(
+      );
+    } else {
+      upserted = await exec(
       `INSERT INTO financials (
         asset_class, model_params,
         land_cost_cr, plot_area_sqft, fsi, loading_factor,
@@ -237,16 +241,14 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
         $29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,$40,$41
        ) RETURNING *`,
       [...params, dealId]
-    );
-  }
+      );
+    }
 
-  // ── AUDIT TRAIL ────────────────────────────────────────────────────────────
-  // Immutable, HMAC-signed record of (inputs → outputs @ engine version). The
-  // row is the single artifact an investor / IC / auditor can replay to prove
-  // the numbers on the pitch deck came from the exact kernel version + input
-  // set on file. Non-fatal on failure: the financial save already succeeded
-  // and we don't want audit infrastructure outages to block underwriting.
-  try {
+    // Immutable, HMAC-signed record of (inputs → outputs @ engine version) — the
+    // single artifact an investor / IC / auditor replays to prove the numbers
+    // came from the exact kernel version + input set. recordEvent throws on a
+    // signing failure (e.g. missing HMAC key); inside this txn that throw now
+    // rolls the whole save back — fail-CLOSED (#13), no orphaned unaudited calc.
     await auditService.recordEvent({
       dealId,
       eventType: 'calculate_and_save',
@@ -260,10 +262,10 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
         hasSensitivity: !!computed.sensitivityMatrix,
         hasScenarios: !!scenarios,
       },
-    });
-  } catch (err) {
-    console.warn('[financial.service] audit recordEvent failed:', err.message);
-  }
+    }, exec);
+
+    return upserted;
+  });
 
   return { ...result.rows[0], computed };
 };
