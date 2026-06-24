@@ -9432,3 +9432,24 @@ The "dead YoC-vs-ExitCap guard" turned out NOT to be a clean fix. The export-QA 
 - **Financial #10/#13/#14** — needs the units audit above, plus fail-closed + atomic financial save.
 - **AI disclosure #9/#21** — needs a rendering decision (gate vs label a low-confidence IC opinion; per-row provenance vs the single-quiet-disclaimer export policy).
 - **Needs operator input:** the website email domain (staff-tier onboarding); the two "Needs Attention" Vercel secrets (`JWT_SECRET`, `BLOB_READ_WRITE_TOKEN` → mark Sensitive); whether to move off Vercel Hobby before the anonymized-benchmark/aggregation work.
+
+---
+
+## 2026-06-24 (Audit-trail completeness + 15-day soft-delete — feature shipped end-to-end) (PRs #868–#871 — all merged; master green)
+
+Operator chose: deletes should be **hidden but kept for 15 days, then removed**. Built the whole thing across all four deal child entities + the cleanup job, as four reviewed, fully-tested PRs. Began with a 7-agent review that mapped every delete flow and — critically — every *read path* (a missed one would make deleted items reappear).
+
+- **Schema (applied to production live):** added `deleted_at` + `deleted_by` (+ fast partial indexes) to risk flags, approvals, DD items, and documents. Migration `20260719` written to the repo AND applied to prod through the Supabase connection (verified). Additive only — nothing changed until the code started filtering.
+- **#868 Risk flags / #869 Approvals / #870 DD items / #871 Documents + cron.** For each: create / edit / delete now writes a permanent entry to the deal's **Audit** tab (who, when, before → after, incl. status changes). Delete became a **soft-delete** — the row is hidden from *every* place it's listed, counted, exported, or referenced (~50 read paths, grep-reconciled per entity), but kept behind the scenes. **Documents** keep their actual stored file too (deleting it would break the 15-day recovery promise).
+- **The 15-day cleanup (`entityPurge.service`).** A daily job permanently removes anything deleted more than 15 days ago; for documents it deletes the stored file **first** (no orphans), then the record. Folded into the existing daily retention cron (Vercel Hobby caps cron count) + a standalone trigger for manual runs.
+
+Each PR: full backend suite green at every step (final: **210 suites / 3415 tests**), CI green, squash-merged. New tests: `{risk,approvals,dd,document}.softDelete.audit.test.js` + `entityPurge.service.test.js`.
+
+### Why it matters
+An investor-grade tool can now answer "what changed on this deal, and who changed it?" for *everything* — not just stage moves — and an accidental delete is recoverable for two weeks instead of gone forever. This was a CLAUDE.md non-negotiable (immutable audit trail) and closes correctness-audit findings #11–#19.
+
+### What's left to do next
+- **Financial #10/#13/#14** — #10 needs the cross-layer units audit (the export validator is fraction-based; the kernel KPI is percentage-based) before any change; #13/#14 fail-closed + atomic financial save.
+- **AI disclosure #9/#21** — rendering decision (gate vs label low-confidence IC opinion; per-row provenance vs the single-quiet-disclaimer export policy).
+- **Labeling #28** (misleading "RLS-scoped" comments) and **deferred #5** (FAR-citation fallback) / **#3** (run the app under a non-owner DB role).
+- **Needs operator input:** the website email domain (staff-tier onboarding); whether to move off Vercel Hobby.
