@@ -63,7 +63,7 @@ router.post('/deals/:dealId/dd', authenticate, requireAdminOrAnalyst, async (req
 // PUT /deals/:dealId/dd/:id
 router.put('/deals/:dealId/dd/:id', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
-    const item = await ddService.update(req.params.id, req.body);
+    const item = await ddService.update(req.params.id, req.body, req.user.id);
     if (!item) {
       return res.status(404).json({ success: false, message: 'DD item not found' });
     }
@@ -94,7 +94,7 @@ router.patch('/deals/:dealId/dd/:id/status', authenticate, requireAdminOrAnalyst
 // DELETE /deals/:dealId/dd/:id
 router.delete('/deals/:dealId/dd/:id', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
-    const deleted = await ddService.delete(req.params.id);
+    const deleted = await ddService.delete(req.params.id, req.user.id);
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'DD item not found' });
     }
