@@ -21,7 +21,7 @@ describe('partial-PATCH integrity — only the sent fields are written', () => {
   beforeEach(() => query.mockReset());
 
   test('approvals.update { notes } leaves status + dates untouched', async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: 'a1', deal_id: 'd1', status: 'validated' }] });
+    query.mockResolvedValue({ rows: [{ id: 'a1', deal_id: 'd1', status: 'validated' }] });
     await approvalsService.update('a1', { notes: 'spoke to BBMP' });
     const call = findUpdate('approval_items');
     expect(call[0]).toMatch(/notes = \$/);
@@ -32,7 +32,7 @@ describe('partial-PATCH integrity — only the sent fields are written', () => {
   });
 
   test('approvals.update { status } still normalizes + writes it (approved → validated)', async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: 'a1', deal_id: 'd1', status: 'validated' }] });
+    query.mockResolvedValue({ rows: [{ id: 'a1', deal_id: 'd1', status: 'validated' }] });
     await approvalsService.update('a1', { status: 'approved' });
     const call = findUpdate('approval_items');
     expect(call[0]).toMatch(/status = \$/);

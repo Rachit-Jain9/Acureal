@@ -235,6 +235,7 @@ const buildIcMemoInput = async (dealId) => {
       `SELECT approval_type, name, status, issuing_authority, expiry_date, is_available
          FROM approval_items
         WHERE deal_id = $1 AND organization_id = current_organization_id()
+          AND deleted_at IS NULL
         ORDER BY (status = 'pending') DESC, expiry_date NULLS LAST
         LIMIT 20`,
       [dealId],

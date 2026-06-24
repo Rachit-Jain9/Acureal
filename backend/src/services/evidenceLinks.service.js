@@ -111,7 +111,7 @@ const resolveDealIdFromOwner = async (ownerKind, ownerId) => {
     return r.rows[0]?.deal_id || null;
   }
   if (ownerKind === 'approval') {
-    const r = await query('SELECT deal_id FROM approval_items WHERE id = $1', [ownerId]);
+    const r = await query('SELECT deal_id FROM approval_items WHERE id = $1 AND deleted_at IS NULL', [ownerId]);
     return r.rows[0]?.deal_id || null;
   }
   if (ownerKind === 'risk_flag') {
@@ -500,7 +500,7 @@ const listDependents = async (sourceKind, sourceId) => {
        )                                         AS deal_name
      FROM evidence_links el
      LEFT JOIN dd_items dd               ON el.owner_kind = 'dd_item'           AND dd.id = el.owner_id
-     LEFT JOIN approval_items ap         ON el.owner_kind = 'approval'          AND ap.id = el.owner_id
+     LEFT JOIN approval_items ap         ON el.owner_kind = 'approval'          AND ap.id = el.owner_id AND ap.deleted_at IS NULL
      LEFT JOIN risk_flags rf             ON el.owner_kind = 'risk_flag'         AND rf.id = el.owner_id AND rf.deleted_at IS NULL
      LEFT JOIN comps cmp                 ON el.owner_kind = 'comp'              AND cmp.id = el.owner_id
      LEFT JOIN financial_scenarios fs    ON el.owner_kind = 'financial_scenario' AND fs.id = el.owner_id

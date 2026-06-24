@@ -43,7 +43,7 @@ router.post('/deals/:dealId/approvals', authenticate, requireAdminOrAnalyst, asy
     const item = await approvalsService.create(req.params.dealId, {
       ...req.body,
       approval_type: approvalType,
-    });
+    }, req.user.id);
     return res.status(201).json({ success: true, data: item });
   } catch (err) {
     next(err);
@@ -53,7 +53,7 @@ router.post('/deals/:dealId/approvals', authenticate, requireAdminOrAnalyst, asy
 // PUT /deals/:dealId/approvals/:id
 router.put('/deals/:dealId/approvals/:id', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
-    const item = await approvalsService.update(req.params.id, req.body);
+    const item = await approvalsService.update(req.params.id, req.body, req.user.id);
     if (!item) {
       return res.status(404).json({ success: false, message: 'Approval item not found' });
     }
@@ -66,7 +66,7 @@ router.put('/deals/:dealId/approvals/:id', authenticate, requireAdminOrAnalyst, 
 // DELETE /deals/:dealId/approvals/:id
 router.delete('/deals/:dealId/approvals/:id', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
-    const deleted = await approvalsService.delete(req.params.id);
+    const deleted = await approvalsService.delete(req.params.id, req.user.id);
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'Approval item not found' });
     }
