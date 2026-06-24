@@ -40,7 +40,9 @@ describe('partial-PATCH integrity — only the sent fields are written', () => {
   });
 
   test('risk.update { mitigation } does not reset status to open', async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: 'r1', deal_id: 'd1', status: 'mitigated' }] });
+    // risk.update now reads a before-snapshot (for the audit diff) then UPDATEs,
+    // so resolve every internal query with the same row.
+    query.mockResolvedValue({ rows: [{ id: 'r1', deal_id: 'd1', status: 'mitigated' }] });
     await riskService.update('r1', { mitigation: 'insurance bound' });
     const call = findUpdate('risk_flags');
     expect(call[0]).toMatch(/mitigation = \$/);
@@ -49,7 +51,7 @@ describe('partial-PATCH integrity — only the sent fields are written', () => {
   });
 
   test('risk.update { status } still normalizes + writes it (closed → resolved)', async () => {
-    query.mockResolvedValueOnce({ rows: [{ id: 'r1', deal_id: 'd1', status: 'resolved' }] });
+    query.mockResolvedValue({ rows: [{ id: 'r1', deal_id: 'd1', status: 'resolved' }] });
     await riskService.update('r1', { status: 'closed' });
     const call = findUpdate('risk_flags');
     expect(call[0]).toMatch(/status = \$/);

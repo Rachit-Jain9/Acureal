@@ -211,6 +211,7 @@ const buildIcMemoInput = async (dealId) => {
       `SELECT category, severity, title, description, mitigation, status, source
          FROM risk_flags
         WHERE deal_id = $1 AND organization_id = current_organization_id()
+          AND deleted_at IS NULL
           AND status IN ('open', 'flagged', 'mitigated')
         ORDER BY CASE severity WHEN 'critical' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
                  created_at DESC

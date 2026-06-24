@@ -132,7 +132,7 @@ router.post('/deals/:dealId/risk', authenticate, requireAdminOrAnalyst, async (r
 // PUT /deals/:dealId/risk/:id
 router.put('/deals/:dealId/risk/:id', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
-    const flag = await riskService.update(req.params.id, req.body);
+    const flag = await riskService.update(req.params.id, req.body, req.user.id);
     if (!flag) {
       return res.status(404).json({ success: false, message: 'Risk flag not found' });
     }
@@ -145,7 +145,7 @@ router.put('/deals/:dealId/risk/:id', authenticate, requireAdminOrAnalyst, async
 // DELETE /deals/:dealId/risk/:id
 router.delete('/deals/:dealId/risk/:id', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
   try {
-    const deleted = await riskService.delete(req.params.id);
+    const deleted = await riskService.delete(req.params.id, req.user.id);
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'Risk flag not found' });
     }
