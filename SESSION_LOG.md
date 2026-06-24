@@ -9490,3 +9490,16 @@ The OneDrive `.git` index-lock hazard struck once during a post-merge sync (the 
 - **AI disclosure #9/#21** — needs an operator rendering decision (gate vs label a low-confidence IC opinion).
 - **Deferred #5** (FAR-citation fallback) / **#3** (non-owner DB role — operator-gated).
 - **Needs operator input:** the website email domain (staff-tier onboarding); whether to move off Vercel Hobby.
+
+---
+
+## 2026-06-24 (Closed the admin-analytics cross-tenant gap — audit #28) (PR #878 — merged; master green)
+
+- **#878 (audit #28) — closed a cross-tenant data gap on internal analytics screens.** A handful of read-only admin/dashboard queries were trusting a database security feature the app actually bypasses, so they had no real per-customer filter. Added the explicit own-workspace filter to all of them (the dashboard AI-cost widget, the recent-activity tail, the operator audit-trail and usage/learning reports), the same safe way the rest of the app already scopes data.
+- **It was mostly theoretical, with one real spot.** Almost all data belongs to one workspace today — but the AI-call log already had rows from two workspaces, so the AI-cost number was quietly summing both. That's now fixed.
+- **Nothing visibly changes for a single workspace** — the fix is defensive, closing the door before a second customer makes it a live problem. Also cleaned up ~14 stale code comments that wrongly implied the database was doing the per-customer filtering (the misconception that caused the original leak). Backed by a new automated test; full backend suite (3,431 checks) passes.
+
+### What's left to do next
+- **AI disclosure #9/#21** — still needs an operator rendering decision (gate vs label a low-confidence IC opinion).
+- **Deferred #5** (FAR-citation fallback) / **#3** (run the app under a non-owner DB role so RLS becomes a real second layer — operator-gated; the last structural piece behind #858/#28).
+- **Needs operator input:** the website email domain (staff-tier onboarding); whether to move off Vercel Hobby.
