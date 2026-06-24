@@ -23,7 +23,7 @@ const fmtCompactPopulation = (value) => {
 
 const SORT_OPTIONS = [
   { key: 'pd_code', label: 'PD code' },
-  { key: 'population_2011', label: 'Population' },
+  { key: 'population_2011', label: 'Population (2011)' },
   { key: 'area_ha', label: 'Area' },
   { key: 'gross_density_pph', label: 'Density' },
 ];
@@ -182,7 +182,7 @@ export default function DistrictIntelligencePanel() {
               <tr>
                 <SortHeader sortKey="pd_code" currentSort={sort} onSort={handleSort}>PD</SortHeader>
                 <th className="text-left font-medium px-4 py-2">Name</th>
-                <SortHeader sortKey="population_2011" currentSort={sort} onSort={handleSort} align="right">Population</SortHeader>
+                <SortHeader sortKey="population_2011" currentSort={sort} onSort={handleSort} align="right">Population (2011)</SortHeader>
                 <SortHeader sortKey="area_ha" currentSort={sort} onSort={handleSort} align="right">Area (Ha)</SortHeader>
                 <SortHeader sortKey="gross_density_pph" currentSort={sort} onSort={handleSort} align="right">Density (PPH)</SortHeader>
                 <th className="text-right font-medium px-4 py-2">Wards / Villages</th>
