@@ -224,6 +224,7 @@ const buildIcMemoInput = async (dealId) => {
          FROM dd_items d
          LEFT JOIN users u ON u.id = d.assigned_to
         WHERE d.deal_id = $1 AND d.organization_id = current_organization_id()
+          AND d.deleted_at IS NULL
           AND d.status NOT IN ('done', 'na', 'completed')
         ORDER BY CASE d.severity WHEN 'critical' THEN 1 WHEN 'primary' THEN 2 ELSE 3 END,
                  d.is_required DESC,

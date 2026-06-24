@@ -60,6 +60,7 @@ const getOverdueDdItems = () =>
        FROM dd_items dd
        JOIN deals d ON d.id = dd.deal_id
       WHERE dd.organization_id = current_organization_id()
+        AND dd.deleted_at IS NULL
         AND d.is_archived = FALSE
         AND d.stage = ANY($1::deal_stage[])
         AND dd.is_required = TRUE

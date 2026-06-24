@@ -142,6 +142,7 @@ const dealSelect = `
     SELECT COUNT(*)
     FROM dd_items ddi
     WHERE ddi.deal_id = d.id
+      AND ddi.deleted_at IS NULL
       AND ddi.is_required = TRUE
       AND ddi.status NOT IN ('completed', 'not_applicable')
   ) as pending_required_dd_count,
@@ -149,6 +150,7 @@ const dealSelect = `
     SELECT COUNT(*)
     FROM dd_items ddi
     WHERE ddi.deal_id = d.id
+      AND ddi.deleted_at IS NULL
       AND ddi.is_required = TRUE
       AND ddi.severity = 'deal_breaker'
       AND ddi.status NOT IN ('completed', 'not_applicable')
@@ -186,6 +188,7 @@ const dealSelect = `
     SELECT COUNT(*)
     FROM dd_items ddi
     WHERE ddi.deal_id = d.id
+      AND ddi.deleted_at IS NULL
       AND ddi.is_required = TRUE
       AND ddi.status IN ('pending', 'in_progress')
       AND ddi.due_date IS NOT NULL
@@ -676,7 +679,7 @@ const getDealById = async (id) => {
        ORDER BY dsh.changed_at ASC`,
       [id]
     ),
-    query('SELECT * FROM dd_items WHERE deal_id = $1 ORDER BY created_at ASC', [id]),
+    query('SELECT * FROM dd_items WHERE deal_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC', [id]),
     query('SELECT * FROM approval_items WHERE deal_id = $1 AND deleted_at IS NULL ORDER BY created_at ASC', [id]),
     query('SELECT * FROM risk_flags WHERE deal_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC', [id]),
     query(

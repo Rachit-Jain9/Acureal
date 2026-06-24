@@ -591,13 +591,15 @@ const getDealExportContext = async (dealId, options = {}) => {
         COUNT(*) FILTER (WHERE is_required AND status IN ('completed', 'not_applicable')) AS completed_required,
         COUNT(*) FILTER (WHERE severity = 'deal_breaker' AND status NOT IN ('completed', 'not_applicable')) AS open_deal_breakers
        FROM dd_items
-       WHERE deal_id = $1`,
+       WHERE deal_id = $1
+         AND deleted_at IS NULL`,
       [dealId]
     ),
     query(
       `SELECT item_name, category, severity, status, assigned_to, due_date, notes
        FROM dd_items
        WHERE deal_id = $1
+         AND deleted_at IS NULL
        ORDER BY CASE severity
          WHEN 'deal_breaker' THEN 1
          WHEN 'buildability_blocker' THEN 2

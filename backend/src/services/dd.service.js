@@ -2,6 +2,7 @@
 
 const { query } = require('../config/database');
 const { EVENTS, publish } = require('../lib/eventBus');
+const dealAuditLog = require('./dealAuditLog.service');
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Constants
@@ -463,6 +464,7 @@ async function listByDeal(dealId) {
      LEFT JOIN users u_completed ON u_completed.id = d.completed_by
      WHERE d.deal_id = $1
        AND d.organization_id = current_organization_id()
+       AND d.deleted_at IS NULL
      ORDER BY
        CASE d.severity
          WHEN 'deal_breaker'         THEN 1
@@ -486,7 +488,8 @@ async function getById(id) {
      LEFT JOIN users u_assigned  ON u_assigned.id  = d.assigned_to
      LEFT JOIN users u_completed ON u_completed.id = d.completed_by
      WHERE d.id = $1
-       AND d.organization_id = current_organization_id()`,
+       AND d.organization_id = current_organization_id()
+       AND d.deleted_at IS NULL`,
     [id],
   );
   return result.rows[0] || null;
@@ -512,10 +515,18 @@ async function create(dealId, data, userId) {
      RETURNING *`,
     [dealId, category, item_name, description, status, severity, is_required, notes, assigned_to, due_date],
   );
-  return result.rows[0];
+  const row = result.rows[0];
+  await dealAuditLog.recordAudit({
+    dealId,
+    eventType: 'dd_item_created',
+    actorId: userId || null,
+    after: { category: row.category, item_name: row.item_name, status: row.status, severity: row.severity },
+    metadata: { dd_item_id: row.id },
+  });
+  return row;
 }
 
-async function update(id, data) {
+async function update(id, data, actorId = null) {
   const normalizedData = {
     ...data,
     item_name: data.item_name ?? data.name,
@@ -542,21 +553,56 @@ async function update(id, data) {
     return getById(id);
   }
 
+  // Snapshot BEFORE state (getById is org + live scoped) for the audit diff.
+  const beforeRow = await getById(id);
+
   values.push(id);
   const result = await query(
     `UPDATE dd_items SET ${setClauses.join(', ')}, updated_at = NOW()
      WHERE id = $${paramIndex}
        AND organization_id = current_organization_id()
+       AND deleted_at IS NULL
      RETURNING *`,
     values,
   );
-  return result.rows[0] || null;
+  const row = result.rows[0] || null;
+  // Append-only audit with a string-normalized field diff (due_date is a Date).
+  if (row && beforeRow) {
+    const before = {};
+    const after = {};
+    for (const field of allowed) {
+      if (Object.prototype.hasOwnProperty.call(normalizedData, field)
+          && String(beforeRow[field] ?? '') !== String(row[field] ?? '')) {
+        before[field] = beforeRow[field];
+        after[field] = row[field];
+      }
+    }
+    if (Object.keys(after).length > 0) {
+      await dealAuditLog.recordAudit({
+        dealId: row.deal_id,
+        eventType: 'dd_item_updated',
+        actorId,
+        before,
+        after,
+        metadata: { dd_item_id: row.id, item_name: row.item_name },
+      });
+    }
+  }
+  return row;
 }
 
 async function updateStatus(id, status, userId) {
   if (!DD_STATUSES.includes(status)) {
     throw new Error(`Invalid DD status: ${status}`);
   }
+
+  // Snapshot the prior status (org + live scoped) so the audit row carries the
+  // before/after transition.
+  const beforeRes = await query(
+    'SELECT status FROM dd_items WHERE id = $1 AND organization_id = current_organization_id() AND deleted_at IS NULL',
+    [id],
+  );
+  const beforeStatus = beforeRes.rows[0]?.status ?? null;
 
   const isCompleting = status === 'completed';
   const result = await query(
@@ -567,6 +613,7 @@ async function updateStatus(id, status, userId) {
          updated_at   = NOW()
      WHERE id = $4
        AND organization_id = current_organization_id()
+       AND deleted_at IS NULL
      RETURNING *`,
     [
       status,
@@ -585,16 +632,44 @@ async function updateStatus(id, status, userId) {
       severity: row.severity,
       userId,
     });
+    if (beforeStatus !== row.status) {
+      await dealAuditLog.recordAudit({
+        dealId: row.deal_id,
+        eventType: 'dd_item_updated',
+        actorId: userId || null,
+        before: { status: beforeStatus },
+        after: { status: row.status },
+        metadata: { dd_item_id: row.id, item_name: row.item_name },
+      });
+    }
   }
   return row;
 }
 
-async function deleteDDItem(id) {
+async function deleteDDItem(id, actorId = null) {
+  // Soft-delete: hide immediately, purge after the retention window. The
+  // tombstone lets the 'dd_item_deleted' audit row carry real before-state and
+  // makes an accidental delete recoverable.
   const result = await query(
-    'DELETE FROM dd_items WHERE id = $1 AND organization_id = current_organization_id() RETURNING id',
-    [id]
+    `UPDATE dd_items
+        SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
+      WHERE id = $1
+        AND organization_id = current_organization_id()
+        AND deleted_at IS NULL
+      RETURNING id, deal_id, category, item_name, status, severity`,
+    [id, actorId || null],
   );
-  return result.rows[0] || null;
+  const row = result.rows[0] || null;
+  if (row) {
+    await dealAuditLog.recordAudit({
+      dealId: row.deal_id,
+      eventType: 'dd_item_deleted',
+      actorId,
+      before: { category: row.category, item_name: row.item_name, status: row.status, severity: row.severity },
+      metadata: { dd_item_id: row.id },
+    });
+  }
+  return row ? { id: row.id } : null;
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -644,7 +719,7 @@ async function seedForDeal(dealId, assetClass = 'residential_apartments', dealSt
 
   // Deduplicate by item_name to be safe on re-seed
   const existing = await query(
-    'SELECT item_name FROM dd_items WHERE deal_id = $1 AND organization_id = current_organization_id()',
+    'SELECT item_name FROM dd_items WHERE deal_id = $1 AND organization_id = current_organization_id() AND deleted_at IS NULL',
     [dealId]
   );
   const existingNames = new Set(existing.rows.map((r) => r.item_name));
@@ -690,6 +765,7 @@ async function getDDScore(dealId) {
      FROM dd_items
      WHERE deal_id = $1
        AND organization_id = current_organization_id()
+       AND deleted_at IS NULL
        AND is_required = TRUE`,
     [dealId],
   );
