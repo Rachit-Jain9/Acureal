@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const { getJwtSecret } = require('../services/auth.service');
 const { hydrateUserAuthContext } = require('../services/organization.service');
 const { roleSatisfies } = require('../constants/roles');
+const { getPlatformAdminEmails } = require('../utils/platformOrg');
 const { setRequestContext } = require('../lib/requestContext');
 const { readAccessCookie } = require('../lib/cookies');
 const log = require('../lib/logger').child({ module: 'auth' });
@@ -109,10 +110,46 @@ const requireRole = (...roles) => (req, res, next) => {
 const requireAdminOrAnalyst = requireRole('admin', 'analyst');
 const requireAdmin = requireRole('admin');
 
+// Platform-operator gate — DISTINCT from `requireRole` (workspace role).
+//
+//   • `requireRole('admin')` checks the caller's role WITHIN their own
+//     organization. Every signup is owner/admin of their own workspace, so
+//     ordinary customers satisfy it — it is NOT an operator boundary.
+//   • `requirePlatformAdmin` checks the caller's email against the REDIP
+//     platform-operator allowlist (`PLATFORM_ADMIN_EMAILS`, falling back to
+//     the founding operator). This is the SAME source of truth `platformOrg`
+//     uses, and the frontend mirrors it via `VITE_PLATFORM_ADMIN_EMAILS` /
+//     `isPlatformAdmin`.
+//
+// Use on cross-org / platform-integrity surfaces: anything that mutates GLOBAL
+// config (AI provider routing) or spends shared platform AI budget (A/B eval),
+// plus the operator-only analytics endpoints. Fails closed — no authenticated
+// user, or an email absent from the allowlist, gets 403.
+const requirePlatformAdmin = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required.',
+    });
+  }
+
+  const email = String(req.user.email || '').trim().toLowerCase();
+  // getPlatformAdminEmails() already returns a lowercased, trimmed list.
+  if (!email || !getPlatformAdminEmails().includes(email)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. This is a REDIP platform-operator surface.',
+    });
+  }
+
+  return next();
+};
+
 module.exports = {
   authenticate,
   verifyAccessToken,
   requireRole,
   requireAdminOrAnalyst,
   requireAdmin,
+  requirePlatformAdmin,
 };

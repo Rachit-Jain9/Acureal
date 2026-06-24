@@ -1,19 +1,29 @@
 'use strict';
 
 /**
- * Admin / operator-only routes. Mounted at /api/admin in server.js.
+ * Admin / operator routes. Mounted at /api/admin in server.js.
  *
- * Currently hosts the AI usage dashboard endpoint. Other admin tooling
- * (model routing config, AI artifact moderation, retention sweep manual
- * trigger) will land here as Tier 2/3 of `docs/AI_ROADMAP.md` ships.
+ * Two gating tiers live here, deliberately:
  *
- * All routes here require role admin or analyst. The cookie-based session
- * auth (PR #142) plus the `requireRole` guard are the gate; org scoping
- * happens at the data layer via RLS.
+ *   1. `requirePlatformAdmin` — REDIP operator only (email allowlist). Used for
+ *      anything that mutates GLOBAL state (AI provider routing config), spends
+ *      shared platform AI budget (A/B eval runs), or is an operator-only
+ *      analytics surface with no customer consumer (audit-trail page,
+ *      learning-signals, extraction-quality, ai-health). These must NOT be
+ *      reachable by an ordinary org admin.
+ *
+ *   2. `requireRole('admin', 'analyst')` — org admin/analyst. Used ONLY for the
+ *      three endpoints that back customer-facing surfaces and return strictly
+ *      org-scoped data: `/users` (Deals + Comps-Queue assignee pickers),
+ *      `/recent-events` (dashboard audit-tail widget), `/ai-usage` (dashboard
+ *      AI-cost widget). Locking these would 403 normal users' dashboards.
+ *
+ * Cookie-based session auth (PR #142) runs first via `authenticate`; org
+ * scoping happens at the data layer (app-layer `current_organization_id()`).
  */
 
 const express = require('express');
-const { authenticate, requireRole } = require('../middleware/auth');
+const { authenticate, requireRole, requirePlatformAdmin } = require('../middleware/auth');
 const aiUsageService = require('../services/aiUsage.service');
 const aiHealthService = require('../services/aiHealth.service'); // PR-NX22
 const extractionVerdictsService = require('../services/extractionVerdicts.service');
@@ -87,7 +97,7 @@ router.get('/recent-events', authenticate, requireRole('admin', 'analyst'), asyn
 //   { events[], event_type_catalog[], window_days, limit }
 //
 // Org-scoped via RLS on deal_events. Read-only.
-router.get('/audit-trail', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+router.get('/audit-trail', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
     const days = req.query.days ? Math.min(Math.max(parseInt(req.query.days, 10), 1), 365) : 7;
@@ -185,7 +195,7 @@ router.get('/ai-usage', authenticate, requireRole('admin', 'analyst'), async (re
 // status only, never throws.
 //
 // Org-scoped via RLS on ai_call_logs. Read-only.
-router.get('/ai-health', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+router.get('/ai-health', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const snapshot = await aiHealthService.getHealthSnapshot();
     res.json({ success: true, data: snapshot });
@@ -207,7 +217,7 @@ router.get('/ai-health', authenticate, requireRole('admin', 'analyst'), async (r
 // Org-scoped via RLS on improvement_signals. Read-only. Migration-tolerant
 // (returns zeros if the table is missing). Operator-only — kept off the
 // customer surface per the AI-disclosure policy.
-router.get('/learning-signals', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+router.get('/learning-signals', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const days = req.query.days ? parseInt(req.query.days, 10) : 30;
     const data = await learningSignalsAdminReport.getDashboard({ days });
@@ -228,7 +238,7 @@ router.get('/learning-signals', authenticate, requireRole('admin', 'analyst'), a
 // 20260611 is unapplied.
 //
 // Org-scoped via current_organization_id() inside the aggregate query.
-router.get('/extraction-quality', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
+router.get('/extraction-quality', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const days = req.query.days ? parseInt(req.query.days, 10) : 90;
     const data = await extractionVerdictsService.getExtractionAccuracy({ days });
@@ -242,7 +252,7 @@ router.get('/extraction-quality', authenticate, requireRole('admin', 'analyst'),
 //
 // Returns every row in the ai_routing_config table. Admin/owner-gated.
 // Used by the Settings page routing editor + ops debugging.
-router.get('/ai-routing', authenticate, requireRole('admin'), async (req, res, next) => {
+router.get('/ai-routing', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const rows = await routingConfigService.listRoutingConfig();
     res.json({ success: true, data: rows });
@@ -258,7 +268,7 @@ router.get('/ai-routing', authenticate, requireRole('admin'), async (req, res, n
 //
 // Effective immediately on the next AI call (the in-process cache is
 // invalidated on success).
-router.put('/ai-routing/:task', authenticate, requireRole('admin'), async (req, res, next) => {
+router.put('/ai-routing/:task', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const { provider, model, fallbackProvider, fallbackModel, notes } = req.body || {};
     if (!provider) {
@@ -294,7 +304,7 @@ router.put('/ai-routing/:task', authenticate, requireRole('admin'), async (req, 
 // ──────────────────────────────────────────────────────────────────────────
 
 // GET /api/admin/ab-eval/runs?limit=50 — list past runs, newest first
-router.get('/ab-eval/runs', authenticate, requireRole('admin'), async (req, res, next) => {
+router.get('/ab-eval/runs', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const rows = await abEvalPersistence.listRuns({
       limit: Number(req.query.limit) || 50,
@@ -306,7 +316,7 @@ router.get('/ab-eval/runs', authenticate, requireRole('admin'), async (req, res,
 });
 
 // GET /api/admin/ab-eval/runs/:id — full detail incl. per-fixture rows
-router.get('/ab-eval/runs/:id', authenticate, requireRole('admin'), async (req, res, next) => {
+router.get('/ab-eval/runs/:id', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const run = await abEvalPersistence.getRunDetail(req.params.id);
     if (!run) {
@@ -329,7 +339,7 @@ router.get('/ab-eval/runs/:id', authenticate, requireRole('admin'), async (req, 
 // 10-fixture default and 2 candidates, expect ~30–40s end-to-end.
 // Vercel function timeout is 60s; harness internally caps at 50
 // fixtures per run.
-router.post('/ab-eval/runs', authenticate, requireRole('admin'), async (req, res, next) => {
+router.post('/ab-eval/runs', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const {
       task = 'export_insights',
@@ -361,7 +371,7 @@ router.post('/ab-eval/runs', authenticate, requireRole('admin'), async (req, res
 // per AI task over a trailing window into a quality trend: the score
 // series, the latest score, the trailing-average baseline, the delta, and
 // a regression flag. Soft-fails to an empty shape if ab_eval is unavailable.
-router.get('/ab-eval/quality-trend', authenticate, requireRole('admin'), async (req, res, next) => {
+router.get('/ab-eval/quality-trend', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const days = req.query.days ? parseInt(req.query.days, 10) : 90;
     const data = await abEvalPersistence.getQualityTrendByTask({ days });
@@ -377,7 +387,7 @@ router.get('/ab-eval/quality-trend', authenticate, requireRole('admin'), async (
 // against the fixture set, persists it, and so feeds the standing quality
 // trend. Body: { task?, limit? }. Sync — blocks until the run completes
 // (~30s for the default 10-fixture slice).
-router.post('/ab-eval/baseline', authenticate, requireRole('admin'), async (req, res, next) => {
+router.post('/ab-eval/baseline', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const { task = 'export_insights', limit = 10 } = req.body || {};
     const run = await abEvalPersistence.runBaselineAndPersist({
