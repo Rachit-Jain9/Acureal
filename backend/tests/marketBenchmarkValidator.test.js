@@ -385,6 +385,9 @@ describe('marketBenchmarkValidator', () => {
   });
 
   describe('validateYocVsExitCapSpread — development premium check', () => {
+    // The kernel emits YoC as a PERCENT (e.g. 9.5), surfaced via
+    // deal.yield_on_cost_pct; exitCapRate stays a FRACTION (e.g. 0.075). This
+    // mirrors production — the validator normalises yoc → fraction internally.
     const buildCtx = (yoc) => ({
       dealFamily: 'income',
       kernelKpis: { yieldOnCost: yoc },
@@ -392,7 +395,7 @@ describe('marketBenchmarkValidator', () => {
 
     test('development-family deal skipped', () => {
       const { issues, addIssue } = makeIssueCollector();
-      const ctx = buildCtx(0.05);
+      const ctx = buildCtx(9.5);
       ctx.dealFamily = 'development';
       validateYocVsExitCapSpread(ctx, { exitCapRate: 0.075 }, addIssue);
       expect(issues).toHaveLength(0);
@@ -407,21 +410,21 @@ describe('marketBenchmarkValidator', () => {
     test('healthy positive spread (≥200 bps) → silent', () => {
       const { issues, addIssue } = makeIssueCollector();
       // YoC 9.5%, ExitCap 7.5% → 200 bps spread
-      validateYocVsExitCapSpread(buildCtx(0.095), { exitCapRate: 0.075 }, addIssue);
+      validateYocVsExitCapSpread(buildCtx(9.5), { exitCapRate: 0.075 }, addIssue);
       expect(issues).toHaveLength(0);
     });
 
     test('thin positive spread (between 50 and 200 bps) → silent', () => {
       const { issues, addIssue } = makeIssueCollector();
       // YoC 8.5%, ExitCap 7.5% → 100 bps spread
-      validateYocVsExitCapSpread(buildCtx(0.085), { exitCapRate: 0.075 }, addIssue);
+      validateYocVsExitCapSpread(buildCtx(8.5), { exitCapRate: 0.075 }, addIssue);
       expect(issues).toHaveLength(0);
     });
 
     test('very thin positive spread (<50 bps) → WARN', () => {
       const { issues, addIssue } = makeIssueCollector();
       // YoC 7.75%, ExitCap 7.5% → 25 bps spread
-      validateYocVsExitCapSpread(buildCtx(0.0775), { exitCapRate: 0.075 }, addIssue);
+      validateYocVsExitCapSpread(buildCtx(7.75), { exitCapRate: 0.075 }, addIssue);
       expect(issues).toHaveLength(1);
       expect(issues[0].severity).toBe('warn');
       expect(issues[0].field).toBe('ExitCapRate');
@@ -432,7 +435,7 @@ describe('marketBenchmarkValidator', () => {
     test('negative spread → escalated WARN (no economic rationale)', () => {
       const { issues, addIssue } = makeIssueCollector();
       // YoC 6.5%, ExitCap 7.5% → −100 bps spread
-      validateYocVsExitCapSpread(buildCtx(0.065), { exitCapRate: 0.075 }, addIssue);
+      validateYocVsExitCapSpread(buildCtx(6.5), { exitCapRate: 0.075 }, addIssue);
       expect(issues).toHaveLength(1);
       expect(issues[0].message).toMatch(/NEGATIVE spread/);
       expect(issues[0].message).toMatch(/100 bps deficit/);
@@ -442,7 +445,7 @@ describe('marketBenchmarkValidator', () => {
     test('exactly 50 bps spread → silent (at the threshold)', () => {
       const { issues, addIssue } = makeIssueCollector();
       // YoC 8%, ExitCap 7.5% → 50 bps exactly
-      validateYocVsExitCapSpread(buildCtx(0.080), { exitCapRate: 0.075 }, addIssue);
+      validateYocVsExitCapSpread(buildCtx(8.0), { exitCapRate: 0.075 }, addIssue);
       expect(issues).toHaveLength(0);
     });
 
@@ -450,7 +453,7 @@ describe('marketBenchmarkValidator', () => {
       const { issues, addIssue } = makeIssueCollector();
       // YoC 7.5%, ExitCap 7.5% → 0 bps exactly
       // Falls in the [0, 50) bps THIN warning band
-      validateYocVsExitCapSpread(buildCtx(0.075), { exitCapRate: 0.075 }, addIssue);
+      validateYocVsExitCapSpread(buildCtx(7.5), { exitCapRate: 0.075 }, addIssue);
       expect(issues).toHaveLength(1);
       expect(issues[0].message).toMatch(/THIN development premium/);
     });
