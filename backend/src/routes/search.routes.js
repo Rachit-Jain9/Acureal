@@ -6,7 +6,7 @@
  *
  * Two endpoints:
  *   GET  /api/search/semantic?q=...&documentId=...&kind=...&k=8
- *      Returns ranked chunks. Org-scoped via RLS.
+ *      Returns ranked chunks. Org-scoped at the app layer (pooled role bypasses RLS).
  *   POST /api/search/reindex/:documentId
  *      Re-runs the chunk → embed → store pipeline for a single document
  *      using its current evidence-source text. Admin/analyst gated.
@@ -42,8 +42,8 @@ router.get('/semantic', authenticate, async (req, res, next) => {
 router.post('/reindex/:documentId', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
   try {
     const documentId = req.params.documentId;
-    // Pull the latest extraction text. RLS on documents + evidence_sources
-    // ensures org scoping.
+    // Pull the latest extraction text. App-layer org filters on documents +
+    // evidence_sources ensure org scoping (the pooled DB role bypasses RLS).
     const text = await fetchLatestExtractionText(documentId);
     if (!text) {
       return res.status(404).json({

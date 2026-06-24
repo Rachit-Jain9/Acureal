@@ -235,7 +235,8 @@ router.get(
 // Accepts the same query params as GET /comps so the export respects
 // the page's current filter combination — city + locality +
 // projectType + rate band + launchYear + search. The list itself is
-// org-scoped via RLS; the same scope flows through here.
+// org-scoped at the app layer (the pooled DB role bypasses RLS — #858/#28);
+// the same scope flows through here.
 //
 // Backed by `compsService.getCompsForExport` which shares the WHERE
 // builder with `getComps` so filter parity is guaranteed without

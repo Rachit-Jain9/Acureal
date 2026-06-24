@@ -65,8 +65,10 @@ router.get('/users', authenticate, requireRole('admin', 'analyst'), async (req, 
 // against deals + users so the timeline can render deal name + actor
 // without per-row lookups.
 //
-// Read-only. RLS on deal_events filters to current_organization_id()
-// automatically; this endpoint just joins for display.
+// Read-only. Org scoping is enforced at the APP layer by the explicit
+// `e.organization_id = current_organization_id()` filter below — NOT by RLS.
+// The pooled DB role bypasses row-level security (see audit #858/#28), so the
+// WHERE clause is the only real tenant boundary. The joins are display-only.
 router.get('/recent-events', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 50);
@@ -79,6 +81,7 @@ router.get('/recent-events', authenticate, requireRole('admin', 'analyst'), asyn
          FROM deal_events e
          LEFT JOIN deals d ON d.id = e.deal_id
          LEFT JOIN users u ON u.id = e.actor_id
+        WHERE e.organization_id = current_organization_id()
         ORDER BY e.created_at DESC
         LIMIT $1`,
       [limit],
@@ -96,7 +99,12 @@ router.get('/recent-events', authenticate, requireRole('admin', 'analyst'), asyn
 // returns a structured payload tuned for the admin page:
 //   { events[], event_type_catalog[], window_days, limit }
 //
-// Org-scoped via RLS on deal_events. Read-only.
+// Org-scoped at the APP layer via `e.organization_id = current_organization_id()`
+// (added to the WHERE builder + the catalog query below). The pooled DB role
+// bypasses RLS, so this explicit filter — not the deal_events RLS policy — is the
+// tenant boundary. Operator-only (requirePlatformAdmin) and scoped to the
+// operator's OWN org; a platform-wide oversight view would be a separate,
+// explicitly platform-scoped endpoint. Read-only.
 router.get('/audit-trail', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 200);
@@ -108,7 +116,11 @@ router.get('/audit-trail', authenticate, requirePlatformAdmin, async (req, res, 
       ? req.query.dealId
       : null;
 
-    const where = [`e.created_at >= NOW() - ($1::int * INTERVAL '1 day')`];
+    const where = [
+      // App-layer tenant boundary (the pooled DB role bypasses RLS — #858/#28).
+      'e.organization_id = current_organization_id()',
+      `e.created_at >= NOW() - ($1::int * INTERVAL '1 day')`,
+    ];
     const params = [days];
     let paramCount = 2;
     if (eventType) {
@@ -141,7 +153,8 @@ router.get('/audit-trail', authenticate, requirePlatformAdmin, async (req, res, 
       query(
         `SELECT event_type, COUNT(*)::int AS count
            FROM deal_events
-          WHERE created_at >= NOW() - ($1::int * INTERVAL '1 day')
+          WHERE organization_id = current_organization_id()
+            AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
           GROUP BY event_type
           ORDER BY count DESC, event_type ASC`,
         [days],
@@ -171,7 +184,10 @@ router.get('/audit-trail', authenticate, requirePlatformAdmin, async (req, res, 
 //   • by_task_provider — top 25 (task × provider × model) cells by cost
 //   • by_doctype — extraction quality by doctype × language (PR #155 cols)
 //
-// Org-scoped via RLS on ai_call_logs. Read-only.
+// Org-scoped at the APP layer: aiUsage.service's aggregate queries each carry
+// `organization_id = current_organization_id()` (the pooled DB role bypasses
+// RLS — #858/#28). Reachable by any org admin/analyst, so it MUST be org-scoped,
+// not platform-wide. Read-only.
 router.get('/ai-usage', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
   try {
     const days = req.query.days ? parseInt(req.query.days, 10) : 30;
@@ -194,7 +210,9 @@ router.get('/ai-usage', authenticate, requireRole('admin', 'analyst'), async (re
 // Soft-fails if ai_call_logs is unavailable — returns configuration
 // status only, never throws.
 //
-// Org-scoped via RLS on ai_call_logs. Read-only.
+// Org-scoped at the APP layer: aiHealth.service filters ai_call_logs by
+// `organization_id = current_organization_id()` (the pooled DB role bypasses
+// RLS — #858/#28). Read-only.
 router.get('/ai-health', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const snapshot = await aiHealthService.getHealthSnapshot();
@@ -214,9 +232,11 @@ router.get('/ai-health', authenticate, requirePlatformAdmin, async (req, res, ne
 // (multiplier < 1.0 — mirrors the consumer's policy exactly), and a daily
 // time-series for the trend chart.
 //
-// Org-scoped via RLS on improvement_signals. Read-only. Migration-tolerant
-// (returns zeros if the table is missing). Operator-only — kept off the
-// customer surface per the AI-disclosure policy.
+// Org-scoped at the APP layer: learningSignals.adminReport's queries each carry
+// `organization_id = current_organization_id()` (the pooled DB role bypasses
+// RLS — #858/#28). Read-only. Migration-tolerant (returns zeros if the table is
+// missing). Operator-only — kept off the customer surface per the AI-disclosure
+// policy.
 router.get('/learning-signals', authenticate, requirePlatformAdmin, async (req, res, next) => {
   try {
     const days = req.query.days ? parseInt(req.query.days, 10) : 30;

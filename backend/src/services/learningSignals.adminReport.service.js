@@ -15,7 +15,10 @@
  *   • Which rules does the team consistently apply (positive feedback)?
  *   • Which rules are CURRENTLY being de-ranked, and by how much?
  *
- * Read-only, RLS-scoped, no AI, no writes. Migration-tolerant.
+ * Read-only, no AI, no writes. Migration-tolerant. Org scoping is enforced at
+ * the APP layer — every query carries `organization_id = current_organization_id()`
+ * (the pooled DB role bypasses RLS, so that explicit filter is the tenant
+ * boundary — audit #858/#28), scoping the report to the operator's own org.
  *
  * Architecture mirrors aiUsage.service.js — each public method runs one
  * safeQuery and returns a clean shape. The page composes the four methods
@@ -70,7 +73,8 @@ const getSummary = async ({ days = DEFAULT_DAYS } = {}) => {
        MIN(created_at)                                                AS first_verdict_at,
        MAX(created_at)                                                AS last_verdict_at
      FROM public.improvement_signals
-     WHERE signal_type = 'recommendation_verdict'
+     WHERE organization_id = current_organization_id()
+       AND signal_type = 'recommendation_verdict'
        AND created_at >= NOW() - ($1::int * INTERVAL '1 day')`,
     [windowDays],
     [],
@@ -128,7 +132,8 @@ const getTopRules = async ({
        COUNT(*)::int                                                   AS total_count,
        MAX(created_at)                                                 AS last_verdict_at
      FROM public.improvement_signals
-     WHERE signal_type = 'recommendation_verdict'
+     WHERE organization_id = current_organization_id()
+       AND signal_type = 'recommendation_verdict'
        AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
      GROUP BY detail->>'rule_id', detail->>'topic'
      HAVING COUNT(*) FILTER (WHERE detail->>'verdict' = $2) > 0
@@ -179,7 +184,8 @@ const getActiveAdjustments = async ({ days = 90 } = {}) => {
        COUNT(*) FILTER (WHERE detail->>'verdict' = 'acted')::int       AS acted_count,
        MAX(created_at)                                                 AS last_verdict_at
      FROM public.improvement_signals
-     WHERE signal_type = 'recommendation_verdict'
+     WHERE organization_id = current_organization_id()
+       AND signal_type = 'recommendation_verdict'
        AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
      GROUP BY detail->>'rule_id', detail->>'topic'
      HAVING COUNT(*) FILTER (WHERE detail->>'verdict' = 'dismissed') > 0`,
@@ -248,7 +254,8 @@ const getDailySeries = async ({ days = DEFAULT_DAYS } = {}) => {
        COUNT(*) FILTER (WHERE detail->>'verdict' = 'acted')::int        AS acted,
        COUNT(*)::int                                                    AS total
      FROM public.improvement_signals
-     WHERE signal_type = 'recommendation_verdict'
+     WHERE organization_id = current_organization_id()
+       AND signal_type = 'recommendation_verdict'
        AND created_at >= NOW() - ($1::int * INTERVAL '1 day')
      GROUP BY 1
      ORDER BY 1 ASC`,

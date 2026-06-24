@@ -482,7 +482,8 @@ router.get(
   async (req, res, next) => {
     try {
       const dealId = req.params.id;
-      // RLS visibility check via dealService first — 404 if not visible.
+      // Org-visibility check via dealService first (app-layer scoped; the
+      // pooled DB role bypasses RLS) — 404 if not visible.
       const deal = await dealService.getDealById(dealId);
       if (!deal) {
         return res.status(404).json({ success: false, message: 'Deal not found' });
@@ -676,8 +677,8 @@ router.delete('/:id', authenticate, requireRole('admin'), async (req, res, next)
 // GET /deals/:id/workspace — unified read-model for the deal workspace UI.
 // Composes deal + financials + scenarios + graph + DD/risk scores + audit
 // events + documents + activities + waterfall into one payload so tabs can
-// share a single React-Query key. RLS is enforced per-slice via the
-// underlying services; no bypass here.
+// share a single React-Query key. Org scoping is enforced per-slice at the
+// app layer by the underlying services (the pooled DB role bypasses RLS).
 router.get(
   '/:id/workspace',
   authenticate,

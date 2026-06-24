@@ -135,7 +135,7 @@ router.get('/deals/:dealId/extractions', authenticate, async (req, res, next) =>
 router.get('/deals/:dealId/document-insights', authenticate, async (req, res, next) => {
   try {
     const dealId = req.params.dealId;
-    // Fetch the deal (RLS-scoped) + every completed extraction with its
+    // Fetch the deal (org-scoped at the app layer by dealService) + every completed extraction with its
     // merged structured_fields in parallel.
     const [deal, dealExtractions] = await Promise.all([
       dealService.getDealById(dealId),
