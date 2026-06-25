@@ -77,7 +77,7 @@ describe('CommandPalette', () => {
   it('filters quick actions by typed query', () => {
     wrap(<CommandPalette />);
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
-    const input = screen.getByRole('textbox', { name: /command palette search/i });
+    const input = screen.getByRole('combobox', { name: /command palette search/i });
     fireEvent.change(input, { target: { value: 'comp' } });
     // After 200ms debounce + render, Comparables should still appear
     expect(screen.getByText('Comparables')).toBeInTheDocument();
@@ -86,7 +86,7 @@ describe('CommandPalette', () => {
   it('runs a deal search after a 2+ char query', async () => {
     wrap(<CommandPalette />);
     fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
-    const input = screen.getByRole('textbox', { name: /command palette search/i });
+    const input = screen.getByRole('combobox', { name: /command palette search/i });
     fireEvent.change(input, { target: { value: 'whit' } });
 
     // Wait for the debounced query to fire and render the result row

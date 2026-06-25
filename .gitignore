@@ -31,3 +31,23 @@ Thumbs.db
 coverage/
 
 .vercel
+
+# Python bytecode / caches (extraction & debug scripts)
+__pycache__/
+*.pyc
+
+# Local-only debug artifacts (not for the repo)
+backend/_pdf_tmp/
+/_claude_remarks.txt
+
+# Root debug image crops (UAV-register parsing spot-checks)
+/band_a.png
+/band_b.png
+/r36.png
+/r38.png
+/r43.png
+/rows36_38.png
+/rows38_39.png
+/rows42_44.png
+/rows43_44.png
+/rows43_44_big.png

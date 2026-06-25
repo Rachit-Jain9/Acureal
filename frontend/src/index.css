@@ -548,6 +548,10 @@ html[data-theme='light'] {
     .redip-empty-in { animation: none; }
     .redip-toast-in, .redip-toast-out { animation: none; }
     .redip-skeleton::after { animation: none; }
+    /* Tailwind's built-in spin/pulse aren't motion-gated by default — kill
+       them globally so OS reduced-motion stops every spinner and pulse. */
+    .animate-spin { animation: none !important; }
+    .animate-pulse { animation: none !important; }
   }
 
   /* Thin, themed scrollbars */

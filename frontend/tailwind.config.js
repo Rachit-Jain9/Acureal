@@ -167,6 +167,9 @@ export default {
       boxShadow: {
         'editorial':    'var(--shadow-card)',
         'editorial-lg': 'var(--shadow-elevated)',
+        // Alias so `shadow-elevated` (used in ~8 components) resolves instead
+        // of rendering flat. Points at the same elevated-depth shadow var.
+        'elevated':     'var(--shadow-elevated)',
       },
     },
   },

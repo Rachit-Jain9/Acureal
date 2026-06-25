@@ -29,11 +29,20 @@ export default function Layout() {
         color: 'var(--color-text-primary)',
       }}
     >
+      {/* Skip-to-content: first focusable element so keyboard users can
+          jump past the sidebar + header straight to the page body. Visually
+          hidden until focused, then surfaces as a floating chip. */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[100] focus:top-3 focus:left-3 focus:rounded-md focus:bg-accent focus:px-3 focus:py-2 focus:text-content-inverse focus:shadow-editorial-lg"
+      >
+        Skip to content
+      </a>
       <Sidebar mobileOpen={mobileNavOpen} onMobileClose={() => setMobileNavOpen(false)} />
       <div className="flex-1 flex flex-col min-w-0">
         <Header onMobileMenuOpen={() => setMobileNavOpen(true)} />
         <EmailVerificationBanner />
-        <main className="flex-1 p-4 sm:p-6 overflow-auto min-w-0">
+        <main id="main-content" tabIndex={-1} className="flex-1 p-4 sm:p-6 overflow-auto min-w-0">
           <Outlet />
         </main>
       </div>
