@@ -109,14 +109,14 @@ export function CompsQueueAlertWidget({ stats = {}, canCurate = true }) {
   return (
     <Card className="p-4 flex flex-col sm:flex-row sm:items-center gap-4">
       <div className="flex items-center gap-3 min-w-0 flex-1">
-        <div className="shrink-0 w-9 h-9 rounded-md bg-amber-50 text-amber-700 flex items-center justify-center">
+        <div className="shrink-0 w-9 h-9 rounded-md bg-premium-soft text-premium flex items-center justify-center">
           <Inbox size={16} />
         </div>
         <div className="min-w-0">
           <div className="text-eyebrow uppercase text-content-muted font-medium">Comps review queue</div>
           <div className="text-sm text-content-primary font-medium tabular-nums">
             {queuePendingReview > 0 && (
-              <><span className="text-amber-600">{queuePendingReview}</span> pending review</>
+              <><span className="text-premium">{queuePendingReview}</span> pending review</>
             )}
             {queuePendingReview === 0 && queuePendingExtraction > 0 && (
               <span className="inline-flex items-center gap-1 text-content-secondary">

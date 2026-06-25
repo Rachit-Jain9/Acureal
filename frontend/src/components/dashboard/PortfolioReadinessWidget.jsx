@@ -30,16 +30,16 @@ import { usePortfolioReadiness } from '../../hooks/useDashboard';
  */
 
 const TIER_TONE = {
-  ic_ready:  { label: 'IC-ready',  pill: 'bg-green-50 text-green-700 border-green-200', bar: 'bg-green-500', dot: 'bg-green-500' },
-  pre_ic:    { label: 'Pre-IC',    pill: 'bg-sky-50 text-sky-700 border-sky-200',       bar: 'bg-sky-500',   dot: 'bg-sky-500' },
-  diligence: { label: 'Diligence', pill: 'bg-amber-50 text-amber-800 border-amber-200', bar: 'bg-amber-500', dot: 'bg-amber-500' },
+  ic_ready:  { label: 'IC-ready',  pill: 'bg-pos-soft text-data-positive border-hairline', bar: 'bg-data-positive', dot: 'bg-data-positive' },
+  pre_ic:    { label: 'Pre-IC',    pill: 'bg-accent-soft text-accent border-hairline',       bar: 'bg-accent',   dot: 'bg-accent' },
+  diligence: { label: 'Diligence', pill: 'bg-premium-soft text-premium border-hairline', bar: 'bg-premium', dot: 'bg-premium' },
   early:     { label: 'Early',     pill: 'bg-bg-secondary text-content-secondary border-hairline', bar: 'bg-content-muted', dot: 'bg-content-muted' },
 };
 
 const SEVERITY_TONE = {
-  critical: 'bg-red-50 text-red-700 border-red-200',
-  high:     'bg-orange-50 text-orange-700 border-orange-200',
-  medium:   'bg-amber-50 text-amber-700 border-amber-200',
+  critical: 'bg-neg-soft text-data-negative border-hairline',
+  high:     'bg-premium-soft text-premium border-hairline',
+  medium:   'bg-premium-soft text-premium border-hairline',
   low:      'bg-bg-secondary text-content-secondary border-hairline',
 };
 
@@ -53,9 +53,9 @@ function overallPosture(totals) {
 }
 
 const POSTURE_COPY = {
-  all_ic_ready: { label: 'Every live deal IC-ready', pill: 'bg-green-50 text-green-700 border-green-200', accent: 'text-green-700' },
-  mixed:        { label: 'Mixed — some IC-ready',     pill: 'bg-sky-50 text-sky-700 border-sky-200',       accent: 'text-sky-700' },
-  in_progress:  { label: 'IC prep in progress',       pill: 'bg-amber-50 text-amber-700 border-amber-200', accent: 'text-amber-700' },
+  all_ic_ready: { label: 'Every live deal IC-ready', pill: 'bg-pos-soft text-data-positive border-hairline', accent: 'text-data-positive' },
+  mixed:        { label: 'Mixed — some IC-ready',     pill: 'bg-accent-soft text-accent border-hairline',       accent: 'text-accent' },
+  in_progress:  { label: 'IC prep in progress',       pill: 'bg-premium-soft text-premium border-hairline', accent: 'text-premium' },
   mostly_early: { label: 'Mostly early-stage',        pill: 'bg-bg-secondary text-content-secondary border-hairline', accent: 'text-content-secondary' },
 };
 
@@ -68,13 +68,13 @@ function TierProportionBar({ totals }) {
   return (
     <div className="h-2 w-full rounded-full bg-bg-secondary overflow-hidden flex" aria-label="portfolio tier breakdown">
       {totals.ic_ready > 0 && (
-        <span className="bg-green-500" style={{ width: `${pct(totals.ic_ready)}%` }} title={`${totals.ic_ready} IC-ready`} />
+        <span className="bg-data-positive" style={{ width: `${pct(totals.ic_ready)}%` }} title={`${totals.ic_ready} IC-ready`} />
       )}
       {totals.pre_ic > 0 && (
-        <span className="bg-sky-500" style={{ width: `${pct(totals.pre_ic)}%` }} title={`${totals.pre_ic} Pre-IC`} />
+        <span className="bg-accent" style={{ width: `${pct(totals.pre_ic)}%` }} title={`${totals.pre_ic} Pre-IC`} />
       )}
       {totals.diligence > 0 && (
-        <span className="bg-amber-500" style={{ width: `${pct(totals.diligence)}%` }} title={`${totals.diligence} Diligence-stage`} />
+        <span className="bg-premium" style={{ width: `${pct(totals.diligence)}%` }} title={`${totals.diligence} Diligence-stage`} />
       )}
       {totals.early > 0 && (
         <span className="bg-content-muted" style={{ width: `${pct(totals.early)}%` }} title={`${totals.early} Early`} />
@@ -259,7 +259,7 @@ export default function PortfolioReadinessWidget() {
               {data.top_ready && data.top_ready.length > 0 && (
                 <div>
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <CheckCircle2 size={12} className="text-green-600" />
+                    <CheckCircle2 size={12} className="text-data-positive" />
                     <span className="text-xs uppercase tracking-wider font-medium text-content-secondary">
                       Top by readiness
                     </span>
@@ -272,7 +272,7 @@ export default function PortfolioReadinessWidget() {
               {data.top_needs_attention && data.top_needs_attention.length > 0 && (
                 <div>
                   <div className="flex items-center gap-1.5 mb-1.5">
-                    <AlertCircle size={12} className="text-amber-600" />
+                    <AlertCircle size={12} className="text-premium" />
                     <span className="text-xs uppercase tracking-wider font-medium text-content-secondary">
                       Needs most attention
                     </span>
