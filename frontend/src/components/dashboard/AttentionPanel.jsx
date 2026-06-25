@@ -44,9 +44,9 @@ const STAGE_LABEL = {
 };
 
 const SEVERITY_DOT = {
-  critical: 'bg-red-600',
-  high: 'bg-amber-500',
-  medium: 'bg-amber-300',
+  critical: 'bg-data-negative',
+  high: 'bg-premium',
+  medium: 'bg-premium',
   low: 'bg-content-tertiary',
 };
 
@@ -97,8 +97,8 @@ function SignalRow({ href, title, deal_name, deal_stage, right, rightTone = 'neu
     ? () => prefetchWorkspace(dealId)
     : undefined;
   const RIGHT_TONE = {
-    danger: 'text-red-700',
-    warn: 'text-amber-700',
+    danger: 'text-data-negative',
+    warn: 'text-premium',
     neutral: 'text-content-secondary',
     muted: 'text-content-tertiary',
   };
@@ -132,8 +132,8 @@ function SignalRow({ href, title, deal_name, deal_stage, right, rightTone = 'neu
 // A signal block header (icon + name + total).
 function SignalHeader({ icon: Icon, label, total, tone = 'neutral' }) {
   const TONE = {
-    danger: 'text-red-700',
-    warn: 'text-amber-700',
+    danger: 'text-data-negative',
+    warn: 'text-premium',
     neutral: 'text-content-secondary',
   };
   return (

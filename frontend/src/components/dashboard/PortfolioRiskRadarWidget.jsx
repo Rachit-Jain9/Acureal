@@ -33,23 +33,23 @@ import { formatRelativeTime, STAGE_CONFIG } from '../../utils/format';
 const POSTURE_COPY = {
   flagged: {
     label: 'Action needed',
-    pill: 'bg-red-50 text-red-700 border-red-200',
+    pill: 'bg-neg-soft text-data-negative border-hairline',
     Icon: AlertTriangle,
-    accent: 'text-red-600',
+    accent: 'text-data-negative',
     headline: 'Portfolio has open critical or high risks awaiting action.',
   },
   unverified: {
     label: 'Not verified',
-    pill: 'bg-amber-50 text-amber-700 border-amber-200',
+    pill: 'bg-premium-soft text-premium border-hairline',
     Icon: HelpCircle,
-    accent: 'text-amber-600',
+    accent: 'text-premium',
     headline: 'Failure modes not yet fully verified across the portfolio.',
   },
   cleared: {
     label: 'Cleared',
-    pill: 'bg-green-50 text-green-700 border-green-200',
+    pill: 'bg-pos-soft text-data-positive border-hairline',
     Icon: CheckCircle,
-    accent: 'text-green-600',
+    accent: 'text-data-positive',
     headline: 'Every live deal has its required diligence in place — no open flags.',
   },
 };
@@ -74,22 +74,22 @@ function PostureBar({ flagged, unverified, cleared }) {
   return (
     <div className="h-1.5 w-24 rounded-full bg-bg-secondary overflow-hidden flex">
       {flagged > 0 && (
-        <span className="bg-red-500" style={{ width: `${fPct}%` }} title={`${flagged} flagged`} />
+        <span className="bg-data-negative" style={{ width: `${fPct}%` }} title={`${flagged} flagged`} />
       )}
       {unverified > 0 && (
-        <span className="bg-amber-500" style={{ width: `${uPct}%` }} title={`${unverified} not verified`} />
+        <span className="bg-premium" style={{ width: `${uPct}%` }} title={`${unverified} not verified`} />
       )}
       {cleared > 0 && (
-        <span className="bg-green-500" style={{ width: `${cPct}%` }} title={`${cleared} cleared`} />
+        <span className="bg-data-positive" style={{ width: `${cPct}%` }} title={`${cleared} cleared`} />
       )}
     </div>
   );
 }
 
 const SEVERITY_TONE = {
-  critical: 'bg-red-50 text-red-700 border-red-200',
-  high: 'bg-amber-50 text-amber-700 border-amber-200',
-  medium: 'bg-yellow-50 text-yellow-700 border-yellow-200',
+  critical: 'bg-neg-soft text-data-negative border-hairline',
+  high: 'bg-premium-soft text-premium border-hairline',
+  medium: 'bg-premium-soft text-premium border-hairline',
   // The "low" tone used `bg-slate-50 text-slate-700 border-slate-200` —
   // a legacy combo from the pre-theme era. Replaced with semantic
   // tokens so it adapts to dark mode without needing the override block
@@ -206,37 +206,37 @@ export default function PortfolioRiskRadarWidget() {
           <p className="text-eyebrow uppercase text-content-muted text-[10px] font-medium tracking-wider mb-1">Live deals</p>
           <p className="text-xl font-bold text-content-primary tabular-nums">{totals.deals}</p>
           <p className="text-[11px] text-content-muted mt-0.5">
-            <span className="text-red-700 font-semibold">{totals.flagged}</span> flagged
+            <span className="text-data-negative font-semibold">{totals.flagged}</span> flagged
             {' · '}
-            <span className="text-amber-700 font-semibold">{totals.unverified}</span> not verified
+            <span className="text-premium font-semibold">{totals.unverified}</span> not verified
             {' · '}
-            <span className="text-green-700 font-semibold">{totals.cleared}</span> cleared
+            <span className="text-data-positive font-semibold">{totals.cleared}</span> cleared
           </p>
         </div>
         <div className="rounded-md border border-hairline-soft bg-surface px-3 py-2.5">
           <p className="text-eyebrow uppercase text-content-muted text-[10px] font-medium tracking-wider mb-1">Open critical</p>
-          <p className={clsx('text-xl font-bold tabular-nums', open_severity.critical > 0 ? 'text-red-600' : 'text-content-secondary')}>
+          <p className={clsx('text-xl font-bold tabular-nums', open_severity.critical > 0 ? 'text-data-negative' : 'text-content-secondary')}>
             {open_severity.critical}
           </p>
           <p className="text-[11px] text-content-muted mt-0.5">Severity-1 flags across portfolio</p>
         </div>
         <div className="rounded-md border border-hairline-soft bg-surface px-3 py-2.5">
           <p className="text-eyebrow uppercase text-content-muted text-[10px] font-medium tracking-wider mb-1">Open high</p>
-          <p className={clsx('text-xl font-bold tabular-nums', open_severity.high > 0 ? 'text-amber-600' : 'text-content-secondary')}>
+          <p className={clsx('text-xl font-bold tabular-nums', open_severity.high > 0 ? 'text-premium' : 'text-content-secondary')}>
             {open_severity.high}
           </p>
           <p className="text-[11px] text-content-muted mt-0.5">Severity-2 flags across portfolio</p>
         </div>
         <div className="rounded-md border border-hairline-soft bg-surface px-3 py-2.5">
           <p className="text-eyebrow uppercase text-content-muted text-[10px] font-medium tracking-wider mb-1">Overdue DD</p>
-          <p className={clsx('text-xl font-bold tabular-nums', open_severity.overdue_dd > 0 ? 'text-red-600' : 'text-content-secondary')}>
+          <p className={clsx('text-xl font-bold tabular-nums', open_severity.overdue_dd > 0 ? 'text-data-negative' : 'text-content-secondary')}>
             {open_severity.overdue_dd ?? 0}
           </p>
           <p className="text-[11px] text-content-muted mt-0.5">Required DD past its due date</p>
         </div>
         <div className="rounded-md border border-hairline-soft bg-surface px-3 py-2.5">
           <p className="text-eyebrow uppercase text-content-muted text-[10px] font-medium tracking-wider mb-1">Portfolio score</p>
-          <p className={clsx('text-xl font-bold tabular-nums', open_severity.portfolio_score > 60 ? 'text-red-600' : open_severity.portfolio_score > 30 ? 'text-amber-600' : 'text-green-600')}>
+          <p className={clsx('text-xl font-bold tabular-nums', open_severity.portfolio_score > 60 ? 'text-data-negative' : open_severity.portfolio_score > 30 ? 'text-premium' : 'text-data-positive')}>
             {open_severity.portfolio_score}
             <span className="text-xs font-normal text-content-muted ml-0.5">/100</span>
           </p>
@@ -260,19 +260,19 @@ export default function PortfolioRiskRadarWidget() {
               </div>
               <div className="flex items-center gap-2 text-[11px] text-content-muted shrink-0 tabular-nums">
                 {mode.flagged_deals > 0 && (
-                  <span className="text-red-700 font-semibold">{mode.flagged_deals} flagged</span>
+                  <span className="text-data-negative font-semibold">{mode.flagged_deals} flagged</span>
                 )}
                 {mode.overdue_total > 0 && (
-                  <span className="text-red-700">
+                  <span className="text-data-negative">
                     {mode.overdue_total}{' '}
                     <span className="font-normal text-content-muted">overdue</span>
                   </span>
                 )}
                 {mode.unverified_deals > 0 && (
-                  <span className="text-amber-700">{mode.unverified_deals} unverified</span>
+                  <span className="text-premium">{mode.unverified_deals} unverified</span>
                 )}
                 {mode.cleared_deals > 0 && mode.flagged_deals === 0 && mode.unverified_deals === 0 && (
-                  <span className="text-green-700">All cleared</span>
+                  <span className="text-data-positive">All cleared</span>
                 )}
               </div>
             </div>
@@ -309,17 +309,17 @@ export default function PortfolioRiskRadarWidget() {
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       {d.open_critical > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 tabular-nums">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-data-negative tabular-nums">
                           {d.open_critical} <span className="font-normal text-content-muted">crit</span>
                         </span>
                       )}
                       {d.open_high > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 tabular-nums">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-premium tabular-nums">
                           {d.open_high} <span className="font-normal text-content-muted">high</span>
                         </span>
                       )}
                       {d.overdue > 0 && (
-                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-red-700 tabular-nums">
+                        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-data-negative tabular-nums">
                           {d.overdue} <span className="font-normal text-content-muted">overdue</span>
                         </span>
                       )}
@@ -370,7 +370,7 @@ export default function PortfolioRiskRadarWidget() {
           render the widget rather than hide it, so the operator gets the
           positive signal that everything is in order. */}
       {top_deals_at_risk.length === 0 && recently_flagged.length === 0 && (
-        <div className="px-3 py-3 rounded-md bg-green-50 border border-green-200 flex items-center gap-2 text-xs text-green-800">
+        <div className="px-3 py-3 rounded-md bg-pos-soft border border-hairline flex items-center gap-2 text-xs text-data-positive">
           <CheckCircle size={14} className="shrink-0" />
           <span>No deals need IC attention right now — required diligence is in place across the portfolio.</span>
         </div>
