@@ -66,7 +66,7 @@ function StatCard({ label, value, sub, icon: Icon = Database }) {
           <div className="mt-2 font-display text-2xl font-semibold text-content-primary tabular-nums">{value}</div>
           {sub && <div className="mt-1 text-xs text-content-secondary">{sub}</div>}
         </div>
-        <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+        <div className="rounded-lg bg-accent-soft p-2 text-accent">
           <Icon size={18} />
         </div>
       </div>
@@ -98,7 +98,7 @@ function SchemaReadinessCard({ schema }) {
     <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
       <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 gap-3">
-          <div className="mt-0.5 rounded-lg bg-primary-50 p-2 text-primary-600">
+          <div className="mt-0.5 rounded-lg bg-accent-soft p-2 text-accent">
             <ShieldCheck size={18} />
           </div>
           <div className="min-w-0">
@@ -119,13 +119,13 @@ function SchemaReadinessCard({ schema }) {
       {missing.length > 0 && (
         <div className="mt-3 grid grid-cols-1 gap-2 md:grid-cols-2">
           {missing.slice(0, 4).map((item) => (
-            <div key={`${item.type}-${item.name}`} className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-800">
+            <div key={`${item.type}-${item.name}`} className="rounded-lg border border-hairline bg-neg-soft px-3 py-2 text-xs text-data-negative">
               <div className="font-semibold">{item.label}</div>
               <div className="mt-0.5 truncate opacity-80">{item.name}</div>
             </div>
           ))}
           {missing.length > 4 && (
-            <div className="rounded-lg border border-rose-100 bg-rose-50 px-3 py-2 text-xs font-medium text-rose-800">
+            <div className="rounded-lg border border-hairline bg-neg-soft px-3 py-2 text-xs font-medium text-data-negative">
               +{missing.length - 4} more missing schema item{missing.length - 4 === 1 ? '' : 's'}
             </div>
           )}
@@ -144,7 +144,7 @@ function RedFlagRulesCard({ rules = [] }) {
   return (
     <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
       <div className="mb-3 flex items-center gap-3">
-        <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+        <div className="rounded-lg bg-accent-soft p-2 text-accent">
           <AlertTriangle size={18} />
         </div>
         <div className="flex-1 min-w-0">
@@ -172,7 +172,7 @@ function RedFlagRulesCard({ rules = [] }) {
         <button
           type="button"
           onClick={() => setExpanded((e) => !e)}
-          className="mt-3 text-xs font-medium text-primary-600 hover:underline"
+          className="mt-3 text-xs font-medium text-accent hover:underline"
         >
           {expanded ? 'Show less' : `Show ${rules.length - 4} more rules`}
         </button>
@@ -213,7 +213,7 @@ function AiUsageCard({ usage }) {
   return (
     <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
       <div className="mb-3 flex items-center gap-3">
-        <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+        <div className="rounded-lg bg-accent-soft p-2 text-accent">
           <Activity size={18} />
         </div>
         <div className="flex-1 min-w-0">
@@ -414,7 +414,7 @@ function AuthorityInputPanel({ dealId, onClose }) {
   };
 
   return (
-    <div className="rounded-xl border border-primary-100 bg-primary-50/40 p-4">
+    <div className="rounded-xl border border-hairline bg-accent-soft p-4">
       <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h3 className="text-sm font-semibold text-content-primary">Authority Input</h3>
@@ -577,7 +577,7 @@ function AuthorityInputPanel({ dealId, onClose }) {
             <button
               type="submit"
               disabled={mutation.isPending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent disabled:opacity-60"
             >
               <PlusCircle size={14} />
               {mutation.isPending ? 'Saving...' : 'Save Authority Input'}
@@ -603,7 +603,7 @@ function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending, se
           checked={selected}
           disabled={pending}
           onChange={() => onSelect(item)}
-          className="h-4 w-4 rounded border-hairline-strong text-primary-600 focus:ring-primary-500"
+          className="h-4 w-4 rounded border-hairline-strong text-accent focus:ring-accent"
           aria-label={`Select ${item.title || item.category || item.type}`}
         />
       </td>
@@ -640,9 +640,9 @@ function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending, se
       <td className="px-3 py-3">
         <div className="flex flex-wrap gap-1.5">
           {[
-            ['approved', 'Approve', 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'],
-            ['needs_review', 'Needs Review', 'bg-amber-50 text-amber-800 hover:bg-amber-100'],
-            ['rejected', 'Reject', 'bg-rose-50 text-rose-700 hover:bg-rose-100'],
+            ['approved', 'Approve', 'bg-pos-soft text-data-positive hover:bg-pos-soft'],
+            ['needs_review', 'Needs Review', 'bg-premium-soft text-premium hover:bg-premium-soft'],
+            ['rejected', 'Reject', 'bg-neg-soft text-data-negative hover:bg-neg-soft'],
           ].map(([status, label, klass]) => (
             <button
               key={status}
@@ -659,7 +659,7 @@ function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending, se
               type="button"
               disabled={pending || promotePending || !promotion.promotable}
               onClick={() => onPromote({ id: item.id })}
-              className="inline-flex items-center gap-1 rounded bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 hover:bg-primary-100 disabled:opacity-45"
+              className="inline-flex items-center gap-1 rounded bg-accent-soft px-2 py-1 text-xs font-medium text-accent hover:bg-accent-soft disabled:opacity-45"
               title={reason || 'Promote reviewed fact to linked property'}
             >
               <ArrowRight size={12} />
@@ -847,7 +847,7 @@ export default function ParcelIntelligenceAdminPage() {
             <button
               type="button"
               onClick={() => setShowAuthorityInput((value) => !value)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-accent-soft px-3 py-2 text-sm font-medium text-accent hover:bg-accent-soft"
             >
               <PlusCircle size={14} />
               Authority Input
@@ -856,7 +856,7 @@ export default function ParcelIntelligenceAdminPage() {
               type="button"
               disabled={eligiblePromotionIds.length === 0 || isDecisionPending}
               onClick={() => promoteBatchMutation.mutate({ ids: eligiblePromotionIds })}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-accent-soft px-3 py-2 text-sm font-medium text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-45"
               title={eligiblePromotionIds.length ? 'Promote approved visible facts into blank linked property inputs' : 'No eligible approved facts in this view'}
             >
               <ArrowRight size={14} />
@@ -869,7 +869,7 @@ export default function ParcelIntelligenceAdminPage() {
               type="button"
               disabled={selectedReviewItems.length === 0 || isDecisionPending}
               onClick={() => reviewSelected('approved')}
-              className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-lg bg-pos-soft px-3 py-2 text-sm font-medium text-data-positive hover:bg-pos-soft disabled:cursor-not-allowed disabled:opacity-45"
             >
               Approve Selected
               {selectedReviewItems.length > 0 && (
@@ -880,7 +880,7 @@ export default function ParcelIntelligenceAdminPage() {
               type="button"
               disabled={selectedReviewItems.length === 0 || isDecisionPending}
               onClick={() => reviewSelected('needs_review')}
-              className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-lg bg-premium-soft px-3 py-2 text-sm font-medium text-premium hover:bg-premium-soft disabled:cursor-not-allowed disabled:opacity-45"
             >
               Needs Review
             </button>
@@ -888,7 +888,7 @@ export default function ParcelIntelligenceAdminPage() {
               type="button"
               disabled={selectedReviewItems.length === 0 || isDecisionPending}
               onClick={() => reviewSelected('rejected')}
-              className="rounded-lg bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-lg bg-neg-soft px-3 py-2 text-sm font-medium text-data-negative hover:bg-neg-soft disabled:cursor-not-allowed disabled:opacity-45"
             >
               Reject Selected
             </button>
@@ -896,7 +896,7 @@ export default function ParcelIntelligenceAdminPage() {
               type="button"
               disabled={selectedEligiblePromotionIds.length === 0 || isDecisionPending}
               onClick={promoteSelected}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-primary-100 bg-primary-50 px-3 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100 disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-accent-soft px-3 py-2 text-sm font-medium text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-45"
             >
               <ArrowRight size={14} />
               Promote Selected
@@ -942,7 +942,7 @@ export default function ParcelIntelligenceAdminPage() {
                       checked={allVisibleSelected}
                       disabled={queue.length === 0 || isDecisionPending}
                       onChange={toggleVisibleSelection}
-                      className="h-4 w-4 rounded border-hairline-strong text-primary-600 focus:ring-primary-500"
+                      className="h-4 w-4 rounded border-hairline-strong text-accent focus:ring-accent"
                       aria-label="Select visible review items"
                     />
                   </th>

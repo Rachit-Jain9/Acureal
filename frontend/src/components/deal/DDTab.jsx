@@ -193,8 +193,8 @@ function DDSection({ dealId, canEdit }) {
   if (isError) {
     return (
       <div className="text-center py-8">
-        <AlertCircle size={24} className="text-red-400 mx-auto mb-2" />
-        <p className="text-sm text-red-600 mb-2">Failed to load DD items.</p>
+        <AlertCircle size={24} className="text-data-negative mx-auto mb-2" />
+        <p className="text-sm text-data-negative mb-2">Failed to load DD items.</p>
         <button onClick={refetch} className="btn btn-secondary text-sm">Retry</button>
       </div>
     );
@@ -239,7 +239,7 @@ function DDSection({ dealId, canEdit }) {
             <span
               className={clsx(
                 'text-sm font-bold',
-                score >= 80 ? 'text-green-600' : score >= 50 ? 'text-amber-600' : 'text-red-600'
+                score >= 80 ? 'text-data-positive' : score >= 50 ? 'text-premium' : 'text-data-negative'
               )}
             >
               {Number(score).toFixed(0)}%
@@ -249,7 +249,7 @@ function DDSection({ dealId, canEdit }) {
             <div
               className={clsx(
                 'h-full rounded-full transition-all',
-                score >= 80 ? 'bg-green-500' : score >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                score >= 80 ? 'bg-data-positive' : score >= 50 ? 'bg-premium' : 'bg-data-negative'
               )}
               style={{ width: `${Math.min(100, score)}%` }}
             />
@@ -408,7 +408,7 @@ function DDSection({ dealId, canEdit }) {
                             {canEdit && (
                             <button
                               onClick={() => handleDelete(item.id)}
-                              className="p-1.5 text-content-muted hover:text-red-500 transition-colors flex-shrink-0"
+                              className="p-1.5 text-content-muted hover:text-data-negative transition-colors flex-shrink-0"
                               title="Remove item"
                             >
                               <Trash2 size={14} />
@@ -496,8 +496,8 @@ function ApprovalsSection({ dealId, canEdit }) {
   if (isError) {
     return (
       <div className="text-center py-8">
-        <AlertCircle size={24} className="text-red-400 mx-auto mb-2" />
-        <p className="text-sm text-red-600 mb-2">Failed to load approvals.</p>
+        <AlertCircle size={24} className="text-data-negative mx-auto mb-2" />
+        <p className="text-sm text-data-negative mb-2">Failed to load approvals.</p>
         <button onClick={refetch} className="btn btn-secondary text-sm">Retry</button>
       </div>
     );
@@ -615,7 +615,7 @@ function ApprovalsSection({ dealId, canEdit }) {
                   type="checkbox"
                   checked={form.is_required}
                   onChange={(e) => setForm((f) => ({ ...f, is_required: e.target.checked }))}
-                  className="rounded text-primary-600"
+                  className="rounded text-accent"
                 />
                 Required
               </label>
@@ -624,7 +624,7 @@ function ApprovalsSection({ dealId, canEdit }) {
                   type="checkbox"
                   checked={form.is_available}
                   onChange={(e) => setForm((f) => ({ ...f, is_available: e.target.checked }))}
-                  className="rounded text-primary-600"
+                  className="rounded text-accent"
                 />
                 Available
               </label>
@@ -633,7 +633,7 @@ function ApprovalsSection({ dealId, canEdit }) {
                   type="checkbox"
                   checked={form.is_uploaded}
                   onChange={(e) => setForm((f) => ({ ...f, is_uploaded: e.target.checked }))}
-                  className="rounded text-primary-600"
+                  className="rounded text-accent"
                 />
                 Uploaded
               </label>
@@ -642,7 +642,7 @@ function ApprovalsSection({ dealId, canEdit }) {
                   type="checkbox"
                   checked={form.is_validated}
                   onChange={(e) => setForm((f) => ({ ...f, is_validated: e.target.checked }))}
-                  className="rounded text-primary-600"
+                  className="rounded text-accent"
                 />
                 Validated
               </label>
@@ -740,7 +740,7 @@ function ApprovalsSection({ dealId, canEdit }) {
                     </td>
                     <td className="px-3 py-3 text-center">
                       {item.is_required ? (
-                        <CheckCircle2 size={14} className="text-green-500 mx-auto" />
+                        <CheckCircle2 size={14} className="text-data-positive mx-auto" />
                       ) : (
                         <span className="text-content-muted">–</span>
                       )}
@@ -751,7 +751,7 @@ function ApprovalsSection({ dealId, canEdit }) {
                         checked={!!item.is_available}
                         onChange={(e) => handleFieldUpdate(item, 'is_available', e.target.checked)}
                         disabled={!canEdit}
-                        className="rounded text-primary-600 cursor-pointer"
+                        className="rounded text-accent cursor-pointer"
                       />
                     </td>
                     <td className="px-3 py-3 text-center">
@@ -760,7 +760,7 @@ function ApprovalsSection({ dealId, canEdit }) {
                         checked={!!item.is_uploaded}
                         onChange={(e) => handleFieldUpdate(item, 'is_uploaded', e.target.checked)}
                         disabled={!canEdit}
-                        className="rounded text-primary-600 cursor-pointer"
+                        className="rounded text-accent cursor-pointer"
                       />
                     </td>
                     <td className="px-3 py-3 text-center">
@@ -769,7 +769,7 @@ function ApprovalsSection({ dealId, canEdit }) {
                         checked={!!item.is_validated}
                         onChange={(e) => handleFieldUpdate(item, 'is_validated', e.target.checked)}
                         disabled={!canEdit}
-                        className="rounded text-primary-600 cursor-pointer"
+                        className="rounded text-accent cursor-pointer"
                       />
                     </td>
                     <td className="px-3 py-3 text-xs text-content-secondary">
@@ -782,7 +782,7 @@ function ApprovalsSection({ dealId, canEdit }) {
                       {canEdit && (
                       <button
                         onClick={() => handleDelete(item.id)}
-                        className="p-1 text-content-muted hover:text-red-500 transition-colors"
+                        className="p-1 text-content-muted hover:text-data-negative transition-colors"
                       >
                         <Trash2 size={13} />
                       </button>

@@ -66,7 +66,7 @@ export default function JVWaterfallPanel({ financials, deal }) {
         className="w-full flex items-center justify-between p-5 text-left"
       >
         <div className="flex items-center gap-2">
-          <Users size={16} className="text-primary-600" />
+          <Users size={16} className="text-accent" />
           <span className="text-sm font-semibold text-content-primary">Joint Venture Profit Waterfall</span>
           {deal?.deal_structure && ['jv', 'profit_share'].includes(deal.deal_structure) && (
             <Badge tone="info">Active structure</Badge>
@@ -171,11 +171,11 @@ export default function JVWaterfallPanel({ financials, deal }) {
             <>
               <div className="flex items-center gap-3 text-sm text-content-secondary bg-bg-secondary rounded-lg px-4 py-2.5">
                 <span className="font-medium text-content-primary">Equity Split:</span>
-                <span className="text-blue-700 font-semibold">
+                <span className="text-accent font-semibold">
                   Landowner {result.landownerEquityPct?.toFixed(1)}%
                 </span>
                 <span className="text-content-muted">/</span>
-                <span className="text-indigo-700 font-semibold">
+                <span className="text-data-highlight font-semibold">
                   Developer {result.developerEquityPct?.toFixed(1)}%
                 </span>
                 <span className="ml-auto text-content-secondary">
@@ -205,16 +205,16 @@ export default function JVWaterfallPanel({ financials, deal }) {
                       {result.waterfall.map((row, i) => (
                         <tr key={i} className={`border-b last:border-0 hover:bg-bg-secondary transition-colors ${!row.fromProfit ? 'bg-blue-50/40' : ''}`}>
                           <td className="px-3 py-2.5 font-medium text-content-primary">{row.tranche}</td>
-                          <td className="px-3 py-2.5 text-right text-blue-700">{fmtCr(row.landownerCr)}</td>
-                          <td className="px-3 py-2.5 text-right text-indigo-700">{fmtCr(row.developerCr)}</td>
+                          <td className="px-3 py-2.5 text-right text-accent">{fmtCr(row.landownerCr)}</td>
+                          <td className="px-3 py-2.5 text-right text-data-highlight">{fmtCr(row.developerCr)}</td>
                           <td className="px-3 py-2.5 text-right font-semibold text-content-primary">{fmtCr(row.totalCr)}</td>
                           <td className="px-3 py-2.5 text-xs text-content-muted">{row.note}</td>
                         </tr>
                       ))}
                       <tr className="bg-bg-secondary font-semibold border-t-2 border-hairline-strong">
                         <td className="px-3 py-2.5 text-content-secondary">Total Distribution</td>
-                        <td className="px-3 py-2.5 text-right text-blue-700">{fmtCr(result.summary.landownerTotal)}</td>
-                        <td className="px-3 py-2.5 text-right text-indigo-700">{fmtCr(result.summary.developerTotal)}</td>
+                        <td className="px-3 py-2.5 text-right text-accent">{fmtCr(result.summary.landownerTotal)}</td>
+                        <td className="px-3 py-2.5 text-right text-data-highlight">{fmtCr(result.summary.developerTotal)}</td>
                         <td className="px-3 py-2.5 text-right text-content-primary">
                           {fmtCr((result.summary.landownerTotal || 0) + (result.summary.developerTotal || 0))}
                         </td>

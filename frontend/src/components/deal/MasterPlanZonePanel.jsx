@@ -60,7 +60,7 @@ export default function MasterPlanZonePanel({ property }) {
     <div
       className={clsx(
         'card-editorial p-0 overflow-hidden border-l-4 transition-colors duration-200 ease-out',
-        isAssigned ? 'border-l-emerald-500' : 'border-l-amber-500',
+        isAssigned ? 'border-l-data-positive' : 'border-l-premium',
       )}
     >
       <div className="flex items-start justify-between gap-3 border-b border-hairline-soft px-5 py-4">
@@ -68,7 +68,7 @@ export default function MasterPlanZonePanel({ property }) {
           <div
             className={clsx(
               'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-hairline transition-colors duration-200 ease-out',
-              isAssigned ? 'bg-emerald-50 text-emerald-700' : 'bg-bg-secondary text-content-muted',
+              isAssigned ? 'bg-pos-soft text-data-positive' : 'bg-bg-secondary text-content-muted',
             )}
           >
             <Shield size={16} />
@@ -123,10 +123,10 @@ export default function MasterPlanZonePanel({ property }) {
               className={clsx(
                 'inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-content-primary',
                 'transition-colors duration-150 ease-out',
-                'hover:border-primary-300',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+                'hover:border-accent',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                 'active:scale-[0.98]',
-                showPicker && 'border-primary-300',
+                showPicker && 'border-accent',
               )}
               aria-expanded={showPicker}
             >
@@ -140,8 +140,8 @@ export default function MasterPlanZonePanel({ property }) {
                 className={clsx(
                   'inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-secondary px-3 py-1.5 text-xs font-semibold text-content-primary',
                   'transition-colors duration-150 ease-out',
-                  'hover:border-rose-300 hover:text-rose-700',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40',
+                  'hover:border-data-negative hover:text-data-negative',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative/40',
                   'active:scale-[0.98]',
                 )}
               >
@@ -192,8 +192,8 @@ export default function MasterPlanZonePanel({ property }) {
                     className={clsx(
                       'flex w-full items-start justify-between gap-3 border-b border-hairline-soft px-4 py-3 text-left transition-colors duration-150 ease-out last:border-0',
                       'hover:bg-bg-secondary',
-                      'focus-visible:outline-none focus-visible:bg-bg-secondary focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:ring-inset',
-                      selected && 'bg-emerald-50/50',
+                      'focus-visible:outline-none focus-visible:bg-bg-secondary focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset',
+                      selected && 'bg-pos-soft',
                     )}
                   >
                     <div className="min-w-0">
@@ -214,7 +214,7 @@ export default function MasterPlanZonePanel({ property }) {
                     {selected && (
                       <CheckCircle2
                         size={15}
-                        className="mt-0.5 shrink-0 text-emerald-600 motion-safe:animate-[scaleIn_150ms_ease-out]"
+                        className="mt-0.5 shrink-0 text-data-positive motion-safe:animate-[scaleIn_150ms_ease-out]"
                       />
                     )}
                   </button>
@@ -278,10 +278,10 @@ export default function MasterPlanZonePanel({ property }) {
                 type="button"
                 onClick={saveNotes}
                 className={clsx(
-                  'inline-flex items-center gap-1.5 rounded-editorial bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white',
+                  'inline-flex items-center gap-1.5 rounded-editorial bg-accent px-3 py-1.5 text-xs font-semibold text-content-inverse',
                   'transition-colors duration-150 ease-out',
-                  'hover:bg-primary-700',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+                  'hover:bg-accent',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                   'active:scale-[0.98]',
                 )}
               >

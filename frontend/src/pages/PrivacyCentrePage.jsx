@@ -85,8 +85,8 @@ function Toggle({ checked, disabled, busy, onChange, labelledById }) {
       aria-labelledby={labelledById}
       disabled={disabled || busy}
       onClick={() => onChange(!checked)}
-      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed ${
-        checked ? 'bg-primary-600 border-primary-600' : 'bg-bg-secondary border-hairline-strong'
+      className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed ${
+        checked ? 'bg-accent border-accent' : 'bg-bg-secondary border-hairline-strong'
       }`}
     >
       <span
@@ -94,7 +94,7 @@ function Toggle({ checked, disabled, busy, onChange, labelledById }) {
           checked ? 'translate-x-6' : 'translate-x-1'
         }`}
       >
-        {busy && <Loader2 size={10} className="animate-spin text-primary-600" />}
+        {busy && <Loader2 size={10} className="animate-spin text-accent" />}
       </span>
     </button>
   );
@@ -112,7 +112,7 @@ function InfoRow({ label, children }) {
 
 // ── Reusable card shell — matches SettingsPage chrome ────────────────────────
 function Card({ icon: Icon, title, children, tone = 'default' }) {
-  const border = tone === 'danger' ? 'border-rose-200' : 'border-hairline-strong';
+  const border = tone === 'danger' ? 'border-hairline' : 'border-hairline-strong';
   return (
     <div className={`bg-bg-elevated rounded-xl shadow-sm border ${border} p-6`}>
       <h3 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
@@ -244,7 +244,7 @@ export default function PrivacyCentrePage() {
             <button
               type="button"
               onClick={load}
-              className="text-sm font-medium text-rose-700 hover:text-rose-900 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40 rounded px-1"
+              className="text-sm font-medium text-data-negative hover:text-data-negative transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40 rounded px-1"
             >
               Try again
             </button>
@@ -264,7 +264,7 @@ export default function PrivacyCentrePage() {
               phone number, use{' '}
               <Link
                 to="/dashboard/settings"
-                className="text-primary-600 hover:text-primary-700 underline underline-offset-2"
+                className="text-accent hover:text-accent underline underline-offset-2"
               >
                 Settings
               </Link>
@@ -279,11 +279,11 @@ export default function PrivacyCentrePage() {
                 <InfoRow label="Sign-in method">{titleCase(profile.sign_in_method)}</InfoRow>
                 <InfoRow label="Email verified">
                   {profile.email_verified ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-700">
+                    <span className="inline-flex items-center gap-1 text-data-positive">
                       <CheckCircle size={14} /> Verified
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-amber-700">
+                    <span className="inline-flex items-center gap-1 text-premium">
                       <AlertTriangle size={14} /> Not verified
                     </span>
                   )}
@@ -387,7 +387,7 @@ export default function PrivacyCentrePage() {
                           href={link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:text-primary-700 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1 py-0.5 shrink-0"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:text-accent transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 py-0.5 shrink-0"
                         >
                           View <ExternalLink size={12} />
                         </a>
@@ -441,7 +441,7 @@ export default function PrivacyCentrePage() {
               <button
                 type="button"
                 onClick={() => setExportOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
               >
                 <Download size={14} />
                 Download my data
@@ -464,7 +464,7 @@ export default function PrivacyCentrePage() {
                       onChange={(e) => setExportPassword(e.target.value)}
                       placeholder="Your account password"
                       disabled={exporting}
-                      className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 mb-3"
+                      className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent mb-3"
                     />
                   </>
                 ) : (
@@ -477,7 +477,7 @@ export default function PrivacyCentrePage() {
                     type="button"
                     onClick={handleExport}
                     disabled={exporting || (passwordNeeded && !exportPassword)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                     {exporting ? 'Preparing…' : 'Confirm & download'}
@@ -486,7 +486,7 @@ export default function PrivacyCentrePage() {
                     type="button"
                     onClick={() => { setExportOpen(false); setExportPassword(''); }}
                     disabled={exporting}
-                    className="px-3 py-2 text-sm font-medium text-content-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded-lg disabled:opacity-50"
+                    className="px-3 py-2 text-sm font-medium text-content-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-lg disabled:opacity-50"
                   >
                     Cancel
                   </button>
@@ -505,7 +505,7 @@ export default function PrivacyCentrePage() {
               href="/grievance"
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-4 py-2 border border-hairline-strong hover:border-primary-300 hover:bg-bg-secondary text-content-primary rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+              className="inline-flex items-center gap-2 px-4 py-2 border border-hairline-strong hover:border-accent hover:bg-bg-secondary text-content-primary rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
             >
               <MessageSquare size={14} />
               Contact the Grievance Officer

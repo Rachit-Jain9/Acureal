@@ -242,7 +242,7 @@ export default function SettingsPage() {
               type="text"
               value={profile.name}
               onChange={(e) => setProfile((p) => ({ ...p, name: e.target.value }))}
-              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
           <div>
@@ -261,13 +261,13 @@ export default function SettingsPage() {
               value={profile.phone}
               onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
               placeholder="9876543210"
-              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
           <button
             type="submit"
             disabled={savingProfile}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
           >
             {savingProfile ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Save Profile
@@ -296,11 +296,11 @@ export default function SettingsPage() {
           // revokes / user deletes Google account → no fallback) and let
           // them attach a password without an operator-support hand-off.
           <>
-            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2.5">
-              <KeyRound size={16} className="mt-0.5 shrink-0 text-amber-700" aria-hidden="true" />
-              <div className="text-sm text-amber-900 leading-relaxed">
+            <div className="mb-4 rounded-lg border border-hairline bg-premium-soft px-4 py-3 flex items-start gap-2.5">
+              <KeyRound size={16} className="mt-0.5 shrink-0 text-premium" aria-hidden="true" />
+              <div className="text-sm text-premium leading-relaxed">
                 <p className="font-medium">Your account currently signs in with Google only.</p>
-                <p className="mt-1 text-xs text-amber-800">
+                <p className="mt-1 text-xs text-premium">
                   Setting a password adds a fallback so you can sign in with
                   email and password if your Google account ever becomes
                   unavailable. You can keep using Google sign-in either way.
@@ -316,7 +316,7 @@ export default function SettingsPage() {
                   value={firstPwd.newPassword}
                   onChange={(e) => setFirstPwd((s) => ({ ...s, newPassword: e.target.value }))}
                   placeholder="At least 8 chars with uppercase, lowercase, and a number"
-                  className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                 />
               </div>
               <div>
@@ -326,13 +326,13 @@ export default function SettingsPage() {
                   autoComplete="new-password"
                   value={firstPwd.confirmPassword}
                   onChange={(e) => setFirstPwd((s) => ({ ...s, confirmPassword: e.target.value }))}
-                  className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                  className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
                 />
               </div>
               <button
                 type="submit"
                 disabled={settingFirstPassword}
-                className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
               >
                 {settingFirstPassword ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
                 Set Password
@@ -347,7 +347,7 @@ export default function SettingsPage() {
                 type="password"
                 value={security.currentPassword}
                 onChange={(e) => setSecurity((s) => ({ ...s, currentPassword: e.target.value }))}
-                className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
             <div>
@@ -357,7 +357,7 @@ export default function SettingsPage() {
                 value={security.newPassword}
                 onChange={(e) => setSecurity((s) => ({ ...s, newPassword: e.target.value }))}
                 placeholder="At least 8 chars with uppercase, lowercase, and a number"
-                className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
             <div>
@@ -366,13 +366,13 @@ export default function SettingsPage() {
                 type="password"
                 value={security.confirmPassword}
                 onChange={(e) => setSecurity((s) => ({ ...s, confirmPassword: e.target.value }))}
-                className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
               />
             </div>
             <button
               type="submit"
               disabled={changingPassword}
-              className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-data-negative hover:bg-data-negative text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
             >
               {changingPassword ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
               Change Password
@@ -395,7 +395,7 @@ export default function SettingsPage() {
         </p>
         <Link
           to="/dashboard/privacy"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
         >
           <Shield size={14} />
           Open Privacy Centre
@@ -415,7 +415,7 @@ export default function SettingsPage() {
           </p>
           <Link
             to="/dashboard/settings/team"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
           >
             <Users size={14} />
             Manage team
@@ -435,7 +435,7 @@ export default function SettingsPage() {
             <select
               value={preferences.currency}
               onChange={(e) => handlePreferenceChange('currency', e.target.value)}
-              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             >
               {CURRENCY_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -447,7 +447,7 @@ export default function SettingsPage() {
             <select
               value={preferences.areaUnit}
               onChange={(e) => handlePreferenceChange('areaUnit', e.target.value)}
-              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             >
               {AREA_UNIT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -459,7 +459,7 @@ export default function SettingsPage() {
             <select
               value={preferences.dateFormat}
               onChange={(e) => handlePreferenceChange('dateFormat', e.target.value)}
-              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             >
               {DATE_FORMAT_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -512,14 +512,14 @@ export default function SettingsPage() {
                 value={notesDraft[key]}
                 onChange={(e) => setNotesDraft((d) => ({ ...d, [key]: e.target.value }))}
                 placeholder={placeholder}
-                className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 resize-y font-mono"
+                className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent resize-y font-mono"
               />
               <div className="flex items-center justify-between mt-1">
                 <p className="text-xs text-content-muted">One observation per line.</p>
                 <button
                   onClick={() => handleNotesSave(key)}
                   disabled={saveMarketNotes.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-xs font-medium transition disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-accent hover:bg-accent text-white rounded-lg text-xs font-medium transition disabled:opacity-50"
                 >
                   {saveMarketNotes.isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                   Save

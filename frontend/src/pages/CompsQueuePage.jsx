@@ -139,10 +139,10 @@ const QueueRow = ({ row, selectable, selected, onToggleSelect }) => {
       <div
         className={clsx(
           'shrink-0 w-9 h-9 rounded-md flex items-center justify-center',
-          visual.tone === 'warn'    && 'bg-amber-50 text-amber-700',
-          visual.tone === 'info'    && 'bg-sky-50 text-sky-700',
-          visual.tone === 'danger'  && 'bg-rose-50 text-rose-700',
-          visual.tone === 'success' && 'bg-emerald-50 text-emerald-700',
+          visual.tone === 'warn'    && 'bg-premium-soft text-premium',
+          visual.tone === 'info'    && 'bg-accent-soft text-accent',
+          visual.tone === 'danger'  && 'bg-neg-soft text-data-negative',
+          visual.tone === 'success' && 'bg-pos-soft text-data-positive',
           visual.tone === 'neutral' && 'bg-bg-secondary text-content-muted'
         )}
       >
@@ -289,7 +289,7 @@ function UploadModal({ open, onClose, onUploaded }) {
           {/* File picker */}
           <div>
             <label className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
-              File <span className="text-amber-600">*</span>
+              File <span className="text-premium">*</span>
             </label>
             <input
               ref={fileInputRef}
@@ -860,7 +860,7 @@ export default function CompsQueuePage() {
             type="button"
             onClick={handleBulkApprove}
             disabled={bulkApprove.isPending || bulkReject.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-emerald-600 text-white hover:bg-emerald-700 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-data-positive text-white hover:bg-data-positive transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
           >
             {bulkApprove.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
             {bulkApprove.isPending ? 'Approving…' : `Approve ${selectedIds.size}`}
@@ -952,7 +952,7 @@ export default function CompsQueuePage() {
                 type="button"
                 onClick={handleBulkRejectConfirm}
                 disabled={bulkReject.isPending}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-rose-600 text-white rounded hover:bg-rose-700 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-data-negative text-white rounded hover:bg-data-negative transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
               >
                 {bulkReject.isPending ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
                 {bulkReject.isPending ? 'Rejecting…' : `Reject ${selectedIds.size}`}

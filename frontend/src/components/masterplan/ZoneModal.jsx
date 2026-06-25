@@ -206,7 +206,7 @@ export default function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting 
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-xs font-medium text-content-secondary">FSI Road-Width Tiers</span>
-              <button type="button" onClick={addTier} className="text-xs text-primary-600 hover:underline inline-flex items-center gap-1">
+              <button type="button" onClick={addTier} className="text-xs text-accent hover:underline inline-flex items-center gap-1">
                 <Plus size={12} /> Add tier
               </button>
             </div>
@@ -218,7 +218,7 @@ export default function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting 
                   <div key={i} className="grid grid-cols-[1fr,1fr,auto] gap-2 items-center">
                     <input type="number" step="0.01" aria-label={`Road width (m) for tier ${i + 1}`} placeholder="road width ≥ (m)" className="input" value={r.road_width_m} onChange={(e) => updateTier(i, 'road_width_m', e.target.value)} />
                     <input type="number" step="0.01" aria-label={`FSI for tier ${i + 1}`} placeholder="FSI" className="input" value={r.fsi} onChange={(e) => updateTier(i, 'fsi', e.target.value)} />
-                    <button type="button" onClick={() => removeTier(i)} aria-label={`Remove tier ${i + 1}`} className="text-content-muted hover:text-red-500 p-1">
+                    <button type="button" onClick={() => removeTier(i)} aria-label={`Remove tier ${i + 1}`} className="text-content-muted hover:text-data-negative p-1">
                       <X size={14} />
                     </button>
                   </div>
@@ -288,7 +288,7 @@ export default function ZoneModal({ isOpen, onClose, zone, onSubmit, submitting 
             <button type="button" onClick={onClose} className="px-3 py-1.5 rounded-lg text-sm text-content-secondary hover:bg-bg-secondary">
               Cancel
             </button>
-            <button type="submit" disabled={submitting} className="px-3 py-1.5 rounded-lg text-sm bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-60">
+            <button type="submit" disabled={submitting} className="px-3 py-1.5 rounded-lg text-sm bg-accent text-white hover:bg-accent-hover disabled:opacity-60">
               {submitting ? 'Saving…' : (zone ? 'Save changes' : 'Create zone')}
             </button>
           </div>

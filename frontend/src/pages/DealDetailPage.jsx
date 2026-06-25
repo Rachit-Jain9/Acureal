@@ -491,7 +491,7 @@ export default function DealDetailPage() {
                 return (
                   <div
                     role="alert"
-                    className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                    className="rounded-md border border-hairline bg-premium-soft px-3 py-2 text-sm text-premium"
                   >
                     <span className="font-medium">Incoherent pair:</span> {v.reason}
                   </div>

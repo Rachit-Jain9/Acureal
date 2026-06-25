@@ -123,8 +123,8 @@ export default function SignoffsSection({ dealId, canEdit }) {
   if (isError) {
     return (
       <div className="text-center py-8">
-        <AlertCircle size={24} className="text-red-400 mx-auto mb-2" />
-        <p className="text-sm text-red-600 mb-2">Failed to load the sign-off board.</p>
+        <AlertCircle size={24} className="text-data-negative mx-auto mb-2" />
+        <p className="text-sm text-data-negative mb-2">Failed to load the sign-off board.</p>
         <button onClick={refetch} className="btn btn-secondary text-sm">Retry</button>
       </div>
     );
@@ -321,7 +321,7 @@ export default function SignoffsSection({ dealId, canEdit }) {
                           {isSigned && (
                             <BadgeCheck
                               size={14}
-                              className="text-green-500 shrink-0"
+                              className="text-data-positive shrink-0"
                               aria-label="Signed — verifies the matching K-RERA item"
                             />
                           )}
@@ -363,7 +363,7 @@ export default function SignoffsSection({ dealId, canEdit }) {
                         {canEdit && (
                           <button
                             onClick={() => handleDelete(item.id)}
-                            className="p-1 text-content-muted hover:text-red-500 transition-colors"
+                            className="p-1 text-content-muted hover:text-data-negative transition-colors"
                             aria-label="Remove sign-off"
                           >
                             <Trash2 size={13} />

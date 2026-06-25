@@ -55,10 +55,10 @@ const SUBPROCESSORS = [
 
 const Field = ({ label, children }) => (
   <div>
-    <dt className="text-[11px] uppercase tracking-[0.14em] text-stone-500 font-medium mb-1">
+    <dt className="text-[11px] uppercase tracking-[0.14em] text-content-muted font-medium mb-1">
       {label}
     </dt>
-    <dd className="text-stone-700 leading-relaxed">{children}</dd>
+    <dd className="text-content-secondary leading-relaxed">{children}</dd>
   </div>
 );
 
@@ -67,32 +67,32 @@ export default function SubprocessorsPage() {
   const navigate = useNavigate();
 
   return (
-    <div className="min-h-screen bg-stone-50 flex flex-col">
-      <header className="border-b border-stone-200 bg-white">
+    <div className="min-h-screen bg-bg-secondary flex flex-col">
+      <header className="border-b border-hairline bg-white">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <button
             type="button"
             onClick={() => (window.history.length > 1 ? navigate(-1) : navigate('/'))}
-            className="inline-flex items-center gap-1.5 text-sm text-stone-600 hover:text-stone-900 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c2410c]/40 rounded px-2 py-1"
+            className="inline-flex items-center gap-1.5 text-sm text-content-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#c2410c]/40 rounded px-2 py-1"
           >
             <ArrowLeft size={14} />
             Back
           </button>
-          <span className="font-serif text-lg font-semibold text-stone-900">
+          <span className="font-serif text-lg font-semibold text-content-primary">
             REDIP<span className="text-[#c2410c]">.</span>
           </span>
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 flex-1 w-full">
-        <div className="text-[11px] uppercase tracking-[0.14em] text-stone-500 mb-2 font-medium">
+        <div className="text-[11px] uppercase tracking-[0.14em] text-content-muted mb-2 font-medium">
           REDIP · Legal
         </div>
-        <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-stone-900 tracking-tight flex items-center gap-3">
+        <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-content-primary tracking-tight flex items-center gap-3">
           <Server size={26} className="text-[#c2410c] shrink-0" aria-hidden="true" />
           Sub-processors
         </h1>
-        <p className="text-sm text-stone-700 mt-3 leading-relaxed max-w-2xl">
+        <p className="text-sm text-content-secondary mt-3 leading-relaxed max-w-2xl">
           A sub-processor is a third-party service REDIP uses to deliver the platform. We
           keep this list current so customers and their reviewers can see exactly who
           processes data on REDIP's behalf, what each one handles, and where it runs.
@@ -112,9 +112,9 @@ export default function SubprocessorsPage() {
           {SUBPROCESSORS.map((s) => (
             <section
               key={s.name}
-              className="bg-white rounded-sm border border-stone-200 shadow-sm p-5"
+              className="bg-white rounded-sm border border-hairline shadow-sm p-5"
             >
-              <h2 className="font-serif text-base font-semibold text-stone-900 tracking-tight">
+              <h2 className="font-serif text-base font-semibold text-content-primary tracking-tight">
                 {s.name}
               </h2>
               <dl className="mt-3 grid sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
@@ -126,11 +126,11 @@ export default function SubprocessorsPage() {
           ))}
         </div>
 
-        <section className="bg-white rounded-sm border border-stone-200 shadow-sm p-5 mt-6">
-          <div className="text-[11px] uppercase tracking-[0.14em] text-stone-500 font-medium mb-1.5">
+        <section className="bg-white rounded-sm border border-hairline shadow-sm p-5 mt-6">
+          <div className="text-[11px] uppercase tracking-[0.14em] text-content-muted font-medium mb-1.5">
             Note on data residency
           </div>
-          <p className="text-sm text-stone-700 leading-relaxed">
+          <p className="text-sm text-content-secondary leading-relaxed">
             Account, deal, and document data is stored in India (Mumbai). AI processing
             is performed by US-based providers; only the specific text or document
             content required for a feature is transmitted, over an encrypted connection,
@@ -140,12 +140,12 @@ export default function SubprocessorsPage() {
           </p>
         </section>
 
-        <p className="text-xs text-stone-500 mt-6 leading-relaxed">
+        <p className="text-xs text-content-muted mt-6 leading-relaxed">
           Last updated: {LAST_UPDATED}. Material changes to this list are announced to
           customers in line with the Privacy Policy.
         </p>
 
-        <footer className="mt-12 pt-6 border-t border-stone-200 text-xs text-stone-500">
+        <footer className="mt-12 pt-6 border-t border-hairline text-xs text-content-muted">
           See also{' '}
           <a href="/terms" className="text-[#c2410c] underline underline-offset-2">
             Terms of Service

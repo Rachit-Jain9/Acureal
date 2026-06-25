@@ -276,7 +276,7 @@ export default function DealComparePage() {
                                 key={deal.id}
                                 className={`px-6 py-3 text-sm ${
                                   bestIndices.includes(index)
-                                    ? 'bg-emerald-50 font-semibold text-emerald-700'
+                                    ? 'bg-pos-soft font-semibold text-data-positive'
                                     : 'text-content-primary'
                                 }`}
                               >

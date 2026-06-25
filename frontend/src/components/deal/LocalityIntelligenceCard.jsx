@@ -174,17 +174,17 @@ export default function LocalityIntelligenceCard({ data }) {
               <Link
                 key={deal.deal_id}
                 to={`/dashboard/deals/${deal.deal_id}`}
-                className="group flex items-center justify-between gap-3 py-2 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded transition-colors"
+                className="group flex items-center justify-between gap-3 py-2 text-[12px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded transition-colors"
               >
                 <div className="min-w-0">
-                  <div className="text-content-primary font-medium truncate group-hover:text-primary-700 transition-colors" title={deal.deal_name}>
+                  <div className="text-content-primary font-medium truncate group-hover:text-accent transition-colors" title={deal.deal_name}>
                     {deal.deal_name || deal.property_name || 'Unnamed deal'}
                   </div>
                   <div className="text-[10px] text-content-muted mt-0.5">
                     {deal.stage ? deal.stage.replace(/_/g, ' ') : 'No stage'} · {formatRelative(deal.updated_at) || '—'}
                   </div>
                 </div>
-                <ArrowRight size={12} className="shrink-0 text-content-muted group-hover:text-primary-600 transition-colors" />
+                <ArrowRight size={12} className="shrink-0 text-content-muted group-hover:text-accent transition-colors" />
               </Link>
             ))}
           </div>

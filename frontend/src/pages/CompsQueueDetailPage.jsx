@@ -218,7 +218,7 @@ function CompField({ comp, setComp, field }) {
         className={clsx(
           'w-full px-2 py-1 text-xs border rounded bg-bg-elevated text-content-primary',
           'focus-visible:outline-none focus-visible:border-accent transition-colors',
-          missing ? 'border-amber-300' : 'border-hairline'
+          missing ? 'border-premium' : 'border-hairline'
         )}
       >
         <option value="">—</option>
@@ -251,7 +251,7 @@ function CompField({ comp, setComp, field }) {
         'w-full px-2 py-1 text-xs border rounded bg-bg-elevated text-content-primary',
         'focus-visible:outline-none focus-visible:border-accent transition-colors',
         isNumeric && 'tabular-nums text-right',
-        missing ? 'border-amber-300 bg-amber-50/40' : 'border-hairline'
+        missing ? 'border-premium bg-premium-soft' : 'border-hairline'
       )}
     />
   );
@@ -285,7 +285,7 @@ function CompsTable({ comps, setComps }) {
               {COL_GROUPS.flatMap((g) => g.fields).map((f) => (
                 <th key={f} className="px-2 py-2 text-left text-content-muted text-[10px] uppercase tracking-wider font-medium whitespace-nowrap">
                   {FIELD_LABELS[f] || f}
-                  {REQUIRED_FIELDS.includes(f) && <span className="ml-0.5 text-amber-600">*</span>}
+                  {REQUIRED_FIELDS.includes(f) && <span className="ml-0.5 text-premium">*</span>}
                 </th>
               ))}
               <th className="px-2 py-2 w-10" />
@@ -304,7 +304,7 @@ function CompsTable({ comps, setComps }) {
                   <button
                     type="button"
                     onClick={() => removeComp(i)}
-                    className="p-1 rounded text-content-muted hover:text-data-negative hover:bg-rose-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative/40"
+                    className="p-1 rounded text-content-muted hover:text-data-negative hover:bg-neg-soft transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative/40"
                     title="Remove this comp from the commit batch"
                   >
                     <Trash2 size={13} />
@@ -385,7 +385,7 @@ function RejectModal({ open, onClose, onConfirm, isSubmitting }) {
             type="button"
             onClick={() => onConfirm(reason.trim() || null)}
             disabled={isSubmitting}
-            className="px-3 py-1.5 text-sm bg-data-negative text-white rounded hover:bg-rose-700 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative/40"
+            className="px-3 py-1.5 text-sm bg-data-negative text-white rounded hover:bg-data-negative disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative/40"
           >
             {isSubmitting ? 'Rejecting…' : 'Reject'}
           </button>
@@ -545,7 +545,7 @@ export default function CompsQueueDetailPage() {
       />
 
       {row.status === 'committed' && row.committed_comp_ids?.length > 0 && (
-        <Card className="p-4 bg-emerald-50/40 border-emerald-200">
+        <Card className="p-4 bg-pos-soft border-hairline">
           <div className="flex items-start gap-3">
             <CheckCircle2 size={18} className="text-data-positive shrink-0 mt-0.5" />
             <div className="text-sm">
@@ -639,7 +639,7 @@ export default function CompsQueueDetailPage() {
                 <button
                   type="button"
                   onClick={() => setRejectOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-hairline rounded text-content-secondary hover:text-data-negative hover:border-rose-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative/40"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-hairline rounded text-content-secondary hover:text-data-negative hover:border-data-negative transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative/40"
                 >
                   <XCircle size={13} />
                   Reject
@@ -648,7 +648,7 @@ export default function CompsQueueDetailPage() {
                   type="button"
                   onClick={() => approveMut.mutate(id)}
                   disabled={approveMut.isPending || validComps.length === 0}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-emerald-600 text-white rounded hover:bg-emerald-700 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-data-positive text-white rounded hover:bg-data-positive transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                   title={validComps.length === 0 ? 'No valid comps to commit (required: project name, city, rate per sqft)' : `Commit ${validComps.length} comps to the database`}
                 >
                   <CheckCircle2 size={13} />

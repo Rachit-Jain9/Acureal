@@ -216,16 +216,16 @@ export default function InputForm({
   return (
     <form onSubmit={handleSubmit} className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
       <h2 className="text-base font-semibold text-content-primary mb-4 flex items-center gap-2">
-        <Calculator size={18} className="text-primary-600" />
+        <Calculator size={18} className="text-accent" />
         Model Inputs
       </h2>
       {modelAssetClass !== assetClass && (
-        <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+        <div className="mb-4 rounded-lg border border-hairline bg-accent-soft px-3 py-2 text-sm text-accent">
           This asset class currently underwrites on the {getFinancialModelLabel(assetClass)} model family.
         </div>
       )}
-      <div className="mb-4 bg-primary-50 border border-primary-100 rounded-lg p-3">
-        <label htmlFor="effectiveDate" className="text-sm font-medium text-primary-900 block mb-1">
+      <div className="mb-4 bg-accent-soft border border-hairline rounded-lg p-3">
+        <label htmlFor="effectiveDate" className="text-sm font-medium text-accent block mb-1">
           Effective Date
         </label>
         <input
@@ -236,7 +236,7 @@ export default function InputForm({
           onChange={handleChange}
           className="input w-full sm:w-auto"
         />
-        <p className="text-xs text-primary-700 mt-1">
+        <p className="text-xs text-accent mt-1">
           Cash flows, construction milestones, and hold period all anchor on this date.
         </p>
       </div>
@@ -258,14 +258,14 @@ export default function InputForm({
                 <button
                   type="button"
                   onClick={() => setHintOpen(hintOpen === field.name ? null : field.name)}
-                  className="text-xs text-content-muted hover:text-primary-600 shrink-0"
+                  className="text-xs text-content-muted hover:text-accent shrink-0"
                 >
                   ?
                 </button>
               )}
             </div>
             {hintOpen === field.name && field.hint && (
-              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1 mb-1">
+              <p className="text-xs text-premium bg-premium-soft border border-hairline rounded px-2 py-1 mb-1">
                 {field.hint}
               </p>
             )}

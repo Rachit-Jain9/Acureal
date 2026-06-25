@@ -93,7 +93,7 @@ export default function AIUsageWidget() {
       </p>
 
       {error && (
-        <div className="flex items-start gap-2 text-sm bg-rose-50 border border-rose-200 text-rose-900 rounded p-3 mb-4">
+        <div className="flex items-start gap-2 text-sm bg-neg-soft border border-hairline text-data-negative rounded p-3 mb-4">
           <AlertTriangle size={16} className="shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
@@ -202,8 +202,8 @@ export default function AIUsageWidget() {
                   <td className="px-3 py-2 text-content-primary">{row.doctype}</td>
                   <td className="px-3 py-2 text-content-secondary">{row.language}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatInt(row.calls)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-emerald-700">{formatInt(row.successes)}</td>
-                  <td className="px-3 py-2 text-right tabular-nums text-rose-700">{formatInt(row.errors)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-data-positive">{formatInt(row.successes)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-data-negative">{formatInt(row.errors)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatUsd(row.cost_usd)}</td>
                 </tr>
               ))}
@@ -216,7 +216,7 @@ export default function AIUsageWidget() {
 }
 
 function UsageTile({ label, value, foot, tone = 'neutral' }) {
-  const valueClass = tone === 'warn' ? 'text-amber-700' : 'text-content-primary';
+  const valueClass = tone === 'warn' ? 'text-premium' : 'text-content-primary';
   return (
     <div className="bg-bg-elevated border border-hairline rounded-lg p-3">
       <div className="text-eyebrow uppercase text-content-muted mb-1.5 font-medium">{label}</div>

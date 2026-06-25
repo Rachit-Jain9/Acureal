@@ -106,8 +106,8 @@ describe('DerivedValueChip', () => {
   it('applies the tone class (warn variant)', () => {
     render(<DerivedValueChip source="google" tone="warn" />);
     const chip = screen.getByTestId('derived-value-chip');
-    // tone="warn" maps to amber palette via TONE_CLASS
-    expect(chip.className).toMatch(/amber/);
+    // tone="warn" maps to the premium (amber) semantic token via TONE_CLASS
+    expect(chip.className).toMatch(/premium/);
   });
 
   it('toggles popover open/closed on repeated clicks', () => {

@@ -124,7 +124,7 @@ function ContextDrawer({ selected, onClose }) {
           type="button"
           onClick={onClose}
           aria-label="Close"
-          className="shrink-0 rounded p-1 text-content-muted transition-colors hover:bg-bg-secondary hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+          className="shrink-0 rounded p-1 text-content-muted transition-colors hover:bg-bg-secondary hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           <XIcon size={14} />
         </button>
@@ -142,7 +142,7 @@ function ContextDrawer({ selected, onClose }) {
           className={clsx(
             'rounded-md border px-2.5 py-2',
             inBounds
-              ? 'border-amber-200 bg-amber-50 text-amber-900'
+              ? 'border-hairline bg-premium-soft text-premium'
               : 'border-hairline bg-bg-secondary text-content-secondary',
           )}
         >
@@ -165,7 +165,7 @@ function ContextDrawer({ selected, onClose }) {
             )}
             <Link
               to={`/dashboard/deals/${selected.id}`}
-              className="inline-flex items-center gap-1.5 rounded-md bg-primary-600 px-2.5 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent px-2.5 py-1.5 text-[11px] font-semibold text-white transition-colors hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               Open deal — Zoning & Parcel <ExternalLink size={11} />
             </Link>
@@ -293,7 +293,7 @@ export default function MasterPlanExplorer() {
           focus:outline-none so the global :focus-visible outline doesn't clash). */}
       <form
         onSubmit={runSearch}
-        className="absolute left-3 top-3 z-[1000] flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-2 py-1.5 shadow-md transition-shadow duration-[80ms] ease-out focus-within:ring-2 focus-within:ring-primary-500/40"
+        className="absolute left-3 top-3 z-[1000] flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-2 py-1.5 shadow-md transition-shadow duration-[80ms] ease-out focus-within:ring-2 focus-within:ring-accent/40"
       >
         <Search size={13} className="text-content-muted" aria-hidden="true" />
         <input
@@ -306,7 +306,7 @@ export default function MasterPlanExplorer() {
         <button
           type="submit"
           disabled={searching || !search.trim()}
-          className="rounded bg-primary-600 px-2 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-primary-700 disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+          className="rounded bg-accent px-2 py-0.5 text-[11px] font-semibold text-white transition-colors hover:bg-accent-hover disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           {searching ? '…' : 'Go'}
         </button>
@@ -335,7 +335,7 @@ export default function MasterPlanExplorer() {
                     onClick={() => setBasemap(key)}
                     className={clsx(
                       'rounded px-2 py-0.5 text-[10px] font-medium transition-colors duration-150 ease-out',
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.97]',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.97]',
                       basemap === key ? 'bg-bg-elevated text-content-primary shadow-sm' : 'text-content-secondary hover:text-content-primary',
                     )}
                   >
@@ -358,8 +358,8 @@ export default function MasterPlanExplorer() {
                 aria-label="Toggle RMP 2015 overlay"
                 onClick={() => setMpEnabled((v) => !v)}
                 className={clsx(
-                  'relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
-                  mpEnabled ? 'bg-primary-600' : 'bg-bg-secondary border border-hairline-strong',
+                  'relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                  mpEnabled ? 'bg-accent' : 'bg-bg-secondary border border-hairline-strong',
                 )}
               >
                 <span className={clsx('absolute top-0.5 h-3 w-3 rounded-full bg-bg-elevated shadow-sm transition-transform duration-150 ease-out', mpEnabled ? 'translate-x-3.5' : 'translate-x-0.5')} />
@@ -377,7 +377,7 @@ export default function MasterPlanExplorer() {
                   value={mpOpacity}
                   aria-label="Overlay opacity"
                   onChange={(e) => setMpOpacity(Number(e.target.value))}
-                  className="h-1 flex-1 cursor-pointer accent-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+                  className="h-1 flex-1 cursor-pointer accent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 />
                 <span className="w-8 shrink-0 text-right text-[10px] font-medium tabular-nums text-content-muted">
                   {Math.round(mpOpacity * 100)}%
@@ -393,7 +393,7 @@ export default function MasterPlanExplorer() {
             <button
               type="button"
               onClick={() => setFlyTarget({ lat: BENGALURU_CENTER[0], lng: BENGALURU_CENTER[1], zoom: EXPLORER_ZOOM, t: Date.now() })}
-              className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-bg-secondary px-2 py-1 text-[10px] font-medium text-content-secondary transition-colors hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+              className="inline-flex items-center gap-1.5 rounded-md border border-hairline bg-bg-secondary px-2 py-1 text-[10px] font-medium text-content-secondary transition-colors hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               <Crosshair size={11} /> Recenter on Bengaluru
             </button>

@@ -64,10 +64,10 @@ export default function AuditTrailChip({ dealId }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-hairline bg-bg-elevated text-xs text-content-secondary hover:border-emerald-200 hover:text-content-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border border-hairline bg-bg-elevated text-xs text-content-secondary hover:border-hairline-strong hover:text-content-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-positive/40"
         aria-label="Open signed audit trail"
       >
-        <ShieldCheck size={12} className="text-emerald-600 shrink-0" />
+        <ShieldCheck size={12} className="text-data-positive shrink-0" />
         <span className="font-medium">Audit signed</span>
         <span className="text-content-muted">·</span>
         <span className="font-mono text-[10px] tracking-tight">HMAC-SHA256</span>

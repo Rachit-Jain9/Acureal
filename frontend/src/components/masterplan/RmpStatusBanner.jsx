@@ -26,9 +26,9 @@ export default function RmpStatusBanner({ className = '', planVersion = null, pl
     return (
       <div
         role="note"
-        className={`flex items-start gap-2 rounded-md border border-emerald-500/30 border-l-4 border-l-emerald-500 bg-emerald-500/10 px-3 py-2 text-[11px] leading-relaxed text-content-secondary ${className}`}
+        className={`flex items-start gap-2 rounded-md border border-emerald-500/30 border-l-4 border-l-data-positive bg-emerald-500/10 px-3 py-2 text-[11px] leading-relaxed text-content-secondary ${className}`}
       >
-        <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-emerald-600" aria-hidden="true" />
+        <CheckCircle2 size={13} className="mt-0.5 shrink-0 text-data-positive" aria-hidden="true" />
         <span>
           <span className="font-semibold text-content-primary">Operative plan{label ? `: ${label}` : ''}.</span>{' '}
           {detail}
@@ -41,9 +41,9 @@ export default function RmpStatusBanner({ className = '', planVersion = null, pl
   return (
     <div
       role="note"
-      className={`flex items-start gap-2 rounded-md border border-amber-500/30 border-l-4 border-l-amber-500 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-content-secondary ${className}`}
+      className={`flex items-start gap-2 rounded-md border border-amber-500/30 border-l-4 border-l-premium bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-content-secondary ${className}`}
     >
-      <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+      <AlertTriangle size={13} className="mt-0.5 shrink-0 text-premium" aria-hidden="true" />
       <span>
         <span className="font-semibold text-content-primary">RMP 2031 is a draft — never legally notified.</span>{' '}
         It was placed for public objection in 2017 and not adopted. The last notified master plan is{' '}

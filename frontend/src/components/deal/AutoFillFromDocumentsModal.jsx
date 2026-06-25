@@ -55,8 +55,8 @@ const formatValue = (value, valueType) => {
 };
 
 const BAND_PILL = {
-  high:   'bg-emerald-50 text-emerald-700 border-emerald-200',
-  medium: 'bg-amber-50 text-amber-800 border-amber-200',
+  high:   'bg-pos-soft text-data-positive border-hairline',
+  medium: 'bg-premium-soft text-premium border-hairline',
   low:    'bg-bg-secondary text-content-secondary border-hairline',
 };
 
@@ -244,9 +244,9 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
         </div>
 
         {/* Mandatory AI disclosure (CLAUDE.md hard rule) */}
-        <div className="px-6 py-2.5 bg-amber-50 border-b border-amber-200 flex items-start gap-2 text-xs">
-          <AlertTriangle size={14} className="text-amber-700 mt-0.5 flex-shrink-0" />
-          <p className="text-amber-900">
+        <div className="px-6 py-2.5 bg-premium-soft border-b border-hairline flex items-start gap-2 text-xs">
+          <AlertTriangle size={14} className="text-premium mt-0.5 flex-shrink-0" />
+          <p className="text-premium">
             <span className="font-semibold">AI-assisted — requires human review.</span>{' '}
             Each value was extracted from a document by AI. Check each one — edit it inline if it is wrong — before applying. The system records who applied what, and whether each value was kept or corrected.
           </p>
@@ -323,7 +323,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                       key={c.canonicalKey}
                       className={clsx(
                         'px-6 py-3 grid grid-cols-12 gap-3 items-start hover:bg-paper-200/40 transition-colors',
-                        isApproved && 'bg-emerald-50/30',
+                        isApproved && 'bg-pos-soft',
                       )}
                     >
                       {/* Checkbox */}
@@ -354,7 +354,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                         <p className="text-[11px] text-content-tertiary mt-0.5 break-words">
                           → {c.spec.table}.{c.spec.column}
                           {c.spec.transform && (
-                            <span className="ml-1 text-amber-700">· transform: {c.spec.transform}</span>
+                            <span className="ml-1 text-premium">· transform: {c.spec.transform}</span>
                           )}
                         </p>
                       </div>
@@ -371,7 +371,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                         <div className="text-[10px] uppercase tracking-wider text-content-tertiary mb-0.5 flex items-center gap-1.5">
                           Proposed
                           {edited && <span className="text-accent font-semibold">· edited</span>}
-                          {willOverwrite && <span className="text-amber-700 font-semibold">· overwrites</span>}
+                          {willOverwrite && <span className="text-premium font-semibold">· overwrites</span>}
                         </div>
                         <div className="flex items-center gap-1">
                           <input
@@ -457,7 +457,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
               type="button"
               onClick={handleApply}
               disabled={isSubmitting || approvedCount === 0}
-              className="px-3 py-1.5 text-sm text-white bg-accent hover:bg-accent-700 rounded inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-3 py-1.5 text-sm text-content-inverse bg-accent hover:bg-accent-700 rounded inline-flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <CheckCircle2 size={14} />
               {isSubmitting ? 'Applying…' : `Apply ${approvedCount || ''} field${approvedCount === 1 ? '' : 's'}`}

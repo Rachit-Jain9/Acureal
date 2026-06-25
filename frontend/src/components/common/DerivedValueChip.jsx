@@ -34,8 +34,8 @@ import { Info } from 'lucide-react';
 
 const TONE_CLASS = {
   info: 'bg-bg-secondary border-hairline text-content-secondary hover:bg-bg-elevated hover:border-hairline-strong',
-  success: 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-emerald-100',
-  warn: 'bg-amber-50 border-amber-200 text-amber-900 hover:bg-amber-100',
+  success: 'bg-pos-soft border-hairline text-data-positive hover:bg-pos-soft',
+  warn: 'bg-premium-soft border-hairline text-premium hover:bg-premium-soft',
   neutral: 'bg-bg-secondary border-hairline text-content-muted hover:bg-bg-elevated',
 };
 
@@ -115,7 +115,7 @@ export default function DerivedValueChip({
         className={clsx(
           'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider border',
           'transition-colors duration-150 ease-out',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
           'active:scale-[0.97]',
           TONE_CLASS[tone] || TONE_CLASS.info,
         )}

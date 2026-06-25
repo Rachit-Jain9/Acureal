@@ -73,7 +73,7 @@ export default function JDAWaterfallPanel({ financials, deal }) {
         className="w-full flex items-center justify-between p-5 text-left"
       >
         <div className="flex items-center gap-2">
-          <GitFork size={16} className="text-primary-600" />
+          <GitFork size={16} className="text-accent" />
           <span className="text-sm font-semibold text-content-primary">JDA / Development Agreement Waterfall</span>
           {deal?.deal_structure && ['jda', 'area_share', 'revenue_share'].includes(deal.deal_structure) && (
             <Badge tone="info">Active structure</Badge>
@@ -196,10 +196,10 @@ export default function JDAWaterfallPanel({ financials, deal }) {
                           <td className="px-3 py-2.5 font-medium text-content-primary">{row.party}</td>
                           <td className="px-3 py-2.5 text-content-secondary">{row.label}</td>
                           <td className="px-3 py-2.5 text-right text-content-primary">{fmtCr(row.grossCr)}</td>
-                          <td className="px-3 py-2.5 text-right text-red-600">
+                          <td className="px-3 py-2.5 text-right text-data-negative">
                             {row.costCr > 0 ? `(${fmtCr(row.costCr)})` : '—'}
                           </td>
-                          <td className={`px-3 py-2.5 text-right font-semibold ${row.netCr != null && row.netCr >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                          <td className={`px-3 py-2.5 text-right font-semibold ${row.netCr != null && row.netCr >= 0 ? 'text-data-positive' : 'text-data-negative'}`}>
                             {fmtCr(row.netCr)}
                           </td>
                           <td className="px-3 py-2.5 text-right text-content-secondary">
@@ -210,8 +210,8 @@ export default function JDAWaterfallPanel({ financials, deal }) {
                       <tr className="bg-bg-secondary font-semibold">
                         <td colSpan={2} className="px-3 py-2.5 text-content-secondary">Project Total</td>
                         <td className="px-3 py-2.5 text-right">{fmtCr(result.summary.totalRevenueCr)}</td>
-                        <td className="px-3 py-2.5 text-right text-red-600">({fmtCr(result.summary.devCostCr)})</td>
-                        <td className="px-3 py-2.5 text-right text-green-700">{fmtCr(result.summary.projectProfitCr)}</td>
+                        <td className="px-3 py-2.5 text-right text-data-negative">({fmtCr(result.summary.devCostCr)})</td>
+                        <td className="px-3 py-2.5 text-right text-data-positive">{fmtCr(result.summary.projectProfitCr)}</td>
                         <td className="px-3 py-2.5 text-right">{fmtPct(result.summary.projectMarginPct)}</td>
                       </tr>
                     </tbody>

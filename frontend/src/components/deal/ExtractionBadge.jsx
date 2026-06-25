@@ -11,9 +11,9 @@ export default function ExtractionBadge({ source, align = 'start', compact = fal
   const tier = tierFor(confidence);
 
   const tone = tier === 'high'
-    ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
+    ? 'bg-pos-soft text-data-positive border-hairline'
     : tier === 'mid'
-    ? 'bg-amber-50 text-amber-800 border-amber-100'
+    ? 'bg-premium-soft text-premium border-hairline'
     : 'bg-bg-secondary text-content-secondary border-hairline';
 
   const Icon = from_corrections ? UserCheck2 : FileScan;

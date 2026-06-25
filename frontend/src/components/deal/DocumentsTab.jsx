@@ -40,11 +40,11 @@ import { formatDate } from '../../utils/format';
 import { downloadAxiosResponse } from '../../utils/download';
 
 const CATEGORIES = [
-  { value: 'om', label: 'OM / Offering Memo', color: 'bg-blue-100 text-blue-700' },
-  { value: 'financials', label: 'Financials', color: 'bg-green-100 text-green-700' },
-  { value: 'legal', label: 'Legal', color: 'bg-amber-100 text-amber-700' },
-  { value: 'technical', label: 'Technical', color: 'bg-cyan-100 text-cyan-700' },
-  { value: 'approvals', label: 'Approvals', color: 'bg-purple-100 text-purple-700' },
+  { value: 'om', label: 'OM / Offering Memo', color: 'bg-accent-soft text-accent' },
+  { value: 'financials', label: 'Financials', color: 'bg-pos-soft text-data-positive' },
+  { value: 'legal', label: 'Legal', color: 'bg-premium-soft text-premium' },
+  { value: 'technical', label: 'Technical', color: 'bg-accent-soft text-accent' },
+  { value: 'approvals', label: 'Approvals', color: 'bg-accent-soft text-accent' },
   { value: 'other', label: 'Other', color: 'bg-bg-secondary text-content-secondary' },
 ];
 
@@ -229,8 +229,8 @@ export default function DocumentsTab() {
   if (isError) {
     return (
       <div className="card-editorial text-center py-12">
-        <AlertCircle size={28} className="text-red-400 mx-auto mb-2" />
-        <p className="text-sm text-red-600 mb-3">Failed to load documents.</p>
+        <AlertCircle size={28} className="text-data-negative mx-auto mb-2" />
+        <p className="text-sm text-data-negative mb-3">Failed to load documents.</p>
         <button onClick={refetch} className="btn btn-secondary text-sm">
           Retry
         </button>
@@ -331,9 +331,9 @@ export default function DocumentsTab() {
                 type="file"
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
                 onChange={handleFileChange}
-                className="block w-full text-sm text-content-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
+                className="block w-full text-sm text-content-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-accent-soft file:text-accent hover:file:bg-accent-soft cursor-pointer"
               />
-              {fileError && <p className="text-xs text-red-600 mt-1">{fileError}</p>}
+              {fileError && <p className="text-xs text-data-negative mt-1">{fileError}</p>}
               {file && !fileError && (
                 <p className="text-xs text-content-secondary mt-1">
                   {file.name} · {formatBytes(file.size)}
@@ -412,7 +412,7 @@ export default function DocumentsTab() {
                           {formatDate(doc.uploaded_at || doc.created_at)}
                           {doc.description && ` · ${doc.description}`}
                           {extraction && extraction.has_data && (
-                            <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-emerald-100 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">
+                            <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-hairline bg-pos-soft px-1.5 py-0.5 text-[10px] font-medium text-data-positive">
                               <CheckCircle2 size={10} />
                               {formatDocType(extraction.doc_type)}
                             </span>
@@ -428,7 +428,7 @@ export default function DocumentsTab() {
                           )}
                           {!extraction && failure?.status === 'failed' && (
                             <span
-                              className="ml-2 inline-flex items-center gap-1 rounded-full border border-red-100 bg-red-50 px-1.5 py-0.5 text-[10px] font-medium text-red-700"
+                              className="ml-2 inline-flex items-center gap-1 rounded-full border border-hairline bg-neg-soft px-1.5 py-0.5 text-[10px] font-medium text-data-negative"
                               title={failure.error_message || 'Extraction failed. Use the extract button to retry.'}
                             >
                               <AlertCircle size={10} />
@@ -436,7 +436,7 @@ export default function DocumentsTab() {
                             </span>
                           )}
                           {!extraction && failure?.status === 'processing' && (
-                            <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-amber-100 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
+                            <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-hairline bg-premium-soft px-1.5 py-0.5 text-[10px] font-medium text-premium">
                               <Loader2 size={10} className="animate-spin motion-reduce:animate-none" />
                               Extracting…
                             </span>
@@ -448,7 +448,7 @@ export default function DocumentsTab() {
                           <button
                             onClick={() => handleExtract(doc)}
                             disabled={isExtracting || extractingDocId !== null}
-                            className="p-1.5 text-content-muted hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors disabled:opacity-50"
+                            className="p-1.5 text-content-muted hover:text-accent hover:bg-accent-soft rounded-lg transition-colors disabled:opacity-50"
                             title={extraction ? 'Re-run extraction' : failure ? 'Retry extraction' : 'Extract evidence'}
                           >
                             {isExtracting ? (
@@ -461,7 +461,7 @@ export default function DocumentsTab() {
                         <button
                           onClick={() => handleDownload(doc)}
                           disabled={downloading === doc.id}
-                          className="p-1.5 text-content-muted hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                          className="p-1.5 text-content-muted hover:text-accent hover:bg-accent-soft rounded-lg transition-colors"
                           title="Download"
                         >
                           {downloading === doc.id ? (
@@ -500,7 +500,7 @@ export default function DocumentsTab() {
                           <button
                             onClick={() => handleDelete(doc.id)}
                             disabled={deleteDoc.isPending}
-                            className="p-1.5 text-content-muted hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            className="p-1.5 text-content-muted hover:text-data-negative hover:bg-neg-soft rounded-lg transition-colors"
                             title="Delete"
                           >
                             <Trash2 size={15} />

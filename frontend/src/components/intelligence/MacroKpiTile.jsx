@@ -8,8 +8,8 @@
  */
 
 export const TREND_TONE = {
-  up: 'text-emerald-600',
-  down: 'text-red-500',
+  up: 'text-data-positive',
+  down: 'text-data-negative',
   flat: 'text-content-muted',
 };
 

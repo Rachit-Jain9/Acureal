@@ -52,10 +52,10 @@ const ZONING_OPTIONS = [
 ];
 
 const GEOCODE_STATUS_META = {
-  verified: { label: 'Verified', cls: 'bg-emerald-100 text-emerald-700' },
-  manual: { label: 'Manual', cls: 'bg-blue-100 text-blue-700' },
-  approximate: { label: 'Approximate (city)', cls: 'bg-amber-100 text-amber-700' },
-  failed: { label: 'Failed', cls: 'bg-red-100 text-red-700' },
+  verified: { label: 'Verified', cls: 'bg-pos-soft text-data-positive' },
+  manual: { label: 'Manual', cls: 'bg-accent-soft text-accent' },
+  approximate: { label: 'Approximate (city)', cls: 'bg-premium-soft text-premium' },
+  failed: { label: 'Failed', cls: 'bg-neg-soft text-data-negative' },
   pending: { label: 'Pending', cls: 'bg-bg-secondary text-content-secondary' },
   insufficient_data: { label: 'Insufficient data', cls: 'bg-bg-secondary text-content-secondary' },
 };
@@ -310,7 +310,7 @@ export default function PropertyDetailPage() {
             <SectionHeader size="sm" title="At a Glance" />
             <div className="space-y-4">
               <div className="flex items-start gap-3">
-                <div className="shrink-0 rounded-lg bg-primary-50 p-2 text-primary-600">
+                <div className="shrink-0 rounded-lg bg-accent-soft p-2 text-accent">
                   <MapPin size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -333,7 +333,7 @@ export default function PropertyDetailPage() {
                       type="button"
                       disabled={geocodeMutation.isPending}
                       onClick={() => geocodeMutation.mutate(id)}
-                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-700 disabled:opacity-50"
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent disabled:opacity-50"
                     >
                       <RefreshCw size={12} className={geocodeMutation.isPending ? 'animate-spin' : ''} />
                       {geocodeMutation.isPending ? 'Re-geocoding...' : 'Re-geocode from address'}
@@ -343,7 +343,7 @@ export default function PropertyDetailPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+                <div className="rounded-lg bg-accent-soft p-2 text-accent">
                   <Ruler size={18} />
                 </div>
                 <div>
@@ -353,7 +353,7 @@ export default function PropertyDetailPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+                <div className="rounded-lg bg-accent-soft p-2 text-accent">
                   <IndianRupee size={18} />
                 </div>
                 <div>
@@ -365,7 +365,7 @@ export default function PropertyDetailPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="rounded-lg bg-primary-50 p-2 text-primary-600">
+                <div className="rounded-lg bg-accent-soft p-2 text-accent">
                   <Building2 size={18} />
                 </div>
                 <div>
@@ -379,7 +379,7 @@ export default function PropertyDetailPage() {
           <div className="rounded-2xl border border-hairline-strong bg-bg-secondary p-4/80">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">Location Confidence</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">Location Confidence</p>
                 <h3 className="mt-2 text-base font-semibold text-content-primary">
                   {property.geocode_status === 'manual'
                     ? 'Manual coordinates override geocoding'
@@ -409,7 +409,7 @@ export default function PropertyDetailPage() {
                       href={googleMapsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 font-medium text-primary-600 hover:text-primary-700"
+                      className="inline-flex items-center gap-1 font-medium text-accent hover:text-accent"
                     >
                       Open map
                       <ExternalLink size={13} />

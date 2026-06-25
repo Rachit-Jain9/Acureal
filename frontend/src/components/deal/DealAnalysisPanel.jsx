@@ -158,10 +158,10 @@ export default function DealAnalysisPanel({ dealId }) {
               highCount > 0 ? 'danger' : mediumCount > 0 ? 'warn' : 'info';
             const palette =
               tone === 'danger'
-                ? { bg: 'bg-rose-50',  border: 'border-rose-200',  text: 'text-rose-900',  icon: 'text-rose-600' }
+                ? { bg: 'bg-neg-soft',  border: 'border-hairline',  text: 'text-data-negative',  icon: 'text-data-negative' }
                 : tone === 'warn'
-                ? { bg: 'bg-amber-50', border: 'border-amber-200', text: 'text-amber-900', icon: 'text-amber-600' }
-                : { bg: 'bg-sky-50',   border: 'border-sky-200',   text: 'text-sky-900',   icon: 'text-sky-600' };
+                ? { bg: 'bg-premium-soft', border: 'border-hairline', text: 'text-premium', icon: 'text-premium' }
+                : { bg: 'bg-accent-soft',   border: 'border-hairline',   text: 'text-accent',   icon: 'text-accent' };
             return (
               <div className={clsx('mt-3 border rounded-md', palette.bg, palette.border)}>
                 <button

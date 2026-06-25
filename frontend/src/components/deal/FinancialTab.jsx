@@ -21,9 +21,9 @@ function MetricCard({ label, value, sub, highlight }) {
       <p
         className={clsx(
           'text-lg font-bold',
-          highlight === 'green' && 'text-green-600',
-          highlight === 'amber' && 'text-amber-600',
-          highlight === 'red' && 'text-red-600',
+          highlight === 'green' && 'text-data-positive',
+          highlight === 'amber' && 'text-premium',
+          highlight === 'red' && 'text-data-negative',
           !highlight && 'text-content-primary'
         )}
       >

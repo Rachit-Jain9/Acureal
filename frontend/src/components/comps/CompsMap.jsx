@@ -65,7 +65,7 @@ function MarkerDot({ comp, selected, onClick, theme }) {
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       aria-label={`${comp.project_name} — ${formatRate(comp.rate_per_sqft)}`}
-      className="absolute group cursor-pointer transition-transform duration-150 ease-out hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60 rounded-full"
+      className="absolute group cursor-pointer transition-transform duration-150 ease-out hover:scale-110 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 rounded-full"
       style={{
         // OverlayView renders us at a div whose origin matches lat/lng;
         // subtract half the visual size so the geometric centre lands at
@@ -136,7 +136,7 @@ function ClusterMarker({ count, dominantPalette, expanded, onClick, theme }) {
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       aria-label={`${count} comparables at this location`}
       aria-expanded={expanded}
-      className="absolute group cursor-pointer transition-transform duration-200 ease-out hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60 rounded-full"
+      className="absolute group cursor-pointer transition-transform duration-200 ease-out hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 rounded-full"
       style={{
         transform: `translate(-${ringSize / 2}px, -${ringSize / 2}px)`,
         width: ringSize,
@@ -225,7 +225,7 @@ function ClusterListPopup({ comps, selectedCompId, onSelect, onClose }) {
                   className={[
                     'w-full text-left px-3 py-2 transition-colors flex items-start gap-2',
                     isSel
-                      ? 'bg-primary-50/60 hover:bg-primary-50 ring-1 ring-inset ring-primary-300/40'
+                      ? 'bg-accent-soft hover:bg-accent-soft ring-1 ring-inset ring-accent/40'
                       : 'hover:bg-bg-secondary',
                   ].join(' ')}
                 >
@@ -529,8 +529,8 @@ export default function CompsMap({
         role="status"
       >
         <div className="text-center max-w-sm px-6">
-          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-amber-50 border border-amber-200 mb-2.5">
-            <AlertTriangle size={16} className="text-amber-600" />
+          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-premium-soft border border-hairline mb-2.5">
+            <AlertTriangle size={16} className="text-premium" />
           </span>
           <p className="text-sm font-semibold text-content-primary mb-1">Map key not configured</p>
           <p className="text-xs text-content-secondary leading-relaxed">
@@ -562,15 +562,15 @@ export default function CompsMap({
         role="status"
       >
         <div className="text-center max-w-md px-6 py-5">
-          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-rose-50 border border-rose-200 mb-2.5">
-            <AlertTriangle size={16} className="text-rose-600" />
+          <span className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-neg-soft border border-hairline mb-2.5">
+            <AlertTriangle size={16} className="text-data-negative" />
           </span>
           <p className="text-sm font-semibold text-content-primary mb-1.5">Could not load Google Maps</p>
 
           {realErrorMsg && (
             <div className="mt-2 mb-2.5 text-left">
               <p className="text-[10px] uppercase tracking-[0.1em] font-semibold text-content-muted mb-1">Error</p>
-              <pre className="bg-bg-secondary border border-hairline rounded px-2.5 py-1.5 text-[11px] text-rose-700 whitespace-pre-wrap leading-snug font-mono break-words">
+              <pre className="bg-bg-secondary border border-hairline rounded px-2.5 py-1.5 text-[11px] text-data-negative whitespace-pre-wrap leading-snug font-mono break-words">
                 {realErrorMsg}
               </pre>
             </div>
@@ -578,7 +578,7 @@ export default function CompsMap({
 
           {authFailure?.host && (
             <p className="mb-2 text-[11px] text-content-muted">
-              Rejected host: <code className="bg-bg-secondary px-1 py-0.5 rounded text-rose-700">{authFailure.host}</code>
+              Rejected host: <code className="bg-bg-secondary px-1 py-0.5 rounded text-data-negative">{authFailure.host}</code>
             </p>
           )}
 
@@ -724,7 +724,7 @@ export default function CompsMap({
           ))}
         </ul>
         {ungeocodedCount > 0 && (
-          <p className="mt-1.5 pt-1.5 border-t border-hairline text-[10px] text-amber-700 flex items-center gap-1">
+          <p className="mt-1.5 pt-1.5 border-t border-hairline text-[10px] text-premium flex items-center gap-1">
             <MapPin size={10} />
             <span className="tabular-nums">{ungeocodedCount}</span> row{ungeocodedCount === 1 ? '' : 's'} not geocoded
           </p>
@@ -743,18 +743,18 @@ export default function CompsMap({
         <div
           className={[
             'absolute bottom-3 left-3 z-[5] max-w-[260px] rounded-editorial border bg-bg-elevated/95 backdrop-blur px-3 py-2 shadow-editorial transition-all duration-150 ease-out',
-            selectedCompIsMapped ? 'border-primary-200' : 'border-amber-200',
+            selectedCompIsMapped ? 'border-accent' : 'border-hairline',
           ].join(' ')}
           role="status"
           aria-live="polite"
         >
           <div className="flex items-center gap-1.5 mb-1">
             {selectedCompIsMapped ? (
-              <Building2 size={12} className="text-primary-600" />
+              <Building2 size={12} className="text-accent" />
             ) : (
-              <AlertTriangle size={12} className="text-amber-600" />
+              <AlertTriangle size={12} className="text-premium" />
             )}
-            <p className={`text-[10px] uppercase tracking-[0.12em] font-semibold ${selectedCompIsMapped ? 'text-primary-700' : 'text-amber-700'}`}>
+            <p className={`text-[10px] uppercase tracking-[0.12em] font-semibold ${selectedCompIsMapped ? 'text-accent' : 'text-premium'}`}>
               {selectedCompIsMapped ? 'Selected' : 'Selected · off-map'}
             </p>
           </div>
@@ -766,7 +766,7 @@ export default function CompsMap({
             {selectedComp.locality && <span> · {selectedComp.locality}</span>}
           </p>
           {!selectedCompIsMapped && (
-            <p className="mt-1 pt-1 border-t border-amber-100 text-[10px] text-amber-700 leading-snug">
+            <p className="mt-1 pt-1 border-t border-hairline text-[10px] text-premium leading-snug">
               No coordinates on file for this row — it appears in the table but not on the map.
             </p>
           )}

@@ -425,7 +425,7 @@ export default function ScenarioComparison({ assetClass, baseInputs, baseKpis, o
       </div>
 
       {error ? (
-        <div className="px-4 py-3 text-xs text-data-negative bg-rose-50 border-t border-rose-200">
+        <div className="px-4 py-3 text-xs text-data-negative bg-neg-soft border-t border-hairline">
           {error}
         </div>
       ) : (

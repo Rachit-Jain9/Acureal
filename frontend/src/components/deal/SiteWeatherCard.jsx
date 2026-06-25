@@ -60,9 +60,9 @@ export default function SiteWeatherCard({ lat, lng, city }) {
       )}
 
       {isError && (
-        <div className="flex items-start gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-700 rounded-lg px-3 py-2.5">
-          <AlertCircle size={14} className="text-amber-500 flex-shrink-0 mt-0.5" />
-          <p className="text-xs text-amber-800 dark:text-amber-300">
+        <div className="flex items-start gap-2 bg-premium-soft dark:bg-amber-900/20 border border-hairline dark:border-hairline rounded-lg px-3 py-2.5">
+          <AlertCircle size={14} className="text-premium flex-shrink-0 mt-0.5" />
+          <p className="text-xs text-premium dark:text-premium">
             Weather data unavailable — the Open-Meteo feed may be rate-limited or offline. This does not block deal work.
           </p>
         </div>
@@ -91,21 +91,21 @@ export default function SiteWeatherCard({ lat, lng, city }) {
                 label="Avg High (7d)"
                 value={`${avgHigh}°C`}
                 hint={`Low ${avgLow}°C`}
-                accent="text-orange-600"
+                accent="text-premium"
               />
               <Stat
                 icon={Droplets}
                 label="Rain (7d total)"
                 value={`${totalRain} mm`}
                 hint={heavyRainDays > 0 ? `${heavyRainDays} heavy-rain day${heavyRainDays > 1 ? 's' : ''}` : 'Light rainfall'}
-                accent="text-sky-600"
+                accent="text-accent"
               />
               <Stat
                 icon={Wind}
                 label="Peak Wind"
                 value={`${maxWind} km/h`}
                 hint="Max daily gust"
-                accent="text-indigo-600"
+                accent="text-accent"
               />
               <Stat
                 icon={Cloud}
@@ -138,7 +138,7 @@ export default function SiteWeatherCard({ lat, lng, city }) {
                         <td className="px-3 py-2 text-right text-content-secondary tabular-nums">
                           {tMax[i]?.toFixed(0)}° / {tMin[i]?.toFixed(0)}°
                         </td>
-                        <td className={`px-3 py-2 text-right tabular-nums ${isHeavy ? 'text-red-600 dark:text-red-400 font-semibold' : 'text-content-secondary'}`}>
+                        <td className={`px-3 py-2 text-right tabular-nums ${isHeavy ? 'text-data-negative dark:text-data-negative font-semibold' : 'text-content-secondary'}`}>
                           {rainMm.toFixed(1)} mm
                         </td>
                         <td className="px-3 py-2 text-right text-content-secondary tabular-nums">

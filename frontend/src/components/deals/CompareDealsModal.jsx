@@ -87,10 +87,10 @@ const STAGE_TONE = {
 };
 
 const TONE_CLASS = {
-  green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  sky: 'bg-sky-50 text-sky-700 border-sky-200',
-  amber: 'bg-amber-50 text-amber-700 border-amber-200',
-  rose: 'bg-rose-50 text-rose-700 border-rose-200',
+  green: 'bg-pos-soft text-data-positive border-hairline',
+  sky: 'bg-accent-soft text-accent border-hairline',
+  amber: 'bg-premium-soft text-premium border-hairline',
+  rose: 'bg-neg-soft text-data-negative border-hairline',
   slate: 'bg-bg-secondary text-content-secondary border-hairline',
 };
 
@@ -300,7 +300,7 @@ export default function CompareDealsModal({ open, dealIds, onClose }) {
           )}
 
           {!loading && errored && (
-            <div className="px-5 py-10 text-center text-sm text-rose-700">
+            <div className="px-5 py-10 text-center text-sm text-data-negative">
               <AlertTriangle className="inline-block mr-1 -mt-0.5" size={14} />
               One or more deals failed to load. Close and retry.
             </div>
@@ -475,10 +475,10 @@ export default function CompareDealsModal({ open, dealIds, onClose }) {
                   renderCell={(s) => {
                     if (!s) return <span className="text-content-muted">—</span>;
                     if (s.dd_breakers_open === 0) {
-                      return <span className="text-xs text-emerald-700 inline-flex items-center gap-1"><CheckCircle2 size={12} />None</span>;
+                      return <span className="text-xs text-data-positive inline-flex items-center gap-1"><CheckCircle2 size={12} />None</span>;
                     }
                     return (
-                      <span className="text-xs text-rose-700 inline-flex items-center gap-1">
+                      <span className="text-xs text-data-negative inline-flex items-center gap-1">
                         <AlertTriangle size={12} />
                         {s.dd_breakers_open}
                       </span>
@@ -534,7 +534,7 @@ export default function CompareDealsModal({ open, dealIds, onClose }) {
                   label="Top gap"
                   values={signals.map((s) => s?.ic_top_gap || null)}
                   renderCell={(v) => {
-                    if (!v) return <span className="text-emerald-700 text-xs inline-flex items-center gap-1"><CheckCircle2 size={12} />No blocker</span>;
+                    if (!v) return <span className="text-data-positive text-xs inline-flex items-center gap-1"><CheckCircle2 size={12} />No blocker</span>;
                     return <span className="text-xs text-content-secondary leading-snug">{v}</span>;
                   }}
                 />

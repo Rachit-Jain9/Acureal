@@ -12,7 +12,7 @@ export default function MissingInputsCard({ missing, panelLabel, onEditInputs })
           <button
             type="button"
             onClick={onEditInputs}
-            className="text-xs font-medium text-amber-900 hover:text-amber-950 underline underline-offset-2"
+            className="text-xs font-medium text-premium hover:text-premium underline underline-offset-2"
           >
             Edit financial inputs
           </button>

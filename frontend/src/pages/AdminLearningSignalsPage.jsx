@@ -93,9 +93,9 @@ const humanTopic = (t) =>
 function KpiStat({ label, value, sub, icon: Icon, tone = 'neutral' }) {
   const toneCls = {
     neutral: 'text-content-primary',
-    success: 'text-emerald-700',
-    warn:    'text-amber-700',
-    danger:  'text-rose-700',
+    success: 'text-data-positive',
+    warn:    'text-premium',
+    danger:  'text-data-negative',
     accent:  'text-accent',
   }[tone] || 'text-content-primary';
   return (
@@ -136,7 +136,7 @@ function AdjustmentRow({ row }) {
               </span>
             )}
             {row.is_legal_carve_out && (
-              <span className="text-[10px] uppercase tracking-wider text-rose-700 inline-flex items-center gap-1">
+              <span className="text-[10px] uppercase tracking-wider text-data-negative inline-flex items-center gap-1">
                 <ShieldAlert size={10} />
                 Legal carve-out
               </span>
@@ -149,7 +149,7 @@ function AdjustmentRow({ row }) {
           )}
           <div className="mt-1.5 flex items-center gap-3 text-[11px] text-content-secondary">
             <span className="inline-flex items-center gap-1">
-              <TrendingDown size={11} className="text-rose-600" />
+              <TrendingDown size={11} className="text-data-negative" />
               <span className="tabular-nums">{row.dismiss_count}</span> dismissed
             </span>
             {row.snooze_count > 0 && (
@@ -159,7 +159,7 @@ function AdjustmentRow({ row }) {
             )}
             {row.acted_count > 0 && (
               <span className="inline-flex items-center gap-1">
-                <CheckCircle2 size={11} className="text-emerald-600" />
+                <CheckCircle2 size={11} className="text-data-positive" />
                 <span className="tabular-nums">{row.acted_count}</span> applied
               </span>
             )}
@@ -175,7 +175,7 @@ function AdjustmentRow({ row }) {
         <div className="shrink-0 text-right">
           <div className={clsx(
             'text-lg font-display tabular-nums',
-            dangerTone ? 'text-rose-700' : 'text-amber-700',
+            dangerTone ? 'text-data-negative' : 'text-premium',
           )}>
             {fmtMultiplier(row.multiplier)}
           </div>
@@ -207,7 +207,7 @@ function LeaderboardRow({ row, primaryKey }) {
               </span>
             )}
             {row.is_legal_carve_out && (
-              <span className="text-[10px] uppercase tracking-wider text-rose-700">
+              <span className="text-[10px] uppercase tracking-wider text-data-negative">
                 Legal
               </span>
             )}
@@ -221,7 +221,7 @@ function LeaderboardRow({ row, primaryKey }) {
         <div className="shrink-0 text-right">
           <div className={clsx(
             'text-base font-display tabular-nums',
-            isDismissed ? 'text-rose-700' : 'text-emerald-700',
+            isDismissed ? 'text-data-negative' : 'text-data-positive',
           )}>
             {primary}×
           </div>

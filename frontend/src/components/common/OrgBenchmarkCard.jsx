@@ -35,9 +35,9 @@ function Switch({ checked, busy, onChange, labelledById }) {
       className={clsx(
         'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border',
         'transition-colors duration-150 ease-out active:scale-[0.97]',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
         'disabled:opacity-50 disabled:cursor-not-allowed',
-        checked ? 'bg-primary-600 border-primary-600' : 'bg-bg-secondary border-hairline-strong',
+        checked ? 'bg-accent border-accent' : 'bg-bg-secondary border-hairline-strong',
       )}
     >
       <span
@@ -47,7 +47,7 @@ function Switch({ checked, busy, onChange, labelledById }) {
           checked ? 'translate-x-6' : 'translate-x-1',
         )}
       >
-        {busy && <Loader2 size={10} className="animate-spin text-primary-600" />}
+        {busy && <Loader2 size={10} className="animate-spin text-accent" />}
       </span>
     </button>
   );
@@ -86,8 +86,8 @@ export default function OrgBenchmarkCard() {
       )}
 
       {!isLoading && isError && (
-        <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-700" />
+        <div className="flex items-start gap-2 rounded-lg border border-hairline bg-premium-soft p-3 text-xs text-premium">
+          <AlertTriangle size={14} className="mt-0.5 shrink-0 text-premium" />
           <span>
             Couldn't load the benchmark setting.{' '}
             <button

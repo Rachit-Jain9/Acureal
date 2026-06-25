@@ -426,7 +426,7 @@ export default function WhatIfSliders({ assetClass, baseInputs, baseKpis, onEdit
       </div>
 
       {(liveError || quickCompute.error) && (
-        <div className="px-4 py-2 text-xs text-data-negative bg-rose-50 border-t border-rose-200">
+        <div className="px-4 py-2 text-xs text-data-negative bg-neg-soft border-t border-hairline">
           Compute failed:{' '}
           {liveError
             || quickCompute.error?.response?.data?.message

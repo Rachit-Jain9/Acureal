@@ -89,7 +89,7 @@ export default function AutoFillReadyCard({ dealId }) {
             <span className="text-sm font-semibold text-content-primary">
               {fieldCount} field{fieldCount === 1 ? '' : 's'} ready to auto-fill from documents
             </span>
-            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+            <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-premium-soft text-premium border border-hairline font-medium">
               AI-assisted
             </span>
           </div>

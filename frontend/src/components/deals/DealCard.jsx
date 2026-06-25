@@ -225,7 +225,7 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
                         type="button"
                         role="menuitem"
                         onClick={handleDelete}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-red-600 hover:bg-red-50"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-data-negative hover:bg-neg-soft"
                       >
                         <Trash2 size={14} />
                         Delete

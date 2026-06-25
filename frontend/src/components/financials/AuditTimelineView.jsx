@@ -33,11 +33,11 @@ const EVENT_LABELS = {
 };
 
 const EVENT_COLORS = {
-  calculate_and_save: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-  scenario_recompute: 'bg-sky-50 text-sky-700 border-sky-200',
-  sensitivity_run: 'bg-amber-50 text-amber-700 border-amber-200',
-  manual_replay: 'bg-violet-50 text-violet-700 border-violet-200',
-  graph_snapshot: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  calculate_and_save: 'bg-accent-soft text-accent border-hairline',
+  scenario_recompute: 'bg-accent-soft text-accent border-hairline',
+  sensitivity_run: 'bg-premium-soft text-premium border-hairline',
+  manual_replay: 'bg-accent-soft text-accent border-hairline',
+  graph_snapshot: 'bg-pos-soft text-data-positive border-hairline',
   export_snapshot: 'bg-bg-secondary text-content-secondary border-hairline-strong',
 };
 
@@ -67,12 +67,12 @@ function CheckRow({ label, ok, detail }) {
   return (
     <div className="flex items-start gap-2 text-xs">
       {ok ? (
-        <CheckCircle2 size={14} className="text-emerald-600 mt-0.5 flex-shrink-0" />
+        <CheckCircle2 size={14} className="text-data-positive mt-0.5 flex-shrink-0" />
       ) : (
-        <XCircle size={14} className="text-red-600 mt-0.5 flex-shrink-0" />
+        <XCircle size={14} className="text-data-negative mt-0.5 flex-shrink-0" />
       )}
       <div className="flex-1">
-        <span className={ok ? 'text-emerald-700' : 'text-red-700'}>
+        <span className={ok ? 'text-data-positive' : 'text-data-negative'}>
           {label}
         </span>
         {detail && <div className="text-content-secondary font-mono mt-0.5">{detail}</div>}
@@ -205,7 +205,7 @@ export default function AuditTimelineView({ dealId, defaultOpen = false, embedde
       </p>
 
       {status === 'error' && (
-        <div className="flex items-start gap-2 p-2 rounded border border-amber-200 bg-amber-50 text-xs text-amber-800">
+        <div className="flex items-start gap-2 p-2 rounded border border-hairline bg-premium-soft text-xs text-premium">
           <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
           <span>{errorMsg || 'Audit log unavailable.'}</span>
         </div>
@@ -336,32 +336,32 @@ export default function AuditTimelineView({ dealId, defaultOpen = false, embedde
                           <div
                             className={`rounded border p-2.5 space-y-1.5 ${
                               verify.error
-                                ? 'border-red-200 bg-red-50'
+                                ? 'border-hairline bg-neg-soft'
                                 : verify.verification?.ok
-                                  ? 'border-emerald-200 bg-emerald-50'
-                                  : 'border-amber-200 bg-amber-50'
+                                  ? 'border-hairline bg-pos-soft'
+                                  : 'border-hairline bg-premium-soft'
                             }`}
                           >
                             <div className="flex items-center gap-1.5 text-xs font-semibold">
                               {verify.error ? (
                                 <>
-                                  <ShieldAlert size={12} className="text-red-600" />
-                                  <span className="text-red-700">Verification error</span>
+                                  <ShieldAlert size={12} className="text-data-negative" />
+                                  <span className="text-data-negative">Verification error</span>
                                 </>
                               ) : verify.verification?.ok ? (
                                 <>
-                                  <ShieldCheck size={12} className="text-emerald-600" />
-                                  <span className="text-emerald-700">Signature valid</span>
+                                  <ShieldCheck size={12} className="text-data-positive" />
+                                  <span className="text-data-positive">Signature valid</span>
                                 </>
                               ) : (
                                 <>
-                                  <ShieldAlert size={12} className="text-amber-600" />
-                                  <span className="text-amber-700">Signature mismatch</span>
+                                  <ShieldAlert size={12} className="text-premium" />
+                                  <span className="text-premium">Signature mismatch</span>
                                 </>
                               )}
                             </div>
                             {verify.error ? (
-                              <div className="text-xs text-red-700">{verify.error}</div>
+                              <div className="text-xs text-data-negative">{verify.error}</div>
                             ) : verify.verification?.checks ? (
                               <div className="space-y-1">
                                 <CheckRow
@@ -385,40 +385,40 @@ export default function AuditTimelineView({ dealId, defaultOpen = false, embedde
                           <div
                             className={`rounded border p-2.5 space-y-1.5 ${
                               replay.error
-                                ? 'border-red-200 bg-red-50'
+                                ? 'border-hairline bg-neg-soft'
                                 : replay.replay?.ok
-                                  ? 'border-emerald-200 bg-emerald-50'
-                                  : 'border-amber-200 bg-amber-50'
+                                  ? 'border-hairline bg-pos-soft'
+                                  : 'border-hairline bg-premium-soft'
                             }`}
                           >
                             <div className="flex items-center gap-1.5 text-xs font-semibold">
                               {replay.error ? (
                                 <>
-                                  <ShieldAlert size={12} className="text-red-600" />
-                                  <span className="text-red-700">Replay error</span>
+                                  <ShieldAlert size={12} className="text-data-negative" />
+                                  <span className="text-data-negative">Replay error</span>
                                 </>
                               ) : replay.replay?.ok ? (
                                 <>
-                                  <CheckCircle2 size={12} className="text-emerald-600" />
-                                  <span className="text-emerald-700">
+                                  <CheckCircle2 size={12} className="text-data-positive" />
+                                  <span className="text-data-positive">
                                     Kernel reproduced the stored outputs exactly
                                   </span>
                                 </>
                               ) : (
                                 <>
-                                  <XCircle size={12} className="text-amber-600" />
-                                  <span className="text-amber-700">
+                                  <XCircle size={12} className="text-premium" />
+                                  <span className="text-premium">
                                     Replay produced a different output hash
                                   </span>
                                 </>
                               )}
                             </div>
                             {replay.error ? (
-                              <div className="text-xs text-red-700">{replay.error}</div>
+                              <div className="text-xs text-data-negative">{replay.error}</div>
                             ) : replay.replay ? (
                               <div className="text-xs space-y-1">
                                 {replay.replay.reason === 'kernel_error' ? (
-                                  <div className="text-red-700 font-mono">
+                                  <div className="text-data-negative font-mono">
                                     {replay.replay.message}
                                   </div>
                                 ) : (
@@ -472,8 +472,8 @@ export default function AuditTimelineView({ dealId, defaultOpen = false, embedde
           <h4 className="text-sm font-semibold text-content-secondary uppercase tracking-wider">
             Signed audit trail
           </h4>
-          <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-pos-soft text-data-positive border border-hairline">
+            <span className="w-1.5 h-1.5 rounded-full bg-data-positive"></span>
             HMAC-SHA256
           </span>
         </div>

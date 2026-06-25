@@ -99,7 +99,7 @@ function VerifyLinkRow({ link }) {
             <p className="text-[10px] text-content-muted leading-snug mt-1 italic">{link.hint}</p>
           )}
           {!ready && (
-            <p className="text-[10px] text-amber-700 leading-snug mt-1 flex items-center gap-1">
+            <p className="text-[10px] text-premium leading-snug mt-1 flex items-center gap-1">
               <AlertCircle size={10} /> Missing inputs — add to property to enable.
             </p>
           )}
@@ -109,7 +109,7 @@ function VerifyLinkRow({ link }) {
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-hairline text-content-secondary hover:bg-bg-elevated hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.97]"
+              className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded border border-hairline text-content-secondary hover:bg-bg-elevated hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.97]"
               aria-label={`Copy ${link.label} search payload to clipboard`}
               data-testid={`verify-link-${link.key}-copy`}
             >
@@ -120,7 +120,7 @@ function VerifyLinkRow({ link }) {
           <button
             type="button"
             onClick={canCopy ? handleCopyAndOpen : () => window.open(link.href, '_blank', 'noopener,noreferrer')}
-            className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-accent text-white hover:bg-accent-hover transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.97]"
+            className="inline-flex items-center gap-1 text-[10px] px-2 py-1 rounded bg-accent text-content-inverse hover:bg-accent-hover transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.97]"
             aria-label={canCopy ? `Copy ${link.label} payload and open portal` : `Open ${link.label} portal`}
             data-testid={`verify-link-${link.key}-open`}
           >

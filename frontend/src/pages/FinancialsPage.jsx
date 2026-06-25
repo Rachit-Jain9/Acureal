@@ -157,14 +157,14 @@ export default function FinancialsPage() {
       <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2 text-sm font-medium text-content-secondary">
-            <Building2 size={16} className="text-primary-600" />
+            <Building2 size={16} className="text-accent" />
             Asset Class
           </div>
           <div className="relative">
             <select
               value={activeClass}
               onChange={(e) => handleClassChange(e.target.value)}
-              className="appearance-none pl-3 pr-8 py-2 border border-hairline-strong rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary-500 bg-bg-elevated"
+              className="appearance-none pl-3 pr-8 py-2 border border-hairline-strong rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent bg-bg-elevated"
             >
               {ASSET_CLASSES.map((ac) => (
                 <option key={ac.value} value={ac.value}>{ac.label}</option>
@@ -176,7 +176,7 @@ export default function FinancialsPage() {
             Underwriting model: {activeFinancialModelLabel}
           </span>
           {hasResults && normalizedFinancials.assetClass !== activeClass && (
-            <span className="text-xs text-amber-600 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+            <span className="text-xs text-premium bg-premium-soft px-2 py-1 rounded border border-hairline">
               Switching class — current results shown above are for {ASSET_CLASSES.find((a) => a.value === normalizedFinancials.assetClass)?.label}
             </span>
           )}
@@ -184,7 +184,7 @@ export default function FinancialsPage() {
       </div>
 
       {showLegacyResidentialNotice && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+        <div className="rounded-xl border border-hairline bg-premium-soft px-4 py-3 text-sm text-premium">
           This residential model was saved under the legacy loading-factor logic. The recalculate form below now normalizes the loading factor to the corrected additive format, but the KPI cards above remain the previously saved output until you click `Calculate`.
         </div>
       )}

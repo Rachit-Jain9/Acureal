@@ -86,7 +86,7 @@ export default function VerifyItemDialog({ item, onClose, onSubmit, isPending })
               value={url}
               onChange={(event) => setUrl(event.target.value)}
               placeholder="https://kaveri.karnataka.gov.in/..."
-              className="mt-1 w-full rounded-editorial border border-hairline bg-bg-secondary px-3 py-2 text-sm text-content-primary placeholder:text-content-muted focus:border-primary-300 focus:outline-none"
+              className="mt-1 w-full rounded-editorial border border-hairline bg-bg-secondary px-3 py-2 text-sm text-content-primary placeholder:text-content-muted focus:border-accent focus:outline-none"
             />
           </label>
           <label className="block">
@@ -98,7 +98,7 @@ export default function VerifyItemDialog({ item, onClose, onSubmit, isPending })
               onChange={(event) => setNotes(event.target.value)}
               rows={3}
               placeholder="What you confirmed and where (e.g. IGR Annexure-IV 2025, Hebbal SRO, INR 12,000/sqft)"
-              className="mt-1 w-full rounded-editorial border border-hairline bg-bg-secondary px-3 py-2 text-sm text-content-primary placeholder:text-content-muted focus:border-primary-300 focus:outline-none"
+              className="mt-1 w-full rounded-editorial border border-hairline bg-bg-secondary px-3 py-2 text-sm text-content-primary placeholder:text-content-muted focus:border-accent focus:outline-none"
             />
           </label>
           {error ? (
@@ -115,7 +115,7 @@ export default function VerifyItemDialog({ item, onClose, onSubmit, isPending })
           <button
             type="button"
             onClick={onClose}
-            className="rounded-editorial border border-hairline bg-bg-elevated px-3 py-2 text-xs font-semibold text-content-primary hover:border-primary-300"
+            className="rounded-editorial border border-hairline bg-bg-elevated px-3 py-2 text-xs font-semibold text-content-primary hover:border-accent"
           >
             Cancel
           </button>
@@ -123,7 +123,7 @@ export default function VerifyItemDialog({ item, onClose, onSubmit, isPending })
             type="submit"
             disabled={isPending}
             className={clsx(
-              'rounded-editorial bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700',
+              'rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent',
               isPending && 'opacity-60'
             )}
           >

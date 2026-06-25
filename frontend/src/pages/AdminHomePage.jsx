@@ -38,9 +38,9 @@ const fmtPct = (v) => (v == null ? '—' : `${Number(v).toFixed(1)}%`);
 function KpiPill({ label, value, sub, tone = 'neutral' }) {
   const cls = {
     neutral: 'text-content-primary',
-    success: 'text-emerald-700',
-    warn:    'text-amber-700',
-    danger:  'text-rose-700',
+    success: 'text-data-positive',
+    warn:    'text-premium',
+    danger:  'text-data-negative',
   }[tone] || 'text-content-primary';
   return (
     <div className="min-w-0">

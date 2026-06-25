@@ -128,7 +128,7 @@ function DealStrip({ deal }) {
   return (
     <Link
       to={`/dashboard/deals/${deal.deal_id}`}
-      className="flex items-center justify-between gap-2 py-1.5 px-2 hover:bg-bg-secondary/60 rounded transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+      className="flex items-center justify-between gap-2 py-1.5 px-2 hover:bg-bg-secondary/60 rounded transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       <div className="flex items-center gap-2 min-w-0">
         <span className={clsx('w-1.5 h-1.5 rounded-full shrink-0', t.dot)} />
@@ -189,7 +189,7 @@ export default function PortfolioReadinessWidget() {
               action={
                 <Link
                   to="/dashboard/deals"
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary-600 hover:text-primary-500"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent"
                 >
                   Go to deals <ArrowRight size={12} />
                 </Link>

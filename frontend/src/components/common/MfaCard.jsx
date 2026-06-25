@@ -85,7 +85,7 @@ export default function MfaCard() {
       <h3 className="text-base font-semibold text-content-primary mb-1 flex items-center gap-2">
         <ShieldCheck size={18} />
         Two-Factor Authentication
-        {enrolled && <span className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5 ml-2">Enabled</span>}
+        {enrolled && <span className="text-xs text-data-positive bg-pos-soft border border-hairline rounded px-1.5 py-0.5 ml-2">Enabled</span>}
       </h3>
       <p className="text-xs text-content-secondary mb-4 max-w-2xl">
         Add a 6-digit code from an authenticator app (Google Authenticator, Authy, 1Password) on every sign-in.
@@ -152,7 +152,7 @@ export default function MfaCard() {
               </div>
             </div>
           </div>
-          <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded p-2">
+          <div className="flex items-start gap-2 text-xs text-premium bg-premium-soft border border-hairline rounded p-2">
             <AlertTriangle size={14} className="shrink-0 mt-0.5" />
             <span>Save the recovery codes <strong>now</strong> — they're only shown once. Without them, a lost authenticator means contacting support.</span>
           </div>
@@ -166,7 +166,7 @@ export default function MfaCard() {
             type="button"
             onClick={handleDisable}
             disabled={busy}
-            className="text-sm font-medium text-rose-700 hover:text-rose-900 border border-rose-300 hover:border-rose-500 rounded-lg px-4 py-2 transition-colors flex items-center gap-1.5"
+            className="text-sm font-medium text-data-negative hover:text-data-negative border border-hairline hover:border-hairline-strong rounded-lg px-4 py-2 transition-colors flex items-center gap-1.5"
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
             Disable two-factor

@@ -73,11 +73,11 @@ export function AssetClassSummaryTile({ assetClassKey, summary, active, onClick 
     premium: 'ring-violet-400/40',
   };
   const TONE_DOT = {
-    info:    'bg-blue-500',
-    warn:    'bg-amber-500',
-    success: 'bg-emerald-500',
-    neutral: 'bg-slate-500',
-    premium: 'bg-violet-500',
+    info:    'bg-accent',
+    warn:    'bg-premium',
+    success: 'bg-data-positive',
+    neutral: 'bg-content-muted',
+    premium: 'bg-premium',
   };
   return (
     <button
@@ -87,7 +87,7 @@ export function AssetClassSummaryTile({ assetClassKey, summary, active, onClick 
       className={[
         'group relative flex flex-col items-start text-left px-3 py-2.5 rounded-editorial border transition-all duration-200 ease-out',
         'hover:border-content-primary/30 hover:-translate-y-px',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/60',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
         active
           ? `bg-bg-elevated border-content-primary/30 shadow-editorial ring-2 ${TONE_RING[meta.tone] || TONE_RING.neutral}`
           : 'bg-bg-secondary/60 border-hairline',

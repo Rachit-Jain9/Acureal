@@ -29,17 +29,17 @@ import { useDealStructureRecommender } from '../../hooks/useDealContext';
  */
 
 const VERDICT_TONE = {
-  Recommend:    'bg-green-50 text-green-700 border-green-200',
-  Consider:     'bg-sky-50 text-sky-700 border-sky-200',
-  'Re-examine': 'bg-amber-50 text-amber-800 border-amber-200',
-  'Stress-test':'bg-orange-50 text-orange-700 border-orange-200',
-  Flag:         'bg-red-50 text-red-700 border-red-200',
+  Recommend:    'bg-pos-soft text-data-positive border-hairline',
+  Consider:     'bg-accent-soft text-accent border-hairline',
+  'Re-examine': 'bg-premium-soft text-premium border-hairline',
+  'Stress-test':'bg-premium-soft text-premium border-hairline',
+  Flag:         'bg-neg-soft text-data-negative border-hairline',
 };
 
 const BAND_BAR = {
-  high:   'bg-green-500',
-  medium: 'bg-amber-500',
-  low:    'bg-slate-400',
+  high:   'bg-data-positive',
+  medium: 'bg-premium',
+  low:    'bg-content-muted',
 };
 
 const FACTOR_LABEL = {
@@ -90,7 +90,7 @@ function StructureRow({ entry }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded"
+        className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
       >
         <div className="flex items-baseline justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">

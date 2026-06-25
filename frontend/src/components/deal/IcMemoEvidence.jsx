@@ -16,14 +16,14 @@ import { useIcEvidence } from '../../hooks/useIcEvidence';
  */
 
 const SOURCE_CHIP = {
-  kernel: { label: 'Kernel-computed', cls: 'bg-sky-50 text-sky-700 border-sky-200' },
-  analyst: { label: 'Analyst-set', cls: 'bg-green-50 text-green-700 border-green-200' },
-  benchmark: { label: 'Benchmark', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  kernel: { label: 'Kernel-computed', cls: 'bg-accent-soft text-accent border-hairline' },
+  analyst: { label: 'Analyst-set', cls: 'bg-pos-soft text-data-positive border-hairline' },
+  benchmark: { label: 'Benchmark', cls: 'bg-premium-soft text-premium border-hairline' },
   deterministic: {
     label: 'Risk register',
     cls: 'bg-bg-secondary text-content-secondary border-hairline-strong',
   },
-  feed: { label: 'Verified feed', cls: 'bg-teal-50 text-teal-700 border-teal-200' },
+  feed: { label: 'Verified feed', cls: 'bg-pos-soft text-data-positive border-hairline' },
   'deal-record': {
     label: 'Deal record',
     cls: 'bg-bg-secondary text-content-secondary border-hairline-strong',
@@ -70,7 +70,7 @@ function ClaimRow({ claim, open, onToggle }) {
         type="button"
         onClick={onToggle}
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-3 py-2 text-left transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1"
+        className="w-full flex items-center justify-between gap-3 py-2 text-left transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1"
       >
         <span className="flex items-center gap-1.5 min-w-0">
           <ChevronRight
@@ -136,7 +136,7 @@ export default function IcMemoEvidence({ dealId }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded"
+        className="w-full flex items-center justify-between gap-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
       >
         <h3 className="text-base font-semibold text-content-primary flex items-center gap-2">
           <FileSearch size={16} className="text-content-muted" />

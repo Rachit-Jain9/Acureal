@@ -126,8 +126,8 @@ export default function ActivityTab() {
   if (isError) {
     return (
       <div className="card-editorial text-center py-12">
-        <AlertCircle size={28} className="text-red-400 mx-auto mb-2" />
-        <p className="text-sm text-red-600 mb-3">Failed to load activities.</p>
+        <AlertCircle size={28} className="text-data-negative mx-auto mb-2" />
+        <p className="text-sm text-data-negative mb-3">Failed to load activities.</p>
         <button onClick={refetch} className="btn btn-secondary text-sm">
           Retry
         </button>
@@ -320,7 +320,7 @@ export default function ActivityTab() {
                           {formatDate(activity.activity_date)}
                         </span>
                         {activity.next_follow_up && (
-                          <span className="text-xs text-amber-600">
+                          <span className="text-xs text-premium">
                             Follow-up: {formatDate(activity.next_follow_up)}
                           </span>
                         )}
@@ -331,7 +331,7 @@ export default function ActivityTab() {
                             <button
                               onClick={() => handleMarkComplete(activity.id)}
                               disabled={updateStatus.isPending}
-                              className="text-xs text-emerald-700 hover:text-emerald-800 flex items-center gap-1"
+                              className="text-xs text-data-positive hover:text-data-positive flex items-center gap-1"
                             >
                               <CheckCircle2 size={12} />
                               Mark complete
@@ -340,7 +340,7 @@ export default function ActivityTab() {
                           <button
                             onClick={() => handleDelete(activity.id)}
                             disabled={deleteActivity.isPending}
-                            className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                            className="text-xs text-data-negative hover:text-data-negative flex items-center gap-1"
                           >
                             <Trash2 size={12} />
                             Delete

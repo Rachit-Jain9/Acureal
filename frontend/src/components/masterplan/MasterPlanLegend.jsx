@@ -70,7 +70,7 @@ function LegendBody({ compact }) {
           type="button"
           onClick={() => setShowSub((v) => !v)}
           aria-pressed={showSub}
-          className="mt-2 inline-flex items-center gap-1 rounded text-[10px] font-medium text-accent transition-colors duration-150 ease-out hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+          className="mt-2 inline-flex items-center gap-1 rounded text-[10px] font-medium text-accent transition-colors duration-150 ease-out hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
         >
           <ChevronDown
             size={11}
@@ -113,7 +113,7 @@ export default function MasterPlanLegend({
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500/40"
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40"
       >
         <span className="text-[11px] font-semibold text-content-primary">Land-use legend</span>
         <ChevronDown

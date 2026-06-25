@@ -68,7 +68,7 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
         className="w-full flex items-center justify-between p-5 text-left"
       >
         <div className="flex items-center gap-2">
-          <Layers size={16} className="text-primary-600" />
+          <Layers size={16} className="text-accent" />
           <span className="text-sm font-semibold text-content-primary">Debt Schedule</span>
           {schedule && (
             <span className="text-xs text-content-secondary">
@@ -97,8 +97,8 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
               </h4>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {amortizingSchedule.termLoan && (
-                  <div className="bg-emerald-50 rounded-lg p-4 border border-emerald-100">
-                    <p className="text-xs font-semibold text-emerald-700 mb-2">Term Loan</p>
+                  <div className="bg-pos-soft rounded-lg p-4 border border-hairline">
+                    <p className="text-xs font-semibold text-data-positive mb-2">Term Loan</p>
                     <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                       <dt className="text-content-secondary">Principal</dt>
                       <dd className="text-right text-content-primary font-medium">{fmtCr(amortizingSchedule.termLoan.principalCr)}</dd>
@@ -118,8 +118,8 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
                   </div>
                 )}
                 {amortizingSchedule.lrd && (
-                  <div className="bg-sky-50 rounded-lg p-4 border border-sky-100">
-                    <p className="text-xs font-semibold text-sky-700 mb-2">LRD Refinance</p>
+                  <div className="bg-accent-soft rounded-lg p-4 border border-hairline">
+                    <p className="text-xs font-semibold text-accent mb-2">LRD Refinance</p>
                     <dl className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                       <dt className="text-content-secondary">Principal</dt>
                       <dd className="text-right text-content-primary font-medium">{fmtCr(amortizingSchedule.lrd.principalCr)}</dd>
@@ -177,14 +177,14 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
                       <tr key={row.quarter} className="border-b last:border-0 hover:bg-bg-secondary transition-colors">
                         <td className="px-3 py-2 text-content-secondary">Q{row.quarter}</td>
                         <td className="px-3 py-2 text-right text-content-secondary">{fmtCr(row.openingBalance)}</td>
-                        <td className="px-3 py-2 text-right text-green-600">
+                        <td className="px-3 py-2 text-right text-data-positive">
                           {row.draw > 0 ? `+${fmtCr(row.draw)}` : '—'}
                         </td>
-                        <td className="px-3 py-2 text-right text-red-600">
+                        <td className="px-3 py-2 text-right text-data-negative">
                           {row.repayment < 0 ? fmtCr(Math.abs(row.repayment)) : '—'}
                         </td>
                         <td className="px-3 py-2 text-right font-medium text-content-primary">{fmtCr(row.closingBalance)}</td>
-                        <td className="px-3 py-2 text-right text-amber-600">{fmtCr(row.interest)}</td>
+                        <td className="px-3 py-2 text-right text-premium">{fmtCr(row.interest)}</td>
                         <td className="px-3 py-2 text-right text-content-secondary">{fmtCr(row.cumulativeInterest)}</td>
                       </tr>
                     ))}
@@ -196,7 +196,7 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
                 <button
                   type="button"
                   onClick={() => setShowAll((s) => !s)}
-                  className="text-xs text-primary-600 hover:underline"
+                  className="text-xs text-accent hover:underline"
                 >
                   {showAll ? 'Show less' : `Show all ${schedule.rows.length} quarters`}
                 </button>

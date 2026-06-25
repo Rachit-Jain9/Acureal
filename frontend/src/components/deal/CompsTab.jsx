@@ -57,9 +57,9 @@ const toneForScore = (score) => {
 };
 
 const TONE_PILL = {
-  success: 'bg-emerald-50 text-emerald-800 border-emerald-200',
-  warn:    'bg-amber-50  text-amber-800   border-amber-200',
-  danger:  'bg-rose-50   text-rose-800    border-rose-200',
+  success: 'bg-pos-soft text-data-positive border-hairline',
+  warn:    'bg-premium-soft  text-premium   border-hairline',
+  danger:  'bg-neg-soft   text-data-negative    border-hairline',
   neutral: 'bg-bg-secondary text-content-muted border-hairline',
 };
 
@@ -77,9 +77,9 @@ function FactorBar({ label, score, weight, hint }) {
   }, [targetPct]);
   const color =
     score == null      ? 'bg-content-muted/40'
-    : score >= 0.65    ? 'bg-emerald-500'
-    : score >= 0.4     ? 'bg-amber-500'
-                       : 'bg-rose-400';
+    : score >= 0.65    ? 'bg-data-positive'
+    : score >= 0.4     ? 'bg-premium'
+                       : 'bg-data-negative';
   return (
     <div className="space-y-1">
       <div className="flex items-baseline justify-between gap-2 text-[11px]">
@@ -236,7 +236,7 @@ function RankedCompsTable({
                 key={comp.id}
                 className={
                   'transition-colors duration-150 ease-out hover:bg-bg-secondary ' +
-                  (isPinned ? 'bg-primary-50/30' : '')
+                  (isPinned ? 'bg-accent-soft/30' : '')
                 }
               >
                 <td className="px-4 py-3 font-medium text-content-primary">
@@ -246,7 +246,7 @@ function RankedCompsTable({
                     </span>
                     {comp.is_verified && (
                       <span
-                        className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500"
+                        className="inline-block w-1.5 h-1.5 rounded-full bg-data-positive"
                         title="Verified comp"
                       />
                     )}
@@ -286,9 +286,9 @@ function RankedCompsTable({
                     <span
                       className={
                         'inline-block w-1.5 h-1.5 rounded-full ' +
-                        (tone === 'success' ? 'bg-emerald-500'
-                         : tone === 'warn'   ? 'bg-amber-500'
-                         : tone === 'danger' ? 'bg-rose-500'
+                        (tone === 'success' ? 'bg-data-positive'
+                         : tone === 'warn'   ? 'bg-premium'
+                         : tone === 'danger' ? 'bg-data-negative'
                                              : 'bg-content-muted')
                       }
                     />
@@ -305,10 +305,10 @@ function RankedCompsTable({
                     onClick={() => onPin(isPinned ? null : comp.id)}
                     className={
                       'inline-flex items-center justify-center w-7 h-7 rounded-full border transition-all duration-150 ease-out ' +
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.95] ' +
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.95] ' +
                       (isPinned
-                        ? 'border-primary-300 bg-primary-50 text-primary-700'
-                        : 'border-hairline-strong text-content-muted hover:border-primary-300 hover:text-primary-700')
+                        ? 'border-hairline bg-accent-soft text-accent'
+                        : 'border-hairline-strong text-content-muted hover:border-hairline hover:text-accent')
                     }
                     title={isPinned ? 'Hide breakdown' : 'Show similarity breakdown'}
                     aria-label={isPinned ? 'Hide breakdown' : 'Show similarity breakdown'}
@@ -500,8 +500,8 @@ export default function CompsTab() {
           <div className="card-editorial p-4"><SkeletonList rows={3} columns={3} /></div>
         ) : benchmarkError ? (
           <div className="card-editorial text-center py-8">
-            <AlertCircle size={24} className="text-red-400 mx-auto mb-2" />
-            <p className="text-sm text-red-600 mb-2">Failed to load benchmark data.</p>
+            <AlertCircle size={24} className="text-data-negative mx-auto mb-2" />
+            <p className="text-sm text-data-negative mb-2">Failed to load benchmark data.</p>
             <button onClick={refetchBenchmark} className="btn btn-secondary text-sm">Retry</button>
           </div>
         ) : (
@@ -521,7 +521,7 @@ export default function CompsTab() {
               <div className="flex items-center gap-2">
                 {ranked.length > 0 && (
                   <span className="text-xs rounded-full border border-hairline bg-bg-secondary px-2 py-0.5 text-content-secondary inline-flex items-center gap-1">
-                    <Sparkles size={11} className="text-primary-500" />
+                    <Sparkles size={11} className="text-accent" />
                     Similarity-ranked
                   </span>
                 )}
@@ -541,8 +541,8 @@ export default function CompsTab() {
             <div className="px-5 py-3"><SkeletonList rows={4} columns={5} /></div>
           ) : rankedError ? (
             <div className="text-center py-8">
-              <AlertCircle size={24} className="text-red-400 mx-auto mb-2" />
-              <p className="text-sm text-red-600 mb-2">Failed to load ranked comps.</p>
+              <AlertCircle size={24} className="text-data-negative mx-auto mb-2" />
+              <p className="text-sm text-data-negative mb-2">Failed to load ranked comps.</p>
               <button onClick={refetchRanked} className="btn btn-secondary text-sm">Retry</button>
             </div>
           ) : (
@@ -564,7 +564,7 @@ export default function CompsTab() {
       <div className="flex items-center justify-end">
         <a
           href="/dashboard/comps"
-          className="text-sm text-primary-600 transition-colors duration-150 ease-out hover:text-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded inline-flex items-center gap-1"
+          className="text-sm text-accent transition-colors duration-150 ease-out hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded inline-flex items-center gap-1"
         >
           View full comps library <ExternalLink size={13} />
         </a>

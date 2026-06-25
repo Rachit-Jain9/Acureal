@@ -365,7 +365,7 @@ export default function ReportsPage() {
               onClick={() => setActiveTab(tab.key)}
               className={`border-b-2 pb-3 text-sm font-medium transition whitespace-nowrap ${
                 activeTab === tab.key
-                  ? 'border-primary-600 text-primary-600'
+                  ? 'border-accent text-accent'
                   : 'border-transparent text-content-secondary hover:text-content-secondary dark:hover:text-content-muted'
               }`}
             >
@@ -550,7 +550,7 @@ export default function ReportsPage() {
                             onClick={() => handleExportPptx(deal.id, deal.name)}
                             disabled={exportingPptx === deal.id}
                             title="Download PPTX investor deck"
-                            className="inline-flex items-center gap-1 rounded-lg bg-orange-50 px-2 py-1 text-xs font-medium text-orange-700 transition hover:bg-orange-100 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-lg bg-premium-soft px-2 py-1 text-xs font-medium text-premium transition hover:bg-premium-soft disabled:opacity-50"
                           >
                             {exportingPptx === deal.id ? (
                               <Loader2 size={11} className="animate-spin" />
@@ -563,7 +563,7 @@ export default function ReportsPage() {
                             onClick={() => handleExportXlsx(deal.id, deal.name)}
                             disabled={exportingXlsx === deal.id}
                             title="Download Excel workbook"
-                            className="inline-flex items-center gap-1 rounded-lg bg-green-50 px-2 py-1 text-xs font-medium text-green-700 transition hover:bg-green-100 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-lg bg-pos-soft px-2 py-1 text-xs font-medium text-data-positive transition hover:bg-pos-soft disabled:opacity-50"
                           >
                             {exportingXlsx === deal.id ? (
                               <Loader2 size={11} className="animate-spin" />
@@ -576,7 +576,7 @@ export default function ReportsPage() {
                             onClick={() => handleExportPdf(deal.id, deal.name)}
                             disabled={exportingPdf === deal.id}
                             title="Download PDF report"
-                            className="inline-flex items-center gap-1 rounded-lg bg-primary-50 px-2 py-1 text-xs font-medium text-primary-700 transition hover:bg-primary-100 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-lg bg-accent-soft px-2 py-1 text-xs font-medium text-accent transition hover:bg-accent-soft disabled:opacity-50"
                           >
                             {exportingPdf === deal.id ? (
                               <Loader2 size={11} className="animate-spin" />
@@ -589,7 +589,7 @@ export default function ReportsPage() {
                             onClick={() => handleExportDocx(deal.id, deal.name)}
                             disabled={exportingDocx === deal.id}
                             title="Download 22-section institutional underwriting report (DOCX)"
-                            className="inline-flex items-center gap-1 rounded-lg bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 transition hover:bg-blue-100 disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-lg bg-accent-soft px-2 py-1 text-xs font-medium text-accent transition hover:bg-accent-soft disabled:opacity-50"
                           >
                             {exportingDocx === deal.id ? (
                               <Loader2 size={11} className="animate-spin" />
@@ -614,7 +614,7 @@ export default function ReportsPage() {
           <div className="rounded-2xl border border-hairline-strong bg-bg-elevated p-6 shadow-sm">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary-600">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent">
                   Verified-data intelligence
                 </p>
                 <h3 className="mt-2 text-xl font-semibold text-content-primary">
@@ -631,14 +631,14 @@ export default function ReportsPage() {
           </div>
 
           {!dailyBrief?.hasVerifiedMarketData && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6 shadow-sm">
-              <h4 className="text-base font-semibold text-amber-900">Verified market sources required</h4>
-              <p className="mt-2 text-sm text-amber-800">
+            <div className="rounded-2xl border border-hairline bg-premium-soft p-6 shadow-sm">
+              <h4 className="text-base font-semibold text-premium">Verified market sources required</h4>
+              <p className="mt-2 text-sm text-premium">
                 REDIP is intentionally withholding external market claims until verified data feeds are connected.
               </p>
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 {(dailyBrief?.verifiedSourceRequirements || []).map((source) => (
-                  <div key={source.key} className="rounded-xl border border-amber-200 bg-bg-elevated p-4">
+                  <div key={source.key} className="rounded-xl border border-hairline bg-bg-elevated p-4">
                     <p className="text-sm font-semibold text-content-primary">{source.label}</p>
                     <p className="mt-2 text-sm text-content-secondary">{source.purpose}</p>
                   </div>
@@ -694,17 +694,17 @@ export default function ReportsPage() {
             <div className="rounded-2xl border border-hairline-strong bg-bg-elevated p-6 shadow-sm">
               <h4 className="text-base font-semibold text-content-primary">3. Market Signals</h4>
               <div className="mt-4 grid gap-4">
-                <div className="rounded-xl bg-emerald-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Bullish</p>
-                  <ul className="mt-3 space-y-2 text-sm text-emerald-900">
+                <div className="rounded-xl bg-pos-soft p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-data-positive">Bullish</p>
+                  <ul className="mt-3 space-y-2 text-sm text-data-positive">
                     {(dailyBrief?.marketSignals?.bullish || []).map((item, index) => (
                       <li key={`bullish-${index}`}>{item}</li>
                     ))}
                   </ul>
                 </div>
-                <div className="rounded-xl bg-amber-50 p-4">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Risk</p>
-                  <ul className="mt-3 space-y-2 text-sm text-amber-900">
+                <div className="rounded-xl bg-premium-soft p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-premium">Risk</p>
+                  <ul className="mt-3 space-y-2 text-sm text-premium">
                     {(dailyBrief?.marketSignals?.risk || []).map((item, index) => (
                       <li key={`risk-${index}`}>{item}</li>
                     ))}

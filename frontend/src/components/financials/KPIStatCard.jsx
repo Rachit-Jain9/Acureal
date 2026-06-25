@@ -291,10 +291,10 @@ export default function KPIStatCard({
         // palette tokens which honour the design-token system + flip
         // correctly across light/dark themes.
         'p-1 rounded-full transition-colors duration-150 ease-out',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
         open
-          ? 'bg-amber-50 text-amber-800'
-          : 'text-content-muted hover:bg-amber-50 hover:text-amber-800',
+          ? 'bg-premium-soft text-premium'
+          : 'text-content-muted hover:bg-premium-soft hover:text-premium',
       )}
       title="See formula, drivers, and source"
       aria-label="Show KPI provenance"

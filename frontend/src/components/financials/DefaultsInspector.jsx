@@ -15,37 +15,37 @@ const CATEGORIES = [
   {
     id: 'land',       label: 'Land & Site',        icon: MapPin,
     match: (k) => /land|plot|area|fsi|loading|saleable|plotSize/i.test(k),
-    accent: 'from-amber-500 to-orange-500',
+    accent: 'from-accent to-accent',
   },
   {
     id: 'construction', label: 'Construction & Soft Cost', icon: Building2,
     match: (k) => /construction|devCost|approval|gst|architect|pmc|contingency|preOpening/i.test(k),
-    accent: 'from-slate-500 to-zinc-500',
+    accent: 'from-accent to-accent',
   },
   {
     id: 'revenue',    label: 'Revenue & Pricing',  icon: TrendingUp,
     match: (k) => /sellingRate|pricingEscalation|marketing|developerMargin|baseRent|rentEscalation|adr|fbRev|otherRev|anchor/i.test(k),
-    accent: 'from-emerald-500 to-teal-500',
+    accent: 'from-accent to-accent',
   },
   {
     id: 'stabilized', label: 'Stabilized Operations', icon: Layers,
     match: (k) => /vacancy|opex|tiPerSqft|lcMonths|gopMargin|ebitdaMargin|stabilizedOcc|adrGrowth/i.test(k),
-    accent: 'from-sky-500 to-cyan-500',
+    accent: 'from-accent to-accent',
   },
   {
     id: 'financing',  label: 'Financing & Debt',   icon: Landmark,
     match: (k) => /debtLTV|debtRate|debtTenor|interestRate|lrd|amortization|financeCost|debtCoverage/i.test(k),
-    accent: 'from-indigo-500 to-blue-600',
+    accent: 'from-accent to-accent',
   },
   {
     id: 'exit',       label: 'Exit & Discount',    icon: Coins,
     match: (k) => /entryCap|exitCap|exitMultiple|perpetuityGrowth|terminalValue|holdPeriod|exitStrategy|discountRate|forwardPurchase/i.test(k),
-    accent: 'from-violet-500 to-purple-500',
+    accent: 'from-accent to-accent',
   },
   {
     id: 'hospitality', label: 'Hospitality Specific', icon: Hotel,
     match: (k) => /keys|stabilizedOcc|preOpening|gopMargin|ebitdaMargin|fbRev|otherRev|adr/i.test(k),
-    accent: 'from-rose-500 to-pink-500',
+    accent: 'from-accent to-accent',
   },
 ];
 
@@ -131,7 +131,7 @@ export default function DefaultsInspector({
   const visibleCategories = useMemo(() => {
     const used = CATEGORIES.filter((c) => grouped[c.id]?.length);
     if (grouped.other?.length) {
-      used.push({ id: 'other', label: 'Other', icon: Info, accent: 'from-gray-400 to-gray-500' });
+      used.push({ id: 'other', label: 'Other', icon: Info, accent: 'from-accent to-accent' });
     }
     return used;
   }, [grouped]);
@@ -144,13 +144,13 @@ export default function DefaultsInspector({
           onClick={() => setOpenInternal(true)}
           className={
             compactTrigger
-              ? 'inline-flex items-center gap-1.5 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-cyan-50 to-teal-50 px-3 py-1 text-[11px] font-semibold text-sky-700 shadow-sm transition hover:shadow-md hover:border-sky-300'
-              : 'group inline-flex items-center gap-2 rounded-full border border-sky-200/80 bg-gradient-to-r from-sky-50 via-cyan-50 to-teal-50 px-3.5 py-1.5 text-xs font-semibold text-sky-700 shadow-sm transition hover:shadow-md hover:border-sky-300'
+              ? 'inline-flex items-center gap-1.5 rounded-full border border-hairline bg-accent-soft px-3 py-1 text-[11px] font-semibold text-accent shadow-sm transition hover:shadow-md hover:border-hairline-strong'
+              : 'group inline-flex items-center gap-2 rounded-full border border-hairline bg-accent-soft px-3.5 py-1.5 text-xs font-semibold text-accent shadow-sm transition hover:shadow-md hover:border-hairline-strong'
           }
           aria-label="View underwriting defaults with provenance"
           title="View all defaults and sources for this asset class"
         >
-          <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-gradient-to-br from-sky-500 via-cyan-500 to-teal-500 text-white shadow-sm">
+          <span className="relative flex h-5 w-5 items-center justify-center rounded-full bg-accent text-white shadow-sm">
             <Database size={12} strokeWidth={2.5} />
           </span>
           <span className="tracking-wide">Defaults & Sources</span>
@@ -166,15 +166,15 @@ export default function DefaultsInspector({
             onClick={close}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-2xl flex-col bg-bg-elevated shadow-2xl">
-            <header className="relative overflow-hidden border-b border-hairline-strong bg-slate-900 px-6 py-5 text-white">
+            <header className="relative overflow-hidden border-b border-hairline-strong bg-surface-2 px-6 py-5 text-content-primary">
               <div className="relative flex items-start justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-cyan-200">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-content-secondary">
                     <Database size={12} /> Single Source of Truth
                   </div>
                   <h2 className="mt-1 text-2xl font-bold">Underwriting Defaults</h2>
-                  <p className="mt-1 max-w-xl text-sm text-cyan-100/90">
-                    Every default value fed into the <span className="font-semibold text-white">{label}</span> model —
+                  <p className="mt-1 max-w-xl text-sm text-content-secondary">
+                    Every default value fed into the <span className="font-semibold text-content-primary">{label}</span> model —
                     with unit, typical range, citation, and last review date. Sourced from
                     <code className="mx-1 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">config/defaults.ts</code>.
                   </p>
@@ -190,7 +190,7 @@ export default function DefaultsInspector({
 
               <div className="relative mt-5 flex flex-col gap-3">
                 <div className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5">
-                  <Search size={14} className="text-cyan-200" />
+                  <Search size={14} className="text-content-muted" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -201,7 +201,7 @@ export default function DefaultsInspector({
                     <button
                       type="button"
                       onClick={() => setSearch('')}
-                      className="text-[10px] uppercase tracking-wider text-cyan-200 hover:text-white"
+                      className="text-[10px] uppercase tracking-wider text-content-muted hover:text-content-primary"
                     >
                       Clear
                     </button>
@@ -240,12 +240,12 @@ export default function DefaultsInspector({
               )}
 
               {error && !loading && (
-                <div className="m-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                <div className="m-6 rounded-lg border border-hairline bg-neg-soft px-4 py-3 text-sm text-data-negative">
                   <div className="font-semibold">Could not load defaults</div>
                   <div className="mt-1 text-xs">{error}</div>
-                  <div className="mt-2 text-[11px] text-rose-600">
+                  <div className="mt-2 text-[11px] text-data-negative">
                     If the kernel dist is missing, run:
-                    <code className="ml-1 rounded bg-rose-100 px-1.5 py-0.5">
+                    <code className="ml-1 rounded bg-neg-soft px-1.5 py-0.5">
                       cd packages/financial-kernel && npx tsc -p tsconfig.build.json
                     </code>
                   </div>
@@ -300,7 +300,7 @@ function CategoryChip({ active, onClick, icon: Icon, accent, label }) {
       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold transition ${
         active
           ? `bg-gradient-to-r ${accent} text-white shadow-md`
-          : 'bg-white/10 text-cyan-100 hover:bg-white/20'
+          : 'bg-bg-secondary text-content-secondary hover:bg-surface'
       }`}
     >
       <Icon size={11} />

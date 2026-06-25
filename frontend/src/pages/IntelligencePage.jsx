@@ -93,9 +93,9 @@ const formatLandSize = (acres, note) => {
 };
 
 const DEAL_TYPE_BADGE = {
-  'Land deal':        'bg-blue-100 text-blue-700',
-  'Equity investment':'bg-emerald-100 text-emerald-700',
-  'Debt':             'bg-amber-100 text-amber-700',
+  'Land deal':        'bg-accent-soft text-accent',
+  'Equity investment':'bg-pos-soft text-data-positive',
+  'Debt':             'bg-premium-soft text-premium',
 };
 
 // ─── Admin Market Notes Editor — extracted to ../components/intelligence/AdminNotesPanel.jsx (2026-05-25, Task #6)
@@ -159,7 +159,7 @@ function TransactionTable({ rows }) {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="mt-3 text-xs font-medium text-primary-600 hover:text-primary-700 flex items-center gap-1"
+          className="mt-3 text-xs font-medium text-accent hover:text-accent flex items-center gap-1"
         >
           <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
           {expanded ? 'Show less' : `Show all ${rows.length} transactions`}
@@ -283,10 +283,10 @@ function BenchmarksTable({ rows }) {
                 : `${yLow}–${yHigh}%`;
               const priceLabel = `₹${(Number(row.avg_price_min_per_sqft) / 1000).toFixed(1)}k–${(Number(row.avg_price_max_per_sqft) / 1000).toFixed(1)}k`;
               const growthVal = yHigh ?? yLow ?? 0;
-              const growthColor = growthVal >= 20 ? 'text-emerald-600 font-semibold'
-                : growthVal >= 10 ? 'text-emerald-600 font-medium'
-                : growthVal >= 5 ? 'text-blue-600 font-medium'
-                : growthVal < 0 ? 'text-red-500 font-medium'
+              const growthColor = growthVal >= 20 ? 'text-data-positive font-semibold'
+                : growthVal >= 10 ? 'text-data-positive font-medium'
+                : growthVal >= 5 ? 'text-accent font-medium'
+                : growthVal < 0 ? 'text-data-negative font-medium'
                 : 'text-content-secondary';
               const dt = dataTypeBadge(row.data_type);
 
@@ -298,7 +298,7 @@ function BenchmarksTable({ rows }) {
                       <Badge tone={dt.tone} className="text-[9px]">{dt.label}</Badge>
                     </div>
                     <div className="w-32 mt-1 bg-bg-secondary rounded-full h-1">
-                      <div className="bg-primary-500 h-1 rounded-full" style={{ width: `${barPct}%` }} />
+                      <div className="bg-accent h-1 rounded-full" style={{ width: `${barPct}%` }} />
                     </div>
                   </td>
                   <td className="py-2.5 px-3 font-mono tabular-nums text-content-primary whitespace-nowrap">{priceLabel}</td>
@@ -310,7 +310,7 @@ function BenchmarksTable({ rows }) {
                   <td className="py-2.5 px-3 whitespace-nowrap">
                     {row.source_url ? (
                       <a href={row.source_url} target="_blank" rel="noopener noreferrer"
-                         className="text-primary-600 hover:text-primary-700 underline-offset-2 hover:underline text-[11px]"
+                         className="text-accent hover:text-accent underline-offset-2 hover:underline text-[11px]"
                          title={row.source}>
                         {row.source?.split(' ').slice(0, 3).join(' ') || 'Link'}
                       </a>
@@ -328,7 +328,7 @@ function BenchmarksTable({ rows }) {
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
-          className="mt-3 text-xs font-medium text-primary-500 hover:text-primary-600 flex items-center gap-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1 -mx-1"
+          className="mt-3 text-xs font-medium text-accent hover:text-accent flex items-center gap-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 -mx-1"
         >
           <ChevronDown size={13} className={`transition-transform duration-150 ${showAll ? 'rotate-180' : ''}`} />
           {showAll ? 'Show less' : `Show all ${sortedRows.length} rows`}
@@ -431,9 +431,9 @@ function AssetClassSelector({ value, onChange, options }) {
             onClick={() => onChange(opt.value)}
             className={
               'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ease-out whitespace-nowrap ' +
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] ' +
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] ' +
               (active
-                ? 'bg-primary-50 text-primary-700 shadow-sm'
+                ? 'bg-accent-soft text-accent shadow-sm'
                 : 'text-content-secondary hover:bg-bg-secondary hover:text-content-primary')
             }
           >
@@ -543,7 +543,7 @@ export default function IntelligencePage() {
   if (isError) {
     return (
       <div className="text-center py-20">
-        <p className="text-red-600 font-medium">Failed to load intelligence brief</p>
+        <p className="text-data-negative font-medium">Failed to load intelligence brief</p>
         <button onClick={() => refetch()} className="mt-3 btn btn-secondary text-sm">Retry</button>
       </div>
     );
@@ -560,7 +560,7 @@ export default function IntelligencePage() {
             <button
               onClick={handleExportTearSheet}
               disabled={exportingTearSheet}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-bg-elevated px-3 py-2 text-sm font-medium text-content-secondary transition-colors duration-150 ease-out hover:border-primary-300 hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-hairline-strong"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-bg-elevated px-3 py-2 text-sm font-medium text-content-secondary transition-colors duration-150 ease-out hover:border-hairline-strong hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-hairline-strong"
               title="Download Bengaluru Q1 2026 tear-sheet PDF"
             >
               {exportingTearSheet ? (
@@ -611,17 +611,17 @@ export default function IntelligencePage() {
       {brief?.claudeBrief && (
         <div className="relative rounded-xl border border-hairline-strong bg-bg-elevated shadow-editorial overflow-hidden">
           <span
-            className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-indigo-500 via-indigo-400 to-violet-500"
+            className="absolute inset-y-0 left-0 w-1 bg-accent"
             aria-hidden="true"
           />
           <div className="px-6 py-5 pl-7">
             <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1.5 mb-3">
-              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-100 text-indigo-700">
+              <span className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-accent-soft text-accent">
                 <Brain size={13} />
               </span>
               <p className="text-eyebrow uppercase tracking-[0.12em] font-semibold text-content-muted">AI Brief</p>
               <span className="text-sm font-semibold text-content-primary">Claude · Daily Synthesis</span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-800">
+              <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-premium-soft px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-premium">
                 AI-assisted · review before relying
               </span>
               <span className="ml-auto text-[11px] text-content-muted">Generated from internal pipeline data only</span>
@@ -671,7 +671,7 @@ export default function IntelligencePage() {
                 )}
               </div>
               {brief.dealOfDay.whyItMatters && (
-                <p className="text-xs text-content-secondary italic border-l-2 border-primary-300 pl-3">
+                <p className="text-xs text-content-secondary italic border-l-2 border-accent pl-3">
                   {brief.dealOfDay.whyItMatters}
                 </p>
               )}
@@ -708,13 +708,13 @@ export default function IntelligencePage() {
             <div className="space-y-3">
               {brief.marketSignals.bullish?.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-emerald-700 mb-1 flex items-center gap-1">
+                  <p className="text-xs font-semibold text-data-positive mb-1 flex items-center gap-1">
                     <TrendingUp size={12} /> Bullish signals
                   </p>
                   <ul className="space-y-1">
                     {brief.marketSignals.bullish.map((s, i) => (
                       <li key={i} className="text-xs text-content-secondary flex gap-2">
-                        <CheckCircle size={11} className="text-emerald-500 flex-shrink-0 mt-0.5" />
+                        <CheckCircle size={11} className="text-data-positive flex-shrink-0 mt-0.5" />
                         {s}
                       </li>
                     ))}
@@ -723,13 +723,13 @@ export default function IntelligencePage() {
               )}
               {brief.marketSignals.risk?.length > 0 && (
                 <div>
-                  <p className="text-xs font-semibold text-red-700 mb-1 flex items-center gap-1">
+                  <p className="text-xs font-semibold text-data-negative mb-1 flex items-center gap-1">
                     <AlertTriangle size={12} /> Risk signals
                   </p>
                   <ul className="space-y-1">
                     {brief.marketSignals.risk.map((s, i) => (
                       <li key={i} className="text-xs text-content-secondary flex gap-2">
-                        <TrendingDown size={11} className="text-red-400 flex-shrink-0 mt-0.5" />
+                        <TrendingDown size={11} className="text-data-negative flex-shrink-0 mt-0.5" />
                         {s}
                       </li>
                     ))}
@@ -756,7 +756,7 @@ export default function IntelligencePage() {
           <SectionCard icon={MapPin} title="4. Bengaluru Micro-Market Intelligence">
             <ul className="space-y-2">
               {brief.bengaluruMicroMarketIntelligence.map((item, i) => (
-                <li key={i} className="text-xs text-content-secondary border-l-2 border-primary-200 pl-3">{item}</li>
+                <li key={i} className="text-xs text-content-secondary border-l-2 border-accent pl-3">{item}</li>
               ))}
             </ul>
           </SectionCard>
@@ -885,10 +885,10 @@ export default function IntelligencePage() {
               <tbody>
                 {brief.bengaluruDemandHeatmap.map((row, i) => {
                   const signalColor =
-                    row.demandSignal === 'Strong'          ? 'bg-emerald-100 text-emerald-700' :
-                    row.demandSignal === 'Moderate-High'   ? 'bg-blue-100 text-blue-700' :
-                    row.demandSignal === 'Moderate'        ? 'bg-amber-100 text-amber-700' :
-                    row.demandSignal === 'Soft'            ? 'bg-red-100 text-red-700' :
+                    row.demandSignal === 'Strong'          ? 'bg-pos-soft text-data-positive' :
+                    row.demandSignal === 'Moderate-High'   ? 'bg-accent-soft text-accent' :
+                    row.demandSignal === 'Moderate'        ? 'bg-premium-soft text-premium' :
+                    row.demandSignal === 'Soft'            ? 'bg-neg-soft text-data-negative' :
                                                              'bg-bg-secondary text-content-secondary';
                   // pricingTrend is a YoY price-growth string ("+8–10% YoY") —
                   // a proxy, not a measured demand feed (see caveat below).
@@ -897,7 +897,7 @@ export default function IntelligencePage() {
                   const trendNeg = hasTrend && String(row.pricingTrend).replace(/^\+/, '').trim().startsWith('-');
                   const trendColor = !hasTrend
                     ? 'text-content-muted'
-                    : trendNeg ? 'text-red-500 font-medium' : 'text-emerald-600 font-medium';
+                    : trendNeg ? 'text-data-negative font-medium' : 'text-data-positive font-medium';
                   return (
                     <tr key={i} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
                       <td className="py-2.5 px-3 font-medium text-content-primary">{row.microMarket}</td>

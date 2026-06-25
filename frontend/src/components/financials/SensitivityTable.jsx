@@ -5,11 +5,11 @@ import { formatINR } from '../../utils/format';
 
 function getIRRColor(irr) {
   if (irr == null) return 'bg-bg-secondary text-content-muted';
-  if (irr >= 25)  return 'bg-emerald-100 text-emerald-800';
-  if (irr >= 18)  return 'bg-green-50 text-green-700';
-  if (irr >= 12)  return 'bg-yellow-50 text-yellow-700';
-  if (irr >= 5)   return 'bg-orange-50 text-orange-700';
-  return 'bg-red-100 text-red-800';
+  if (irr >= 25)  return 'bg-pos-soft text-data-positive';
+  if (irr >= 18)  return 'bg-pos-soft text-data-positive';
+  if (irr >= 12)  return 'bg-premium-soft text-premium';
+  if (irr >= 5)   return 'bg-premium-soft text-premium';
+  return 'bg-neg-soft text-data-negative';
 }
 
 export default function SensitivityTable({ sensitivity, assetClass }) {

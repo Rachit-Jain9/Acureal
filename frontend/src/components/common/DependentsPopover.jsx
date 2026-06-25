@@ -45,11 +45,11 @@ const OWNER_KIND_META = {
 };
 
 const OWNER_KIND_TONE = {
-  dd_item: 'bg-sky-50 text-sky-700 border-sky-200',
-  approval: 'bg-violet-50 text-violet-700 border-violet-200',
-  risk_flag: 'bg-rose-50 text-rose-700 border-rose-200',
-  comp: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  financial_scenario: 'bg-amber-50 text-amber-700 border-amber-200',
+  dd_item: 'bg-accent-soft text-accent border-hairline',
+  approval: 'bg-accent-soft text-accent border-hairline',
+  risk_flag: 'bg-neg-soft text-data-negative border-hairline',
+  comp: 'bg-pos-soft text-data-positive border-hairline',
+  financial_scenario: 'bg-premium-soft text-premium border-hairline',
   parcel_intelligence: 'bg-bg-secondary text-content-secondary border-hairline',
   deal_note: 'bg-bg-secondary text-content-secondary border-hairline',
   guidance_value: 'bg-bg-secondary text-content-secondary border-hairline',
@@ -103,7 +103,7 @@ function OwnerRow({ owner }) {
               </span>
             )}
             {owner.verified_at && (
-              <span className="text-[10px] text-emerald-700 inline-flex items-center gap-0.5">
+              <span className="text-[10px] text-data-positive inline-flex items-center gap-0.5">
                 · Verified
               </span>
             )}
@@ -238,7 +238,7 @@ export default function DependentsPopover({
             )}
 
             {isError && (
-              <div className="text-[11px] text-rose-700 py-3 text-center">
+              <div className="text-[11px] text-data-negative py-3 text-center">
                 Could not load dependents. Try again.
               </div>
             )}

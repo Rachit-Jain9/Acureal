@@ -56,8 +56,8 @@ export function SearchField({ value, onChange, placeholder, ariaLabel, autoFocus
           'bg-bg-elevated text-content-primary placeholder:text-content-muted',
           'border border-hairline-strong',
           'transition-colors duration-150 ease-out',
-          'hover:border-primary-300',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-400',
+          'hover:border-hairline-strong',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:border-accent',
         )}
       />
       {local && (
@@ -69,7 +69,7 @@ export function SearchField({ value, onChange, placeholder, ariaLabel, autoFocus
             'absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md',
             'text-content-muted hover:text-content-primary hover:bg-bg-secondary',
             'transition-colors duration-150 ease-out',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
             'active:scale-[0.98]',
           )}
         >
@@ -107,7 +107,7 @@ export function FilterChipGroup({ label, value, onChange, options, allowAll = fa
               className={clsx(
                 'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium',
                 'border transition-colors duration-150 ease-out',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                 'active:scale-[0.98]',
                 active
                   ? 'bg-content-primary text-bg-primary border-content-primary shadow-sm'
@@ -171,7 +171,7 @@ export function SortDropdown({ value, onChange, options }) {
           'bg-bg-elevated text-content-primary border border-hairline-strong',
           'transition-colors duration-150 ease-out',
           'hover:bg-bg-secondary hover:border-content-muted',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
           'active:scale-[0.98]',
         )}
       >
@@ -209,7 +209,7 @@ export function SortDropdown({ value, onChange, options }) {
                   )}
                 >
                   <span className="truncate">{opt.label}</span>
-                  {active && <span className="text-primary-500 text-[10px]">●</span>}
+                  {active && <span className="text-accent text-[10px]">●</span>}
                 </button>
               </li>
             );
@@ -238,7 +238,7 @@ export function ActiveFilters({ filters, onRemove, onClearAll, resultCount, tota
             key={f.id}
             className={clsx(
               'inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium',
-              'bg-primary-500/10 text-primary-500 border border-primary-500/20',
+              'bg-accent-soft text-accent border border-hairline',
             )}
             title={`${f.label}: ${f.displayValue || f.value}`}
           >
@@ -251,8 +251,8 @@ export function ActiveFilters({ filters, onRemove, onClearAll, resultCount, tota
               className={clsx(
                 'rounded-sm -mr-0.5 p-0.5',
                 'transition-colors duration-100',
-                'hover:bg-primary-500/20',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+                'hover:bg-accent-soft',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
               )}
             >
               <X size={11} />
@@ -278,7 +278,7 @@ export function ActiveFilters({ filters, onRemove, onClearAll, resultCount, tota
               'text-[11px] font-medium text-content-secondary',
               'transition-colors duration-150',
               'hover:text-content-primary',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded',
             )}
           >
             Clear all

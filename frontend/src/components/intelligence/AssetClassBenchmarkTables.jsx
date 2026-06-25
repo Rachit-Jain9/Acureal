@@ -33,7 +33,7 @@ const fmtDelta = (v, digits) => {
 const deltaTone = (v) => {
   const n = Number(v);
   if (!Number.isFinite(n) || n === 0) return 'text-content-muted';
-  return n > 0 ? 'text-emerald-600' : 'text-red-500';
+  return n > 0 ? 'text-data-positive' : 'text-data-negative';
 };
 
 export function OfficeBenchmarksTable({ rows }) {
@@ -102,10 +102,10 @@ export function OfficeBenchmarksTable({ rows }) {
           </thead>
           <tbody>
             {ipcRows.map((r) => {
-              const vacColor = r.vacancy_pct <= 5 ? 'text-emerald-600 font-semibold'
-                : r.vacancy_pct <= 10 ? 'text-blue-600 font-medium'
-                : r.vacancy_pct <= 20 ? 'text-amber-600 font-medium'
-                : 'text-red-500 font-semibold';
+              const vacColor = r.vacancy_pct <= 5 ? 'text-data-positive font-semibold'
+                : r.vacancy_pct <= 10 ? 'text-accent font-medium'
+                : r.vacancy_pct <= 20 ? 'text-premium font-medium'
+                : 'text-data-negative font-semibold';
               return (
                 <tr key={r.id} className="border-b border-hairline hover:bg-bg-secondary transition-colors">
                   <td className="py-2 px-3 font-medium text-content-primary">{r.submarket}</td>
@@ -127,7 +127,7 @@ export function OfficeBenchmarksTable({ rows }) {
       <button
         type="button"
         onClick={() => setShowSubmarkets((v) => !v)}
-        className="mt-3 text-xs font-medium text-primary-500 hover:text-primary-600 flex items-center gap-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1 -mx-1"
+        className="mt-3 text-xs font-medium text-accent hover:text-accent flex items-center gap-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 -mx-1"
       >
         <ChevronDown size={13} className={`transition-transform duration-150 ${showSubmarkets ? 'rotate-180' : ''}`} />
         {showSubmarkets ? 'Hide submarket Grade A range' : `Show ${subRows.length} submarket Grade A range${subRows.length === 1 ? '' : 's'}`}

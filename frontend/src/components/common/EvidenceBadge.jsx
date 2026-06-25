@@ -87,8 +87,8 @@ const renderLinkSubtitle = (link) => {
 };
 
 const BUCKET_PILL = {
-  verified: 'bg-green-50 text-green-700 border-green-200',
-  inferred: 'bg-amber-50 text-amber-700 border-amber-200',
+  verified: 'bg-pos-soft text-data-positive border-hairline',
+  inferred: 'bg-premium-soft text-premium border-hairline',
   needs_verification: 'bg-bg-secondary text-content-secondary border-hairline',
 };
 
@@ -205,7 +205,7 @@ export default function EvidenceBadge({
           )}
 
           {isError && (
-            <div className="text-[11px] text-red-600">
+            <div className="text-[11px] text-data-negative">
               Couldn't load evidence. Try again.
             </div>
           )}
@@ -248,7 +248,7 @@ export default function EvidenceBadge({
                           className={clsx(
                             'shrink-0 mt-0.5',
                             link.link_kind === 'manual_verification'
-                              ? 'text-green-600'
+                              ? 'text-data-positive'
                               : 'text-accent',
                           )}
                         />

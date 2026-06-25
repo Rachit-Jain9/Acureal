@@ -137,8 +137,8 @@ export class ErrorBoundary extends Component {
       const isChunk = isChunkLoadError(this.state.error);
       return (
         <div className="flex flex-col items-center justify-center min-h-[400px] gap-5 p-8 text-center">
-          <div className="rounded-full bg-red-50 p-4 ring-1 ring-red-100">
-            <AlertTriangle size={28} className="text-red-500" />
+          <div className="rounded-full bg-neg-soft p-4 ring-1 ring-hairline">
+            <AlertTriangle size={28} className="text-data-negative" />
           </div>
           <div>
             <h2 className="text-base font-semibold text-content-primary">
@@ -163,7 +163,7 @@ export class ErrorBoundary extends Component {
               <button
                 type="button"
                 onClick={this.handleHardReload}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-500"
+                className="inline-flex items-center gap-2 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-content-inverse hover:bg-accent"
               >
                 <RefreshCw size={14} />
                 Refresh page

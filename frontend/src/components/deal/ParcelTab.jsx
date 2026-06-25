@@ -112,7 +112,7 @@ function PropertyPickerModal({ dealId, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-hairline">
           <h3 id="link-property-dialog-title" className="text-base font-bold text-content-primary flex items-center gap-2">
-            <Link2 size={16} className="text-primary-600" /> Link Property to Deal
+            <Link2 size={16} className="text-accent" /> Link Property to Deal
           </h3>
           <button onClick={onClose} aria-label="Close link-property dialog" className="text-content-muted hover:text-content-secondary p-1">
             <X size={18} />
@@ -125,7 +125,7 @@ function PropertyPickerModal({ dealId, onClose }) {
             onClick={() => setMode('search')}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               mode === 'search'
-                ? 'bg-primary-50 text-primary-700'
+                ? 'bg-accent-soft text-accent'
                 : 'text-content-secondary hover:text-content-secondary'
             }`}
           >
@@ -135,7 +135,7 @@ function PropertyPickerModal({ dealId, onClose }) {
             onClick={() => setMode('create')}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
               mode === 'create'
-                ? 'bg-primary-50 text-primary-700'
+                ? 'bg-accent-soft text-accent'
                 : 'text-content-secondary hover:text-content-secondary'
             }`}
           >
@@ -182,7 +182,7 @@ function PropertyPickerModal({ dealId, onClose }) {
                     key={p.id}
                     onClick={() => setSelected(selected?.id === p.id ? null : p)}
                     className={`w-full text-left px-4 py-3 hover:bg-bg-secondary transition-colors ${
-                      selected?.id === p.id ? 'bg-primary-50' : ''
+                      selected?.id === p.id ? 'bg-accent-soft' : ''
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -199,7 +199,7 @@ function PropertyPickerModal({ dealId, onClose }) {
                         </p>
                       </div>
                       {selected?.id === p.id && (
-                        <CheckCircle2 size={16} className="text-primary-600 flex-shrink-0" />
+                        <CheckCircle2 size={16} className="text-accent flex-shrink-0" />
                       )}
                     </div>
                   </button>
@@ -209,10 +209,10 @@ function PropertyPickerModal({ dealId, onClose }) {
 
             {/* Selected property summary */}
             {selected && (
-              <div className="bg-primary-50 border border-primary-100 rounded-lg px-4 py-3 text-sm">
-                <p className="font-medium text-primary-900">{displayName(selected)}</p>
+              <div className="bg-accent-soft border border-hairline rounded-lg px-4 py-3 text-sm">
+                <p className="font-medium text-content-primary">{displayName(selected)}</p>
                 {selected.address && (
-                  <p className="text-primary-700 text-xs mt-0.5">{selected.address}</p>
+                  <p className="text-accent text-xs mt-0.5">{selected.address}</p>
                 )}
               </div>
             )}
@@ -315,8 +315,8 @@ export default function ParcelTab({ canEdit }) {
 
       {/* Property Link Banner */}
       {hasProperty ? (
-        <div className="flex items-center justify-between bg-primary-50 border border-primary-100 rounded-xl px-4 py-3">
-          <div className="flex items-center gap-2 text-sm text-primary-800">
+        <div className="flex items-center justify-between bg-accent-soft border border-hairline rounded-xl px-4 py-3">
+          <div className="flex items-center gap-2 text-sm text-accent">
             <MapPin size={14} />
             <span>Property record linked</span>
           </div>
@@ -324,14 +324,14 @@ export default function ParcelTab({ canEdit }) {
             {canEdit && (
               <button
                 onClick={() => setShowPicker(true)}
-                className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                className="text-xs text-accent hover:text-accent font-medium"
               >
                 Change
               </button>
             )}
             <Link
               to={`/dashboard/properties/${deal.property_id}`}
-              className="text-sm text-primary-700 font-medium hover:text-primary-800 flex items-center gap-1"
+              className="text-sm text-accent font-medium hover:text-accent flex items-center gap-1"
             >
               View / Edit Property Record <ExternalLink size={13} />
             </Link>
@@ -344,7 +344,7 @@ export default function ParcelTab({ canEdit }) {
           action={canEdit && (
             <button
               onClick={() => setShowPicker(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-amber-700"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-premium px-3 py-1.5 text-xs font-medium text-content-inverse transition-colors hover:bg-premium"
             >
               <Link2 size={13} /> Link Property
             </button>
@@ -440,7 +440,7 @@ export default function ParcelTab({ canEdit }) {
                 href={`https://www.google.com/maps/search/?api=1&query=${deal.lat},${deal.lng}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 flex items-center gap-1"
+                className="text-accent hover:text-accent flex items-center gap-1"
               >
                 Open in Google Maps <ExternalLink size={12} />
               </a>
@@ -448,7 +448,7 @@ export default function ParcelTab({ canEdit }) {
                 href={`https://www.google.com/maps/@${deal.lat},${deal.lng},17z/data=!3m1!1e3`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 flex items-center gap-1"
+                className="text-accent hover:text-accent flex items-center gap-1"
               >
                 Satellite view <ExternalLink size={12} />
               </a>
@@ -480,7 +480,7 @@ export default function ParcelTab({ canEdit }) {
             {!hasProperty && canEdit && (
               <button
                 onClick={() => setShowPicker(true)}
-                className="mt-1 text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
+                className="mt-1 text-xs text-accent hover:text-accent font-medium flex items-center gap-1"
               >
                 <Link2 size={12} /> Link a property to enable geocoding
               </button>

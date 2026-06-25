@@ -73,7 +73,7 @@ export default function SourcePagesModal({
             type="button"
             onClick={onClose}
             aria-label="Close source page ledger"
-            className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+            className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
           >
             <X size={18} />
           </button>
@@ -101,7 +101,7 @@ export default function SourcePagesModal({
               <button
                 type="button"
                 onClick={onRetry}
-                className="rounded-lg border border-hairline bg-bg-elevated px-3 py-1.5 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+                className="rounded-lg border border-hairline bg-bg-elevated px-3 py-1.5 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
               >
                 Retry
               </button>
@@ -125,7 +125,7 @@ export default function SourcePagesModal({
               type="button"
               onClick={onPrepare}
               disabled={!canPrepare || preparing}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 transition-colors duration-150 ease-out hover:bg-primary-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent transition-colors duration-150 ease-out hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {preparing ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
               {preparing ? 'Preparing...' : 'Prepare pages'}
@@ -139,7 +139,7 @@ export default function SourcePagesModal({
                 type="button"
                 onClick={onPrepare}
                 disabled={!canPrepare || preparing}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-bg-elevated px-3 py-1.5 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-bg-elevated px-3 py-1.5 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {preparing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                 {preparing ? 'Preparing...' : 'Fill missing pages'}

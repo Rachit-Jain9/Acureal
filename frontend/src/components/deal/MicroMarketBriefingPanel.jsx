@@ -29,9 +29,9 @@ import { formatRelativeTime } from '../../utils/format';
  */
 
 const CONFIDENCE_TONE = {
-  high:   'bg-green-50 text-green-700 border-green-200',
-  medium: 'bg-amber-50 text-amber-800 border-amber-200',
-  low:    'bg-slate-50 text-slate-700 border-slate-200',
+  high:   'bg-pos-soft text-data-positive border-hairline',
+  medium: 'bg-premium-soft text-premium border-hairline',
+  low:    'bg-bg-secondary text-content-secondary border-hairline',
 };
 
 const TIER_LABEL = { 1: 'Ultra-premium', 2: 'Premium', 3: 'Mid', 4: 'Affordable', 5: 'Emerging' };
@@ -172,7 +172,7 @@ function DemandSignal({ signal }) {
   const isYoyPriceUp = signal.signal_kind === 'price_yoy_pct' && Number(signal.value_numeric) > 0;
   return (
     <div className="flex items-start gap-2 py-1.5">
-      <Icon size={13} className={clsx('shrink-0 mt-0.5', isYoyPriceUp ? 'text-green-600' : 'text-content-muted')} />
+      <Icon size={13} className={clsx('shrink-0 mt-0.5', isYoyPriceUp ? 'text-data-positive' : 'text-content-muted')} />
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-2 flex-wrap">
           <span className="text-xs font-medium text-content-secondary">

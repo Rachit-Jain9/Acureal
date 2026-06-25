@@ -68,7 +68,7 @@ export default function SemanticSearchPanel({ dealId, onResult }) {
       </form>
 
       {error && (
-        <p className="mt-3 text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">{error}</p>
+        <p className="mt-3 text-sm text-data-negative bg-neg-soft border border-hairline rounded p-2">{error}</p>
       )}
 
       {results !== null && !error && (

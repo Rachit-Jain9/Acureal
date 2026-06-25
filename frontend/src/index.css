@@ -390,54 +390,14 @@ html[data-theme='light'] {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
-   Dark-mode semantic-wash overrides.
-
-   The bulk of the pre-theme "safety net" was retired in 2026-05 → 2026-05-25.
-   Every legacy `bg-white`, `bg-gray-*`, `bg-slate-*`, `bg-paper-*`,
-   `border-gray-*`, `border-slate-*`, `border-line`, `divide-gray-*`,
-   `text-gray-*`, `text-slate-*`, `text-ink-*` call site was migrated
-   to the semantic tokens (`bg-bg-elevated`, `bg-bg-secondary`,
-   `text-content-primary`, `border-hairline`, etc.), and the
-   corresponding override rules were deleted along with them.
-
-   What REMAINS below is intentional: the semantic tinted-info utilities
-   (red / amber / sky / indigo / violet 50 + 200) and the gradient washes
-   that several editorial / hero panels use. Those Tailwind tones are
-   tuned for light mode and need to soften in dark mode to keep
-   readable contrast; rewriting every call site to use bespoke tokens
-   isn't worth it.
+   The dark-mode "semantic-wash override" block that used to live here
+   (remapping hardcoded bg-*-50 / border-*-200 / gradient washes via !important)
+   was REMOVED on 2026-06-25 once every call site was migrated to the semantic
+   theme tokens. Colors now route through tokens directly (see
+   docs/THEMING_TOKENS.md + the frontend/scripts/check-theme-tokens.cjs guard),
+   so no per-class dark override is needed. Do not reintroduce raw palette
+   utilities in src/components or src/pages — use the tokens.
    ───────────────────────────────────────────────────────────────────────── */
-html[data-theme='dark'] {
-  /* Gradient washes lose their tint in dark mode; collapse to subtle surfaces */
-  .from-indigo-50,
-  .from-sky-50,
-  .from-amber-50,
-  .from-violet-50,
-  .to-violet-50,
-  .to-cyan-50,
-  .to-orange-50,
-  .to-sky-50,
-  .from-emerald-50,
-  .to-emerald-50,
-  .from-rose-50,
-  .to-rose-50 { --tw-gradient-from: transparent !important; --tw-gradient-to: transparent !important; }
-  .bg-gradient-to-r { background-image: none !important; background-color: var(--color-bg-secondary) !important; }
-
-  /* Tinted info panels → soft semantic accent washes */
-  .bg-rose-50 { background-color: rgba(239,68,68,0.10) !important; }
-  .bg-emerald-50 { background-color: rgba(34,197,94,0.10) !important; }
-  .bg-amber-50 { background-color: var(--color-brand-premium-soft) !important; }
-  .bg-sky-50 { background-color: var(--color-brand-accent-soft) !important; }
-  .bg-indigo-50 { background-color: var(--color-brand-accent-soft) !important; }
-  .bg-violet-50 { background-color: var(--color-brand-accent-soft) !important; }
-
-  .border-rose-200 { border-color: rgba(239,68,68,0.35) !important; }
-  .border-emerald-200 { border-color: rgba(34,197,94,0.35) !important; }
-  .border-amber-200 { border-color: rgba(245,184,0,0.35) !important; }
-  .border-sky-200,
-  .border-indigo-200,
-  .border-violet-200 { border-color: rgba(59,130,246,0.35) !important; }
-}
 
 @layer utilities {
   /* Evidence-ref flash — fired by useScrollOnMount when an operator

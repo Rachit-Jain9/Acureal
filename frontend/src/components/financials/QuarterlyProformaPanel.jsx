@@ -234,7 +234,7 @@ export default function QuarterlyProformaPanel({ proforma }) {
                   key={h.key}
                   className={clsx(
                     'px-3 py-2 border-b border-hairline text-right uppercase tracking-[0.1em] text-[10px] font-semibold whitespace-nowrap',
-                    i === peakIndex && 'ring-1 ring-amber-400 bg-premium-soft',
+                    i === peakIndex && 'ring-1 ring-premium bg-premium-soft',
                   )}
                 >
                   <div className="text-content-primary text-[11px] font-semibold">{h.label}</div>
@@ -311,7 +311,7 @@ export default function QuarterlyProformaPanel({ proforma }) {
                   key={i}
                   className={clsx(
                     'px-3 py-2 text-right font-semibold',
-                    i === peakIndex && 'bg-premium-soft ring-1 ring-amber-400',
+                    i === peakIndex && 'bg-premium-soft ring-1 ring-premium',
                     n >= 0 ? 'text-data-positive' : 'text-data-negative',
                   )}
                 >
@@ -338,7 +338,7 @@ export default function QuarterlyProformaPanel({ proforma }) {
                     key={i}
                     className={clsx(
                       'px-3 py-2 text-right',
-                      i === peakIndex && 'bg-premium-soft ring-1 ring-amber-500 font-semibold text-premium',
+                      i === peakIndex && 'bg-premium-soft ring-1 ring-premium font-semibold text-premium',
                       val < 0 ? 'text-premium' : 'text-content-secondary',
                     )}
                   >
@@ -472,7 +472,7 @@ function SubtotalRow({ label, cells, total, peakIndex, tone, signed }) {
             key={i}
             className={clsx(
               'px-3 py-1.5 text-right',
-              i === peakIndex && 'ring-1 ring-amber-300',
+              i === peakIndex && 'ring-1 ring-premium',
             )}
           >
             {signed && val < 0 ? `(${fmtCell(Math.abs(val))})` : fmtCell(val)}
