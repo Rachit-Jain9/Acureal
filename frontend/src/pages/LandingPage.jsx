@@ -1,12 +1,54 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import HeroParcelResolve from './landing/HeroParcelResolve';
-import InboundBecomesStructure from './landing/InboundBecomesStructure';
-import DiligenceSevenLayers from './landing/DiligenceSevenLayers';
-import TheKernel from './landing/TheKernel';
-import ProvenanceThread from './landing/ProvenanceThread';
-import TheDecisionCommittee from './landing/TheDecisionCommittee';
+// The five below-fold scenes are code-split and mounted on scroll (see
+// <LazyScene> below), so the cold-cache first paint ships only the hero + shell
+// instead of all six animation scenes. Each scene also owns timers/scroll
+// listeners that now only start once the scene actually mounts near the viewport.
+const InboundBecomesStructure = lazy(() => import('./landing/InboundBecomesStructure'));
+const DiligenceSevenLayers = lazy(() => import('./landing/DiligenceSevenLayers'));
+const TheKernel = lazy(() => import('./landing/TheKernel'));
+const ProvenanceThread = lazy(() => import('./landing/ProvenanceThread'));
+const TheDecisionCommittee = lazy(() => import('./landing/TheDecisionCommittee'));
+
+// Mounts its children once they scroll within ~900px of the viewport (so the
+// real scene renders just OFF-screen — any height settling happens before the
+// reader reaches it, never as a visible jump). Until then it reserves vertical
+// space via minHeight so the page has a stable scroll height and the observer
+// can fire. Degrades to eager render where IntersectionObserver is unavailable.
+function LazyScene({ children, minHeight = '90vh' }) {
+  const ref = useRef(null);
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    if (typeof IntersectionObserver === 'undefined') {
+      setShow(true);
+      return undefined;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setShow(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: '900px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} style={show ? undefined : { minHeight }}>
+      {show ? (
+        <Suspense fallback={<div style={{ minHeight }} aria-hidden="true" />}>
+          {children}
+        </Suspense>
+      ) : null}
+    </div>
+  );
+}
 
 /**
  * LandingPage — REDIP public marketing surface.
@@ -190,11 +232,11 @@ export default function LandingPage() {
       {/* ── Scenes, in order ─────────────────────────────────────────────── */}
       <main>
         <HeroParcelResolve />
-        <InboundBecomesStructure />
-        <DiligenceSevenLayers />
-        <TheKernel />
-        <ProvenanceThread />
-        <TheDecisionCommittee />
+        <LazyScene minHeight="80vh"><InboundBecomesStructure /></LazyScene>
+        <LazyScene minHeight="100vh"><DiligenceSevenLayers /></LazyScene>
+        <LazyScene minHeight="100vh"><TheKernel /></LazyScene>
+        <LazyScene minHeight="100vh"><ProvenanceThread /></LazyScene>
+        <LazyScene minHeight="90vh"><TheDecisionCommittee /></LazyScene>
       </main>
 
       {/* ── Quiet colophon footer ────────────────────────────────────────── */}
