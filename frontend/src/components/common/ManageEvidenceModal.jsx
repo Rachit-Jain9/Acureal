@@ -226,7 +226,7 @@ export default function ManageEvidenceModal({
                     type="button"
                     onClick={() => handleDetach(link.id)}
                     disabled={detach.isPending}
-                    className="p-1 text-content-muted hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                    className="p-1 text-content-muted hover:text-data-negative hover:bg-neg-soft rounded transition-colors"
                     aria-label="Remove this link"
                   >
                     <Trash2 size={12} />
@@ -363,7 +363,7 @@ export default function ManageEvidenceModal({
 
           <div>
             <label className={FIELD_LABEL} htmlFor="ev-notes">
-              Notes {linkKind === 'manual_verification' && <span className="text-red-600">*</span>}
+              Notes {linkKind === 'manual_verification' && <span className="text-data-negative">*</span>}
             </label>
             <textarea
               id="ev-notes"
@@ -380,7 +380,7 @@ export default function ManageEvidenceModal({
           </div>
 
           {formError && (
-            <p className="text-[12px] text-red-600">{formError}</p>
+            <p className="text-[12px] text-data-negative">{formError}</p>
           )}
 
           <div className="flex items-center justify-end gap-2 pt-1">

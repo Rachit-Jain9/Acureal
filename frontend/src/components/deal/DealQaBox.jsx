@@ -158,7 +158,7 @@ function HistoryRow({ row, dealId, onDelete }) {
       {expanded && (
         <div className="mt-2 ml-5 space-y-2">
           {isFailed ? (
-            <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+            <div className="flex items-start gap-2 rounded-md border border-hairline bg-premium-soft p-2 text-xs text-premium">
               <AlertTriangle size={12} className="shrink-0 mt-0.5" />
               <div>
                 {row.failure_reason || 'Q&A failed.'} Try rephrasing.
@@ -180,7 +180,7 @@ function HistoryRow({ row, dealId, onDelete }) {
                 </div>
               )}
               {drifts.length > 0 && (
-                <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                <div className="text-[11px] text-premium bg-premium-soft border border-hairline rounded px-2 py-1">
                   <AlertTriangle size={10} className="inline -mt-0.5 mr-1" />
                   {drifts.length} numerical claim{drifts.length === 1 ? '' : 's'} flagged for review.
                 </div>

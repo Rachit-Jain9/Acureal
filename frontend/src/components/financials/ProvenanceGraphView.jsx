@@ -7,7 +7,7 @@ const KIND_STYLES = {
   input: {
     fill: '#eef2ff',
     stroke: '#6366f1',
-    label: 'text-indigo-700',
+    label: 'text-accent',
   },
   computation: {
     fill: '#f9fafb',
@@ -17,7 +17,7 @@ const KIND_STYLES = {
   output: {
     fill: '#ecfdf5',
     stroke: '#10b981',
-    label: 'text-emerald-700',
+    label: 'text-data-positive',
   },
 };
 
@@ -168,8 +168,8 @@ export default function ProvenanceGraphView({
             How this deal is computed
           </h4>
           {source === 'live' && remoteMeta?.engineVersion && (
-            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span className="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-pos-soft text-data-positive border border-hairline">
+              <span className="w-1.5 h-1.5 rounded-full bg-data-positive"></span>
               {remoteMeta.engineVersion}
             </span>
           )}
@@ -193,7 +193,7 @@ export default function ProvenanceGraphView({
       {open && (
         <div className="mt-4 space-y-3">
           {remoteStatus === 'error' && (
-            <div className="flex items-start gap-2 p-2 rounded border border-amber-200 bg-amber-50 text-xs text-amber-800">
+            <div className="flex items-start gap-2 p-2 rounded border border-hairline bg-premium-soft text-xs text-premium">
               <AlertCircle size={14} className="mt-0.5 flex-shrink-0" />
               <span>
                 Live graph unavailable — showing a preview topology for{' '}

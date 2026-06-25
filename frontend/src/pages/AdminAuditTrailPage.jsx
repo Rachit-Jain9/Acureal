@@ -80,9 +80,9 @@ const EVENT_TONE = {
 };
 
 const TONE_CLASS = {
-  info:  'bg-sky-50 text-sky-700 border-sky-200',
-  amber: 'bg-amber-50 text-amber-700 border-amber-200',
-  rose:  'bg-rose-50 text-rose-700 border-rose-200',
+  info:  'bg-accent-soft text-accent border-hairline',
+  amber: 'bg-premium-soft text-premium border-hairline',
+  rose:  'bg-neg-soft text-data-negative border-hairline',
   slate: 'bg-bg-secondary text-content-secondary border-hairline',
 };
 
@@ -305,7 +305,7 @@ export default function AdminAuditTrailPage() {
 
         {/* Cryptographic-signature footer — explains the HMAC chain */}
         <div className="px-5 py-2.5 border-t border-hairline-soft text-[10px] text-content-muted leading-relaxed">
-          <ShieldCheck size={10} className="inline -mt-0.5 mr-1 text-emerald-700" />
+          <ShieldCheck size={10} className="inline -mt-0.5 mr-1 text-data-positive" />
           Every row carries an HMAC-SHA256 signature over the engine inputs + outputs hashes,
           chain-keyed to <code className="font-mono">DEAL_EVENTS_HMAC_KEY</code>. The dashboard's
           Activity / Override timeline reads the same source; this page is the full operator view.

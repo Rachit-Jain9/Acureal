@@ -39,8 +39,8 @@ export default function CloseAccountCard() {
 
   return (
     <>
-      <div className="bg-bg-elevated rounded-xl shadow-sm border border-rose-200 p-6">
-        <h3 className="text-base font-semibold text-rose-900 mb-1 flex items-center gap-2">
+      <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline p-6">
+        <h3 className="text-base font-semibold text-data-negative mb-1 flex items-center gap-2">
           <AlertTriangle size={18} />
           Close My Account
         </h3>
@@ -54,7 +54,7 @@ export default function CloseAccountCard() {
         <button
           type="button"
           onClick={() => { setOpen(true); setConfirmText(''); }}
-          className="text-sm font-medium text-rose-700 hover:text-rose-900 border border-rose-300 hover:border-rose-500 rounded-lg px-4 py-2 transition-colors"
+          className="text-sm font-medium text-data-negative hover:text-data-negative border border-hairline hover:border-hairline-strong rounded-lg px-4 py-2 transition-colors"
         >
           Close my account
         </button>
@@ -77,12 +77,12 @@ export default function CloseAccountCard() {
               <X size={18} />
             </button>
             <h4 id="close-account-title" className="font-display text-lg font-semibold text-content-primary mb-2 flex items-center gap-2">
-              <AlertTriangle size={18} className="text-rose-700" />
+              <AlertTriangle size={18} className="text-data-negative" />
               Confirm account closure
             </h4>
             <p className="text-sm text-content-secondary mb-4">
               This logs you out everywhere, blocks future sign-ins, and schedules anonymization of your
-              personal data after 90 days. Type <code className="bg-bg-secondary px-1.5 py-0.5 rounded text-rose-700 font-mono">CLOSE</code> below
+              personal data after 90 days. Type <code className="bg-bg-secondary px-1.5 py-0.5 rounded text-data-negative font-mono">CLOSE</code> below
               to confirm.
             </p>
             <input
@@ -108,7 +108,7 @@ export default function CloseAccountCard() {
                 type="button"
                 onClick={handleClose}
                 disabled={!canConfirm || submitting}
-                className="text-sm font-medium text-white bg-rose-700 hover:bg-rose-800 disabled:bg-rose-300 disabled:cursor-not-allowed rounded-lg px-4 py-2 flex items-center gap-1.5 transition-colors"
+                className="text-sm font-medium text-content-inverse bg-data-negative hover:bg-data-negative disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-4 py-2 flex items-center gap-1.5 transition-colors"
               >
                 {submitting && <Loader2 size={14} className="animate-spin" />}
                 {submitting ? 'Closing…' : 'Close account permanently'}

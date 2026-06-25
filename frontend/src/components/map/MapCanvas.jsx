@@ -62,7 +62,7 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
             <p className="text-sm font-semibold">{property.name}</p>
             <p className="text-xs text-content-secondary">{property.city}, {property.state}</p>
             {property.geocode_status === 'approximate' && (
-              <p className="text-xs text-amber-600">⚠ Approximate location</p>
+              <p className="text-xs text-premium">⚠ Approximate location</p>
             )}
           </div>
         </Tooltip>
@@ -74,7 +74,7 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
               <p className="text-sm text-content-secondary">{property.address}</p>
             </div>
             {property.geocode_status === 'approximate' && (
-              <div className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+              <div className="text-xs text-premium bg-premium-soft border border-hairline rounded px-2 py-1.5">
                 ⚠ Location is approximate — the pin may not reflect the exact site. Enter a precise address and re-geocode from the{' '}
                 <Link to={`/dashboard/properties/${property.id}`} className="underline font-medium">property page</Link>.
               </div>
@@ -102,13 +102,13 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
               <button
                 type="button"
                 onClick={() => onSelectProperty(property.id)}
-                className="text-sm font-medium text-primary-600 hover:text-primary-700"
+                className="text-sm font-medium text-accent hover:text-accent"
               >
                 Focus property
               </button>
               <Link
                 to={`/dashboard/properties/${property.id}`}
-                className="text-sm font-medium text-primary-600 hover:text-primary-700"
+                className="text-sm font-medium text-accent hover:text-accent"
               >
                 Open detail
               </Link>
@@ -249,7 +249,7 @@ function PropertyClusterLayer({ properties, selectedProperty, showClusters, onSe
                     <p className="text-sm font-medium text-content-primary">{property.name}</p>
                     <p className="text-xs text-content-secondary">{property.city}</p>
                   </div>
-                  <span className="text-xs font-medium text-primary-600">Focus</span>
+                  <span className="text-xs font-medium text-accent">Focus</span>
                 </button>
               ))}
             </div>
@@ -474,7 +474,7 @@ export default function MapCanvas({
 
       <div className="pointer-events-none absolute left-4 top-4 z-[1000] max-w-sm rounded-2xl bg-bg-elevated/95 p-4 shadow-lg ring-1 ring-black/5 dark:ring-white/10">
         <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-primary-50 p-2 text-primary-600">
+          <div className="rounded-xl bg-accent-soft p-2 text-accent">
             <Layers3 size={18} />
           </div>
           <div>
@@ -499,7 +499,7 @@ export default function MapCanvas({
         </div>
       </div>
 
-      <div className="absolute bottom-4 left-4 z-[1000] flex flex-wrap items-center gap-3 rounded-2xl bg-bg-primary px-4 py-3 text-sm text-white shadow-lg">
+      <div className="absolute bottom-4 left-4 z-[1000] flex flex-wrap items-center gap-3 rounded-2xl bg-surface-2 px-4 py-3 text-sm text-content-primary shadow-lg">
         <span className="inline-flex items-center gap-2">
           <Building2 size={15} />
           {properties.length} properties

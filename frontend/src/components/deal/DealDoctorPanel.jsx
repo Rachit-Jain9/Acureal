@@ -27,12 +27,12 @@ import { formatRelativeTime } from '../../utils/format';
  */
 
 const VERB_TONE = {
-  Diverges:           'bg-amber-50 text-amber-800 border-amber-200',
-  'Lacks support':    'bg-red-50 text-red-700 border-red-200',
-  Inconsistent:       'bg-orange-50 text-orange-700 border-orange-200',
-  'Below benchmark':  'bg-rose-50 text-rose-700 border-rose-200',
-  'Above benchmark':  'bg-purple-50 text-purple-700 border-purple-200',
-  Missing:            'bg-slate-50 text-slate-700 border-slate-200',
+  Diverges:           'bg-premium-soft text-premium border-hairline',
+  'Lacks support':    'bg-neg-soft text-data-negative border-hairline',
+  Inconsistent:       'bg-premium-soft text-premium border-hairline',
+  'Below benchmark':  'bg-neg-soft text-data-negative border-hairline',
+  'Above benchmark':  'bg-accent-soft text-accent border-hairline',
+  Missing:            'bg-bg-secondary text-content-secondary border-hairline',
 };
 
 const GROUP_ICON = {
@@ -43,15 +43,15 @@ const GROUP_ICON = {
 };
 
 const severityIcon = (severity) => {
-  if (severity >= 4) return <AlertOctagon size={14} className="text-red-600" />;
-  if (severity >= 3) return <AlertTriangle size={14} className="text-amber-600" />;
-  return <Info size={14} className="text-slate-500" />;
+  if (severity >= 4) return <AlertOctagon size={14} className="text-data-negative" />;
+  if (severity >= 3) return <AlertTriangle size={14} className="text-premium" />;
+  return <Info size={14} className="text-content-muted" />;
 };
 
 function FindingCard({ finding }) {
   const [open, setOpen] = useState(false);
   const navigateToEvidence = useEvidenceNavigate();
-  const verbCls = VERB_TONE[finding.verb] || 'bg-slate-50 text-slate-700 border-slate-200';
+  const verbCls = VERB_TONE[finding.verb] || 'bg-bg-secondary text-content-secondary border-hairline';
 
   return (
     <div className="border border-hairline rounded-md bg-surface px-3 py-2.5">

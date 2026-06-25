@@ -23,15 +23,15 @@ const SHORT_LABEL = {
 };
 
 const POSTURE = {
-  cleared: { label: 'Cleared', dot: 'bg-green-500', text: 'text-green-700' },
-  unverified: { label: 'Not verified', dot: 'bg-amber-500', text: 'text-amber-700' },
-  flagged: { label: 'Flagged', dot: 'bg-red-500', text: 'text-red-700' },
+  cleared: { label: 'Cleared', dot: 'bg-data-positive', text: 'text-data-positive' },
+  unverified: { label: 'Not verified', dot: 'bg-premium', text: 'text-premium' },
+  flagged: { label: 'Flagged', dot: 'bg-data-negative', text: 'text-data-negative' },
 };
 
 const OVERALL = {
-  cleared: { label: 'Cleared', tone: 'text-green-700', icon: 'text-green-600' },
-  unverified: { label: 'Not verified', tone: 'text-amber-700', icon: 'text-amber-600' },
-  flagged: { label: 'Flagged', tone: 'text-red-700', icon: 'text-red-600' },
+  cleared: { label: 'Cleared', tone: 'text-data-positive', icon: 'text-data-positive' },
+  unverified: { label: 'Not verified', tone: 'text-premium', icon: 'text-premium' },
+  flagged: { label: 'Flagged', tone: 'text-data-negative', icon: 'text-data-negative' },
 };
 
 export default function RiskRadarStrip({ dealId }) {
@@ -54,7 +54,7 @@ export default function RiskRadarStrip({ dealId }) {
   return (
     <Link
       to={`/dashboard/deals/${dealId}?tab=risk`}
-      className="block bg-bg-elevated border border-hairline rounded-editorial p-3 transition-colors duration-150 ease-out hover:border-primary-300 active:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+      className="block bg-bg-elevated border border-hairline rounded-editorial p-3 transition-colors duration-150 ease-out hover:border-hairline-strong active:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
     >
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex items-center gap-2.5 min-w-0">

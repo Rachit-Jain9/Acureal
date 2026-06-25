@@ -41,7 +41,7 @@ function ToggleRow({ checked, label, description, onChange }) {
         type="checkbox"
         checked={checked}
         onChange={onChange}
-        className="mt-1 h-4 w-4 rounded border-hairline-strong text-primary-600 focus:ring-primary-500"
+        className="mt-1 h-4 w-4 rounded border-hairline-strong text-accent focus:ring-accent"
       />
     </label>
   );
@@ -273,37 +273,37 @@ export default function MapPage() {
       <div className="grid grid-cols-1 xl:grid-cols-[390px_minmax(0,1fr)] gap-6">
         <aside className="card-editorial flex h-[calc(100vh-180px)] min-h-[720px] flex-col overflow-hidden">
           <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-4 dark:border-blue-900/60 dark:bg-blue-950/45">
-              <p className="text-xs font-medium uppercase tracking-wide text-blue-700 dark:text-blue-300">Visible Properties</p>
+            <div className="rounded-xl border border-hairline bg-accent-soft px-3 py-4 dark:border-blue-900/60 dark:bg-blue-950/45">
+              <p className="text-xs font-medium uppercase tracking-wide text-accent dark:text-accent">Visible Properties</p>
               <p className="mt-2 text-2xl font-semibold text-content-primary">{filteredProperties.length}</p>
             </div>
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-4 dark:border-emerald-900/60 dark:bg-emerald-950/45">
-              <p className="text-xs font-medium uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Visible Deals</p>
+            <div className="rounded-xl border border-hairline bg-pos-soft px-3 py-4 dark:border-emerald-900/60 dark:bg-emerald-950/45">
+              <p className="text-xs font-medium uppercase tracking-wide text-data-positive dark:text-data-positive">Visible Deals</p>
               <p className="mt-2 text-2xl font-semibold text-content-primary">{visibleDeals.length}</p>
             </div>
-            <div className="rounded-xl border border-purple-100 bg-purple-50 px-3 py-4 dark:border-purple-900/60 dark:bg-purple-950/45">
-              <p className="text-xs font-medium uppercase tracking-wide text-purple-700 dark:text-purple-300">Cities</p>
+            <div className="rounded-xl border border-hairline bg-accent-soft px-3 py-4 dark:border-purple-900/60 dark:bg-purple-950/45">
+              <p className="text-xs font-medium uppercase tracking-wide text-accent dark:text-accent">Cities</p>
               <p className="mt-2 text-2xl font-semibold text-content-primary">{Object.keys(cityCounts).length}</p>
             </div>
-            <div className="rounded-xl border border-amber-100 bg-amber-50 px-3 py-4 dark:border-amber-900/60 dark:bg-amber-950/45">
-              <p className="text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">Pin Review</p>
+            <div className="rounded-xl border border-hairline bg-premium-soft px-3 py-4 dark:border-amber-900/60 dark:bg-amber-950/45">
+              <p className="text-xs font-medium uppercase tracking-wide text-premium dark:text-premium">Pin Review</p>
               <p className="mt-2 text-2xl font-semibold text-content-primary">{reviewQueueProperties.length}</p>
             </div>
           </div>
 
           {reviewQueueProperties.length > 0 && (
-            <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+            <div className="mt-5 rounded-2xl border border-hairline bg-premium-soft p-4 shadow-sm">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-700">Precision Mode</p>
-                  <h2 className="mt-2 text-base font-semibold text-amber-950">Only precise property pins appear on this map</h2>
-                  <p className="mt-1 text-sm text-amber-900">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-premium">Precision Mode</p>
+                  <h2 className="mt-2 text-base font-semibold text-premium">Only precise property pins appear on this map</h2>
+                  <p className="mt-1 text-sm text-premium">
                     REDIP now excludes low-confidence locations from nearby comps and deal heat layers.
                     {approximateCount > 0 ? ` ${approximateCount} properties are approximate.` : ''}
                     {missingPinCount > 0 ? ` ${missingPinCount} still need coordinates.` : ''}
                   </p>
                 </div>
-                <div className="rounded-xl border border-amber-300 bg-white/80 px-3 py-2 text-right text-xs text-amber-900">
+                <div className="rounded-xl border border-hairline bg-white/80 px-3 py-2 text-right text-xs text-premium">
                   <p>Precise statuses</p>
                   <p className="mt-1 font-semibold">{Array.from(PRECISE_GEOCODE_STATUSES).join(' + ')}</p>
                 </div>
@@ -314,7 +314,7 @@ export default function MapPage() {
                   <Link
                     key={property.id}
                     to={`/dashboard/properties/${property.id}`}
-                    className="flex items-center justify-between rounded-xl border border-amber-200 bg-bg-elevated px-3 py-3 transition hover:border-amber-300 hover:bg-amber-100/40"
+                    className="flex items-center justify-between rounded-xl border border-hairline bg-bg-elevated px-3 py-3 transition hover:border-hairline-strong hover:bg-amber-100/40"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-content-primary">{property.name}</p>
@@ -322,7 +322,7 @@ export default function MapPage() {
                         {[property.city, property.state].filter(Boolean).join(', ') || 'Location incomplete'}
                       </p>
                     </div>
-                    <span className="rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-800">
+                    <span className="rounded-full bg-premium-soft px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-premium">
                       {property.geocodeStatus?.replace(/_/g, ' ') || 'review'}
                     </span>
                   </Link>
@@ -423,7 +423,7 @@ export default function MapPage() {
                 <h2 className="text-base font-semibold text-content-primary">Smart Layers</h2>
                 <p className="text-sm text-content-secondary">Turn overlays on and off depending on the story you want to see.</p>
               </div>
-              <div className="rounded-xl bg-primary-50 p-2 text-primary-600">
+              <div className="rounded-xl bg-accent-soft p-2 text-accent">
                 <Layers3 size={18} />
               </div>
             </div>
@@ -463,7 +463,7 @@ export default function MapPage() {
                     onClick={() => setNearbyRadiusKm(radius)}
                     className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
                       nearbyRadiusKm === radius
-                        ? 'bg-primary-600 text-white'
+                        ? 'bg-accent text-white'
                         : 'bg-bg-secondary text-content-secondary hover:bg-bg-secondary'
                     }`}
                   >
@@ -501,7 +501,7 @@ export default function MapPage() {
                 <h2 className="text-base font-semibold text-content-primary">Selected Property</h2>
                 <p className="text-sm text-content-secondary">Focus one property to unlock nearby comps and pricing context.</p>
               </div>
-              <div className="rounded-xl bg-primary-50 p-2 text-primary-600">
+              <div className="rounded-xl bg-accent-soft p-2 text-accent">
                 <MapPin size={18} />
               </div>
             </div>
@@ -534,7 +534,7 @@ export default function MapPage() {
 
                   <Link
                     to={`/dashboard/properties/${selectedProperty.id}`}
-                    className="mt-3 inline-flex text-sm font-medium text-primary-600 hover:text-primary-700"
+                    className="mt-3 inline-flex text-sm font-medium text-accent hover:text-accent"
                   >
                     Open property detail
                   </Link>
@@ -608,7 +608,7 @@ export default function MapPage() {
                       key={property.id}
                       className={`rounded-2xl border px-4 py-4 transition ${
                         isSelected
-                          ? 'border-primary-500 bg-primary-50 shadow-sm'
+                          ? 'border-accent bg-accent-soft shadow-sm'
                           : 'border-hairline-strong bg-bg-elevated hover:border-hairline-strong hover:shadow-sm'
                       }`}
                     >
@@ -650,7 +650,7 @@ export default function MapPage() {
                         </button>
                         <Link
                           to={`/dashboard/properties/${property.id}`}
-                          className="font-medium text-primary-600 hover:text-primary-700"
+                          className="font-medium text-accent hover:text-accent"
                         >
                           Open detail
                         </Link>

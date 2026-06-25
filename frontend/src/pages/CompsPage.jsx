@@ -609,9 +609,9 @@ export default function CompsPage() {
                     onClick={() => setViewMode(value)}
                     className={
                       'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors duration-150 ease-out ' +
-                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] ' +
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] ' +
                       (active
-                        ? 'bg-primary-50 text-primary-700 shadow-sm'
+                        ? 'bg-accent-soft text-accent shadow-sm'
                         : 'text-content-secondary hover:bg-bg-secondary hover:text-content-primary')
                     }
                   >
@@ -624,7 +624,7 @@ export default function CompsPage() {
             <button
               onClick={handleExport}
               disabled={exporting || rawRows.length === 0}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-bg-elevated px-3 py-2 text-sm font-medium text-content-secondary transition-colors duration-150 ease-out hover:border-primary-300 hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-hairline-strong"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline-strong bg-bg-elevated px-3 py-2 text-sm font-medium text-content-secondary transition-colors duration-150 ease-out hover:border-hairline-strong hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:border-hairline-strong"
               title={rawRows.length === 0 ? 'Nothing to export' : 'Download all comps as CSV'}
             >
               {exporting ? (
@@ -672,7 +672,7 @@ export default function CompsPage() {
             onChange={(e) => updateFilter({ city: e.target.value })}
             placeholder="City"
             aria-label="Filter by city"
-            className="w-32 px-3 py-2 rounded-lg text-sm bg-bg-elevated text-content-primary placeholder:text-content-muted border border-hairline-strong transition-colors duration-150 hover:border-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-400"
+            className="w-32 px-3 py-2 rounded-lg text-sm bg-bg-elevated text-content-primary placeholder:text-content-muted border border-hairline-strong transition-colors duration-150 hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:border-accent"
           />
           <input
             type="number"
@@ -680,7 +680,7 @@ export default function CompsPage() {
             onChange={(e) => updateFilter({ minRate: e.target.value })}
             placeholder="Min ₹/sqft"
             aria-label="Minimum rate per sqft"
-            className="w-28 px-3 py-2 rounded-lg text-sm tabular-nums bg-bg-elevated text-content-primary placeholder:text-content-muted border border-hairline-strong transition-colors duration-150 hover:border-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-400"
+            className="w-28 px-3 py-2 rounded-lg text-sm tabular-nums bg-bg-elevated text-content-primary placeholder:text-content-muted border border-hairline-strong transition-colors duration-150 hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:border-accent"
           />
           <input
             type="number"
@@ -688,7 +688,7 @@ export default function CompsPage() {
             onChange={(e) => updateFilter({ maxRate: e.target.value })}
             placeholder="Max ₹/sqft"
             aria-label="Maximum rate per sqft"
-            className="w-28 px-3 py-2 rounded-lg text-sm tabular-nums bg-bg-elevated text-content-primary placeholder:text-content-muted border border-hairline-strong transition-colors duration-150 hover:border-primary-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 focus-visible:border-primary-400"
+            className="w-28 px-3 py-2 rounded-lg text-sm tabular-nums bg-bg-elevated text-content-primary placeholder:text-content-muted border border-hairline-strong transition-colors duration-150 hover:border-hairline-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:border-accent"
           />
           <DataToolbar.Sort
             value={sort.key === 'created_at' && sort.dir === 'desc' ? 'created_desc'
@@ -821,9 +821,9 @@ export default function CompsPage() {
                     : { tone: 'neutral', label: 'Internal' });
                   const yoy = comp.yoy_change_pct;
                   const yoyColor = yoy == null ? 'text-content-muted'
-                    : yoy >= 20 ? 'text-emerald-600 font-semibold'
-                    : yoy >= 5  ? 'text-emerald-600'
-                    : yoy < 0   ? 'text-red-500' : 'text-content-secondary';
+                    : yoy >= 20 ? 'text-data-positive font-semibold'
+                    : yoy >= 5  ? 'text-data-positive'
+                    : yoy < 0   ? 'text-data-negative' : 'text-content-secondary';
                   const rangeLow  = comp.rate_per_sqft_min;
                   const rangeHigh = comp.rate_per_sqft_max;
                   const hasRange = rangeLow != null && rangeHigh != null && Number(rangeLow) !== Number(rangeHigh);
@@ -836,7 +836,7 @@ export default function CompsPage() {
                       className={
                         'cursor-pointer transition-colors duration-150 ease-out ' +
                         (isSelected
-                          ? 'bg-primary-50/60 ring-1 ring-inset ring-primary-200'
+                          ? 'bg-accent-soft ring-1 ring-inset ring-accent'
                           : 'hover:bg-bg-secondary')
                       }
                     >
@@ -860,7 +860,7 @@ export default function CompsPage() {
                             editorial-not-tacky rule. Replaces the prior
                             saturated blue tile that read as chip-soup. */}
                         <span className="inline-flex items-center gap-1 rounded-full border border-hairline bg-bg-secondary px-2 py-0.5 text-[11px] font-medium text-content-secondary uppercase tracking-wide">
-                          <span className="w-1 h-1 rounded-full bg-primary-500" aria-hidden="true" />
+                          <span className="w-1 h-1 rounded-full bg-accent" aria-hidden="true" />
                           {comp.project_type?.replace(/_/g, ' ') || '—'}
                         </span>
                       </td>
@@ -885,7 +885,7 @@ export default function CompsPage() {
                               target="_blank"
                               rel="noopener noreferrer"
                               onClick={(e) => e.stopPropagation()}
-                              className="inline-block transition-opacity duration-150 ease-out hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded-full"
+                              className="inline-block transition-opacity duration-150 ease-out hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-full"
                               title={comp.source || 'Open source'}
                             >
                               <Badge tone={dt.tone}>{dt.label}</Badge>
@@ -900,7 +900,7 @@ export default function CompsPage() {
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDelete(comp.id); }}
                             disabled={deleteMutation.isPending}
-                            className="p-1.5 rounded-lg text-content-muted transition-colors duration-150 ease-out hover:text-red-600 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 active:scale-[0.95] disabled:opacity-50"
+                            className="p-1.5 rounded-lg text-content-muted transition-colors duration-150 ease-out hover:text-data-negative hover:bg-neg-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40 active:scale-[0.95] disabled:opacity-50"
                             title="Delete comparable"
                           >
                             <Trash2 size={16} />
@@ -926,7 +926,7 @@ export default function CompsPage() {
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
                   disabled={safePage === 1}
                   aria-label="Previous page"
-                  className="p-1.5 rounded-lg border border-hairline-strong text-content-secondary transition-colors duration-150 hover:bg-bg-elevated hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  className="p-1.5 rounded-lg border border-hairline-strong text-content-secondary transition-colors duration-150 hover:bg-bg-elevated hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <ChevronLeft size={15} />
                 </button>
@@ -934,7 +934,7 @@ export default function CompsPage() {
                   onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                   disabled={safePage === totalPages}
                   aria-label="Next page"
-                  className="p-1.5 rounded-lg border border-hairline-strong text-content-secondary transition-colors duration-150 hover:bg-bg-elevated hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  className="p-1.5 rounded-lg border border-hairline-strong text-content-secondary transition-colors duration-150 hover:bg-bg-elevated hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                 >
                   <ChevronRight size={15} />
                 </button>

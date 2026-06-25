@@ -35,7 +35,7 @@ export default function CashFlowChart({ cashFlows, yearlyCashFlows, assetClass }
           <button
             type="button"
             onClick={() => setView('quarterly')}
-            className={`px-3 py-1.5 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] ${view === 'quarterly' ? 'bg-accent text-white' : 'bg-bg-elevated text-content-secondary hover:bg-surface'}`}
+            className={`px-3 py-1.5 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] ${view === 'quarterly' ? 'bg-accent text-white' : 'bg-bg-elevated text-content-secondary hover:bg-surface'}`}
             aria-pressed={view === 'quarterly'}
           >
             Quarterly
@@ -43,7 +43,7 @@ export default function CashFlowChart({ cashFlows, yearlyCashFlows, assetClass }
           <button
             type="button"
             onClick={() => setView('yearly')}
-            className={`px-3 py-1.5 transition-colors duration-150 ease-out border-l border-hairline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] ${view === 'yearly' ? 'bg-accent text-white' : 'bg-bg-elevated text-content-secondary hover:bg-surface'}`}
+            className={`px-3 py-1.5 transition-colors duration-150 ease-out border-l border-hairline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] ${view === 'yearly' ? 'bg-accent text-white' : 'bg-bg-elevated text-content-secondary hover:bg-surface'}`}
             aria-pressed={view === 'yearly'}
           >
             Yearly

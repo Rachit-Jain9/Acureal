@@ -30,17 +30,17 @@ import { formatRelativeTime } from '../../utils/format';
  */
 
 const VERB_TONE = {
-  Recommend:    'bg-blue-50 text-blue-700 border-blue-200',
-  Consider:     'bg-slate-50 text-slate-700 border-slate-200',
-  'Re-examine': 'bg-amber-50 text-amber-800 border-amber-200',
-  Flag:         'bg-red-50 text-red-700 border-red-200',
-  'Stress-test':'bg-purple-50 text-purple-700 border-purple-200',
+  Recommend:    'bg-accent-soft text-accent border-hairline',
+  Consider:     'bg-bg-secondary text-content-secondary border-hairline',
+  'Re-examine': 'bg-premium-soft text-premium border-hairline',
+  Flag:         'bg-neg-soft text-data-negative border-hairline',
+  'Stress-test':'bg-accent-soft text-accent border-hairline',
 };
 
 const SEVERITY_ICON = (severity) => {
-  if (severity >= 4) return <AlertTriangle size={14} className="text-red-600" />;
-  if (severity >= 3) return <Info size={14} className="text-amber-600" />;
-  return <Info size={14} className="text-slate-500" />;
+  if (severity >= 4) return <AlertTriangle size={14} className="text-data-negative" />;
+  if (severity >= 3) return <Info size={14} className="text-premium" />;
+  return <Info size={14} className="text-content-muted" />;
 };
 
 /**
@@ -67,7 +67,7 @@ function TeamFeedbackChip({ feedback }) {
   if (multiplier < 1.0 && reason) {
     return (
       <span
-        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-800 text-[10px] font-medium"
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-hairline bg-premium-soft text-premium text-[10px] font-medium"
         title="The platform de-ranked this card because your team has dismissed similar ones recently. Click the card to act on it anyway."
       >
         <Sparkles size={10} />
@@ -79,7 +79,7 @@ function TeamFeedbackChip({ feedback }) {
   if (acted > 0 && acted >= dismissed) {
     return (
       <span
-        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-emerald-200 bg-emerald-50 text-emerald-800 text-[10px] font-medium"
+        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-hairline bg-pos-soft text-data-positive text-[10px] font-medium"
         title="Your team has applied this kind of recommendation before."
       >
         <Sparkles size={10} />
@@ -113,7 +113,7 @@ function VerdictMenu({ card, dealId, snapshotHash, onClose }) {
         disabled={verdict.isPending}
         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
       >
-        <CheckCircle2 size={14} className="text-green-600" />
+        <CheckCircle2 size={14} className="text-data-positive" />
         Mark as acted-on
       </button>
       <div className="border-t border-hairline" />
@@ -123,7 +123,7 @@ function VerdictMenu({ card, dealId, snapshotHash, onClose }) {
         disabled={verdict.isPending}
         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
       >
-        <Clock size={14} className="text-amber-600" />
+        <Clock size={14} className="text-premium" />
         Snooze until inputs change
       </button>
       <button
@@ -132,7 +132,7 @@ function VerdictMenu({ card, dealId, snapshotHash, onClose }) {
         disabled={verdict.isPending}
         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
       >
-        <Clock size={14} className="text-amber-600" />
+        <Clock size={14} className="text-premium" />
         Snooze 7 days
       </button>
       <button
@@ -141,7 +141,7 @@ function VerdictMenu({ card, dealId, snapshotHash, onClose }) {
         disabled={verdict.isPending}
         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
       >
-        <Clock size={14} className="text-amber-600" />
+        <Clock size={14} className="text-premium" />
         Snooze 30 days
       </button>
       <div className="border-t border-hairline" />
@@ -149,7 +149,7 @@ function VerdictMenu({ card, dealId, snapshotHash, onClose }) {
         type="button"
         onClick={() => submit({ verdict: 'dismissed' })}
         disabled={verdict.isPending}
-        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-red-600 hover:bg-red-50 disabled:opacity-50"
+        className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-data-negative hover:bg-neg-soft disabled:opacity-50"
       >
         <X size={14} />
         Dismiss
@@ -163,7 +163,7 @@ function RecommendationCard({ card, dealId, snapshotHash, hidden = false }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const verdict = useRecommendationVerdict();
   const navigateToEvidence = useEvidenceNavigate();
-  const verbCls = VERB_TONE[card.verb] || 'bg-slate-50 text-slate-700 border-slate-200';
+  const verbCls = VERB_TONE[card.verb] || 'bg-bg-secondary text-content-secondary border-hairline';
 
   // Hidden (verdict-applied) cards render in a quieter, muted style + show
   // a Restore button.
@@ -195,10 +195,10 @@ function RecommendationCard({ card, dealId, snapshotHash, hidden = false }) {
               </span>
             )}
             {card.verdict?.kind === 'dismissed' && (
-              <span className="text-[10px] uppercase tracking-wider text-red-700">Dismissed</span>
+              <span className="text-[10px] uppercase tracking-wider text-data-negative">Dismissed</span>
             )}
             {card.verdict?.kind === 'snoozed' && (
-              <span className="text-[10px] uppercase tracking-wider text-amber-700">Snoozed</span>
+              <span className="text-[10px] uppercase tracking-wider text-premium">Snoozed</span>
             )}
             <TeamFeedbackChip feedback={card.team_feedback} />
           </div>

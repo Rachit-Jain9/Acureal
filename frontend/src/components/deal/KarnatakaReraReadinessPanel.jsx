@@ -36,11 +36,11 @@ import { formatDate } from '../../utils/format';
  */
 
 const STATUS_TONE = {
-  verified:  { icon: CheckCircle2, tone: 'text-green-600', bg: 'bg-green-50 text-green-700 border-green-200' },
-  uploaded:  { icon: CheckCircle2, tone: 'text-sky-600',   bg: 'bg-sky-50 text-sky-700 border-sky-200' },
-  available: { icon: Circle,       tone: 'text-amber-600', bg: 'bg-amber-50 text-amber-700 border-amber-200' },
-  pending:   { icon: Circle,       tone: 'text-amber-600', bg: 'bg-amber-50 text-amber-700 border-amber-200' },
-  missing:   { icon: AlertCircle,  tone: 'text-red-500',   bg: 'bg-red-50 text-red-700 border-red-200' },
+  verified:  { icon: CheckCircle2, tone: 'text-data-positive', bg: 'bg-pos-soft text-data-positive border-hairline' },
+  uploaded:  { icon: CheckCircle2, tone: 'text-accent',   bg: 'bg-accent-soft text-accent border-hairline' },
+  available: { icon: Circle,       tone: 'text-premium', bg: 'bg-premium-soft text-premium border-hairline' },
+  pending:   { icon: Circle,       tone: 'text-premium', bg: 'bg-premium-soft text-premium border-hairline' },
+  missing:   { icon: AlertCircle,  tone: 'text-data-negative',   bg: 'bg-neg-soft text-data-negative border-hairline' },
 };
 
 const STATUS_LABEL = {
@@ -48,18 +48,18 @@ const STATUS_LABEL = {
 };
 
 const SEVERITY_TONE = {
-  critical: 'bg-red-50 text-red-700 border-red-200',
-  high:     'bg-orange-50 text-orange-700 border-orange-200',
-  medium:   'bg-amber-50 text-amber-700 border-amber-200',
-  low:      'bg-slate-50 text-slate-700 border-slate-200',
+  critical: 'bg-neg-soft text-data-negative border-hairline',
+  high:     'bg-premium-soft text-premium border-hairline',
+  medium:   'bg-premium-soft text-premium border-hairline',
+  low:      'bg-bg-secondary text-content-secondary border-hairline',
 };
 
 const READINESS_TIER_TONE = {
-  filing_ready: 'bg-green-50 text-green-700 border-green-200',
-  mostly_ready: 'bg-sky-50 text-sky-700 border-sky-200',
-  partial:      'bg-amber-50 text-amber-700 border-amber-200',
-  early:        'bg-slate-50 text-slate-700 border-slate-200',
-  blocked:      'bg-red-50 text-red-700 border-red-200',
+  filing_ready: 'bg-pos-soft text-data-positive border-hairline',
+  mostly_ready: 'bg-accent-soft text-accent border-hairline',
+  partial:      'bg-premium-soft text-premium border-hairline',
+  early:        'bg-bg-secondary text-content-secondary border-hairline',
+  blocked:      'bg-neg-soft text-data-negative border-hairline',
 };
 
 const READINESS_TIER_LABEL = {
@@ -67,16 +67,16 @@ const READINESS_TIER_LABEL = {
 };
 
 const METER_BAR = {
-  filing_ready: 'bg-green-500', mostly_ready: 'bg-sky-500', partial: 'bg-amber-500', early: 'bg-slate-400', blocked: 'bg-red-500',
+  filing_ready: 'bg-data-positive', mostly_ready: 'bg-accent', partial: 'bg-premium', early: 'bg-content-muted', blocked: 'bg-data-negative',
 };
 
-const BUCKET_STATUS_BAR = { complete: 'bg-green-500', partial: 'bg-amber-500', missing: 'bg-slate-400' };
+const BUCKET_STATUS_BAR = { complete: 'bg-data-positive', partial: 'bg-premium', missing: 'bg-content-muted' };
 
 const APPLICABILITY_CFG = {
-  in_scope:      { label: 'In scope', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: AlertCircle },
-  uncertain:     { label: 'Uncertain', cls: 'bg-amber-50 text-amber-700 border-amber-200', icon: HelpCircle },
-  likely_exempt: { label: 'Likely exempt', cls: 'bg-slate-50 text-slate-700 border-slate-200', icon: Circle },
-  na:            { label: 'Not applicable', cls: 'bg-slate-50 text-slate-600 border-slate-200', icon: Circle },
+  in_scope:      { label: 'In scope', cls: 'bg-accent-soft text-accent border-hairline', icon: AlertCircle },
+  uncertain:     { label: 'Uncertain', cls: 'bg-premium-soft text-premium border-hairline', icon: HelpCircle },
+  likely_exempt: { label: 'Likely exempt', cls: 'bg-bg-secondary text-content-secondary border-hairline', icon: Circle },
+  na:            { label: 'Not applicable', cls: 'bg-bg-secondary text-content-secondary border-hairline', icon: Circle },
 };
 
 const MILESTONE_STOPS = [
@@ -136,7 +136,7 @@ function ApplicabilityChip({ applicability }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className={clsx('inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded border transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40', cfg.cls)}
+        className={clsx('inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-1 rounded border transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40', cfg.cls)}
         title="Why? — the deterministic applicability rule trace"
       >
         <Icon size={12} />
@@ -152,7 +152,7 @@ function ApplicabilityChip({ applicability }) {
             {trace.map((t, i) => {
               const res = t.result;
               const RIcon = res === true ? CheckCircle2 : res === false ? MinusCircle : Circle;
-              const rtone = res === true ? 'text-green-600' : res === false ? 'text-slate-400' : 'text-amber-500';
+              const rtone = res === true ? 'text-data-positive' : res === false ? 'text-content-muted' : 'text-premium';
               return (
                 <li key={i} className="flex items-start gap-1.5">
                   <RIcon size={12} className={clsx('mt-0.5 shrink-0', rtone)} />
@@ -180,7 +180,7 @@ function MilestoneBand({ milestone }) {
           return (
             <div key={stop.key} className="flex items-center gap-1.5 flex-1 min-w-0">
               <div className="flex flex-col items-start min-w-0 flex-1">
-                <div className={clsx('w-full h-1 rounded-full transition-all duration-500 ease-out', reached ? 'bg-primary-500' : 'bg-bg-tertiary')} />
+                <div className={clsx('w-full h-1 rounded-full transition-all duration-500 ease-out', reached ? 'bg-accent' : 'bg-bg-tertiary')} />
                 <span className={clsx('mt-1 text-[10px] truncate w-full', isActive ? 'text-content-primary font-medium' : 'text-content-muted')}>
                   {stop.label}
                 </span>
@@ -200,16 +200,16 @@ function MilestoneBand({ milestone }) {
 function BlockersCallout({ blockers }) {
   if (!blockers || blockers.length === 0) return null;
   return (
-    <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2">
+    <div className="mb-3 rounded-md border border-hairline bg-neg-soft px-3 py-2">
       <div className="flex items-center gap-1.5 mb-1">
-        <ShieldAlert size={13} className="text-red-600 shrink-0" />
-        <span className="text-xs uppercase tracking-wider font-semibold text-red-700">
+        <ShieldAlert size={13} className="text-data-negative shrink-0" />
+        <span className="text-xs uppercase tracking-wider font-semibold text-data-negative">
           {blockers.length} fatal blocker{blockers.length > 1 ? 's' : ''} — filing premature until resolved
         </span>
       </div>
       <ul className="space-y-0.5 pl-5 list-disc">
         {blockers.map((b) => (
-          <li key={b.item_id} className="text-[11px] text-red-700/90 leading-snug">{b.item_label}</li>
+          <li key={b.item_id} className="text-[11px] text-data-negative/90 leading-snug">{b.item_label}</li>
         ))}
       </ul>
     </div>
@@ -250,9 +250,9 @@ function MarketingNote({ applicability }) {
   const registered = applicability.signals && applicability.signals.already_registered;
   if (!sellableStatus || registered) return null;
   return (
-    <div className="mt-3 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5">
-      <AlertTriangle size={12} className="text-amber-600 mt-0.5 shrink-0" />
-      <p className="text-[11px] text-amber-800 leading-snug">
+    <div className="mt-3 flex items-start gap-1.5 rounded-md border border-hairline bg-premium-soft px-2.5 py-1.5">
+      <AlertTriangle size={12} className="text-premium mt-0.5 shrink-0" />
+      <p className="text-[11px] text-premium leading-snug">
         K-RERA registration appears required and none is on file. Confirm with your counsel before any
         advertising, booking or sale — RERA bars marketing of a covered project before registration.
       </p>
@@ -301,7 +301,7 @@ function ProjectFactsForm({ dealId, currentInputs, onSaved }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full text-left px-3 py-2 bg-bg-secondary/50 hover:bg-bg-secondary flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 transition-colors duration-150 ease-out"
+        className="w-full text-left px-3 py-2 bg-bg-secondary/50 hover:bg-bg-secondary flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 transition-colors duration-150 ease-out"
       >
         {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
         <SlidersHorizontal size={12} className="text-content-muted" />
@@ -317,7 +317,7 @@ function ProjectFactsForm({ dealId, currentInputs, onSaved }) {
                 type="number" min="0" inputMode="numeric" value={units}
                 onChange={(e) => setUnits(e.target.value)}
                 placeholder="e.g. 48"
-                className="mt-1 w-full rounded border border-hairline bg-bg-secondary px-2 py-1 text-sm text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+                className="mt-1 w-full rounded border border-hairline bg-bg-secondary px-2 py-1 text-sm text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               />
             </label>
             <label className="block">
@@ -325,7 +325,7 @@ function ProjectFactsForm({ dealId, currentInputs, onSaved }) {
               <input
                 type="date" value={completion}
                 onChange={(e) => setCompletion(e.target.value)}
-                className="mt-1 w-full rounded border border-hairline bg-bg-secondary px-2 py-1 text-sm text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+                className="mt-1 w-full rounded border border-hairline bg-bg-secondary px-2 py-1 text-sm text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               />
             </label>
           </div>
@@ -336,8 +336,8 @@ function ProjectFactsForm({ dealId, currentInputs, onSaved }) {
                 <button
                   key={val} type="button" onClick={() => setSaleIntent(val)}
                   className={clsx(
-                    'px-2.5 py-1 text-xs transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
-                    saleIntent === val ? 'bg-primary-500 text-white' : 'bg-bg-secondary text-content-secondary hover:bg-bg-tertiary',
+                    'px-2.5 py-1 text-xs transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                    saleIntent === val ? 'bg-accent text-content-inverse' : 'bg-bg-secondary text-content-secondary hover:bg-bg-tertiary',
                   )}
                 >
                   {label}
@@ -348,7 +348,7 @@ function ProjectFactsForm({ dealId, currentInputs, onSaved }) {
           <div className="flex items-center gap-2">
             <button
               type="button" onClick={save} disabled={saving}
-              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded bg-primary-500 text-white hover:bg-primary-600 disabled:opacity-60 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded bg-accent text-content-inverse hover:bg-accent disabled:opacity-60 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
               {saving ? 'Saving…' : 'Save facts'}
@@ -379,7 +379,7 @@ function ItemRow({ item }) {
             <span className="text-sm font-medium text-content-primary flex items-center gap-1">
               {item.label}
               {item.is_blocker && (
-                <span className="text-[9px] uppercase tracking-wide text-red-600 border border-red-200 bg-red-50 rounded px-1" title="Fatal blocker — caps readiness until resolved">blocker</span>
+                <span className="text-[9px] uppercase tracking-wide text-data-negative border border-hairline bg-neg-soft rounded px-1" title="Fatal blocker — caps readiness until resolved">blocker</span>
               )}
             </span>
             <StatusPill status={ev.status} />
@@ -417,7 +417,7 @@ function BucketCard({ bucket }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full text-left py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded"
+        className="w-full text-left py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
       >
         <div className="flex items-baseline justify-between gap-3">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -511,7 +511,7 @@ function ConsistencySection({ consistency }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full text-left px-3 py-2 bg-bg-secondary/60 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 transition-colors duration-150 ease-out"
+        className="w-full text-left px-3 py-2 bg-bg-secondary/60 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 transition-colors duration-150 ease-out"
       >
         <div className="flex items-center gap-1.5 flex-wrap">
           {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -522,7 +522,7 @@ function ConsistencySection({ consistency }) {
               {summary.total} finding{summary.total === 1 ? '' : 's'}{summary.critical ? ` · ${summary.critical} critical` : ''}
             </span>
           ) : (
-            <span className="text-[10px] text-green-600">no conflicts</span>
+            <span className="text-[10px] text-data-positive">no conflicts</span>
           )}
         </div>
       </button>
@@ -530,7 +530,7 @@ function ConsistencySection({ consistency }) {
         <div className="bg-bg-elevated">
           {findings.length === 0 ? (
             <p className="text-[11px] text-content-secondary px-3 py-2 flex items-center gap-1.5">
-              <CheckCircle2 size={12} className="text-green-600 shrink-0" />
+              <CheckCircle2 size={12} className="text-data-positive shrink-0" />
               No cross-document conflicts detected across the uploaded documents.
             </p>
           ) : (
@@ -551,9 +551,9 @@ function ConsistencySection({ consistency }) {
 
 // ── Post-Registration Compliance Calendar — deterministic due schedule ──────
 const CAL_STATUS = {
-  overdue:  { cls: 'bg-red-50 text-red-700 border-red-200', label: 'Overdue' },
-  due_soon: { cls: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Due soon' },
-  upcoming: { cls: 'bg-slate-50 text-slate-600 border-slate-200', label: 'Upcoming' },
+  overdue:  { cls: 'bg-neg-soft text-data-negative border-hairline', label: 'Overdue' },
+  due_soon: { cls: 'bg-premium-soft text-premium border-hairline', label: 'Due soon' },
+  upcoming: { cls: 'bg-bg-secondary text-content-secondary border-hairline', label: 'Upcoming' },
 };
 
 function CalendarItemRow({ item }) {
@@ -600,7 +600,7 @@ function ComplianceCalendarSection({ calendar }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full text-left px-3 py-2 bg-bg-secondary/60 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 transition-colors duration-150 ease-out"
+        className="w-full text-left px-3 py-2 bg-bg-secondary/60 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 transition-colors duration-150 ease-out"
       >
         <div className="flex items-center gap-1.5 flex-wrap">
           {open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
@@ -708,7 +708,7 @@ export default function KarnatakaReraReadinessPanel() {
             type="button"
             onClick={handleDownload}
             disabled={downloading}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-content-secondary hover:text-content-primary disabled:text-content-muted transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded border border-bg-tertiary px-2 py-1"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-content-secondary hover:text-content-primary disabled:text-content-muted transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded border border-bg-tertiary px-2 py-1"
             title="Download the readiness pack as a Word document for your CA / architect / lawyer"
           >
             {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
@@ -743,17 +743,17 @@ export default function KarnatakaReraReadinessPanel() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
         <div className="bg-bg-secondary rounded p-2">
           <div className="text-[10px] text-content-muted uppercase tracking-wider">Verified</div>
-          <div className="text-lg font-semibold text-green-700 tabular-nums">
+          <div className="text-lg font-semibold text-data-positive tabular-nums">
             {verifiedCount}<span className="text-content-muted font-normal text-xs">/{totalItems}</span>
           </div>
         </div>
         <div className="bg-bg-secondary rounded p-2">
           <div className="text-[10px] text-content-muted uppercase tracking-wider">Uploaded</div>
-          <div className="text-lg font-semibold text-sky-700 tabular-nums">{uploadedCount}</div>
+          <div className="text-lg font-semibold text-accent tabular-nums">{uploadedCount}</div>
         </div>
         <div className="bg-bg-secondary rounded p-2">
           <div className="text-[10px] text-content-muted uppercase tracking-wider">Missing</div>
-          <div className="text-lg font-semibold text-red-600 tabular-nums">{missingCount}</div>
+          <div className="text-lg font-semibold text-data-negative tabular-nums">{missingCount}</div>
         </div>
         <div className="bg-bg-secondary rounded p-2">
           <div className="text-[10px] text-content-muted uppercase tracking-wider">Top gap</div>
@@ -773,7 +773,7 @@ export default function KarnatakaReraReadinessPanel() {
             type="button"
             onClick={() => setGapsOpen((v) => !v)}
             aria-expanded={gapsOpen}
-            className="w-full text-left px-3 py-2 bg-bg-secondary/60 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+            className="w-full text-left px-3 py-2 bg-bg-secondary/60 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             <div className="flex items-center gap-1.5">
               {gapsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}

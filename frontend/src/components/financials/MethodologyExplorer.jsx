@@ -7,15 +7,15 @@ import {
 } from 'lucide-react';
 
 const TABS = [
-  { id: 'overview',   label: 'Overview',        icon: Sparkles,    accent: 'from-indigo-500 to-violet-500' },
-  { id: 'dcfflow',    label: 'DCF Flow',        icon: Route,       accent: 'from-blue-500 to-indigo-500' },
-  { id: 'kpis',       label: 'KPIs',            icon: Gauge,       accent: 'from-emerald-500 to-teal-500' },
-  { id: 'cashflow',   label: 'Cash Flow',       icon: Waves,       accent: 'from-sky-500 to-cyan-500' },
-  { id: 'terminal',   label: 'Terminal Value',  icon: Target,      accent: 'from-violet-500 to-purple-500' },
-  { id: 'costs',      label: 'Costs & Stack',   icon: Layers,      accent: 'from-rose-500 to-pink-500' },
-  { id: 'waterfall',  label: 'Waterfall',       icon: GitFork,     accent: 'from-amber-500 to-orange-500' },
-  { id: 'debt',       label: 'Debt',            icon: Landmark,    accent: 'from-slate-500 to-zinc-500' },
-  { id: 'class',      label: 'Asset Class',     icon: Building2,   accent: 'from-fuchsia-500 to-purple-500' },
+  { id: 'overview',   label: 'Overview',        icon: Sparkles,    accent: 'from-accent to-accent' },
+  { id: 'dcfflow',    label: 'DCF Flow',        icon: Route,       accent: 'from-accent to-accent' },
+  { id: 'kpis',       label: 'KPIs',            icon: Gauge,       accent: 'from-accent to-accent' },
+  { id: 'cashflow',   label: 'Cash Flow',       icon: Waves,       accent: 'from-accent to-accent' },
+  { id: 'terminal',   label: 'Terminal Value',  icon: Target,      accent: 'from-accent to-accent' },
+  { id: 'costs',      label: 'Costs & Stack',   icon: Layers,      accent: 'from-accent to-accent' },
+  { id: 'waterfall',  label: 'Waterfall',       icon: GitFork,     accent: 'from-accent to-accent' },
+  { id: 'debt',       label: 'Debt',            icon: Landmark,    accent: 'from-accent to-accent' },
+  { id: 'class',      label: 'Asset Class',     icon: Building2,   accent: 'from-accent to-accent' },
 ];
 
 const ASSET_CLASS_DEEP_DIVE = {
@@ -180,14 +180,14 @@ export default function MethodologyExplorer({
             onClick={close}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-3xl flex-col bg-bg-elevated shadow-2xl">
-            <header className="relative overflow-hidden border-b border-hairline-strong bg-slate-900 px-6 py-5 text-white">
+            <header className="relative overflow-hidden border-b border-hairline-strong bg-surface-2 px-6 py-5 text-content-primary">
               <div className="relative flex items-start justify-between">
                 <div>
-                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-indigo-200">
+                  <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-content-secondary">
                     <Sparkles size={12} /> Underwriting Playbook
                   </div>
                   <h2 className="mt-1 text-2xl font-bold">How This Model Works</h2>
-                  <p className="mt-1 max-w-xl text-sm text-indigo-100/90">
+                  <p className="mt-1 max-w-xl text-sm text-content-secondary">
                     Every KPI, cash-flow line, and waterfall tranche — mapped to the deterministic formula behind it.
                     No black boxes. Built for IC-grade defensibility.
                   </p>
@@ -211,7 +211,7 @@ export default function MethodologyExplorer({
                       className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition ${
                         active
                           ? `bg-gradient-to-r ${t.accent} text-white shadow-md`
-                          : 'bg-white/10 text-indigo-100 hover:bg-white/20'
+                          : 'bg-bg-secondary text-content-secondary hover:bg-surface'
                       }`}
                     >
                       <Icon size={12} />
@@ -270,24 +270,24 @@ function Formula({ label, expr, note }) {
 
 function Pill({ tone = 'indigo', children }) {
   const tones = {
-    indigo:  'bg-indigo-50 text-indigo-700 border-indigo-200',
-    emerald: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    rose:    'bg-rose-50 text-rose-700 border-rose-200',
-    amber:   'bg-amber-50 text-amber-800 border-amber-200',
-    sky:     'bg-sky-50 text-sky-700 border-sky-200',
-    violet:  'bg-violet-50 text-violet-700 border-violet-200',
+    indigo:  'bg-accent-soft text-accent border-hairline',
+    emerald: 'bg-pos-soft text-data-positive border-hairline',
+    rose:    'bg-neg-soft text-data-negative border-hairline',
+    amber:   'bg-premium-soft text-premium border-hairline',
+    sky:     'bg-accent-soft text-accent border-hairline',
+    violet:  'bg-accent-soft text-accent border-hairline',
   };
   return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${tones[tone]}`}>{children}</span>;
 }
 
 function StepRow({ idx, title, body, tone = 'indigo' }) {
   const tones = {
-    indigo:  'bg-indigo-500',
-    emerald: 'bg-emerald-500',
-    rose:    'bg-rose-500',
-    amber:   'bg-amber-500',
-    sky:     'bg-sky-500',
-    violet:  'bg-violet-500',
+    indigo:  'bg-accent',
+    emerald: 'bg-data-positive',
+    rose:    'bg-data-negative',
+    amber:   'bg-premium',
+    sky:     'bg-accent',
+    violet:  'bg-accent',
   };
   return (
     <div className="flex gap-3">
@@ -307,14 +307,14 @@ function OverviewSection() {
     <div className="space-y-5">
       <SectionTitle
         icon={Sparkles}
-        gradient="from-indigo-500 to-violet-500"
+        gradient="from-accent to-accent"
         title="Deterministic, Defensible, Disclosed"
         subtitle="LLMs never touch the math. Every rupee is a formula."
       />
-      <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 p-4">
+      <div className="rounded-xl border border-hairline bg-accent-soft p-4">
         <p className="text-sm leading-relaxed text-content-secondary">
           REDIP's Financial Engine is built on the same principles you'd find in an institutional IC memo:
-          <span className="font-semibold text-indigo-900"> transparency over cleverness</span>. Every KPI card,
+          <span className="font-semibold text-content-primary"> transparency over cleverness</span>. Every KPI card,
           cash-flow row, and waterfall tranche traces back to a published formula. There are no AI-generated numbers,
           no undisclosed assumptions, and no generic templates.
         </p>
@@ -341,12 +341,12 @@ function OverviewSection() {
           body="Base/Bull/Bear KPIs are stored in the financial_scenarios table with their multipliers. Sensitivities are live-grid recomputes, not LLM guesses." />
       </div>
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-        <div className="flex items-center gap-2 text-amber-900">
+      <div className="rounded-xl border border-hairline bg-premium-soft p-4">
+        <div className="flex items-center gap-2 text-premium">
           <Target size={14} />
           <span className="text-sm font-semibold">Why this beats a CBRE/JLL associate's spreadsheet</span>
         </div>
-        <ul className="mt-2 space-y-1 text-xs text-amber-900">
+        <ul className="mt-2 space-y-1 text-xs text-premium">
           <li>• <span className="font-semibold">Zero link rot</span> — it's a schema, not 47 tabs with =INDIRECT references.</li>
           <li>• <span className="font-semibold">Auditable</span> — every field is validated; every formula is open-source readable.</li>
           <li>• <span className="font-semibold">Asset-class native</span> — 6 specialized models, not one monolith with patched columns.</li>
@@ -360,7 +360,7 @@ function OverviewSection() {
 function KpisSection() {
   return (
     <div className="space-y-5">
-      <SectionTitle icon={Gauge} gradient="from-emerald-500 to-teal-500" title="Return Metrics — The KPI Stack" subtitle="What IC actually looks at" />
+      <SectionTitle icon={Gauge} gradient="from-accent to-accent" title="Return Metrics — The KPI Stack" subtitle="What IC actually looks at" />
 
       <Formula
         label="IRR (Levered Project IRR)"
@@ -393,11 +393,11 @@ function KpisSection() {
         note="For residential/plotted. Bengaluru institutional targets: 18–25% gross margin."
       />
 
-      <div className="rounded-xl border border-emerald-100 bg-emerald-50/50 p-4">
-        <div className="flex items-center gap-2 text-sm font-semibold text-emerald-900">
+      <div className="rounded-xl border border-hairline bg-pos-soft p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-data-positive">
           <Scale size={14} /> Sign conventions matter
         </div>
-        <p className="mt-1 text-xs text-emerald-900/90">
+        <p className="mt-1 text-xs text-data-positive">
           Equity contributions are negative; distributions are positive. Construction draws are cost (negative);
           revenue collections are positive. Finance interest accrues negatively on the capital stack. Get the signs
           wrong and IRR collapses silently — this is the #1 spreadsheet error in the industry.
@@ -410,10 +410,10 @@ function KpisSection() {
 function CashflowSection() {
   return (
     <div className="space-y-5">
-      <SectionTitle icon={Waves} gradient="from-sky-500 to-cyan-500" title="Cash Flow Construction" subtitle="How per-quarter numbers are built" />
+      <SectionTitle icon={Waves} gradient="from-accent to-accent" title="Cash Flow Construction" subtitle="How per-quarter numbers are built" />
 
-      <div className="rounded-xl border border-sky-100 bg-gradient-to-br from-sky-50 to-cyan-50 p-4">
-        <div className="text-xs font-semibold uppercase tracking-wide text-sky-800">S-Curve Construction Draws</div>
+      <div className="rounded-xl border border-hairline bg-accent-soft p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-accent">S-Curve Construction Draws</div>
         <p className="mt-1 text-sm leading-relaxed text-content-secondary">
           Construction doesn't draw linearly — it ramps. REDIP builds a <span className="font-semibold">Beta(2, 2) S-curve</span>
           across the construction window, with mass concentrated in the middle quarters. This is the institutional standard
@@ -421,7 +421,7 @@ function CashflowSection() {
         </p>
         <div className="mt-3 flex items-end gap-1 h-16">
           {[0.05, 0.10, 0.16, 0.19, 0.18, 0.15, 0.10, 0.07].map((h, i) => (
-            <div key={i} className="flex-1 rounded-t bg-gradient-to-t from-sky-500 to-cyan-400" style={{ height: `${h * 400}%` }} />
+            <div key={i} className="flex-1 rounded-t bg-accent" style={{ height: `${h * 400}%` }} />
           ))}
         </div>
         <div className="mt-1 flex justify-between text-[10px] text-content-secondary">
@@ -453,11 +453,11 @@ function CashflowSection() {
       <div className="rounded-xl border border-hairline-strong bg-bg-elevated p-4">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-content-secondary">Quarterly Cash Flow Waterfall</div>
         <div className="space-y-1.5 text-xs">
-          <div className="flex justify-between rounded bg-emerald-50 px-2 py-1"><span>+ Revenue / NOI</span><span className="font-mono">inflows</span></div>
-          <div className="flex justify-between rounded bg-rose-50 px-2 py-1"><span>− Hard & Soft Costs</span><span className="font-mono">outflows</span></div>
-          <div className="flex justify-between rounded bg-amber-50 px-2 py-1"><span>− Finance Cost (accrued)</span><span className="font-mono">outflows</span></div>
-          <div className="flex justify-between rounded bg-sky-50 px-2 py-1"><span>+ Debt Draw  /  − P&amp;I</span><span className="font-mono">capital stack</span></div>
-          <div className="flex justify-between rounded bg-violet-50 px-2 py-1"><span>+ Exit Proceeds (terminal)</span><span className="font-mono">inflows</span></div>
+          <div className="flex justify-between rounded bg-pos-soft px-2 py-1"><span>+ Revenue / NOI</span><span className="font-mono">inflows</span></div>
+          <div className="flex justify-between rounded bg-neg-soft px-2 py-1"><span>− Hard & Soft Costs</span><span className="font-mono">outflows</span></div>
+          <div className="flex justify-between rounded bg-premium-soft px-2 py-1"><span>− Finance Cost (accrued)</span><span className="font-mono">outflows</span></div>
+          <div className="flex justify-between rounded bg-accent-soft px-2 py-1"><span>+ Debt Draw  /  − P&amp;I</span><span className="font-mono">capital stack</span></div>
+          <div className="flex justify-between rounded bg-accent-soft px-2 py-1"><span>+ Exit Proceeds (terminal)</span><span className="font-mono">inflows</span></div>
           <div className="flex justify-between rounded bg-bg-primary px-2 py-1 font-semibold text-white"><span>= Equity Cash Flow</span><span className="font-mono">to IRR/NPV</span></div>
         </div>
       </div>
@@ -468,11 +468,11 @@ function CashflowSection() {
 function CostsSection() {
   return (
     <div className="space-y-5">
-      <SectionTitle icon={Layers} gradient="from-rose-500 to-pink-500" title="Cost Stack & Capital Sources" subtitle="Where money goes, where money comes from" />
+      <SectionTitle icon={Layers} gradient="from-accent to-accent" title="Cost Stack & Capital Sources" subtitle="Where money goes, where money comes from" />
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-xl border border-rose-100 bg-rose-50 p-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-rose-800">Hard Costs</div>
+        <div className="rounded-xl border border-hairline bg-neg-soft p-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-data-negative">Hard Costs</div>
           <ul className="mt-2 space-y-1 text-xs text-content-secondary">
             <li>• Construction: GFA × ₹/sqft</li>
             <li>• Site works</li>
@@ -480,8 +480,8 @@ function CostsSection() {
             <li>• GST on works: 12–18%</li>
           </ul>
         </div>
-        <div className="rounded-xl border border-amber-100 bg-amber-50 p-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-amber-800">Soft Costs</div>
+        <div className="rounded-xl border border-hairline bg-premium-soft p-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-premium">Soft Costs</div>
           <ul className="mt-2 space-y-1 text-xs text-content-secondary">
             <li>• Approvals (BBMP/BMRDA)</li>
             <li>• Architect: 1.5–3%</li>
@@ -489,8 +489,8 @@ function CostsSection() {
             <li>• Marketing: 3–6% of rev</li>
           </ul>
         </div>
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50 p-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-indigo-800">Land & Acquisition</div>
+        <div className="rounded-xl border border-hairline bg-accent-soft p-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-accent">Land & Acquisition</div>
           <ul className="mt-2 space-y-1 text-xs text-content-secondary">
             <li>• Land cost (Cr)</li>
             <li>• Stamp duty: 5–6.5%</li>
@@ -498,8 +498,8 @@ function CostsSection() {
             <li>• Typically equity-funded</li>
           </ul>
         </div>
-        <div className="rounded-xl border border-sky-100 bg-sky-50 p-3">
-          <div className="text-xs font-semibold uppercase tracking-wide text-sky-800">Finance</div>
+        <div className="rounded-xl border border-hairline bg-accent-soft p-3">
+          <div className="text-xs font-semibold uppercase tracking-wide text-accent">Finance</div>
           <ul className="mt-2 space-y-1 text-xs text-content-secondary">
             <li>• Construction debt: 12–16% pa</li>
             <li>• LRD refinance: 8.5–10% pa</li>
@@ -513,9 +513,9 @@ function CostsSection() {
         <div className="mb-3 text-xs font-semibold uppercase tracking-wide text-content-secondary">Capital Stack Seniority</div>
         <div className="flex items-center gap-1.5 text-xs">
           <div className="flex-1 rounded-l-md bg-bg-primary px-3 py-2 font-semibold text-white">Senior Debt (1st lien)</div>
-          <div className="flex-1 bg-slate-600 px-3 py-2 font-semibold text-white">Mezzanine</div>
-          <div className="flex-1 bg-emerald-600 px-3 py-2 font-semibold text-white">Pref Equity</div>
-          <div className="flex-1 rounded-r-md bg-indigo-600 px-3 py-2 font-semibold text-white">Common Equity</div>
+          <div className="flex-1 bg-surface-2 px-3 py-2 font-semibold text-content-primary">Mezzanine</div>
+          <div className="flex-1 bg-data-positive px-3 py-2 font-semibold text-white">Pref Equity</div>
+          <div className="flex-1 rounded-r-md bg-accent px-3 py-2 font-semibold text-white">Common Equity</div>
         </div>
         <div className="mt-1.5 flex justify-between text-[10px] text-content-secondary">
           <span>Lowest risk • Lowest return</span>
@@ -529,10 +529,10 @@ function CostsSection() {
 function WaterfallSection() {
   return (
     <div className="space-y-5">
-      <SectionTitle icon={GitFork} gradient="from-amber-500 to-orange-500" title="Waterfall & Promote" subtitle="How profits split between LP and GP" />
+      <SectionTitle icon={GitFork} gradient="from-accent to-accent" title="Waterfall & Promote" subtitle="How profits split between LP and GP" />
 
-      <div className="rounded-xl border border-amber-100 bg-gradient-to-br from-amber-50 to-orange-50 p-4">
-        <div className="text-xs font-semibold uppercase tracking-wide text-amber-900">The 4-Tranche JV Waterfall</div>
+      <div className="rounded-xl border border-hairline bg-premium-soft p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-premium">The 4-Tranche JV Waterfall</div>
         <div className="mt-3 space-y-2">
           {[
             { tier: '1', name: 'Return of Capital', who: 'LP + GP pro-rata', detail: 'Both partners recover their original equity contribution first.' },
@@ -542,7 +542,7 @@ function WaterfallSection() {
           ].map((t, i) => (
             <div key={i} className="rounded-lg border border-white bg-white/70 p-2.5 backdrop-blur-sm">
               <div className="flex items-center gap-2">
-                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-amber-600 text-xs font-bold text-white">{t.tier}</span>
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-premium text-xs font-bold text-white">{t.tier}</span>
                 <span className="text-sm font-semibold text-content-primary">{t.name}</span>
                 <span className="ml-auto text-[11px] font-medium text-content-secondary">→ {t.who}</span>
               </div>
@@ -579,10 +579,10 @@ function WaterfallSection() {
 function DebtSection() {
   return (
     <div className="space-y-5">
-      <SectionTitle icon={Landmark} gradient="from-slate-600 to-zinc-600" title="Debt Schedule" subtitle="Construction finance, operating debt, and LRD" />
+      <SectionTitle icon={Landmark} gradient="from-accent to-accent" title="Debt Schedule" subtitle="Construction finance, operating debt, and LRD" />
 
-      <div className="rounded-xl border border-sky-100 bg-sky-50 p-4">
-        <div className="text-xs font-semibold uppercase tracking-wide text-sky-900">Construction Phase (S-Curve Draws)</div>
+      <div className="rounded-xl border border-hairline bg-accent-soft p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-accent">Construction Phase (S-Curve Draws)</div>
         <p className="mt-1 text-sm text-content-secondary">
           Debt draws track construction S-curve. Interest-only during construction — accrued per-quarter on the
           outstanding balance. No principal amortization while the asset isn't yet generating NOI.
@@ -614,10 +614,10 @@ function DebtSection() {
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-content-secondary">Debt Cost Hierarchy (typical, India, 2026)</div>
         <div className="space-y-1.5">
           {[
-            { type: 'Construction Finance',   rate: '13–15%', tone: 'bg-rose-500' },
-            { type: 'Operating Term Loan',    rate: '10–12%', tone: 'bg-amber-500' },
-            { type: 'LRD (Lease Discounting)', rate: '8.5–10%', tone: 'bg-emerald-500' },
-            { type: 'CMBS / Bond Refinance',  rate: '8–9%',  tone: 'bg-sky-500' },
+            { type: 'Construction Finance',   rate: '13–15%', tone: 'bg-data-negative' },
+            { type: 'Operating Term Loan',    rate: '10–12%', tone: 'bg-premium' },
+            { type: 'LRD (Lease Discounting)', rate: '8.5–10%', tone: 'bg-data-positive' },
+            { type: 'CMBS / Bond Refinance',  rate: '8–9%',  tone: 'bg-accent' },
           ].map((r, i) => (
             <div key={i} className="flex items-center gap-2">
               <span className={`h-2 flex-1 rounded-full ${r.tone}`} />
@@ -644,13 +644,13 @@ function ClassDeepDive({ data, assetClass }) {
     <div className="space-y-5">
       <SectionTitle
         icon={Building2}
-        gradient="from-fuchsia-500 to-purple-500"
+        gradient="from-accent to-accent"
         title={labels[assetClass] || 'Asset Class Deep Dive'}
         subtitle="Class-specific mechanics & benchmarks"
       />
 
-      <div className="rounded-xl border border-fuchsia-100 bg-gradient-to-br from-fuchsia-50 to-purple-50 p-4">
-        <div className="text-sm font-bold text-fuchsia-900">{data.headline}</div>
+      <div className="rounded-xl border border-hairline bg-accent-soft p-4">
+        <div className="text-sm font-bold text-accent">{data.headline}</div>
         <p className="mt-1.5 text-sm leading-relaxed text-content-secondary">{data.thesis}</p>
       </div>
 
@@ -659,7 +659,7 @@ function ClassDeepDive({ data, assetClass }) {
         <div className="space-y-2">
           {data.unitEconomics.map((u, i) => (
             <div key={i} className="flex items-center gap-3 rounded-lg border border-hairline-strong bg-bg-elevated p-2.5">
-              <ChevronRight size={14} className="shrink-0 text-fuchsia-500" />
+              <ChevronRight size={14} className="shrink-0 text-accent" />
               <div className="min-w-[130px] text-xs font-semibold text-content-secondary">{u.label}</div>
               <code className="flex-1 rounded bg-bg-secondary px-2 py-1 text-[12px] font-mono text-content-primary">{u.formula}</code>
             </div>
@@ -671,8 +671,8 @@ function ClassDeepDive({ data, assetClass }) {
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-content-secondary">Market Benchmarks (Bengaluru, 2026)</div>
         <div className="grid grid-cols-2 gap-2">
           {data.benchmarks.map((b, i) => (
-            <div key={i} className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-800">{b.k}</div>
+            <div key={i} className="rounded-lg border border-hairline bg-pos-soft p-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-data-positive">{b.k}</div>
               <div className="mt-0.5 font-mono text-sm font-bold text-content-primary">{b.v}</div>
               <div className="text-[10px] text-content-secondary">{b.ctx}</div>
             </div>
@@ -691,10 +691,10 @@ const DCF_STAGES = [
     number: '01',
     title: 'Revenue',
     icon: IndianRupee,
-    gradient: 'from-emerald-500 to-teal-500',
-    border: 'border-emerald-200',
-    surface: 'from-emerald-50 to-teal-50',
-    text: 'text-emerald-900',
+    gradient: 'from-accent to-accent',
+    border: 'border-hairline',
+    surface: 'from-accent-soft to-accent-soft',
+    text: 'text-accent',
     tagline: 'Top-line ingestion per quarter',
     summary: 'For-sale: bookings × rate, recognized on the sellout curve. Income: leasable × rent × 12 × (1 − vacancy). Hospitality: ADR × occupancy × keys × 365.',
     formulas: [
@@ -709,10 +709,10 @@ const DCF_STAGES = [
     number: '02',
     title: 'NOI',
     icon: Activity,
-    gradient: 'from-blue-500 to-indigo-500',
-    border: 'border-blue-200',
-    surface: 'from-blue-50 to-indigo-50',
-    text: 'text-blue-900',
+    gradient: 'from-accent to-accent',
+    border: 'border-hairline',
+    surface: 'from-accent-soft to-accent-soft',
+    text: 'text-accent',
     tagline: 'Net operating income after opex',
     summary: 'EGI discounts gross revenue for vacancy. NOI subtracts opex (office ~18%, retail ~22%, industrial ~15%). Hospitality shifts to GOP / EBITDA margin on total revenue.',
     formulas: [
@@ -727,10 +727,10 @@ const DCF_STAGES = [
     number: '03',
     title: 'Cash Flow',
     icon: Waves,
-    gradient: 'from-sky-500 to-cyan-500',
-    border: 'border-sky-200',
-    surface: 'from-sky-50 to-cyan-50',
-    text: 'text-sky-900',
+    gradient: 'from-accent to-accent',
+    border: 'border-hairline',
+    surface: 'from-accent-soft to-accent-soft',
+    text: 'text-accent',
     tagline: 'Quarterly equity cash flow stream',
     summary: 'Construction draws on S-curve (negative), operating NOI (positive), finance cost accruals, and debt draws / P&I. Output: quarterly equity cash flow feeding IRR and NPV.',
     formulas: [
@@ -745,10 +745,10 @@ const DCF_STAGES = [
     number: '04',
     title: 'Terminal Value',
     icon: Target,
-    gradient: 'from-violet-500 to-purple-500',
-    border: 'border-violet-200',
-    surface: 'from-violet-50 to-purple-50',
-    text: 'text-violet-900',
+    gradient: 'from-accent to-accent',
+    border: 'border-hairline',
+    surface: 'from-accent-soft to-accent-soft',
+    text: 'text-accent',
     tagline: 'Exit valuation in year N',
     summary: 'Four interchangeable methods: exit cap rate (default), exit multiple, Gordon perpetuity growth, or contractual forward purchase. The chosen TV is added to the final quarter\'s cash flow before IRR/NPV.',
     formulas: [
@@ -764,10 +764,10 @@ const DCF_STAGES = [
     number: '05',
     title: 'NPV / IRR',
     icon: Percent,
-    gradient: 'from-amber-500 to-orange-500',
-    border: 'border-amber-200',
-    surface: 'from-amber-50 to-orange-50',
-    text: 'text-amber-900',
+    gradient: 'from-accent to-accent',
+    border: 'border-hairline',
+    surface: 'from-accent-soft to-accent-soft',
+    text: 'text-accent',
     tagline: 'Discounted return metrics',
     summary: 'All quarterly equity cash flows (including the discounted TV injected in the terminal quarter) are discounted at WACC for NPV. IRR solves the same series for the rate at which NPV = 0.',
     formulas: [
@@ -797,16 +797,16 @@ function DCFFlowSection({ assetClass }) {
     <div className="space-y-5">
       <SectionTitle
         icon={Route}
-        gradient="from-blue-500 to-indigo-500"
+        gradient="from-accent to-accent"
         title="DCF Flow — End-to-End"
         subtitle="Revenue → NOI → Cash Flow → Terminal Value → NPV / IRR"
       />
 
-      <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-slate-900 via-indigo-900 to-violet-900 p-5 text-white shadow-sm">
-        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-indigo-200">
+      <div className="rounded-xl border border-hairline-strong bg-surface-2 p-5 text-content-primary shadow-sm">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-widest text-content-secondary">
           <Sparkles size={12} /> The Five-Stage Pipeline
         </div>
-        <p className="mt-1 text-sm leading-relaxed text-indigo-100/90">
+        <p className="mt-1 text-sm leading-relaxed text-content-secondary">
           Every rupee in the model flows through exactly these five stages. Click any card to expand its formulas,
           required inputs, and cross-references to the code path that executes it.
         </p>
@@ -912,10 +912,10 @@ function DCFFlowSection({ assetClass }) {
         })}
       </div>
 
-      <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-4">
+      <div className="rounded-xl border border-hairline bg-accent-soft p-4">
         <div className="flex items-center gap-2">
-          <Building2 size={14} className="text-violet-700" />
-          <span className="text-xs font-bold uppercase tracking-wider text-violet-900">
+          <Building2 size={14} className="text-accent" />
+          <span className="text-xs font-bold uppercase tracking-wider text-accent">
             {ASSET_CLASS_DEEP_DIVE[assetClass]?.headline?.split('—')[0]?.trim() || 'Asset-Class Note'}
           </span>
         </div>
@@ -933,9 +933,9 @@ const TV_METHODS = [
     title: 'Exit Cap Rate',
     tagline: 'Most common for stabilized income assets',
     icon: Gauge,
-    gradient: 'from-emerald-500 to-teal-500',
-    surface: 'from-emerald-50 to-teal-50',
-    border: 'border-emerald-200',
+    gradient: 'from-accent to-accent',
+    surface: 'from-accent-soft to-accent-soft',
+    border: 'border-hairline',
     formula: 'TV = NOI_exit ÷ Exit Cap Rate',
     example: 'NOI_exit = ₹42 Cr, Cap = 7.5% → TV = 42 ÷ 0.075 = ₹560 Cr',
     when: 'Office, retail, industrial — anywhere a liquid cap-rate market exists. Buyers underwrite forward NOI.',
@@ -947,9 +947,9 @@ const TV_METHODS = [
     title: 'Exit Multiple',
     tagline: 'Hospitality / operating assets',
     icon: Layers,
-    gradient: 'from-blue-500 to-indigo-500',
-    surface: 'from-blue-50 to-indigo-50',
-    border: 'border-blue-200',
+    gradient: 'from-accent to-accent',
+    surface: 'from-accent-soft to-accent-soft',
+    border: 'border-hairline',
     formula: 'TV = NOI_stabilized × Exit Multiple',
     example: 'EBITDA = ₹18 Cr, 10× → TV = ₹180 Cr',
     when: 'Hotels, serviced apartments, student housing — wherever EBITDA-multiple comps are the market norm.',
@@ -961,9 +961,9 @@ const TV_METHODS = [
     title: 'Perpetuity Growth (Gordon)',
     tagline: 'Stabilized, long-hold, steady-state',
     icon: TrendingUp,
-    gradient: 'from-violet-500 to-purple-500',
-    surface: 'from-violet-50 to-purple-50',
-    border: 'border-violet-200',
+    gradient: 'from-accent to-accent',
+    surface: 'from-accent-soft to-accent-soft',
+    border: 'border-hairline',
     formula: 'TV = NOI_exit × (1 + g) ÷ (r − g)',
     example: 'NOI = ₹42 Cr, g = 3%, r = 11% → TV = 42 × 1.03 ÷ 0.08 = ₹541 Cr',
     when: 'Core-plus strategies assuming asset lives forever — India REIT underwriting, annuity-style income.',
@@ -975,9 +975,9 @@ const TV_METHODS = [
     title: 'Forward Purchase',
     tagline: 'Contractual pre-committed exit',
     icon: GitFork,
-    gradient: 'from-amber-500 to-orange-500',
-    surface: 'from-amber-50 to-orange-50',
-    border: 'border-amber-200',
+    gradient: 'from-accent to-accent',
+    surface: 'from-accent-soft to-accent-soft',
+    border: 'border-hairline',
     formula: 'TV = Contractual Forward Price (₹ Cr)',
     example: 'Signed forward with institutional buyer at ₹485 Cr → TV = ₹485 Cr',
     when: 'Deal has a signed forward purchase agreement (BlackRock / Blackstone / GIC style pre-commitments).',
@@ -995,13 +995,13 @@ function TerminalValueSection() {
     <div className="space-y-5">
       <SectionTitle
         icon={Target}
-        gradient="from-violet-500 to-purple-500"
+        gradient="from-accent to-accent"
         title="Terminal Value — The Exit Valuation"
         subtitle="Four methods, one unified pipeline"
       />
 
-      <div className="rounded-xl border border-violet-200 bg-gradient-to-br from-violet-50 via-white to-indigo-50 p-4">
-        <div className="flex items-center gap-2 text-violet-900">
+      <div className="rounded-xl border border-hairline bg-accent-soft p-4">
+        <div className="flex items-center gap-2 text-accent">
           <Sparkles size={14} />
           <span className="text-sm font-bold">Terminal value is ≥50% of NPV for most income assets</span>
         </div>
@@ -1060,14 +1060,14 @@ function TerminalValueSection() {
         </div>
 
         <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 p-3">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-800 mb-1.5">Pros</div>
+          <div className="rounded-lg border border-hairline bg-pos-soft p-3">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-data-positive mb-1.5">Pros</div>
             <ul className="space-y-1 text-xs text-content-secondary">
               {active.pros.map((p, i) => <li key={i}>• {p}</li>)}
             </ul>
           </div>
-          <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-3">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-rose-800 mb-1.5">Cons</div>
+          <div className="rounded-lg border border-hairline bg-neg-soft p-3">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-data-negative mb-1.5">Cons</div>
             <ul className="space-y-1 text-xs text-content-secondary">
               {active.cons.map((c, i) => <li key={i}>• {c}</li>)}
             </ul>
@@ -1086,12 +1086,12 @@ function TerminalValueSection() {
         note="The TV is computed in year N, then discounted back to t = 0 before being added into NPV. Engine injects the non-discounted TV into the final quarter's cash flow — the standard NPV formula handles the discount."
       />
 
-      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
-        <div className="flex items-center gap-2 text-amber-900">
+      <div className="rounded-xl border border-hairline bg-premium-soft p-4">
+        <div className="flex items-center gap-2 text-premium">
           <TrendingDown size={14} />
           <span className="text-sm font-bold">Perpetuity Growth — fallback logic</span>
         </div>
-        <p className="mt-1 text-xs text-amber-900">
+        <p className="mt-1 text-xs text-premium">
           If <code className="font-mono font-bold">r ≤ g</code> (discount rate not strictly greater than growth), the perpetuity
           formula is mathematically invalid (division by zero or negative). REDIP falls back to the exit-cap method in that case
           rather than throwing, preserving auditability and preventing NaN propagation.

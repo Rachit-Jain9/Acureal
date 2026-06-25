@@ -35,10 +35,10 @@ const icons = {
 };
 
 const colors = {
-  success: 'bg-green-50 border-green-200 text-green-800',
-  error: 'bg-red-50 border-red-200 text-red-800',
-  info: 'bg-blue-50 border-blue-200 text-blue-800',
-  warning: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+  success: 'bg-pos-soft border-hairline text-data-positive',
+  error: 'bg-neg-soft border-hairline text-data-negative',
+  info: 'bg-accent-soft border-hairline text-accent',
+  warning: 'bg-premium-soft border-hairline text-premium',
 };
 
 const TOAST_EXIT_MS = 200; // keep in sync with .redip-toast-out in index.css

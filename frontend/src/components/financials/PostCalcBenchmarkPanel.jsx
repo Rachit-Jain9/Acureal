@@ -77,7 +77,7 @@ export default function PostCalcBenchmarkPanel({ dealId, kpis, inputs }) {
   return (
     <Card elevated className="p-4">
       <h3 className="text-sm font-semibold text-content-primary mb-2 flex items-center gap-1.5">
-        <AlertTriangle size={14} className="text-amber-600" />
+        <AlertTriangle size={14} className="text-premium" />
         Underwriting Benchmarks
         <span className="text-[11px] font-normal text-content-muted ml-1">
           ({warnings.length} {warnings.length === 1 ? 'flag' : 'flags'} on kernel output)

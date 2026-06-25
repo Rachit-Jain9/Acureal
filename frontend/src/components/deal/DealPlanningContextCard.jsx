@@ -16,9 +16,9 @@ const stripSuffix = (value, pattern) => String(value || '').replace(pattern, '')
 
 function CalloutTile({ icon: Icon, label, value, hint, tone = 'neutral' }) {
   const toneClass = {
-    warn: 'border-amber-200 bg-amber-50/60',
-    info: 'border-sky-200 bg-sky-50/60',
-    success: 'border-emerald-200 bg-emerald-50/60',
+    warn: 'border-hairline bg-premium-soft',
+    info: 'border-hairline bg-accent-soft',
+    success: 'border-hairline bg-pos-soft',
     neutral: 'border-hairline bg-bg-secondary/40',
   }[tone] || 'border-hairline bg-bg-secondary/40';
 

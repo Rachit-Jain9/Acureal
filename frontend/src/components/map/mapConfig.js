@@ -7,27 +7,27 @@ export const ZONING_META = {
   residential: {
     label: 'Residential',
     color: '#2563eb',
-    badgeClass: 'bg-blue-100 text-blue-700',
+    badgeClass: 'bg-accent-soft text-accent',
   },
   commercial: {
     label: 'Commercial',
     color: '#f97316',
-    badgeClass: 'bg-orange-100 text-orange-700',
+    badgeClass: 'bg-premium-soft text-premium',
   },
   mixed_use: {
     label: 'Mixed Use',
     color: '#8b5cf6',
-    badgeClass: 'bg-purple-100 text-purple-700',
+    badgeClass: 'bg-accent-soft text-accent',
   },
   industrial: {
     label: 'Industrial',
     color: '#059669',
-    badgeClass: 'bg-emerald-100 text-emerald-700',
+    badgeClass: 'bg-pos-soft text-data-positive',
   },
   agricultural: {
     label: 'Agricultural',
     color: '#65a30d',
-    badgeClass: 'bg-lime-100 text-lime-700',
+    badgeClass: 'bg-pos-soft text-data-positive',
   },
 };
 
@@ -35,17 +35,17 @@ export const COMP_TYPE_META = {
   residential: {
     label: 'Residential Comp',
     color: '#1d4ed8',
-    badgeClass: 'bg-blue-100 text-blue-700',
+    badgeClass: 'bg-accent-soft text-accent',
   },
   commercial: {
     label: 'Commercial Comp',
     color: '#ea580c',
-    badgeClass: 'bg-orange-100 text-orange-700',
+    badgeClass: 'bg-premium-soft text-premium',
   },
   mixed_use: {
     label: 'Mixed Use Comp',
     color: '#7c3aed',
-    badgeClass: 'bg-purple-100 text-purple-700',
+    badgeClass: 'bg-accent-soft text-accent',
   },
 };
 

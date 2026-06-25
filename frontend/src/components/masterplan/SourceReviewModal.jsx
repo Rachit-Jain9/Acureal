@@ -112,7 +112,7 @@ export default function SourceReviewModal({ doc, isOpen, onClose, onSubmit, subm
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+            className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
           >
             <X size={18} />
           </button>
@@ -191,12 +191,12 @@ export default function SourceReviewModal({ doc, isOpen, onClose, onSubmit, subm
           </div>
 
           <div className="flex flex-col gap-3 border-t border-hairline pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <label className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-hairline px-3 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-within:ring-2 focus-within:ring-primary-500/40 active:scale-[0.99]">
+            <label className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-hairline px-3 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-within:ring-2 focus-within:ring-accent/40 active:scale-[0.99]">
               <input
                 type="checkbox"
                 checked={form.ocrRequired}
                 onChange={(e) => set('ocrRequired', e.target.checked)}
-                className="h-4 w-4 rounded border-hairline text-primary-600 focus:ring-primary-500/40"
+                className="h-4 w-4 rounded border-hairline text-accent focus:ring-accent/40"
               />
               OCR needed
             </label>

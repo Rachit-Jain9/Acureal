@@ -211,7 +211,7 @@ export default function DerivedParcelMiniMap({
                 role="tab"
                 aria-selected={tileMode === mode}
                 onClick={() => setTileMode(mode)}
-                className={`px-1.5 py-0.5 rounded transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.97] ${
+                className={`px-1.5 py-0.5 rounded transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.97] ${
                   tileMode === mode ? 'bg-bg-secondary text-content-primary' : 'text-content-muted hover:text-content-secondary'
                 }`}
                 data-testid={`mini-map-tile-${mode}`}
@@ -224,7 +224,7 @@ export default function DerivedParcelMiniMap({
             href={googleSatHref}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[10px] text-content-muted hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1"
+            className="inline-flex items-center gap-1 text-[10px] text-content-muted hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1"
             aria-label="Open in Google Maps satellite (new tab)"
           >
             <ExternalLink size={10} /> Google sat

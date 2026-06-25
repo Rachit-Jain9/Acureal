@@ -40,7 +40,7 @@ export default function SensitivityNarrativePanel({ dealId }) {
         <div className="flex items-center gap-2 mb-3">
           <Sparkles size={14} className="text-accent" />
           <span className="text-sm font-semibold text-content-primary">Sensitivity Analysis</span>
-          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-premium-soft text-premium border border-hairline font-medium">
             AI-assisted
           </span>
         </div>
@@ -89,7 +89,7 @@ export default function SensitivityNarrativePanel({ dealId }) {
               <span className="font-semibold text-content-primary">{dominant_driver}</span>
             </span>
           )}
-          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-medium flex-shrink-0">
+          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-premium-soft text-premium border border-hairline font-medium flex-shrink-0">
             AI-assisted
           </span>
         </div>

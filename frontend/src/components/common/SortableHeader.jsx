@@ -71,7 +71,7 @@ export default function SortableHeader({
           align === 'right' && 'flex-row-reverse',
           active ? 'text-content-primary' : 'text-content-secondary',
           'hover:text-content-primary hover:bg-bg-secondary',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
           'active:scale-[0.98]',
         )}
       >
@@ -80,7 +80,7 @@ export default function SortableHeader({
           size={11}
           className={clsx(
             'shrink-0 transition-opacity duration-150',
-            active ? 'text-primary-500 opacity-100' : 'text-content-muted opacity-60',
+            active ? 'text-accent opacity-100' : 'text-content-muted opacity-60',
           )}
         />
       </button>

@@ -15,7 +15,7 @@ import {
 const CLASS_INSIGHTS = {
   residential_apartments: {
     icon: Home,
-    accent: 'text-indigo-500',
+    accent: 'text-accent',
     tagline: 'For-sale residential — cash-velocity play',
     thesis: 'End-user-led for-sale market. Underwrite for velocity over headline margin — the model monetises loading-factor uplift and books revenue on sellout milestones.',
     bands: [
@@ -28,7 +28,7 @@ const CLASS_INSIGHTS = {
   },
   plotted_development: {
     icon: Landmark,
-    accent: 'text-amber-500',
+    accent: 'text-accent',
     tagline: 'Plotted layouts — infrastructure alpha',
     thesis: 'Land-heavy, low-construction. A slice of land value spent on roads & utilities unlocks an uplift on saleable plots — fast turn, sharp IRR. Approvals and infrastructure are the moat.',
     bands: [
@@ -41,7 +41,7 @@ const CLASS_INSIGHTS = {
   },
   commercial_office: {
     icon: Building2,
-    accent: 'text-sky-500',
+    accent: 'text-accent',
     tagline: 'Grade A office — GCC-anchored core asset',
     thesis: 'GCC- and SaaS-anchored Grade-A core. Underwrite to a stabilised yield-on-cost, then a cap-rate exit (REIT / LRD / forward sale). Cap-rate movement, not rent, drives the value swing.',
     bands: [
@@ -54,7 +54,7 @@ const CLASS_INSIGHTS = {
   },
   retail: {
     icon: Store,
-    accent: 'text-rose-500',
+    accent: 'text-accent',
     tagline: 'Retail — footfall × conversion × basket',
     thesis: 'Anchor-plus-inline underwriting on long lease cycles and higher opex. Model realistic vacancy and anchor churn — experiential and F&B-led formats carry the rent.',
     bands: [
@@ -67,7 +67,7 @@ const CLASS_INSIGHTS = {
   },
   industrial_warehousing: {
     icon: Warehouse,
-    accent: 'text-emerald-500',
+    accent: 'text-accent',
     tagline: 'Industrial / logistics — long NNN-style leases',
     thesis: 'Lowest capex, lowest opex, longest NNN-style leases. E-commerce and 3PL demand underpin tight caps — strong risk-adjusted yield when leasing holds.',
     bands: [
@@ -80,7 +80,7 @@ const CLASS_INSIGHTS = {
   },
   hospitality: {
     icon: Hotel,
-    accent: 'text-fuchsia-500',
+    accent: 'text-accent',
     tagline: 'Hospitality — operating leverage at ramp',
     thesis: 'Operating-leverage play. ADR × Occ × Keys is the top line; GOP margins build from year-1 to stabilisation. Underwrite the stabilised EBITDA and a multiple exit — not the trailing.',
     bands: [

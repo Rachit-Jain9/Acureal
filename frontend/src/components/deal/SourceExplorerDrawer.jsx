@@ -123,7 +123,7 @@ export default function SourceExplorerDrawer({ citation, onClose }) {
           <button
             type="button"
             onClick={onClose}
-            className="shrink-0 rounded-md p-1.5 text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+            className="shrink-0 rounded-md p-1.5 text-content-muted hover:text-content-primary hover:bg-bg-secondary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             aria-label="Close source detail"
           >
             <X size={16} />
@@ -150,7 +150,7 @@ export default function SourceExplorerDrawer({ citation, onClose }) {
                 <span className="inline-flex items-center gap-2 tabular-nums">
                   {confidencePct}
                   {citation.confidence < 0.5 && (
-                    <span className="inline-flex items-center gap-1 text-[11px] text-amber-700">
+                    <span className="inline-flex items-center gap-1 text-[11px] text-premium">
                       <AlertCircle size={11} />
                       verify before reliance
                     </span>
@@ -201,7 +201,7 @@ export default function SourceExplorerDrawer({ citation, onClose }) {
               href={citation.source_url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-editorial bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700 transition-colors"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent transition-colors"
             >
               Open source
               <ExternalLink size={12} />

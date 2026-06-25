@@ -106,7 +106,7 @@ export default function AutoFillParcelContextCard({
               role="tab"
               aria-selected={mode === m}
               onClick={() => setMode(m)}
-              className={`px-3 py-1.5 rounded transition-colors duration-150 ease-out hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] ${
+              className={`px-3 py-1.5 rounded transition-colors duration-150 ease-out hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] ${
                 mode === m ? 'bg-bg-elevated text-content-primary shadow-sm' : 'text-content-secondary'
               }`}
             >
@@ -130,7 +130,7 @@ export default function AutoFillParcelContextCard({
                 onKeyDown={(e) => e.key === 'Enter' && handleDerive()}
                 placeholder="100 Brigade Road, Bengaluru"
                 aria-label="Parcel address"
-                className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary placeholder:text-content-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary placeholder:text-content-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               />
             </div>
             <DeriveButton onClick={handleDerive} loading={isFetching} disabled={!addressInput.trim()} />
@@ -145,7 +145,7 @@ export default function AutoFillParcelContextCard({
               onChange={(e) => setLatInput(e.target.value)}
               placeholder="Latitude (e.g. 12.9750)"
               aria-label="Latitude"
-              className="flex-1 min-w-[140px] px-3 py-2 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary tabular-nums placeholder:text-content-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+              className="flex-1 min-w-[140px] px-3 py-2 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary tabular-nums placeholder:text-content-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             />
             <input
               type="number"
@@ -155,7 +155,7 @@ export default function AutoFillParcelContextCard({
               onChange={(e) => setLngInput(e.target.value)}
               placeholder="Longitude (e.g. 77.6050)"
               aria-label="Longitude"
-              className="flex-1 min-w-[140px] px-3 py-2 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary tabular-nums placeholder:text-content-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+              className="flex-1 min-w-[140px] px-3 py-2 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary tabular-nums placeholder:text-content-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             />
             <DeriveButton onClick={handleDerive} loading={isFetching} disabled={!latInput || !lngInput} />
           </div>
@@ -214,7 +214,7 @@ export default function AutoFillParcelContextCard({
               <button
                 type="button"
                 onClick={() => refetch()}
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-hairline text-content-secondary hover:bg-bg-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-hairline text-content-secondary hover:bg-bg-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
                 aria-label="Re-derive parcel context"
               >
                 <RefreshCw size={12} /> Re-derive
@@ -223,7 +223,7 @@ export default function AutoFillParcelContextCard({
                 type="button"
                 onClick={handleApply}
                 disabled={!onApply || includedFields.length === 0}
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-accent text-white hover:bg-accent-hover transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md bg-accent text-content-inverse hover:bg-accent-hover transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
                 aria-label="Apply derived context to deal"
               >
                 <Check size={12} /> Apply {includedFields.length} fields
@@ -249,7 +249,7 @@ function DeriveButton({ onClick, loading, disabled }) {
       type="button"
       onClick={onClick}
       disabled={disabled || loading}
-      className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-md bg-accent text-white hover:bg-accent-hover transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
+      className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-md bg-accent text-content-inverse hover:bg-accent-hover transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
       aria-label="Derive parcel context"
     >
       {loading ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
@@ -260,7 +260,7 @@ function DeriveButton({ onClick, loading, disabled }) {
 
 function ErrorBanner({ message, onRetry }) {
   return (
-    <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 flex items-center justify-between gap-3 mb-3">
+    <div className="rounded-md border border-hairline bg-premium-soft px-3 py-2 text-xs text-premium flex items-center justify-between gap-3 mb-3">
       <span className="flex items-center gap-2 min-w-0">
         <AlertTriangle size={14} className="shrink-0" />
         <span className="truncate">Auto-derive failed: {message}</span>
@@ -269,7 +269,7 @@ function ErrorBanner({ message, onRetry }) {
         <button
           type="button"
           onClick={onRetry}
-          className="text-amber-900 font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 rounded px-1"
+          className="text-premium font-medium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-premium rounded px-1"
         >
           Retry
         </button>
@@ -337,11 +337,11 @@ function CoordinatesGateExplainer({ gate, kgisHierarchy, onSwitchToCoords }) {
   const confidencePct = gate?.confidence != null ? Math.round(gate.confidence * 100) : null;
   return (
     <div
-      className="rounded-md border border-red-300 bg-red-50 px-3 py-3 mb-3 flex items-start gap-2"
+      className="rounded-md border border-hairline bg-neg-soft px-3 py-3 mb-3 flex items-start gap-2"
       data-testid="coordinates-gate-explainer"
     >
-      <AlertTriangle size={14} className="shrink-0 mt-0.5 text-red-700" aria-hidden="true" />
-      <div className="flex-1 min-w-0 text-xs text-red-900">
+      <AlertTriangle size={14} className="shrink-0 mt-0.5 text-data-negative" aria-hidden="true" />
+      <div className="flex-1 min-w-0 text-xs text-data-negative">
         <div className="font-semibold mb-1">
           Geocode is approximate{confidencePct != null ? ` (${confidencePct}% confidence, ${gate.provider || 'unknown source'})` : ''} — BBMP lookups skipped
         </div>
@@ -362,7 +362,7 @@ function CoordinatesGateExplainer({ gate, kgisHierarchy, onSwitchToCoords }) {
             <button
               type="button"
               onClick={onSwitchToCoords}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-red-700 text-white hover:bg-red-800 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400 active:scale-[0.98]"
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-data-negative text-content-inverse hover:bg-data-negative transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative active:scale-[0.98]"
             >
               Switch to coordinate input
             </button>
@@ -392,7 +392,7 @@ function OutsideBbmpExplainer({ data }) {
   const isTalukOverride = detection === 'kgis_taluk_override';
   return (
     <div
-      className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 mb-3 text-xs text-amber-900 flex items-start gap-2"
+      className="rounded-md border border-hairline bg-premium-soft px-3 py-2 mb-3 text-xs text-premium flex items-start gap-2"
       data-testid="outside-bbmp-explainer"
     >
       <AlertTriangle size={13} className="shrink-0 mt-0.5" aria-hidden="true" />
@@ -456,7 +456,7 @@ function ResultRows({ fields, skipped, onToggleSkip, derivedAt }) {
             <button
               type="button"
               onClick={() => onToggleSkip(f.key)}
-              className="text-[10px] text-content-muted hover:text-content-primary uppercase tracking-wider px-2 py-1 rounded border border-hairline transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+              className="text-[10px] text-content-muted hover:text-content-primary uppercase tracking-wider px-2 py-1 rounded border border-hairline transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
               aria-label={isSkipped ? `Include ${f.label}` : `Skip ${f.label}`}
             >
               {isSkipped ? 'Include' : 'Skip'}

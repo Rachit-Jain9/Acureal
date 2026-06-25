@@ -259,7 +259,7 @@ export default function BulkAddressLookupPanel() {
             rows={6}
             disabled={running}
             aria-label="Addresses (one per line)"
-            className="w-full px-3 py-2 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary placeholder:text-content-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 font-mono leading-relaxed"
+            className="w-full px-3 py-2 text-sm rounded-md border border-hairline bg-bg-elevated text-content-primary placeholder:text-content-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 font-mono leading-relaxed"
             data-testid="bulk-lookup-textarea"
           />
           {raw && (
@@ -284,12 +284,12 @@ export default function BulkAddressLookupPanel() {
               {' '}of {MAX_ADDRESSES} addresses
             </span>
             {parsed.dropped > 0 && (
-              <span className="text-amber-700">
+              <span className="text-premium">
                 · {parsed.dropped} duplicate{parsed.dropped === 1 ? '' : 's'} dropped
               </span>
             )}
             {parsed.overCap > 0 && (
-              <span className="text-amber-700">
+              <span className="text-premium">
                 · {parsed.overCap} over the cap (will be ignored)
               </span>
             )}
@@ -299,7 +299,7 @@ export default function BulkAddressLookupPanel() {
               <button
                 type="button"
                 onClick={handleClear}
-                className="text-xs px-3 py-1.5 rounded-md border border-hairline text-content-secondary hover:bg-bg-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+                className="text-xs px-3 py-1.5 rounded-md border border-hairline text-content-secondary hover:bg-bg-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
                 data-testid="bulk-lookup-clear"
               >
                 Clear
@@ -309,7 +309,7 @@ export default function BulkAddressLookupPanel() {
               type="button"
               onClick={handleRun}
               disabled={running || parsed.addresses.length === 0}
-              className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-md bg-accent text-white hover:bg-accent-hover transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
+              className="inline-flex items-center gap-1.5 text-sm px-4 py-2 rounded-md bg-accent text-white hover:bg-accent-hover transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none"
               aria-label="Run bulk lookup"
               data-testid="bulk-lookup-run"
             >
@@ -348,7 +348,7 @@ export default function BulkAddressLookupPanel() {
               <button
                 type="button"
                 onClick={handleCopyTsv}
-                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-hairline text-content-secondary hover:bg-bg-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border border-hairline text-content-secondary hover:bg-bg-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
                 aria-label="Copy results as Excel-ready table"
                 data-testid="bulk-lookup-copy-tsv"
               >
@@ -393,7 +393,7 @@ function BulkResultsTable({ rows }) {
                 <div className="font-medium text-content-primary leading-snug min-w-[180px] max-w-[240px]">
                   {r.address}
                 </div>
-                {r.error && <p className="text-[10px] text-amber-700 mt-0.5 flex items-center gap-1"><AlertTriangle size={9} />{r.error}</p>}
+                {r.error && <p className="text-[10px] text-premium mt-0.5 flex items-center gap-1"><AlertTriangle size={9} />{r.error}</p>}
               </td>
               <td className="px-2 py-2 align-top">
                 {r.status === 'ok' && <Badge tone="success">ok</Badge>}
@@ -441,7 +441,7 @@ function BulkResultsTable({ rows }) {
               </td>
               <td className="px-2 py-2 align-top tabular-nums text-content-secondary">
                 {r.warning_count > 0 ? (
-                  <span className="inline-flex items-center gap-1 text-amber-700"><MapPin size={9} />{r.warning_count}</span>
+                  <span className="inline-flex items-center gap-1 text-premium"><MapPin size={9} />{r.warning_count}</span>
                 ) : (
                   <span className="text-content-muted">0</span>
                 )}

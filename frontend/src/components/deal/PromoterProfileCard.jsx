@@ -19,15 +19,15 @@ import { GuideHelp } from '../../design-system';
  */
 
 const POSTURE = {
-  cleared: { label: 'Cleared', chip: 'bg-green-50 text-green-700 border-green-200' },
-  unverified: { label: 'Not verified', chip: 'bg-amber-50 text-amber-700 border-amber-200' },
-  flagged: { label: 'Flagged', chip: 'bg-red-50 text-red-700 border-red-200' },
+  cleared: { label: 'Cleared', chip: 'bg-pos-soft text-data-positive border-hairline' },
+  unverified: { label: 'Not verified', chip: 'bg-premium-soft text-premium border-hairline' },
+  flagged: { label: 'Flagged', chip: 'bg-neg-soft text-data-negative border-hairline' },
 };
 
 const SIGNAL_TONE = {
-  negative: 'text-red-700',
-  warn: 'text-amber-700',
-  positive: 'text-green-700',
+  negative: 'text-data-negative',
+  warn: 'text-premium',
+  positive: 'text-data-positive',
   neutral: 'text-content-muted',
 };
 
@@ -84,8 +84,8 @@ const fmt = (v) => (v === null || v === undefined ? '—' : v);
 const simBand = (score) => {
   const n = Number(score);
   if (!Number.isFinite(n)) return { label: '—', tone: 'text-content-muted' };
-  if (n >= 0.85) return { label: `${Math.round(n * 100)}% match`, tone: 'text-green-700' };
-  if (n >= 0.6) return { label: `${Math.round(n * 100)}% match`, tone: 'text-amber-700' };
+  if (n >= 0.85) return { label: `${Math.round(n * 100)}% match`, tone: 'text-data-positive' };
+  if (n >= 0.6) return { label: `${Math.round(n * 100)}% match`, tone: 'text-premium' };
   return { label: `${Math.round(n * 100)}% match`, tone: 'text-content-muted' };
 };
 
@@ -152,7 +152,7 @@ function ReraCrossCheck({ dealId, rera }) {
             type="button"
             onClick={() => unlink.mutate({ dealId })}
             disabled={unlink.isPending}
-            className="inline-flex items-center gap-1 text-[11px] font-medium text-content-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1.5 py-1 shrink-0"
+            className="inline-flex items-center gap-1 text-[11px] font-medium text-content-secondary hover:text-content-primary transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1.5 py-1 shrink-0"
             title="Clear the K-RERA cross-link"
           >
             {unlink.isPending ? <Loader2 size={12} className="animate-spin" /> : <Unlink size={12} />}
@@ -314,7 +314,7 @@ export default function PromoterProfileCard({ dealId }) {
           <button
             type="button"
             onClick={startEdit}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-content-secondary hover:text-primary-600 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1.5 py-1"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-content-secondary hover:text-accent transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1.5 py-1"
           >
             <Edit2 size={13} />
             {profile ? 'Edit' : 'Record'}

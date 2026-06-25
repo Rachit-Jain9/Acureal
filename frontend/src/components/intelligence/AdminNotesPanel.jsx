@@ -54,7 +54,7 @@ function NotesEditor({ section, initialItems, onSave, saving }) {
             <button
               type="button"
               onClick={() => remove(idx)}
-              className="text-content-muted hover:text-red-500 flex-shrink-0 mt-0.5"
+              className="text-content-muted hover:text-data-negative flex-shrink-0 mt-0.5"
             >
               <Trash2 size={13} />
             </button>
@@ -78,7 +78,7 @@ function NotesEditor({ section, initialItems, onSave, saving }) {
             }
           }}
           placeholder={SECTION_META[section]?.placeholder}
-          className="flex-1 rounded-lg border border-hairline-strong px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+          className="flex-1 rounded-lg border border-hairline-strong px-3 py-2 text-sm focus:ring-2 focus:ring-accent focus:border-accent outline-none"
         />
         <button
           type="button"
@@ -121,19 +121,19 @@ export default function AdminNotesPanel() {
   if (isLoading) return <p className="text-sm text-content-secondary">Loading notes...</p>;
 
   return (
-    <div className="rounded-xl border border-blue-200 bg-blue-50 p-5">
+    <div className="rounded-xl border border-hairline bg-accent-soft p-5">
       <div className="flex items-center gap-2 mb-4">
-        <Lock size={15} className="text-blue-600" />
-        <p className="text-sm font-semibold text-blue-800">Admin — Market Notes Editor</p>
-        <span className="ml-auto text-xs text-blue-500">Only admins can edit</span>
+        <Lock size={15} className="text-accent" />
+        <p className="text-sm font-semibold text-accent">Admin — Market Notes Editor</p>
+        <span className="ml-auto text-xs text-accent">Only admins can edit</span>
       </div>
-      <p className="text-xs text-blue-700 mb-4">
+      <p className="text-xs text-accent mb-4">
         Notes entered here appear in the intelligence brief and are stored in the database.
         No external data is fabricated — only what you enter here is surfaced.
       </p>
       <div className="space-y-3">
         {Object.entries(SECTION_META).map(([sectionKey, meta]) => (
-          <div key={sectionKey} className="rounded-lg bg-bg-elevated border border-blue-100">
+          <div key={sectionKey} className="rounded-lg bg-bg-elevated border border-hairline">
             <button
               type="button"
               onClick={() =>

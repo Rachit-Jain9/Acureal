@@ -9,7 +9,7 @@ import { Check } from 'lucide-react';
 
 const TONE_RING = {
   default: 'focus-visible:ring-accent/40 group-hover:border-content-muted',
-  error: 'focus-visible:ring-rose-400/50 border-rose-400 group-hover:border-rose-500',
+  error: 'focus-visible:ring-rose-400/50 border-data-negative group-hover:border-data-negative',
 };
 
 // Keep the visual checkbox + label tappable as one unit. The native <input>
@@ -47,14 +47,14 @@ const Checkbox = forwardRef(function Checkbox(
             'peer-focus-visible:ring-2 peer-focus-visible:ring-offset-1 peer-focus-visible:ring-offset-bg-secondary',
             'peer-checked:bg-accent peer-checked:border-accent peer-disabled:opacity-50',
             TONE_RING[tone] || TONE_RING.default,
-            tone === 'error' ? 'border-rose-400' : 'border-hairline-strong',
+            tone === 'error' ? 'border-data-negative' : 'border-hairline-strong',
           )}
         >
           <Check
             size={12}
             strokeWidth={3}
             className={clsx(
-              'text-white transition-opacity duration-100 ease-out',
+              'text-content-inverse transition-opacity duration-100 ease-out',
               checked ? 'opacity-100' : 'opacity-0',
             )}
           />

@@ -117,9 +117,9 @@ export default function PropertyCaptureField({
                 type="checkbox"
                 checked={aiAssisted}
                 onChange={(e) => setAiAssisted(e.target.checked)}
-                className="rounded border-hairline accent-primary-600"
+                className="rounded border-hairline accent-accent"
               />
-              <Sparkles size={12} className="text-primary-600" />
+              <Sparkles size={12} className="text-accent" />
               <span>AI-extract narrative inputs (area, asking price, asset class)</span>
             </label>
             <button
@@ -194,9 +194,9 @@ function CandidatePreview({
 
       {/* Warnings */}
       {warnings && warnings.length > 0 && (
-        <div className="text-xs bg-amber-50 border border-amber-200 rounded-md px-3 py-2 space-y-1">
+        <div className="text-xs bg-premium-soft border border-hairline rounded-md px-3 py-2 space-y-1">
           {warnings.map((w, i) => (
-            <div key={i} className="flex items-start gap-1.5 text-amber-900">
+            <div key={i} className="flex items-start gap-1.5 text-premium">
               <AlertTriangle size={12} className="flex-shrink-0 mt-0.5" /> <span>{w}</span>
             </div>
           ))}
@@ -333,11 +333,11 @@ function FieldLine({ label, value, hint }) {
 }
 
 const CLASSIFICATION_LABELS = {
-  googleMapsUrl: { label: 'Google Maps link', color: 'bg-primary-50 text-primary-700 border-primary-200' },
-  plusCode: { label: 'Plus Code', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  latLng: { label: 'Coordinates', color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  surveyNumber: { label: 'Survey number', color: 'bg-amber-50 text-amber-800 border-amber-200' },
-  freeText: { label: 'AI-extracted narrative', color: 'bg-violet-50 text-violet-700 border-violet-200' },
+  googleMapsUrl: { label: 'Google Maps link', color: 'bg-accent-soft text-accent border-hairline' },
+  plusCode: { label: 'Plus Code', color: 'bg-pos-soft text-data-positive border-hairline' },
+  latLng: { label: 'Coordinates', color: 'bg-pos-soft text-data-positive border-hairline' },
+  surveyNumber: { label: 'Survey number', color: 'bg-premium-soft text-premium border-hairline' },
+  freeText: { label: 'AI-extracted narrative', color: 'bg-accent-soft text-accent border-hairline' },
   address: { label: 'Address', color: 'bg-bg-secondary text-content-secondary border-hairline' },
 };
 
@@ -358,8 +358,8 @@ function ConfidenceBadge({ label, value, status }) {
   const pct = Math.round((value || 0) * 100);
   const isLow = (value ?? 1) < 0.7 || status === 'approximate';
   const tone = isLow
-    ? 'bg-amber-50 text-amber-800 border-amber-200'
-    : 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    ? 'bg-premium-soft text-premium border-hairline'
+    : 'bg-pos-soft text-data-positive border-hairline';
   return (
     <span className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border ${tone}`}>
       {label} {pct}%
@@ -380,8 +380,8 @@ function AiExtractionPanel({ ai, suggestedFields }) {
 
   if (rows.length === 0) return null;
   return (
-    <div className="text-xs bg-violet-50/50 border border-violet-100 rounded-md px-3 py-2.5 space-y-1.5">
-      <div className="flex items-center gap-1.5 text-violet-800 font-medium mb-1">
+    <div className="text-xs bg-accent-soft border border-hairline rounded-md px-3 py-2.5 space-y-1.5">
+      <div className="flex items-center gap-1.5 text-accent font-medium mb-1">
         <Sparkles size={11} /> AI-extracted from your text
       </div>
       <dl className="space-y-1">
@@ -412,7 +412,7 @@ function VerifyLinks({ links }) {
           href={l.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border border-hairline text-content-secondary hover:text-primary-700 hover:border-primary-300 transition-colors"
+          className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded border border-hairline text-content-secondary hover:text-accent hover:border-accent transition-colors"
         >
           {l.label} <ExternalLink size={9} />
         </a>

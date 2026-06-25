@@ -31,7 +31,7 @@ import { formatFallbackReason } from '../../utils/formatFallbackReason';
 
 const SEVERITY_STYLES = {
   critical: { tone: 'text-data-negative',  bg: 'bg-data-negative/10  border-data-negative/30',  label: 'Critical' },
-  high:     { tone: 'text-amber-700',      bg: 'bg-amber-50 border-amber-200',                  label: 'High'     },
+  high:     { tone: 'text-premium',        bg: 'bg-premium-soft border-hairline',               label: 'High'     },
   medium:   { tone: 'text-content-secondary', bg: 'bg-bg-secondary border-hairline',           label: 'Medium'   },
   low:      { tone: 'text-content-muted',  bg: 'bg-bg-secondary border-hairline',              label: 'Low'      },
 };
@@ -47,7 +47,7 @@ export default function DocumentInsightsPanel({ dealId }) {
         <div className="flex items-center gap-2 mb-3">
           <Sparkles size={14} className="text-accent" />
           <span className="text-sm font-semibold text-content-primary">Cross-Document Analysis</span>
-          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-medium">
+          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-premium-soft text-premium border border-hairline font-medium">
             AI-assisted
           </span>
         </div>
@@ -99,7 +99,7 @@ export default function DocumentInsightsPanel({ dealId }) {
         <div className="flex items-center gap-2 min-w-0">
           <Sparkles size={14} className="text-accent flex-shrink-0" />
           <span className="text-sm font-semibold text-content-primary">Cross-Document Analysis</span>
-          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 font-medium flex-shrink-0">
+          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-premium-soft text-premium border border-hairline font-medium flex-shrink-0">
             AI-assisted
           </span>
         </div>
@@ -148,9 +148,9 @@ export default function DocumentInsightsPanel({ dealId }) {
           })}
         </div>
       ) : (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50/40 px-3 py-2 flex items-center gap-2 mb-2">
-          <ShieldCheck size={14} className="text-emerald-700 flex-shrink-0" />
-          <p className="text-xs text-emerald-800">
+        <div className="rounded-md border border-hairline bg-pos-soft px-3 py-2 flex items-center gap-2 mb-2">
+          <ShieldCheck size={14} className="text-data-positive flex-shrink-0" />
+          <p className="text-xs text-data-positive">
             No inconsistencies detected across the document set — a positive signal.
           </p>
         </div>

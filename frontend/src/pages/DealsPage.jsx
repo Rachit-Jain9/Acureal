@@ -709,7 +709,7 @@ export default function DealsPage() {
               type="button"
               onClick={() => setDeleteModalOpen(true)}
               disabled={bulkBusy}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-neg-soft text-data-negative hover:bg-neg-soft transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
               title="Hard-delete the selected deals — irreversible"
             >
               <Trash2 size={13} />
@@ -912,8 +912,8 @@ export default function DealsPage() {
         open={deleteModalOpen}
         onClose={() => { if (!bulkBusy) setDeleteModalOpen(false); }}
         title={(
-          <span className="inline-flex items-center gap-2 text-rose-800">
-            <Trash2 size={15} className="text-rose-600" />
+          <span className="inline-flex items-center gap-2 text-data-negative">
+            <Trash2 size={15} className="text-data-negative" />
             Delete {selectedIds.size} deal{selectedIds.size === 1 ? '' : 's'}
           </span>
         )}
@@ -937,7 +937,7 @@ export default function DealsPage() {
         )}
       >
         <div className="space-y-3">
-          <div className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2.5 text-xs text-rose-900">
+          <div className="rounded-md border border-hairline bg-neg-soft px-3 py-2.5 text-xs text-data-negative">
             <p className="font-medium">This is irreversible.</p>
             <p className="mt-1">
               Each deal's documents, financials, scenarios, audit events, and DD/risk records will be hard-deleted along with the deal itself. To remove deals from active views without deleting them, use <span className="font-semibold">Archive</span> instead.
@@ -945,7 +945,7 @@ export default function DealsPage() {
           </div>
           <div>
             <label htmlFor="bulk-delete-confirm" className="block text-eyebrow uppercase text-content-muted mb-1.5 font-medium">
-              Type <span className="font-mono text-rose-700">DELETE</span> to confirm
+              Type <span className="font-mono text-data-negative">DELETE</span> to confirm
             </label>
             <input
               id="bulk-delete-confirm"
@@ -957,7 +957,7 @@ export default function DealsPage() {
               }}
               autoFocus
               placeholder="DELETE"
-              className="w-full px-2.5 py-1.5 text-sm font-mono border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-rose-500"
+              className="w-full px-2.5 py-1.5 text-sm font-mono border border-hairline rounded bg-bg-elevated text-content-primary focus-visible:outline-none focus-visible:border-data-negative"
             />
           </div>
         </div>
@@ -988,7 +988,7 @@ export default function DealsPage() {
                     <button
                       type="button"
                       onClick={() => setPropertyMode('capture')}
-                      className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                      className="text-xs text-accent hover:text-accent font-medium"
                     >
                       + Create new (paste link / Plus Code / address)
                     </button>
@@ -1031,7 +1031,7 @@ export default function DealsPage() {
                     )}
                   </>
                 ) : (
-                  <div className="rounded-lg border border-primary-200 bg-primary-50/30 p-3">
+                  <div className="rounded-lg border border-hairline bg-accent-soft p-3">
                     <PropertyCaptureField
                       onSaved={handlePropertyCaptured}
                       onCancel={() => setPropertyMode('pick')}
@@ -1114,7 +1114,7 @@ export default function DealsPage() {
                 return (
                   <div
                     role="alert"
-                    className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+                    className="rounded-md border border-hairline bg-premium-soft px-3 py-2 text-sm text-premium"
                   >
                     <span className="font-medium">Incoherent pair:</span> {v.reason}
                   </div>

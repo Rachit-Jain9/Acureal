@@ -50,16 +50,16 @@ export default function DealAutoDerivedWarningsStrip({ deal }) {
 
   return (
     <div
-      className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-3"
+      className="rounded-xl border border-hairline bg-premium-soft px-4 py-3 flex items-start gap-3"
       data-testid="deal-warnings-strip"
     >
-      <ShieldAlert size={16} className="text-amber-700 mt-0.5 shrink-0" aria-hidden="true" />
+      <ShieldAlert size={16} className="text-premium mt-0.5 shrink-0" aria-hidden="true" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-3 mb-1.5">
-          <span className="text-xs font-semibold uppercase tracking-wider text-amber-900">
+          <span className="text-xs font-semibold uppercase tracking-wider text-premium">
             City-level callouts to verify against this parcel
           </span>
-          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-300 font-medium shrink-0">
+          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-premium-soft text-premium border border-hairline font-medium shrink-0">
             AI-assisted
           </span>
         </div>
@@ -69,12 +69,12 @@ export default function DealAutoDerivedWarningsStrip({ deal }) {
               key={`${w.fact_type}-${w.fact_key}-${i}`}
               type="button"
               title={w.message || w.kind}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-bg-elevated border border-amber-200 text-amber-900 hover:bg-amber-100 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 active:scale-[0.98]"
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded-md bg-bg-elevated border border-hairline text-premium hover:bg-premium-soft transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-premium/40 active:scale-[0.98]"
             >
               <AlertTriangle size={11} aria-hidden="true" />
               <span className="font-medium">{w.kind}</span>
               {w.item_count > 1 && (
-                <span className="text-amber-700 tabular-nums">({w.item_count})</span>
+                <span className="text-premium tabular-nums">({w.item_count})</span>
               )}
             </button>
           ))}
@@ -84,7 +84,7 @@ export default function DealAutoDerivedWarningsStrip({ deal }) {
             </Badge>
           )}
         </div>
-        <p className="text-[11px] text-amber-800 mt-1.5">
+        <p className="text-[11px] text-premium mt-1.5">
           <MapPin size={10} className="inline mr-1 -mt-0.5" aria-hidden="true" />
           Each callout is a city-wide fact, not a spatial intersection — verify against the parcel's location on the Parcel tab before quoting in IC memos.
         </p>

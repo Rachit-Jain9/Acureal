@@ -124,7 +124,7 @@ export default function ZoneLibrary({ canEdit }) {
           </select>
         )}
         {canEdit && (
-          <button onClick={openCreate} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600 text-white text-sm hover:bg-primary-700">
+          <button onClick={openCreate} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-sm hover:bg-accent-hover">
             <Plus size={14} /> Add Zone
           </button>
         )}
@@ -182,7 +182,7 @@ export default function ZoneLibrary({ canEdit }) {
                         {z.review_status !== 'approved' && (
                           <button
                             onClick={() => reviewMut.mutate({ id: z.id, status: 'approved' })}
-                            className="px-2 py-1 rounded text-xs bg-green-50 text-green-700 hover:bg-green-100"
+                            className="px-2 py-1 rounded text-xs bg-pos-soft text-data-positive hover:bg-pos-soft"
                           >
                             Approve
                           </button>
@@ -190,7 +190,7 @@ export default function ZoneLibrary({ canEdit }) {
                         {z.review_status !== 'rejected' && (
                           <button
                             onClick={() => reviewMut.mutate({ id: z.id, status: 'rejected' })}
-                            className="px-2 py-1 rounded text-xs bg-red-50 text-red-700 hover:bg-red-100"
+                            className="px-2 py-1 rounded text-xs bg-neg-soft text-data-negative hover:bg-neg-soft"
                           >
                             Reject
                           </button>

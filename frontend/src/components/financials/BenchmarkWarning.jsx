@@ -26,10 +26,10 @@ export default function BenchmarkWarning({ warning }) {
         'mt-1 px-2 py-1 rounded-md border text-[11px] leading-snug flex items-start gap-1.5',
         isCritical
           ? 'bg-data-negative/10 border-data-negative/30 text-data-negative'
-          : 'bg-amber-50 border-amber-200 text-amber-900',
+          : 'bg-premium-soft border-hairline text-premium',
       )}
     >
-      <Icon size={12} className={clsx('flex-shrink-0 mt-0.5', isCritical ? 'text-data-negative' : 'text-amber-700')} />
+      <Icon size={12} className={clsx('flex-shrink-0 mt-0.5', isCritical ? 'text-data-negative' : 'text-premium')} />
       <div className="min-w-0 flex-1">
         <div className="font-semibold">{warning.label}</div>
         {warning.detail && (

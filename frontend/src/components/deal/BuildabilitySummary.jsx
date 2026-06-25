@@ -82,7 +82,7 @@ export default function BuildabilitySummary({
     <div className="card-editorial p-0 overflow-hidden">
       <div className="px-4 sm:px-5 py-3 flex items-center justify-between gap-3 bg-bg-elevated border-b border-hairline">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center text-white shadow-sm">
+          <div className="w-8 h-8 rounded-lg bg-accent flex items-center justify-center text-content-inverse shadow-sm">
             <Building2 size={14} />
           </div>
           <div className="min-w-0">
@@ -92,7 +92,7 @@ export default function BuildabilitySummary({
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {data?.zoning?.zone_code && (
-            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-primary-50 text-primary-700 font-medium">
+            <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full bg-accent-soft text-accent font-medium">
               {data.zoning.zone_code}
             </span>
           )}
@@ -112,7 +112,7 @@ export default function BuildabilitySummary({
           </div>
         ) : isError || !hasBuildability ? (
           <div className="space-y-3">
-            <div className="flex items-start gap-2 rounded-md border border-amber-100 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+            <div className="flex items-start gap-2 rounded-md border border-hairline bg-premium-soft px-3 py-2.5 text-xs text-premium">
               <AlertTriangle size={14} className="mt-0.5 shrink-0" />
               <div className="min-w-0">
                 <div className="font-semibold">Buildability needs verification</div>
@@ -144,12 +144,12 @@ export default function BuildabilitySummary({
                 <button
                   type="button"
                   onClick={() => setAutoFillOpen(true)}
-                  className="w-full inline-flex items-center justify-between gap-3 rounded-md border border-hairline-strong bg-bg-elevated hover:bg-bg-secondary transition-colors px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+                  className="w-full inline-flex items-center justify-between gap-3 rounded-md border border-hairline-strong bg-bg-elevated hover:bg-bg-secondary transition-colors px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                   aria-label={`Auto-fill ${buildabilityExtractionCount} buildability fields from extracted documents`}
                 >
                   <span className="flex items-center gap-2 min-w-0">
-                    <span className="w-7 h-7 rounded-md bg-primary-50 flex items-center justify-center flex-shrink-0">
-                      <Sparkles size={13} className="text-primary-700" />
+                    <span className="w-7 h-7 rounded-md bg-accent-soft flex items-center justify-center flex-shrink-0">
+                      <Sparkles size={13} className="text-accent" />
                     </span>
                     <span className="min-w-0">
                       <span className="block text-xs font-semibold text-content-primary">
@@ -166,7 +166,7 @@ export default function BuildabilitySummary({
                 <button
                   type="button"
                   onClick={onUploadClick}
-                  className="w-full inline-flex items-center justify-between gap-3 rounded-md border border-dashed border-hairline-strong bg-bg-elevated hover:border-primary-300 hover:text-content-primary transition-colors px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+                  className="w-full inline-flex items-center justify-between gap-3 rounded-md border border-dashed border-hairline-strong bg-bg-elevated hover:border-accent hover:text-content-primary transition-colors px-3 py-2.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                   aria-label="Upload a sanctioned plan or RTC to populate buildability fields"
                 >
                   <span className="flex items-center gap-2 min-w-0">
@@ -214,7 +214,7 @@ export default function BuildabilitySummary({
               <span
                 className={clsx(
                   'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
-                  isReferenceMatch ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-800',
+                  isReferenceMatch ? 'bg-pos-soft text-data-positive' : 'bg-premium-soft text-premium',
                 )}
               >
                 {isReferenceMatch ? <CheckCircle2 size={11} /> : <AlertTriangle size={11} />}
@@ -279,10 +279,10 @@ export default function BuildabilitySummary({
 
 function Tile({ icon: Icon, tone, label, value, unit }) {
   const tones = {
-    primary: 'bg-primary-50/70 text-primary-800',
-    emerald: 'bg-emerald-50/70 text-emerald-800',
-    indigo: 'bg-indigo-50/70 text-indigo-800',
-    amber: 'bg-amber-50/70 text-amber-800',
+    primary: 'bg-accent-soft text-accent',
+    emerald: 'bg-pos-soft text-data-positive',
+    indigo: 'bg-accent-soft text-accent',
+    amber: 'bg-premium-soft text-premium',
   };
   return (
     <div className={clsx('rounded-lg p-2.5 min-w-0', tones[tone] || tones.primary)}>

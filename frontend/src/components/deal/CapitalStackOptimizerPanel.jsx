@@ -28,17 +28,17 @@ import { useDealCapitalStack } from '../../hooks/useDealContext';
  */
 
 const VERDICT_TONE = {
-  Recommend:    'bg-green-50 text-green-700 border-green-200',
-  Consider:     'bg-sky-50 text-sky-700 border-sky-200',
-  'Re-examine': 'bg-amber-50 text-amber-800 border-amber-200',
-  'Stress-test':'bg-orange-50 text-orange-700 border-orange-200',
-  Flag:         'bg-red-50 text-red-700 border-red-200',
+  Recommend:    'bg-pos-soft text-data-positive border-hairline',
+  Consider:     'bg-accent-soft text-accent border-hairline',
+  'Re-examine': 'bg-premium-soft text-premium border-hairline',
+  'Stress-test':'bg-premium-soft text-premium border-hairline',
+  Flag:         'bg-neg-soft text-data-negative border-hairline',
 };
 
 const BAND_BAR = {
-  high:   'bg-green-500',
-  medium: 'bg-amber-500',
-  low:    'bg-slate-400',
+  high:   'bg-data-positive',
+  medium: 'bg-premium',
+  low:    'bg-content-muted',
 };
 
 const FACTOR_LABEL = {
@@ -96,10 +96,10 @@ function StackMixGrid({ mix, amounts }) {
       </div>
       {/* Visual proportion bar */}
       <div className="flex w-full h-2 rounded-sm overflow-hidden border border-bg-tertiary mb-1">
-        <div className="h-full bg-slate-500" style={{ width: `${mix.equity_pct}%` }} title={`Equity ${mix.equity_pct}%`} />
-        <div className="h-full bg-sky-500" style={{ width: `${mix.construction_finance_pct}%` }} title={`Construction Finance ${mix.construction_finance_pct}%`} />
-        <div className="h-full bg-amber-500" style={{ width: `${mix.pref_equity_pct}%` }} title={`Pref Equity ${mix.pref_equity_pct}%`} />
-        <div className="h-full bg-violet-500" style={{ width: `${mix.mezz_pct}%` }} title={`Mezzanine ${mix.mezz_pct}%`} />
+        <div className="h-full bg-content-muted" style={{ width: `${mix.equity_pct}%` }} title={`Equity ${mix.equity_pct}%`} />
+        <div className="h-full bg-accent" style={{ width: `${mix.construction_finance_pct}%` }} title={`Construction Finance ${mix.construction_finance_pct}%`} />
+        <div className="h-full bg-premium" style={{ width: `${mix.pref_equity_pct}%` }} title={`Pref Equity ${mix.pref_equity_pct}%`} />
+        <div className="h-full bg-data-highlight" style={{ width: `${mix.mezz_pct}%` }} title={`Mezzanine ${mix.mezz_pct}%`} />
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-xs">
         {rows.map((r) => (
@@ -126,7 +126,7 @@ function CovenantRow({ label, item, formatValue }) {
     );
   }
   const Icon = item.passes ? CheckCircle2 : XCircle;
-  const tone = item.passes ? 'text-green-600' : 'text-red-600';
+  const tone = item.passes ? 'text-data-positive' : 'text-data-negative';
   return (
     <div className="flex items-center justify-between text-xs py-0.5 tabular-nums">
       <div className="flex items-center gap-1.5">
@@ -134,7 +134,7 @@ function CovenantRow({ label, item, formatValue }) {
         <span className="text-content-secondary">{label}</span>
       </div>
       <div className="flex items-center gap-2">
-        <span className={clsx('font-medium', item.passes ? 'text-content-primary' : 'text-red-700')}>
+        <span className={clsx('font-medium', item.passes ? 'text-content-primary' : 'text-data-negative')}>
           {formatValue(item.value)}
         </span>
         <span className="text-content-muted text-[10px]">
@@ -186,7 +186,7 @@ function ScenarioRow({ entry }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded"
+        className="w-full text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
       >
         <div className="flex items-baseline justify-between gap-3">
           <div className="flex items-center gap-2 min-w-0">

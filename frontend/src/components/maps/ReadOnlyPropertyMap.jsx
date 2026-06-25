@@ -472,9 +472,9 @@ export default function ReadOnlyPropertyMap({
           1. Idle: small "Move pin" button below the zoning toggle.
           2. Active: instructional banner + Save / Cancel buttons. */}
       {propertyId && canEdit && relocateMode && (
-        <div className="absolute left-1/2 top-3 z-[1100] -translate-x-1/2 flex max-w-[460px] flex-col gap-2 rounded-editorial border border-primary-300 bg-bg-elevated/95 px-3 py-2 shadow-lg backdrop-blur-sm">
+        <div className="absolute left-1/2 top-3 z-[1100] -translate-x-1/2 flex max-w-[460px] flex-col gap-2 rounded-editorial border border-accent bg-bg-elevated/95 px-3 py-2 shadow-lg backdrop-blur-sm">
           <div className="flex items-start gap-2">
-            <MapPin size={13} className="mt-0.5 shrink-0 text-primary-600" />
+            <MapPin size={13} className="mt-0.5 shrink-0 text-accent" />
             <div className="text-[11px] leading-relaxed text-content-primary">
               <span className="font-semibold">Click the map</span> or drag the marker to set the actual parcel pin.
               {pendingPin && (
@@ -498,7 +498,7 @@ export default function ReadOnlyPropertyMap({
               type="button"
               onClick={saveRelocatedPin}
               disabled={!pendingPin || saving}
-              className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-primary-700 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-[11px] font-semibold text-content-inverse hover:bg-accent disabled:opacity-50 transition-colors"
             >
               <Check size={11} />
               {saving ? 'Saving…' : 'Save pin'}
@@ -518,7 +518,7 @@ export default function ReadOnlyPropertyMap({
               setRelocateMode(true);
               setPendingPin(center);
             }}
-            className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated/95 px-2.5 py-1.5 text-[11px] font-medium text-content-secondary hover:border-primary-300 hover:text-content-primary transition-colors duration-150 ease-out shadow-sm backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+            className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated/95 px-2.5 py-1.5 text-[11px] font-medium text-content-secondary hover:border-accent hover:text-content-primary transition-colors duration-150 ease-out shadow-sm backdrop-blur-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             title="Pin not at the actual parcel? Move it"
           >
             <MapPin size={11} />
@@ -549,8 +549,8 @@ export default function ReadOnlyPropertyMap({
           aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
           className={clsx(
             'absolute bottom-6 right-3 z-[1000] inline-flex items-center justify-center rounded-editorial border border-hairline bg-bg-elevated/95 p-1.5 shadow-sm backdrop-blur-sm transition-colors duration-150 ease-out',
-            'hover:border-primary-300 active:scale-[0.98]',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+            'hover:border-accent active:scale-[0.98]',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
           )}
         >
           {isFullscreen ? (

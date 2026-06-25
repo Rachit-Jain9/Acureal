@@ -74,7 +74,7 @@ function CitationChip({ citation, onSelect }) {
           e.stopPropagation();
           onSelect(citation);
         }}
-        className="inline-flex items-center gap-1 rounded-full border border-hairline bg-bg-secondary px-2 py-0.5 text-[10px] font-medium text-content-secondary hover:border-primary-300 hover:text-content-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+        className="inline-flex items-center gap-1 rounded-full border border-hairline bg-bg-secondary px-2 py-0.5 text-[10px] font-medium text-content-secondary hover:border-accent hover:text-content-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
       >
         <FileText size={11} />
         {label}
@@ -114,16 +114,16 @@ function StatusPill({ status }) {
 }
 
 const VERDICT_ACCENT = {
-  success: 'border-l-emerald-500',
-  info: 'border-l-blue-500',
-  warning: 'border-l-amber-500',
-  danger: 'border-l-rose-500',
+  success: 'border-l-data-positive',
+  info: 'border-l-accent',
+  warning: 'border-l-premium',
+  danger: 'border-l-data-negative',
 };
 const VERDICT_ICON = {
-  success: 'text-emerald-600',
-  info: 'text-blue-600',
-  warning: 'text-amber-600',
-  danger: 'text-rose-600',
+  success: 'text-data-positive',
+  info: 'text-accent',
+  warning: 'text-premium',
+  danger: 'text-data-negative',
 };
 
 function VerdictBanner({ verdict }) {
@@ -132,8 +132,8 @@ function VerdictBanner({ verdict }) {
   const tone = verdict.tone || 'info';
   const Icon = tone === 'success' ? CheckCircle2 : AlertTriangle;
   const counts = [
-    ['High', verdict.counts?.high || 0, 'text-rose-600'],
-    ['Medium', verdict.counts?.medium || 0, 'text-amber-600'],
+    ['High', verdict.counts?.high || 0, 'text-data-negative'],
+    ['Medium', verdict.counts?.medium || 0, 'text-premium'],
     ['Low', verdict.counts?.low || 0, 'text-content-secondary'],
     ['Open', verdict.counts?.needs_verification || 0, 'text-content-secondary'],
   ];
@@ -173,7 +173,7 @@ function VerdictBanner({ verdict }) {
         <div className="mt-4 flex flex-wrap gap-2 border-t border-hairline-soft pt-3">
           {verdict.next_actions.slice(0, 3).map((action) => {
             const content = (
-              <span className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-secondary px-3 py-1.5 text-xs font-medium text-content-primary hover:border-primary-300 transition-colors">
+              <span className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-secondary px-3 py-1.5 text-xs font-medium text-content-primary hover:border-accent transition-colors">
                 {action.label}
                 {action.href && <ExternalLink size={12} />}
               </span>
@@ -209,10 +209,10 @@ export function GoverningPlanStrip({ plan }) {
   const needsConfirm = Boolean(plan.needs_authority_confirmation);
   const accent =
     plan.note || needsConfirm
-      ? 'border-l-amber-500'
+      ? 'border-l-premium'
       : statusTone === 'danger'
-        ? 'border-l-rose-500'
-        : 'border-l-emerald-500';
+        ? 'border-l-data-negative'
+        : 'border-l-data-positive';
   const confidencePct =
     plan.confidence !== null && plan.confidence !== undefined
       ? Math.round(Number(plan.confidence) * 100)
@@ -251,7 +251,7 @@ export function GoverningPlanStrip({ plan }) {
       </div>
       {plan.note ? (
         <div className="mt-3 flex items-start gap-2 rounded-editorial border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-[11px] leading-relaxed text-content-secondary">
-          <AlertTriangle size={13} className="mt-0.5 shrink-0 text-amber-600" />
+          <AlertTriangle size={13} className="mt-0.5 shrink-0 text-premium" />
           <span>{plan.note}</span>
         </div>
       ) : null}
@@ -267,7 +267,7 @@ export function RoadWidthBasisNote({ basis }) {
   const inferred = basis.basis === 'inferred';
   return (
     <div className="flex items-start gap-2 rounded-editorial border border-hairline-soft bg-bg-secondary px-3 py-2">
-      <Ruler size={13} className={clsx('mt-0.5 shrink-0', inferred ? 'text-amber-600' : 'text-content-muted')} />
+      <Ruler size={13} className={clsx('mt-0.5 shrink-0', inferred ? 'text-premium' : 'text-content-muted')} />
       <div className="min-w-0 text-[11px] leading-relaxed text-content-secondary">
         <span className="font-medium text-content-primary">
           Road width {basis.width_m !== null && basis.width_m !== undefined ? `${basis.width_m} m` : '—'} · {basis.label}
@@ -391,16 +391,16 @@ function ConfidenceMeter({ confidence, intelligence }) {
   }));
 
   const segmentTone = (value) => {
-    if (value >= 0.7) return 'bg-emerald-500';
-    if (value >= 0.4) return 'bg-amber-500';
-    if (value > 0) return 'bg-rose-400';
+    if (value >= 0.7) return 'bg-data-positive';
+    if (value >= 0.4) return 'bg-premium';
+    if (value > 0) return 'bg-data-negative';
     return 'bg-bg-secondary';
   };
 
   const toneAccent = (value) => {
-    if (value >= 0.7) return 'border-l-emerald-500';
-    if (value >= 0.4) return 'border-l-amber-500';
-    if (value > 0) return 'border-l-rose-400';
+    if (value >= 0.7) return 'border-l-data-positive';
+    if (value >= 0.4) return 'border-l-premium';
+    if (value > 0) return 'border-l-data-negative';
     return 'border-l-content-muted';
   };
 
@@ -444,7 +444,7 @@ function ConfidenceMeter({ confidence, intelligence }) {
               onClick={() => setOpenPillar(isOpen ? null : pillar.key)}
               className={clsx(
                 'flex flex-col gap-1.5 rounded-md px-1.5 py-1 text-left transition-colors',
-                'hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
+                'hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                 'active:scale-[0.99]',
                 isOpen && 'bg-bg-secondary'
               )}
@@ -519,7 +519,7 @@ function RedFlags({ flags = [] }) {
     return (
       <Card className="p-4">
         <div className="flex items-start gap-3">
-          <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-emerald-600" />
+          <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-data-positive" />
           <div className="text-sm text-content-secondary">
             No high-priority parcel intelligence flags from the configured references.
           </div>
@@ -543,9 +543,9 @@ function RedFlags({ flags = [] }) {
               className={clsx(
                 'mt-0.5 shrink-0',
                 flag.severity === 'high'
-                  ? 'text-rose-600'
+                  ? 'text-data-negative'
                   : flag.severity === 'medium'
-                    ? 'text-amber-600'
+                    ? 'text-premium'
                     : 'text-content-muted',
               )}
             />
@@ -586,7 +586,7 @@ function VerifiedPill({ verification, canEdit, onUnverify, isPending }) {
           onClick={onUnverify}
           disabled={isPending}
           aria-label="Remove verification"
-          className="rounded p-0.5 text-content-muted hover:text-rose-600 disabled:opacity-50"
+          className="rounded p-0.5 text-content-muted hover:text-data-negative disabled:opacity-50"
         >
           <Trash2 size={11} />
         </button>
@@ -648,7 +648,7 @@ function BucketList({
                   <button
                     type="button"
                     onClick={() => onVerify(item)}
-                    className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-content-primary hover:border-primary-300 transition-colors"
+                    className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-secondary px-2.5 py-1.5 text-[11px] font-semibold text-content-primary hover:border-accent transition-colors"
                   >
                     <CheckCircle2 size={12} />
                     Mark verified
@@ -764,7 +764,7 @@ function VerificationLinks({ links = [], onUploadClick }) {
       <button
         type="button"
         onClick={onUploadClick}
-        className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-3 py-2 text-xs font-medium text-content-primary hover:border-primary-300 transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-3 py-2 text-xs font-medium text-content-primary hover:border-accent transition-colors"
       >
         <Upload size={13} />
         Upload evidence
@@ -797,7 +797,7 @@ function VerificationLinks({ links = [], onUploadClick }) {
                 href={link.href}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex shrink-0 items-center gap-1 rounded-editorial border border-hairline bg-bg-secondary px-2.5 py-1 text-[11px] font-semibold text-content-primary hover:border-primary-300 transition-colors"
+                className="inline-flex shrink-0 items-center gap-1 rounded-editorial border border-hairline bg-bg-secondary px-2.5 py-1 text-[11px] font-semibold text-content-primary hover:border-accent transition-colors"
               >
                 Open
                 <ExternalLink size={11} />
@@ -825,7 +825,7 @@ function VerificationLinks({ links = [], onUploadClick }) {
         <button
           type="button"
           onClick={onUploadClick}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-editorial border border-dashed border-hairline bg-bg-elevated px-4 py-2 text-xs font-medium text-content-secondary hover:border-primary-300 hover:text-content-primary transition-colors"
+          className="mt-3 inline-flex items-center gap-1.5 rounded-editorial border border-dashed border-hairline bg-bg-elevated px-4 py-2 text-xs font-medium text-content-secondary hover:border-accent hover:text-content-primary transition-colors"
         >
           <Upload size={13} />
           Upload evidence
@@ -944,14 +944,14 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
             )}
             <Link
               to={reviewQueueUrl}
-              className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-3 py-2 text-xs font-semibold text-content-primary hover:border-primary-300 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-elevated px-3 py-2 text-xs font-semibold text-content-primary hover:border-accent transition-colors"
             >
               Review evidence
               <ExternalLink size={13} />
             </Link>
             <Link
               to={authorityInputUrl}
-              className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-secondary px-3 py-2 text-xs font-semibold text-content-primary hover:border-primary-300 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-editorial border border-hairline bg-bg-secondary px-3 py-2 text-xs font-semibold text-content-primary hover:border-accent transition-colors"
             >
               Add authority input
               <ExternalLink size={13} />
@@ -960,7 +960,7 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
               type="button"
               onClick={() => refreshMutation.mutate(propertyId)}
               disabled={refreshMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-editorial bg-primary-600 px-3 py-2 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-60 transition-colors"
+              className="inline-flex items-center gap-2 rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent disabled:opacity-60 transition-colors"
             >
               <RefreshCw size={14} className={clsx(refreshMutation.isPending && 'animate-spin')} />
               Refresh

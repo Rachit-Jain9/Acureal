@@ -20,9 +20,9 @@ import MasterPlanLegend from '../masterplan/MasterPlanLegend';
  */
 
 const TONE_BADGE = {
-  verified: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  approximate: 'bg-amber-50 text-amber-800 border-amber-200',
-  error: 'bg-rose-50 text-rose-700 border-rose-200',
+  verified: 'bg-pos-soft text-data-positive border-hairline',
+  approximate: 'bg-premium-soft text-premium border-hairline',
+  error: 'bg-neg-soft text-data-negative border-hairline',
   muted: 'bg-bg-secondary text-content-secondary border-hairline',
 };
 
@@ -104,7 +104,7 @@ function BasemapRow({ layer, onBasemapChange }) {
                 onClick={() => onBasemapChange?.(opt.value)}
                 className={clsx(
                   'rounded px-2 py-0.5 text-[10px] font-medium transition-colors duration-150 ease-out',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.97]',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.97]',
                   isActive
                     ? 'bg-bg-elevated text-content-primary shadow-sm'
                     : 'text-content-secondary hover:text-content-primary',
@@ -143,8 +143,8 @@ function ZoningRow({ layer, onToggleZoning }) {
             onClick={() => onToggleZoning?.()}
             className={clsx(
               'relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150 ease-out',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
-              layer.enabled ? 'bg-primary-600' : 'bg-bg-secondary border border-hairline-strong',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+              layer.enabled ? 'bg-accent' : 'bg-bg-secondary border border-hairline-strong',
             )}
           >
             <span
@@ -185,8 +185,8 @@ function MasterPlanRow({ layer, onToggleMasterPlan, onMasterPlanOpacity }) {
             onClick={() => onToggleMasterPlan?.()}
             className={clsx(
               'relative h-4 w-7 shrink-0 rounded-full transition-colors duration-150 ease-out',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40',
-              layer.enabled ? 'bg-primary-600' : 'bg-bg-secondary border border-hairline-strong',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+              layer.enabled ? 'bg-accent' : 'bg-bg-secondary border border-hairline-strong',
             )}
           >
             <span
@@ -208,7 +208,7 @@ function MasterPlanRow({ layer, onToggleMasterPlan, onMasterPlanOpacity }) {
             value={layer.opacity}
             aria-label="Master-plan overlay opacity"
             onChange={(e) => onMasterPlanOpacity?.(Number(e.target.value))}
-            className="h-1 flex-1 cursor-pointer accent-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+            className="h-1 flex-1 cursor-pointer accent-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           />
           <span className="w-8 shrink-0 text-right text-[10px] font-medium tabular-nums text-content-muted">
             {pct}%
@@ -225,7 +225,7 @@ function MasterPlanRow({ layer, onToggleMasterPlan, onMasterPlanOpacity }) {
             type="button"
             onClick={() => setLegendOpen((v) => !v)}
             aria-expanded={legendOpen}
-            className="inline-flex items-center gap-1 rounded text-[10px] font-medium text-accent transition-colors duration-150 ease-out hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+            className="inline-flex items-center gap-1 rounded text-[10px] font-medium text-accent transition-colors duration-150 ease-out hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             <ChevronDown
               size={11}
@@ -289,7 +289,7 @@ export default function CadastralLayerPanel({
         aria-expanded={open}
         className={clsx(
           'flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition-colors duration-150 ease-out',
-          'hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-500/40',
+          'hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40',
         )}
       >
         <span className="flex items-center gap-1.5">

@@ -257,8 +257,8 @@ export default function DocumentsPanel({ canEdit }) {
   if (isError) {
     return (
       <div className="card-editorial text-center py-12">
-        <AlertTriangle size={28} className="text-red-400 mx-auto mb-2" />
-        <p className="text-sm text-red-600 mb-3">Failed to load source documents.</p>
+        <AlertTriangle size={28} className="text-data-negative mx-auto mb-2" />
+        <p className="text-sm text-data-negative mb-3">Failed to load source documents.</p>
         <button onClick={refetch} className="btn btn-secondary text-sm inline-flex items-center gap-1.5">
           <RefreshCw size={14} /> Retry
         </button>
@@ -303,7 +303,7 @@ export default function DocumentsPanel({ canEdit }) {
                 type="file"
                 accept=".pdf,.docx,.doc,.rtf,.odt,.txt,.md,.xlsx,.xls,.xlsm,.csv,.tsv,.ods,.pptx,.ppt,.odp,.jpg,.jpeg,.png,.webp,.tif,.tiff,.gif,.bmp,.heic,.heif,.geojson,.kml,.kmz,.gpx,.json,.xml"
                 onChange={handleFile}
-                className="block w-full text-sm text-content-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100 cursor-pointer"
+                className="block w-full text-sm text-content-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-accent-soft file:text-accent hover:file:bg-accent-soft cursor-pointer"
               />
             </div>
           </div>
@@ -356,7 +356,7 @@ export default function DocumentsPanel({ canEdit }) {
               onChange={(e) => set('planName', e.target.value)}
               placeholder="Volume-6 Zoning Regulations"
             />
-            {fileError && <p className="mt-1 text-xs text-red-600">{fileError}</p>}
+            {fileError && <p className="mt-1 text-xs text-data-negative">{fileError}</p>}
             {file && !fileError && (
               <p className="mt-1 text-xs text-content-muted">{file.name} | {formatBytes(file.size)}</p>
             )}
@@ -372,12 +372,12 @@ export default function DocumentsPanel({ canEdit }) {
                 placeholder="Draft source, image-only PDF, derived from user remarks..."
               />
             </div>
-            <label className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-hairline px-3 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-within:ring-2 focus-within:ring-primary-500/40 active:scale-[0.99]">
+            <label className="inline-flex min-h-[38px] items-center gap-2 rounded-lg border border-hairline px-3 text-xs font-medium text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary focus-within:ring-2 focus-within:ring-accent/40 active:scale-[0.99]">
               <input
                 type="checkbox"
                 checked={form.ocrRequired}
                 onChange={(e) => set('ocrRequired', e.target.checked)}
-                className="h-4 w-4 rounded border-hairline text-primary-600 focus:ring-primary-500/40"
+                className="h-4 w-4 rounded border-hairline text-accent focus:ring-accent/40"
               />
               OCR needed
             </label>
@@ -385,13 +385,13 @@ export default function DocumentsPanel({ canEdit }) {
 
 
           <div className="mt-4 flex items-center justify-between gap-3 border-t border-hairline pt-3">
-            <Link to="/dashboard/settings/parcel-intelligence" className="text-xs font-medium text-primary-600 hover:underline">
+            <Link to="/dashboard/settings/parcel-intelligence" className="text-xs font-medium text-accent hover:underline">
               Review queue
             </Link>
             <button
               type="submit"
               disabled={uploadMut.isPending || !file}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 ease-out hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-sm font-medium text-white transition-colors duration-150 ease-out hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-60"
             >
               {uploadMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
               {uploadMut.isPending ? 'Uploading...' : 'Upload source'}
@@ -416,7 +416,7 @@ export default function DocumentsPanel({ canEdit }) {
                   onClick={handleBatchExtract}
                   disabled={batchExtractMut.isPending}
                   title={`Queue ${eligibleForBatchExtract.length} extraction${eligibleForBatchExtract.length === 1 ? '' : 's'} in parallel — runs in the background`}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 ease-out hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-medium text-white transition-colors duration-150 ease-out hover:bg-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-60"
                 >
                   {batchExtractMut.isPending ? (
                     <Loader2 size={12} className="animate-spin motion-reduce:animate-none" />
@@ -440,10 +440,10 @@ export default function DocumentsPanel({ canEdit }) {
                   aria-pressed={selected}
                   onClick={() => setReadinessFilter(filter.key)}
                   className={clsx(
-                    'rounded-lg border px-3 py-2 text-left transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]',
+                    'rounded-lg border px-3 py-2 text-left transition-all duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]',
                     selected
-                      ? 'border-primary-300 bg-primary-50 text-primary-700'
-                      : 'border-hairline bg-bg-elevated text-content-secondary hover:border-primary-300 hover:bg-bg-secondary',
+                      ? 'border-hairline bg-accent-soft text-accent'
+                      : 'border-hairline bg-bg-elevated text-content-secondary hover:border-hairline-strong hover:bg-bg-secondary',
                   )}
                 >
                   <div className="text-lg font-semibold tabular-nums">{count}</div>
@@ -527,7 +527,7 @@ export default function DocumentsPanel({ canEdit }) {
                     <div className="text-xs text-content-muted">{formatDocType(doc.doc_type)}</div>
                     <div className="text-xs text-content-muted">{readiness.description}</div>
                     {doc.extraction_error && (
-                      <div className="line-clamp-2 text-xs text-red-600">{doc.extraction_error}</div>
+                      <div className="line-clamp-2 text-xs text-data-negative">{doc.extraction_error}</div>
                     )}
                   </div>
 
@@ -546,7 +546,7 @@ export default function DocumentsPanel({ canEdit }) {
                       <button
                         type="button"
                         onClick={() => setReviewingDoc(doc)}
-                        className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+                        className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
                         title="Review source"
                         aria-label={`Review source ${doc.plan_name}`}
                       >
@@ -557,7 +557,7 @@ export default function DocumentsPanel({ canEdit }) {
                       <button
                         type="button"
                         onClick={() => setHistoryDoc(doc)}
-                        className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+                        className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
                         title="Review history"
                         aria-label={`Review history ${doc.plan_name}`}
                       >
@@ -568,7 +568,7 @@ export default function DocumentsPanel({ canEdit }) {
                       <button
                         type="button"
                         onClick={() => setPagesDoc(doc)}
-                        className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98]"
+                        className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
                         title="Page ledger"
                         aria-label={`Page ledger ${doc.plan_name}`}
                       >
@@ -579,7 +579,7 @@ export default function DocumentsPanel({ canEdit }) {
                       type="button"
                       onClick={() => openMut.mutate(doc.id)}
                       disabled={openMut.isPending}
-                      className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-primary-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50"
+                      className="rounded-lg p-1.5 text-content-muted transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50"
                       title="Open source"
                     >
                       <ExternalLink size={15} />
@@ -590,7 +590,7 @@ export default function DocumentsPanel({ canEdit }) {
                         onClick={() => handleExtract(doc)}
                         disabled={busy || extractingId !== null || !readiness.canExtract}
                         title={readiness.blockReason || readiness.description}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-primary-50 px-2.5 py-1.5 text-xs font-medium text-primary-700 transition-colors duration-150 ease-out hover:bg-primary-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 active:scale-[0.98] disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs font-medium text-accent transition-colors duration-150 ease-out hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50"
                       >
                         {busy ? <Loader2 size={13} className="animate-spin" /> : <FileSearch size={13} />}
                         {busy ? 'Extracting...' : readiness.actionLabel}

@@ -22,18 +22,18 @@ import { useModelConfidence } from '../../hooks/useFinancials';
 const BAND = {
   grounded: {
     label: 'Well-grounded',
-    chip: 'bg-green-50 text-green-700 border-green-200',
-    bar: 'bg-green-500',
+    chip: 'bg-pos-soft text-data-positive border-hairline',
+    bar: 'bg-data-positive',
   },
   mixed: {
     label: 'Mixed basis',
-    chip: 'bg-amber-50 text-amber-700 border-amber-200',
-    bar: 'bg-amber-500',
+    chip: 'bg-premium-soft text-premium border-hairline',
+    bar: 'bg-premium',
   },
   'assumption-led': {
     label: 'Assumption-led',
-    chip: 'bg-rose-50 text-rose-700 border-rose-200',
-    bar: 'bg-rose-500',
+    chip: 'bg-neg-soft text-data-negative border-hairline',
+    bar: 'bg-data-negative',
   },
 };
 
@@ -95,7 +95,7 @@ export default function ModelTrustSummary({ dealId }) {
 
       <Link
         to={`/dashboard/financials/${dealId}`}
-        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-content-secondary hover:text-primary-600 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1 py-0.5"
+        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-content-secondary hover:text-accent transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 py-0.5"
       >
         View the full confidence breakdown
         <ArrowRight size={12} />

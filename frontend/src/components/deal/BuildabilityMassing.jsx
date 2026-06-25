@@ -107,21 +107,23 @@ export default function BuildabilityMassing({ values, landAreaSqft, className = 
         {/* Right face */}
         <polygon
           points={poly(baseB, baseC, topC, topB)}
-          className="fill-primary-700 stroke-primary-800"
+          className="fill-accent stroke-accent"
           strokeWidth="1"
           strokeLinejoin="round"
+          fillOpacity="0.85"
         />
         {/* Left face */}
         <polygon
           points={poly(baseD, baseC, topC, topD)}
-          className="fill-primary-800 stroke-primary-800"
+          className="fill-accent stroke-accent"
           strokeWidth="1"
           strokeLinejoin="round"
+          fillOpacity="0.7"
         />
         {/* Top face */}
         <polygon
           points={poly(topA, topB, topC, topD)}
-          className="fill-primary-600 stroke-primary-800"
+          className="fill-accent stroke-accent"
           strokeWidth="1"
           strokeLinejoin="round"
         />
@@ -149,7 +151,7 @@ export default function BuildabilityMassing({ values, landAreaSqft, className = 
 
       <div className="mt-2 flex items-center justify-center gap-4 text-[11px] text-content-muted">
         <span className="inline-flex items-center gap-1.5">
-          <span className="w-2.5 h-2.5 rounded-sm bg-primary-600" />
+          <span className="w-2.5 h-2.5 rounded-sm bg-accent" />
           Buildable mass
         </span>
         <span className="inline-flex items-center gap-1.5">

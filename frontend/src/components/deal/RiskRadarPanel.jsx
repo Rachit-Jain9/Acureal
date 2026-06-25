@@ -18,20 +18,20 @@ const POSTURE = {
   cleared: {
     label: 'Cleared',
     Icon: CheckCircle,
-    color: 'text-green-600',
-    chip: 'bg-green-50 text-green-700 border-green-200',
+    color: 'text-data-positive',
+    chip: 'bg-pos-soft text-data-positive border-hairline',
   },
   unverified: {
     label: 'Not verified',
     Icon: HelpCircle,
-    color: 'text-amber-600',
-    chip: 'bg-amber-50 text-amber-700 border-amber-200',
+    color: 'text-premium',
+    chip: 'bg-premium-soft text-premium border-hairline',
   },
   flagged: {
     label: 'Flagged',
     Icon: AlertTriangle,
-    color: 'text-red-600',
-    chip: 'bg-red-50 text-red-700 border-red-200',
+    color: 'text-data-negative',
+    chip: 'bg-neg-soft text-data-negative border-hairline',
   },
 };
 
@@ -42,9 +42,9 @@ const OVERALL_COPY = {
 };
 
 const SIGNAL_TONE = {
-  negative: 'text-red-700',
-  warn: 'text-amber-700',
-  positive: 'text-green-700',
+  negative: 'text-data-negative',
+  warn: 'text-premium',
+  positive: 'text-data-positive',
   neutral: 'text-content-muted',
 };
 

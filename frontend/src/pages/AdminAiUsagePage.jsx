@@ -109,9 +109,9 @@ function CostCapBar({ costCap }) {
   const tone = blocked || pct >= 90 ? 'danger' : pct >= 75 ? 'warn' : 'success';
   const palette =
     tone === 'danger'
-      ? { bg: 'bg-rose-50',  border: 'border-rose-200',  bar: 'bg-rose-500',    text: 'text-rose-900',   label: 'text-rose-700' }
+      ? { bg: 'bg-neg-soft',  border: 'border-hairline',  bar: 'bg-data-negative',    text: 'text-data-negative',   label: 'text-data-negative' }
       : tone === 'warn'
-        ? { bg: 'bg-amber-50', border: 'border-amber-200', bar: 'bg-amber-500',  text: 'text-amber-900', label: 'text-amber-700' }
+        ? { bg: 'bg-premium-soft', border: 'border-hairline', bar: 'bg-premium',  text: 'text-premium', label: 'text-premium' }
         : { bg: 'bg-bg-elevated', border: 'border-hairline', bar: 'bg-data-positive', text: 'text-content-primary', label: 'text-content-muted' };
   return (
     <div className={clsx('border rounded-editorial p-4', palette.bg, palette.border)}>

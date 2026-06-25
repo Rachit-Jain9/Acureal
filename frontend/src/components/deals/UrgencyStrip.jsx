@@ -44,7 +44,7 @@ export default function UrgencyStrip({ deal }) {
     <div className="mb-3 flex flex-wrap gap-1.5" aria-label="Urgency signals">
       {overdue > 0 && (
         <span
-          className={clsx(PILL_BASE, 'bg-red-50 text-red-700 border border-red-100')}
+          className={clsx(PILL_BASE, 'bg-neg-soft text-data-negative border border-hairline')}
           title={`${overdue} required DD item${overdue === 1 ? '' : 's'} past due date`}
         >
           <AlertTriangle size={10} />
@@ -53,7 +53,7 @@ export default function UrgencyStrip({ deal }) {
       )}
       {newRisks > 0 && (
         <span
-          className={clsx(PILL_BASE, 'bg-amber-50 text-amber-700 border border-amber-100')}
+          className={clsx(PILL_BASE, 'bg-premium-soft text-premium border border-hairline')}
           title={`${newRisks} risk flag${newRisks === 1 ? '' : 's'} raised in the last 7 days`}
         >
           <ShieldAlert size={10} />

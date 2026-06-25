@@ -35,9 +35,9 @@ export default function DefaultFieldBadge({
   const isDefault = numeric != null && Math.abs(numeric - Number(meta.value)) < 1e-6;
 
   const tone = outOfRange
-    ? 'bg-rose-50 text-rose-700 border-rose-200'
+    ? 'bg-neg-soft text-data-negative border-hairline'
     : isDefault
-    ? 'bg-sky-50 text-sky-700 border-sky-200'
+    ? 'bg-accent-soft text-accent border-hairline'
     : 'bg-bg-secondary text-content-secondary border-hairline-strong';
 
   const Icon = outOfRange ? AlertTriangle : BookOpen;

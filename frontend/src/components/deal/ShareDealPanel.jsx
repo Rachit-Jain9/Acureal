@@ -83,8 +83,8 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-hairline">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary-50 flex items-center justify-center">
-              <Share2 size={16} className="text-primary-600" />
+            <div className="w-8 h-8 rounded-lg bg-accent-soft flex items-center justify-center">
+              <Share2 size={16} className="text-accent" />
             </div>
             <div>
               <h3 id="share-deal-dialog-title" className="text-base font-semibold text-content-primary">Share Deal</h3>
@@ -113,13 +113,13 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="user@example.com"
-                className="flex-1 px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                className="flex-1 px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent focus:border-transparent"
                 required
               />
               <select
                 value={permission}
                 onChange={(e) => setPermission(e.target.value)}
-                className="px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-bg-elevated"
+                className="px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent bg-bg-elevated"
               >
                 {PERMISSION_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -128,7 +128,7 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
               <button
                 type="submit"
                 disabled={sharing}
-                className="px-4 py-2 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-1.5"
+                className="px-4 py-2 bg-accent hover:bg-accent text-content-inverse rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-1.5"
               >
                 {sharing ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
                 Share
@@ -194,7 +194,7 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
                         <button
                           onClick={() => handleRevoke(share.shared_with, share.shared_with_name || share.shared_with_email)}
                           disabled={revokingId === share.shared_with}
-                          className="p-1.5 rounded-lg text-content-muted hover:text-red-600 hover:bg-red-50 transition disabled:opacity-50"
+                          className="p-1.5 rounded-lg text-content-muted hover:text-data-negative hover:bg-neg-soft transition disabled:opacity-50"
                           title="Revoke access"
                         >
                           {revokingId === share.shared_with ? (

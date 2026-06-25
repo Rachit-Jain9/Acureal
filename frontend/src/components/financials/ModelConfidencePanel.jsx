@@ -18,18 +18,18 @@ import { useModelConfidence } from '../../hooks/useFinancials';
 const BAND = {
   grounded: {
     label: 'Well-grounded',
-    chip: 'bg-green-50 text-green-700 border-green-200',
-    bar: 'bg-green-500',
+    chip: 'bg-pos-soft text-data-positive border-hairline',
+    bar: 'bg-data-positive',
   },
   mixed: {
     label: 'Mixed basis',
-    chip: 'bg-amber-50 text-amber-700 border-amber-200',
-    bar: 'bg-amber-500',
+    chip: 'bg-premium-soft text-premium border-hairline',
+    bar: 'bg-premium',
   },
   'assumption-led': {
     label: 'Assumption-led',
-    chip: 'bg-rose-50 text-rose-700 border-rose-200',
-    bar: 'bg-rose-500',
+    chip: 'bg-neg-soft text-data-negative border-hairline',
+    bar: 'bg-data-negative',
   },
 };
 
@@ -44,7 +44,7 @@ function StatusRow({ item }) {
       <div className="flex items-start gap-2 min-w-0">
         <Icon
           size={14}
-          className={clsx('mt-0.5 shrink-0', isDealSet ? 'text-green-600' : 'text-content-muted')}
+          className={clsx('mt-0.5 shrink-0', isDealSet ? 'text-data-positive' : 'text-content-muted')}
         />
         <div className="min-w-0">
           <p className="text-sm text-content-primary">
@@ -58,7 +58,7 @@ function StatusRow({ item }) {
         className={clsx(
           'shrink-0 text-[10px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded border',
           isDealSet
-            ? 'bg-green-50 text-green-700 border-green-200'
+            ? 'bg-pos-soft text-data-positive border-hairline'
             : 'bg-bg-secondary text-content-muted border-hairline-strong',
         )}
       >
@@ -146,7 +146,7 @@ export default function ModelConfidencePanel({ dealId }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-content-secondary hover:text-primary-600 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded px-1 py-0.5"
+        className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-content-secondary hover:text-accent transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 py-0.5"
       >
         <ChevronRight
           size={13}

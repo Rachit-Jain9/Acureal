@@ -669,7 +669,7 @@ export default function FinancialVisualizationLayer({ financials, inputs }) {
             onClick={() => setTab(t.id)}
             className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
               tab === t.id
-                ? 'bg-bg-elevated text-indigo-700 shadow-sm'
+                ? 'bg-bg-elevated text-accent shadow-sm'
                 : 'text-content-secondary hover:text-content-primary'
             }`}
           >

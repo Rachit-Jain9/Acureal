@@ -32,11 +32,11 @@ import { GuideHelp } from '../../design-system';
  */
 
 const STATUS_TONE = {
-  verified:  { icon: CheckCircle2, tone: 'text-green-600', bg: 'bg-green-50 text-green-700 border-green-200' },
-  uploaded:  { icon: CheckCircle2, tone: 'text-sky-600',   bg: 'bg-sky-50 text-sky-700 border-sky-200' },
-  available: { icon: Circle,       tone: 'text-amber-600', bg: 'bg-amber-50 text-amber-700 border-amber-200' },
-  pending:   { icon: Circle,       tone: 'text-amber-600', bg: 'bg-amber-50 text-amber-700 border-amber-200' },
-  missing:   { icon: AlertCircle,  tone: 'text-red-500',   bg: 'bg-red-50 text-red-700 border-red-200' },
+  verified:  { icon: CheckCircle2, tone: 'text-data-positive', bg: 'bg-pos-soft text-data-positive border-hairline' },
+  uploaded:  { icon: CheckCircle2, tone: 'text-accent',   bg: 'bg-accent-soft text-accent border-hairline' },
+  available: { icon: Circle,       tone: 'text-premium', bg: 'bg-premium-soft text-premium border-hairline' },
+  pending:   { icon: Circle,       tone: 'text-premium', bg: 'bg-premium-soft text-premium border-hairline' },
+  missing:   { icon: AlertCircle,  tone: 'text-data-negative',   bg: 'bg-neg-soft text-data-negative border-hairline' },
 };
 
 const STATUS_LABEL = {
@@ -44,17 +44,17 @@ const STATUS_LABEL = {
 };
 
 const SEVERITY_TONE = {
-  critical: 'bg-red-50 text-red-700 border-red-200',
-  high:     'bg-orange-50 text-orange-700 border-orange-200',
-  medium:   'bg-amber-50 text-amber-700 border-amber-200',
-  low:      'bg-slate-50 text-slate-700 border-slate-200',
+  critical: 'bg-neg-soft text-data-negative border-hairline',
+  high:     'bg-premium-soft text-premium border-hairline',
+  medium:   'bg-premium-soft text-premium border-hairline',
+  low:      'bg-bg-secondary text-content-secondary border-hairline',
 };
 
 const READINESS_TIER_TONE = {
-  ic_ready:  'bg-green-50 text-green-700 border-green-200',
-  pre_ic:    'bg-sky-50 text-sky-700 border-sky-200',
-  diligence: 'bg-amber-50 text-amber-700 border-amber-200',
-  early:     'bg-slate-50 text-slate-700 border-slate-200',
+  ic_ready:  'bg-pos-soft text-data-positive border-hairline',
+  pre_ic:    'bg-accent-soft text-accent border-hairline',
+  diligence: 'bg-premium-soft text-premium border-hairline',
+  early:     'bg-bg-secondary text-content-secondary border-hairline',
 };
 
 const READINESS_TIER_LABEL = {
@@ -65,9 +65,9 @@ const READINESS_TIER_LABEL = {
 };
 
 const BUCKET_STATUS_BAR = {
-  complete: 'bg-green-500',
-  partial:  'bg-amber-500',
-  missing:  'bg-slate-400',
+  complete: 'bg-data-positive',
+  partial:  'bg-premium',
+  missing:  'bg-content-muted',
 };
 
 function StatusPill({ status }) {
@@ -128,7 +128,7 @@ function BucketCard({ bucket }) {
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="w-full text-left py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded"
+        className="w-full text-left py-2.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded"
       >
         <div className="flex items-baseline justify-between gap-3">
           <div className="flex items-center gap-1.5 min-w-0">
@@ -245,7 +245,7 @@ export default function IcReadinessPanel() {
             type="button"
             onClick={handleDownload}
             disabled={downloading}
-            className="inline-flex items-center gap-1.5 text-xs font-medium text-content-secondary hover:text-content-primary disabled:text-content-muted transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40 rounded border border-bg-tertiary px-2 py-1"
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-content-secondary hover:text-content-primary disabled:text-content-muted transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded border border-bg-tertiary px-2 py-1"
             title="Download the IC readiness pack as a Word document for IC committee handoff"
           >
             {downloading ? <Loader2 size={12} className="animate-spin" /> : <Download size={12} />}
@@ -268,18 +268,18 @@ export default function IcReadinessPanel() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
         <div className="bg-bg-secondary rounded p-2">
           <div className="text-[10px] text-content-muted uppercase tracking-wider">Verified</div>
-          <div className="text-lg font-semibold text-green-700 tabular-nums">
+          <div className="text-lg font-semibold text-data-positive tabular-nums">
             {verifiedCount}
             <span className="text-content-muted font-normal text-xs">/{totalItems}</span>
           </div>
         </div>
         <div className="bg-bg-secondary rounded p-2">
           <div className="text-[10px] text-content-muted uppercase tracking-wider">Uploaded</div>
-          <div className="text-lg font-semibold text-sky-700 tabular-nums">{uploadedCount}</div>
+          <div className="text-lg font-semibold text-accent tabular-nums">{uploadedCount}</div>
         </div>
         <div className="bg-bg-secondary rounded p-2">
           <div className="text-[10px] text-content-muted uppercase tracking-wider">Missing</div>
-          <div className="text-lg font-semibold text-red-600 tabular-nums">{missingCount}</div>
+          <div className="text-lg font-semibold text-data-negative tabular-nums">{missingCount}</div>
         </div>
         <div className="bg-bg-secondary rounded p-2">
           <div className="text-[10px] text-content-muted uppercase tracking-wider">Top gap</div>
@@ -301,7 +301,7 @@ export default function IcReadinessPanel() {
             type="button"
             onClick={() => setGapsOpen((v) => !v)}
             aria-expanded={gapsOpen}
-            className="w-full text-left px-3 py-2 bg-bg-secondary/60 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500/40"
+            className="w-full text-left px-3 py-2 bg-bg-secondary/60 hover:bg-bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
           >
             <div className="flex items-center gap-1.5">
               {gapsOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
