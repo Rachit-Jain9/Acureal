@@ -38,6 +38,7 @@ const docx = require('docx');
 const palette = require('../shared/palette');
 const { computeDealScore } = require('../../../utils/scoring/dealScore');
 const { renderSiteMap } = require('../shared/googleMapsStaticMap.service');
+const { resolveCustomerIcOpinion } = require('../../export.insights.service');
 const { generateSection } = require('../narrative/exportNarrative.service');
 // PR-NX18 (2026-05-16): asset-class × deal-structure × exit-strategy aware
 // briefing — shared across XLSX, DOCX, PPTX. Same service, same narrative
@@ -565,21 +566,31 @@ const buildExecutiveSummary = (ctx) => {
   children.push(aiBadge());
 
   const ic = ctx.icOpinion || ctx.exportContext?.ai;
-  if (ic && ic.ic_opinion) {
-    children.push(bodyPara(ic.ic_opinion));
-    // PR-NX40 (2026-05-18): combine confidence + provider + auto-failover
-    // diagnostic into a single attribution line so the reader knows which
-    // model produced the opinion AND when a fallback rescued the call.
+  // Audit #9/#21 (2026-06-25): low-confidence opinions are WITHHELD from the
+  // customer report (gate, not label) — see resolveCustomerIcOpinion. The
+  // deterministic KPIs below carry the report.
+  const icDisplay = resolveCustomerIcOpinion(ic);
+  if (icDisplay.mode === 'render') {
+    children.push(bodyPara(icDisplay.text));
+    // PR-NX40 (2026-05-18): confidence attribution so the reader knows the
+    // grounding strength of the opinion shown (only medium/high reach here).
     const attribution = [];
-    if (ic.confidence) attribution.push(`Confidence: ${ic.confidence}`);
+    if (icDisplay.confidence) attribution.push(`Confidence: ${icDisplay.confidence}`);
     if (attribution.length) {
       children.push(bodyPara(attribution.join(' · '), { italic: true, color: HEX('mutedHigh') }));
     }
+  } else if (icDisplay.mode === 'withheld') {
+    // Low confidence: do NOT print the hedged stance (it reads as authoritative).
+    // State plainly that no rated opinion was warranted and point to the numbers.
+    children.push(bodyPara(
+      'A confidence-rated investment opinion was withheld from this report: the available verified inputs were insufficient to support one to an institutional standard. The deterministic KPIs and risk register below stand on their own; the full working model is available in the deal workspace.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
   } else {
     // PR-NX40 (2026-05-18): surface the WHY when both providers failed
     // so the operator knows whether it's a key issue, rate-limit, or
     // outage — instead of a silent "not available" with no diagnostic.
-    const reason = ic?.reason ? ` (cause: ${ic.reason})` : '';
+    const reason = icDisplay.reason ? ` (cause: ${icDisplay.reason})` : '';
     children.push(bodyPara(
       `AI-generated investor-grade opinion is not available for this deal${reason}. Please rely on the structured KPIs and risk register below for decision support.`,
       { italic: true, color: HEX('mutedHigh') },
