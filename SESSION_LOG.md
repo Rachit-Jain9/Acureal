@@ -9503,3 +9503,39 @@ The OneDrive `.git` index-lock hazard struck once during a post-merge sync (the 
 - **AI disclosure #9/#21** — still needs an operator rendering decision (gate vs label a low-confidence IC opinion).
 - **Deferred #5** (FAR-citation fallback) / **#3** (run the app under a non-owner DB role so RLS becomes a real second layer — operator-gated; the last structural piece behind #858/#28).
 - **Needs operator input:** the website email domain (staff-tier onboarding); whether to move off Vercel Hobby.
+
+---
+
+## 2026-06-25 (Landing rebuild → app-wide quality block: theming, a11y, motion, perf, credibility) (PRs #880–#886 — all merged; master green)
+
+Big session. Started with the landing page, ended with a deep audit + a five-phase quality pass across the whole frontend. All work verified (build + 1223-test vitest suite + a new CI guard) and visually checked on the live logged-in app in both themes via the Chrome connector.
+
+### Landing page — rebuilt to "institutional cinematic" (PR #880)
+- Operator rejected two directions before converging: an editorial/broadsheet cut (too plain) and a cinematic "blind-spot/landmine" cut (too superficial). Final, approved direction, chosen against concrete references: **institutional finance (Addepar/Bridgewater) world + expressive-cinematic energy.**
+- Built as an art-directed, single-mode warm-palette scrollytelling page: `frontend/src/pages/LandingPage.jsx` shell + 6 self-contained scenes in `pages/landing/` (parcel-resolve hero → inbound-becomes-structure → 7-layer diligence+radar → interactive deterministic kernel with a draggable what-if (Saleable %/Exit ₹psf → live IRR/multiple/DSCR + closed-verb WARN) → provenance thread → IC-memo close). Legal-four shown as human-verify; all sample figures tagged illustrative. Standing rule captured in memory `feedback_landing_marketing_cinematic_story.md`.
+
+### Deep multi-dimensional audit
+- 7 parallel auditors (theming, UX/flows, design-system, performance, correctness/credibility, a11y, code-health) → prioritized plan. Unanimous #1: **dark-mode colour fidelity** (6/7 flagged P0).
+
+### Phase 1 — Dark-mode theming migration to semantic tokens (PRs #881 + #882)
+- #881: fixed the 3 worst dashboard widgets (risk radar / readiness / attention) that rendered near-white boxes on the dark default theme.
+- #882: migrated **all ~130 component/page files (127 changed, 541 swaps)** off hardcoded Tailwind palette colours onto the semantic tokens; static `primary-*` folded onto theme-aware `accent`; fixed `bg-slate-900` headers → `surface-2`; rainbow category gradients collapsed to one restrained accent; **removed the dead per-class `index.css` dark-override hack**. Added `docs/THEMING_TOKENS.md` (canonical mapping) + `frontend/scripts/check-theme-tokens.cjs` guard wired into vitest so raw palette can never regress. Memory: `project_theming_token_system.md`.
+
+### Phase 2 — Quick-win cleanup + a11y (PR #883)
+- `shadow-elevated` token alias (un-flattened ~8 surfaces); global `prefers-reduced-motion` gate for Tailwind `animate-spin`/`animate-pulse`; LoadingSpinner role/aria; skip-to-content link; Cmd-K combobox+listbox semantics; DealCard menu downgraded from a broken `role=menu` contract to plain focusable buttons; Toast focus ring → accent; CompsMap console.error collapsed behind DEV + removed a leaked API-key-prefix log; `.gitignore` for stray debug artifacts; Badge/EmptyState re-exported from the design-system barrel.
+
+### Phase 3 — Motion polish (PR #884)
+- Scroll-reset on route change (papercut: pages used to open half-scrolled; gated on pathname so in-page evidence-ref scrolls are unaffected); 180ms route + deal-tab content cross-fades (reduced-motion gated; shell never animates). Corrected FRONTEND_GUIDELINES: **framer-motion is intentionally NOT installed** (CSS/rAF only) — the doc wrongly claimed otherwise.
+
+### Phase 4 — Landing performance (PR #885)
+- Code-split + scroll-mount the 5 below-fold landing scenes via a `<LazyScene>` IntersectionObserver wrapper (~900px rootMargin, reserved min-height → no visible jump). **Landing entry chunk 95.4 kB → 18.9 kB (26.8 → 6.2 kB gzip).** Verified the full scroll experience locally — all scenes render, no gaps, no errors.
+
+### Phase 5 — Credibility (PR #886)
+- Comps table footer was overclaiming ("All transactions verified from public disclosures"); reworded to an honest methodology note (as reported by public sources, not independently verified by REDIP — confirm before underwriting), per the no-overstated-comp-confidence hard rule. Investigated the other audit "correctness" items (`Number(x||0)`, `formatPct` 100×, riskTone dedup) and deliberately **did not churn** them — confirmed they're cosmetic/contract-safe/different-metrics, not active bugs (quality > diff-noise).
+
+### What's left to do next / needs operator
+- **Operator decision — comps per-row provenance (audit #26):** add a per-row Source + verified-date column (needs confirming the per-row source data exists / methodology wording). Footer overclaim already removed.
+- **Operator decision — map engine:** drop `@react-google-maps/api` and move CompsMap to Leaflet (better for the CSP posture, self-hostable) vs. keep Google. Vendor call.
+- **Ratify** framer-motion staying uninstalled (doc already corrected to reflect reality).
+- Deferred (low-value, not done by design): `Number(x ?? 0)` cosmetic sweep, `utils/riskTone.js` dedup, `components/map`→`components/maps` consolidation, large-file decomposition (DealsPage/MethodologyExplorer), rollup bundle-visualizer + size-budget CI.
+- Still open from prior sessions: AI disclosure #9/#21; deferred #5 / #3 (non-owner DB role); website email domain; Vercel Hobby.
