@@ -287,15 +287,16 @@ export default function CompsMap({
   // wrong layer.
   useEffect(() => {
     if (!loadError) return;
-    // eslint-disable-next-line no-console
-    console.error('[CompsMap] useJsApiLoader.loadError:', loadError);
-    // eslint-disable-next-line no-console
-    console.error('[CompsMap] loadError.message:', loadError?.message);
-    // eslint-disable-next-line no-console
-    console.error('[CompsMap] loadError.stack:', loadError?.stack);
-    // eslint-disable-next-line no-console
-    console.error('[CompsMap] script src expected:', `https://maps.googleapis.com/maps/api/js?key=${(apiKey || '').slice(0, 10)}…&libraries=marker&v=weekly`);
-  }, [loadError, apiKey]);
+    if (import.meta.env.DEV) {
+      // Single dev-only diagnostic; never logs in production and never
+      // echoes any part of the API key.
+      // eslint-disable-next-line no-console
+      console.error('[CompsMap] useJsApiLoader.loadError:', {
+        message: loadError?.message,
+        stack: loadError?.stack,
+      });
+    }
+  }, [loadError]);
 
   const mapRef = useRef(null);
 
@@ -318,11 +319,13 @@ export default function CompsMap({
         href: window.location.href,
         timestamp: new Date().toISOString(),
       });
-      // eslint-disable-next-line no-console
-      console.error(
-        '[CompsMap] Google Maps gm_authFailure fired — key restriction blocked the load.',
-        { host: window.location.host, href: window.location.href }
-      );
+      if (import.meta.env.DEV) {
+        // eslint-disable-next-line no-console
+        console.error(
+          '[CompsMap] Google Maps gm_authFailure fired — key restriction blocked the load.',
+          { host: window.location.host, href: window.location.href }
+        );
+      }
       if (typeof prev === 'function') prev();
     };
     return () => {

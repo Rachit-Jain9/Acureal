@@ -75,7 +75,7 @@ function ToastItem({ toast: t, onRemove }) {
         type="button"
         onClick={dismiss}
         aria-label="Dismiss notification"
-        className="opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-black/30 rounded"
+        className="opacity-60 hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1 focus-visible:ring-accent/50 rounded"
       >
         <X size={14} aria-hidden="true" />
       </button>
@@ -90,6 +90,7 @@ export default function ToastContainer() {
 
   return (
     <div
+      role="region"
       aria-label="Notifications"
       className="fixed top-4 right-4 z-50 space-y-2 max-w-sm"
     >

@@ -25,6 +25,11 @@ export { CollapsibleCard } from './CollapsibleCard';
 // Checkbox — accessible checkbox control.
 export { default as Checkbox } from './Checkbox';
 
+// Common primitives re-exported through the barrel so they're importable
+// alongside the rest of the design system.
+export { default as Badge } from '../components/common/Badge';
+export { default as EmptyState } from '../components/common/EmptyState';
+
 // Interactive primitives — see each file for the full prop contract.
 export { default as Button } from './Button';
 export { Modal } from './Modal';

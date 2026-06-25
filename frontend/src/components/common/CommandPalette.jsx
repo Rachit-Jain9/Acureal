@@ -32,6 +32,10 @@ import { usePrefetchDealWorkspace } from '../../hooks/useDeals';
 const RECENT_KEY = 'redip:cmdk:recent';
 const MAX_RECENT = 8;
 
+// Stable ids wiring the WAI-ARIA combobox + listbox relationship.
+const LISTBOX_ID = 'redip-cmdk-listbox';
+const optionId = (index) => `redip-cmdk-opt-${index}`;
+
 const QUICK_ACTIONS = [
   // "Create" actions appear first so the most-used action is one keystroke
   // away. ?new=1 is a deep-link DealsPage opens its create modal on.
@@ -256,6 +260,9 @@ export default function CommandPalette() {
       <button
         type="button"
         key={`${item.kind}-${item.payload.id || idx}`}
+        id={optionId(idx)}
+        role="option"
+        aria-selected={isActive}
         onClick={() => navigateTo(item)}
         onMouseEnter={onIntent}
         onFocus={onIntent}
@@ -300,6 +307,11 @@ export default function CommandPalette() {
             placeholder="Type to search deals or jump to a page…"
             className="flex-1 bg-transparent outline-none text-sm py-1.5 text-content-primary"
             aria-label="Command palette search"
+            role="combobox"
+            aria-expanded={flatItems.length > 0}
+            aria-controls={LISTBOX_ID}
+            aria-autocomplete="list"
+            aria-activedescendant={flatItems.length > 0 ? optionId(activeIndex) : undefined}
           />
           <button
             type="button"
@@ -311,7 +323,7 @@ export default function CommandPalette() {
           </button>
         </div>
 
-        <div className="max-h-[60vh] overflow-y-auto p-2">
+        <div className="max-h-[60vh] overflow-y-auto p-2" role="listbox" id={LISTBOX_ID}>
           {filteredQuickActions.length > 0 && (
             <div className="mb-2">
               <div className="px-2 py-1 text-[11px] uppercase tracking-wider text-content-muted">

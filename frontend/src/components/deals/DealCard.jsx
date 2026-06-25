@@ -186,7 +186,7 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
                 type="button"
                 onClick={(e) => { stopAll(e); setMenuOpen((v) => !v); }}
                 aria-label="Deal actions"
-                aria-haspopup="menu"
+                aria-haspopup="true"
                 aria-expanded={menuOpen}
                 className="p-1 rounded hover:bg-bg-secondary text-content-secondary hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-95 transition-transform duration-120 ease-out"
               >
@@ -194,14 +194,12 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
               </button>
               {menuOpen && (
                 <div
-                  role="menu"
                   className="absolute right-0 top-full mt-1 w-44 rounded-md border border-hairline-strong bg-bg-elevated shadow-lg z-20"
                   onClick={stopAll}
                   onMouseDown={(e) => e.stopPropagation()}
                 >
                   <button
                     type="button"
-                    role="menuitem"
                     onClick={handleExport}
                     disabled={exporting}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
@@ -211,7 +209,6 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
                   </button>
                   <button
                     type="button"
-                    role="menuitem"
                     onClick={handleShare}
                     className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-content-secondary hover:bg-bg-secondary"
                   >
@@ -223,7 +220,6 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
                       <div className="border-t border-hairline" />
                       <button
                         type="button"
-                        role="menuitem"
                         onClick={handleDelete}
                         className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left text-data-negative hover:bg-neg-soft"
                       >
