@@ -138,6 +138,13 @@ const loadFarRules = async ({ property, zone, statutoryPlanId = null }) => {
      FROM regulatory_data.far_rules fr
      LEFT JOIN regulatory_data.evidence_sources es ON es.id = fr.evidence_source_id
      WHERE fr.review_status = 'approved'
+       -- Only serve rules from a plan that is currently IN FORCE. A rule can be
+       -- review_status='approved' yet belong to a withdrawn/superseded/draft plan
+       -- (e.g. the withdrawn RMP 2031 Draft rows still sitting at 'approved' in
+       -- prod). Citing those as authoritative FAR is a credibility defect, so we
+       -- exclude any non-operative plan here. COALESCE NULL -> 'operative' keeps
+       -- org-authored manual rules (which carry no plan_status) servable.
+       AND COALESCE(fr.plan_status, 'operative') NOT IN ('withdrawn', 'superseded', 'draft', 'draft_reference')
        AND (
          fr.zone_code = $1
          OR (
