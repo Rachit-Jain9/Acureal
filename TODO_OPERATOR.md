@@ -27,7 +27,7 @@ _Last updated: 2026-06-09._
 
 # 🔴 DO FIRST — protects your data and money (this week)
 
-## 1. Turn on database backups — most important
+## 1. ⏳ IN PROGRESS (operator purchasing Supabase Pro — 2026-06-25) — Turn on database backups — most important
 **Why:** Right now your database may have **no automatic backups**. If something
 ever goes wrong, deal data could be lost permanently.
 
@@ -39,7 +39,7 @@ ever goes wrong, deal data could be lost permanently.
 5. One small follow-up: each backup has a **Restore** option next to it — you don't
    need to restore anything, just confirm it's there and reply `restore option visible`.
 
-## 2. Delete the old Google Maps key — closes a leaked-key hole
+## 2. ✅ DONE (2026-06-25 — operator confirmed deleted) — Delete the old Google Maps key — closes a leaked-key hole
 **Why:** An old Google Maps key was once exposed. The new key is already in the site,
 but **the old leaked key still works until you delete it** in Google Cloud.
 
@@ -51,7 +51,7 @@ but **the old leaked key still works until you delete it** in Google Cloud.
    cap** set so a runaway can never cost a fortune.
 5. **Reply:** `maps key deleted`.
 
-## 3. Set the AI spending cap — ~2 minutes
+## 3. ✅ DONE (2026-06-25 — AI_DAILY_COST_CAP_USD set in Vercel) — Set the AI spending cap — ~2 minutes
 **Why:** This puts a hard daily dollar limit on the AI features so they can never
 overspend, no matter what.
 

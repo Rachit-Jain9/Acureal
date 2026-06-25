@@ -9539,3 +9539,19 @@ Big session. Started with the landing page, ended with a deep audit + a five-pha
 - **Ratify** framer-motion staying uninstalled (doc already corrected to reflect reality).
 - Deferred (low-value, not done by design): `Number(x ?? 0)` cosmetic sweep, `utils/riskTone.js` dedup, `components/map`→`components/maps` consolidation, large-file decomposition (DealsPage/MethodologyExplorer), rollup bundle-visualizer + size-budget CI.
 - Still open from prior sessions: AI disclosure #9/#21; deferred #5 / #3 (non-owner DB role); website email domain; Vercel Hobby.
+
+---
+
+## 2026-06-25 (Pending-work inventory + operator answers → AI-disclosure gate + FAR-rule credibility) (PRs #888, #889 — merged; master green)
+
+Produced a full, deduplicated pending-work inventory across every TODO file, roadmap, memory backlog, the session log, and in-code markers (multi-agent workflow, 217 raw → 5 buckets: Claude-coding / Rachit-manual+decisions / APIs-needed / external / features). Operator answered the open questions; acted on them:
+
+- **#888 (audit #9/#21) — AI deal-opinion disclosure.** Operator delegated the call ("do whatever is best"); chose **gate, not label**: a LOW-confidence AI investor opinion is now **withheld** from the customer Word report (replaced by a neutral "opinion withheld — see the metrics" note); medium/high still render with their confidence label. In-app workspace is unchanged (still shows the opinion + chip) — the gate is export-only. New pure `resolveCustomerIcOpinion` policy helper + test.
+- **#889 (regulatory credibility) — never serve withdrawn-plan FAR rules.** Live data check: `regulatory_data.far_rules` holds 51 operative RMP-2015 + 41 Anekal rules (correct, approved) but ALSO 32 **withdrawn** RMP-2031 rows still flagged `approved`. The served query (`loadFarRules`) had no `plan_status` guard, so in the legacy path those could be cited as authoritative FAR. Added a guard so only in-force plans serve. (Answers the operator's "isn't RMP-2015 done?" — yes; this was the cleanup.)
+
+**Operator answers captured (TODO_OPERATOR.md updated):** AI cost cap ✅ set; old Google Maps key ✅ deleted; Supabase Pro + Vercel Pro → purchasing; non-owner DB login (#3) → agreed, operator will remind; document retention policy → not required (basics already covered: private-by-default + signed URLs + access logging); enterprise SOC2/ISO program → explained, recommended deferring until a customer asks; RMP-2015 upload → not needed (already loaded).
+
+### What's left to do next
+- **AI disclosure — second half (#9/#21 remainder + #26):** per-row Source + verified-date labels on comps tables in exports (CLAUDE.md hard rule) + provenance line on the whyThisArea/demographics AI market prose. Confirm the comps rows carry per-row source/freshness data first.
+- **Data tidy (Phase 0):** the 32 withdrawn-but-`approved` far_rules rows are now never served but remain mis-tagged; re-tag them under the Phase-0 regulatory-correction work (with the `reference_audit_log` trail).
+- **Operator-gated:** non-owner DB login (#3, operator will remind); website email domain; map engine Google-vs-Leaflet; resume paused data streams when directed.
