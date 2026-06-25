@@ -213,6 +213,30 @@ const coerceInsightsEnvelope = (parsed, extras = {}) => ({
   ...extras,
 });
 
+// ── Customer-export display policy for the IC opinion (audit #9/#21, 2026-06-25).
+// A LOW-confidence AI opinion (per SYSTEM_PROMPT: financial_model null or DD
+// completion < 30%) reads as authoritative in a customer investor report while
+// being weakly grounded. Operator decision (delegated 2026-06-25): WITHHOLD it
+// from customer-facing exports and lead with the deterministic metrics, rather
+// than print a hedged stance carrying a "Confidence: low" label. The in-app
+// workspace keeps showing the opinion with its confidence chip (separate
+// intelligence.service path) — this gate is EXPORT-ONLY. Medium/high opinions
+// render normally with their label.
+//
+// Returns a display decision so every customer renderer treats it identically:
+//   { mode: 'render' | 'withheld' | 'unavailable', text, confidence, reason }
+const resolveCustomerIcOpinion = (envelope) => {
+  const ic = envelope || {};
+  const opinion = typeof ic.ic_opinion === 'string' ? ic.ic_opinion.trim() : '';
+  if (!opinion) {
+    return { mode: 'unavailable', text: null, confidence: ic.confidence || null, reason: ic.reason || null };
+  }
+  if (ic.confidence === 'low') {
+    return { mode: 'withheld', text: null, confidence: 'low', reason: ic.reason || null };
+  }
+  return { mode: 'render', text: opinion, confidence: ic.confidence || null, reason: null };
+};
+
 // PR-NX40 (2026-05-18): single-provider call helpers. Each returns the
 // raw model text (string) or throws. The orchestrator below catches +
 // records fallbackReason, then tries the next provider.
@@ -1019,4 +1043,6 @@ module.exports = {
   // Internal — exported for the legal-four guard regression tests.
   coerceInsightsEnvelope,
   coerceDocInsightsEnvelope,
+  // Customer-export IC-opinion display policy (audit #9/#21).
+  resolveCustomerIcOpinion,
 };
