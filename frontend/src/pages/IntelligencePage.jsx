@@ -167,8 +167,9 @@ function TransactionTable({ rows }) {
       )}
 
       <p className="mt-3 text-xs text-content-muted">
-        Source: Economic Times, Business Standard, Hindustan Times, Moneycontrol, company press releases.
-        All transactions verified from public disclosures. Quantum in ₹ Cr.
+        Compiled from public reporting — Economic Times, Business Standard, Hindustan Times,
+        Moneycontrol, and company press releases. Figures are as reported by those sources, not
+        independently verified by REDIP; confirm before relying on them for underwriting. Quantum in ₹ Cr.
       </p>
     </div>
   );
