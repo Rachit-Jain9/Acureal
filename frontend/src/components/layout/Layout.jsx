@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
 import Header from './Header';
@@ -17,8 +17,14 @@ export default function Layout() {
   // stay open after a navigation click.
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const location = useLocation();
+  const mainRef = useRef(null);
   useEffect(() => {
     setMobileNavOpen(false);
+    // Reset scroll to the top of the content panel on every route change so a
+    // new page never opens half-scrolled. In-page evidence-ref scrolls fire on
+    // the SAME pathname, so they're unaffected. Instant (no smooth) — a nav
+    // should land at the top immediately, not animate a long scroll.
+    mainRef.current?.scrollTo({ top: 0, left: 0 });
   }, [location.pathname]);
 
   return (
@@ -42,8 +48,14 @@ export default function Layout() {
       <div className="flex-1 flex flex-col min-w-0">
         <Header onMobileMenuOpen={() => setMobileNavOpen(true)} />
         <EmailVerificationBanner />
-        <main id="main-content" tabIndex={-1} className="flex-1 p-4 sm:p-6 overflow-auto min-w-0">
-          <Outlet />
+        <main ref={mainRef} id="main-content" tabIndex={-1} className="flex-1 p-4 sm:p-6 overflow-auto min-w-0">
+          {/* Keyed by pathname so the content panel cross-fades on route change
+              (180ms, reduced-motion gated). The shell never animates. Tab
+              changes within a page use searchParams (same pathname) and are
+              handled by the per-tab fade, not this. */}
+          <div key={location.pathname} className="redip-route-fade">
+            <Outlet />
+          </div>
         </main>
       </div>
       {/* Cmd+K palette is mounted once and overlays everything when toggled. */}

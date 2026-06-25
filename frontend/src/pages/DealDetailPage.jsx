@@ -402,7 +402,7 @@ export default function DealDetailPage() {
         {/* Active tab content. All deal tabs read deal/dealId from useDealContext;
             only auxiliary parent-supplied props remain (ParcelTab.canEdit,
             ZoningTab.setTab). */}
-        <div role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`}>
+        <div key={activeTab} role="tabpanel" id={`panel-${activeTab}`} aria-labelledby={`tab-${activeTab}`} className="redip-tab-fade">
           {/* Overview is eager (landing tab); the other nine tabs lazy-load
               via React.lazy so their bundles only download on click. */}
           {activeTab === 'overview' && <OverviewTab setTab={setTab} />}

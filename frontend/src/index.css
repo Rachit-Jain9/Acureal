@@ -552,7 +552,18 @@ html[data-theme='light'] {
        them globally so OS reduced-motion stops every spinner and pulse. */
     .animate-spin { animation: none !important; }
     .animate-pulse { animation: none !important; }
+    .redip-tab-fade, .redip-route-fade { animation: none; }
   }
+
+  /* Route + tab content cross-fade (FRONTEND_GUIDELINES §8) — short, decisive,
+     reduced-motion gated above. A wrapper keyed by route/tab replays it on change;
+     the shell (sidebar, header, tab strip) never animates. */
+  @keyframes redip-content-fade {
+    0%   { opacity: 0; transform: translateY(4px); }
+    100% { opacity: 1; transform: translateY(0); }
+  }
+  .redip-tab-fade,
+  .redip-route-fade { animation: redip-content-fade 180ms ease-out both; will-change: opacity, transform; }
 
   /* Thin, themed scrollbars */
   * { scrollbar-width: thin; scrollbar-color: var(--color-border-strong) transparent; }
