@@ -117,7 +117,7 @@ For any operation > 100ms, show a skeleton that matches the final layout. Spinne
 
 When data updates in place (refresh, polling, save):
 
-- **Numbers count up/down** to the new value over 600ms (`ease-out`). Use `framer-motion` `<motion.span>` with key change or a count-up hook.
+- **Numbers count up/down** to the new value over 600ms (`ease-out`). Use the `useCountUp` hook (motion is CSS/rAF-based — `framer-motion` is intentionally NOT a dependency).
 - **Status pills cross-fade** (180ms) between states.
 - **Chart bars/lines reflow** with their stagger animation when underlying data changes.
 - **Map markers** fade in/out (220ms), never pop.
@@ -138,7 +138,7 @@ Default is flat. 3D depth is reserved for moments where it earns its complexity:
 | Map tilt-to-3D on cadastral overlays when explicitly toggled | Page-load 3D logo reveals |
 | Card flip (180° rotateY, 320ms) for "show details / show source" toggles | Cube transitions between tabs |
 
-**Implementation:** use `framer-motion`'s `motion.div` with `transform-gpu` Tailwind class. Always respect `prefers-reduced-motion`.
+**Implementation:** use CSS transforms (`transform-gpu` Tailwind class) + `requestAnimationFrame`. Always respect `prefers-reduced-motion`.
 
 ---
 
@@ -181,7 +181,7 @@ The shell (sidebar, header, tabs strip) NEVER animates on route change. Stable c
 - 60fps minimum for any in-flow animation. If a transition drops frames, reduce its complexity or remove it.
 - Use `transform` and `opacity` for animations (GPU-composited). Never animate `width`, `height`, `top`, `left`, or `margin` directly.
 - `will-change` only on elements actively animating, removed when done.
-- Bundle impact of a new animation library must be < 15KB gzipped or it's not allowed. Prefer CSS / Tailwind / `framer-motion` (already installed).
+- Bundle impact of a new animation library must be < 15KB gzipped or it's not allowed. Prefer CSS / Tailwind / `requestAnimationFrame`. `framer-motion` is intentionally NOT a dependency — do not add it without operator sign-off.
 - Lighthouse Performance score on the deal-detail page must stay ≥ 85.
 
 ---
@@ -219,7 +219,7 @@ If any answer is "no" or "not sure," do not merge.
 ## 13. Default tooling
 
 - **Tailwind** for all static styling.
-- **`framer-motion`** for any motion beyond simple CSS transitions (already in `package.json`).
+- **CSS keyframes / transitions + `requestAnimationFrame`** for all motion. `framer-motion` is intentionally NOT installed (keeps the bundle lean) — do not add it without operator sign-off.
 - **`recharts`** for charts (already used). Inline styles required for chart props — that's fine, just hoist constants.
 - **`react-leaflet`** for maps. Use `flyTo` with 400ms duration for programmatic moves.
 - **`lucide-react`** for icons. Never decorative emojis in UI.
