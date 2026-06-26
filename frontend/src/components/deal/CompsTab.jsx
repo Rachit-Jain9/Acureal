@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import EmptyState from '../common/EmptyState';
 import EvidenceBadge from '../common/EvidenceBadge';
+import ProvenanceCell from '../common/ProvenanceCell';
 import { useQuery } from '@tanstack/react-query';
 import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
 import {
@@ -244,12 +245,8 @@ function RankedCompsTable({
                     <span className="truncate max-w-[180px]" title={comp.project_name}>
                       {comp.project_name || '—'}
                     </span>
-                    {comp.is_verified && (
-                      <span
-                        className="inline-block w-1.5 h-1.5 rounded-full bg-data-positive"
-                        title="Verified comp"
-                      />
-                    )}
+                    {/* Verified status now lives in the Source · Freshness column
+                        (ProvenanceCell) — no duplicate dot here (one signal, once). */}
                     {/* Provenance — every comp price should be tied to a
                         listing screenshot, broker quote, or registry entry
                         before it carries weight in valuation. */}
@@ -295,10 +292,8 @@ function RankedCompsTable({
                     {formatScorePct(score)}
                   </span>
                 </td>
-                <td className="px-3 py-3">
-                  <span className="text-[11px] text-content-secondary truncate max-w-[140px] inline-block" title={comp.source}>
-                    {comp.source || '—'}
-                  </span>
+                <td className="px-3 py-3 align-top">
+                  <ProvenanceCell comp={comp} compact />
                 </td>
                 <td className="px-3 py-3 text-center relative">
                   <button
