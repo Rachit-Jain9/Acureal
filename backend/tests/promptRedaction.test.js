@@ -56,6 +56,26 @@ describe('promptRedaction.redactText', () => {
     expect(redactText('Registration 9876543210123').count).toBe(0);
   });
 
+  // Context-anchored masking — recall lift where a keyword disambiguates the PII
+  // from a khata / survey / registration number (keyword kept, digits masked).
+  test('masks a bare Aadhaar when an aadhaar/uid keyword precedes it', () => {
+    expect(redactText('Aadhaar No. 123456789012').text).toBe(`Aadhaar No. ${REDACTED}`);
+    expect(redactText('UID 1234 5678 9012').text).toBe(`UID ${REDACTED}`);
+    expect(redactText('aadhar - 1234-5678-9012').count).toBe(1);
+  });
+
+  test('masks a bare 10-digit mobile when a mobile/phone/whatsapp keyword precedes it', () => {
+    expect(redactText('Mobile: 9876543210').text).toBe(`Mobile: ${REDACTED}`);
+    expect(redactText('phone 9988776655').count).toBe(1);
+    expect(redactText('WhatsApp 9123456780').count).toBe(1);
+  });
+
+  test('precision: a khata/survey number is NOT swept in when the keyword is far away', () => {
+    // The keyword→number gap exceeds the cap, so the product number is untouched.
+    expect(redactText('Aadhaar verified separately; khata number 123456789012').count).toBe(0);
+    expect(redactText('Mobile tower nearby. Survey number 9876543210 in the records.').count).toBe(0);
+  });
+
   test('passes non-strings through untouched', () => {
     expect(redactText(null)).toEqual({ text: null, count: 0 });
     expect(redactText(undefined)).toEqual({ text: undefined, count: 0 });
