@@ -48,6 +48,7 @@ const {
   addProsConsColumns,
 } = require('./primitives');
 const { drawAssetClassCover } = require('./coverArtwork');
+const { deriveCompProvenance, formatAbsoluteDate } = require('../../../utils/compProvenance');
 
 const renderCover = (pptx, slide, context, totalSlides) => {
   setSlideDefaults(slide);
@@ -888,29 +889,31 @@ const renderMarketPositioning = (pptx, slide, context, pageNumber, totalSlides) 
       bandColor: COLORS.plumSoft,
       fill: COLORS.white,
     });
-    slide.addText('TOP VERIFIED COMPARABLES', {
+    slide.addText('TOP COMPARABLES', {
       x: 0.78, y: 5.5, w: 5.6, h: 0.2,
       fontFace: FONT, fontSize: 8, bold: true, color: COLORS.muted, charSpace: 1.6,
     });
+    const headerCell = (t) => ({ text: t, options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8 } });
     const compTableRows = [
-      [
-        { text: 'Project', options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8 } },
-        { text: 'Developer', options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8 } },
-        { text: 'Rate / sqft', options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8 } },
-        { text: 'Verified', options: { bold: true, color: COLORS.white, fill: { color: COLORS.plum }, fontSize: 8 } },
-      ],
-      ...compsForTable.map((c, idx) => [
-        { text: truncate(c.project_name || '–', 22), options: { fontSize: 8, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist } } },
-        { text: truncate(c.developer || '–', 18), options: { fontSize: 8, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist } } },
-        { text: formatRate(c.rate_per_sqft) || '–', options: { fontSize: 8, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist }, bold: true } },
-        { text: c.is_verified === false ? 'No' : 'Yes', options: { fontSize: 8, fill: { color: idx % 2 === 0 ? COLORS.white : COLORS.mist }, color: c.is_verified === false ? COLORS.red : COLORS.green } },
-      ]),
+      [headerCell('Project'), headerCell('Developer'), headerCell('Rate / sqft'), headerCell('Source'), headerCell('Verified')],
+      ...compsForTable.map((c, idx) => {
+        const prov = deriveCompProvenance(c);
+        const rowFill = { color: idx % 2 === 0 ? COLORS.white : COLORS.mist };
+        return [
+          { text: truncate(c.project_name || '–', 20), options: { fontSize: 8, fill: rowFill } },
+          { text: truncate(c.developer || '–', 15), options: { fontSize: 8, fill: rowFill } },
+          { text: formatRate(c.rate_per_sqft) || '–', options: { fontSize: 8, fill: rowFill, bold: true } },
+          { text: truncate(prov.sourceTypeLabel, 13), options: { fontSize: 7.5, fill: rowFill, color: COLORS.muted } },
+          // Honest: only an explicit is_verified===true earns "Yes"/green; null/false → muted "No".
+          { text: prov.verified ? 'Yes' : 'No', options: { fontSize: 8, fill: rowFill, color: prov.verified ? COLORS.green : COLORS.muted } },
+        ];
+      }),
     ];
     addTable(slide, compTableRows, {
       x: 0.78,
       y: 5.78,
       w: 5.8,
-      colW: [1.95, 1.6, 1.35, 0.9],
+      colW: [1.65, 1.25, 1.05, 1.15, 0.7],
       rowH: 0.27,
       fontSize: 8,
     });
@@ -978,11 +981,14 @@ const renderMarketPositioning = (pptx, slide, context, pageNumber, totalSlides) 
   });
 
   // Bottom note — verified count.
-  const verifiedCount = (context.compRows || []).filter((c) => c.is_verified !== false).length;
+  // Honest verified count: only an explicit is_verified===true (null/false are NOT verified).
+  const verifiedCount = (context.compRows || []).filter((c) => c.is_verified === true).length;
   const totalCompRows = (context.compRows || []).length;
+  const asOfDates = (context.compRows || []).map((c) => c.as_of_date).filter(Boolean).sort();
+  const latestAsOf = asOfDates.length ? formatAbsoluteDate(asOfDates[asOfDates.length - 1]) : null;
   if (totalCompRows > 0) {
     slide.addText(
-      `${verifiedCount} of ${totalCompRows} comparable rate references are verified. Unverified rows surfaced for context only.`,
+      `${verifiedCount} of ${totalCompRows} comparable rate references are verified.${latestAsOf ? ` Market data as of ${latestAsOf}.` : ''} Unverified rows surfaced for context only.`,
       {
         x: 7.22, y: 5.35, w: 5.3, h: 0.5,
         fontFace: FONT, fontSize: 8.5, italic: true, color: COLORS.muted, valign: 'top',

@@ -26,6 +26,7 @@
 
 const K = require('../docx/packKit');
 const { getAudience } = require('../../../constants/reportPackCatalog');
+const { deriveCompProvenance } = require('../../../utils/compProvenance');
 
 const { EMDASH, C } = K;
 
@@ -416,13 +417,37 @@ const sectionMarketContext = (ws) => {
   } else {
     blocks.push({ type: 'sourceNote' }); // → "No verified feed available"
   }
-  const comps = ((ws && ws.comps && ws.comps.entries) || []).filter((c) => c.is_verified !== false);
-  blocks.push({
-    type: 'note',
-    text: comps.length
-      ? `${comps.length} verified comparable transaction${comps.length === 1 ? '' : 's'} within 5 km on file.`
-      : 'No verified comparables on file within 5 km yet.',
-  });
+  // Per-row comp provenance (source-type + honest verified status) + a sourceNote
+  // carrying the verified count and the "as of" freshness — mirrors the benchmark
+  // block above. is_verified===true is the ONLY path to "Verified" (null/false are
+  // surfaced honestly, not silently promoted).
+  const comps = (ws && ws.comps && ws.comps.entries) || [];
+  if (comps.length) {
+    const compRows = comps.slice(0, 6).map((c) => {
+      const prov = deriveCompProvenance(c);
+      return [
+        c.project_name || EMDASH,
+        c.rate_per_sqft != null ? K.formatNumber(c.rate_per_sqft) : EMDASH,
+        prov.sourceTypeLabel,
+        prov.verifiedLabel,
+      ];
+    });
+    blocks.push({
+      type: 'table',
+      columns: [{ header: 'Comparable', width: 34 }, { header: 'Rate/sqft', width: 18 }, { header: 'Source', width: 26 }, { header: 'Status', width: 22 }],
+      rows: compRows,
+    });
+    const verifiedN = comps.filter((c) => c.is_verified === true).length;
+    const freshest = comps.map((c) => c.as_of_date).filter(Boolean).sort().slice(-1)[0];
+    blocks.push({
+      type: 'sourceNote',
+      source: `${verifiedN} of ${comps.length} comparable${comps.length === 1 ? '' : 's'} verified within 5 km`,
+      freshness: freshest ? K.formatDate(freshest) : null,
+      confidence: null,
+    });
+  } else {
+    blocks.push({ type: 'note', text: 'No verified comparables on file within 5 km yet.' });
+  }
   const bestUse = ((ws && ws.best_use && ws.best_use.scores) || [])[0];
   if (bestUse) {
     blocks.push({ type: 'note', text: `Best-use suitability: ${K.assetClassLabel(bestUse.asset_class)} — score ${bestUse.score}/100${bestUse.label ? ` (${bestUse.label})` : ''}.` });

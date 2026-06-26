@@ -437,8 +437,13 @@ const fetchCityComps = async ({ city, compType }) => {
   }
 
   const result = await query(
+    // Provenance columns (data_type / source_url / as_of_date / updated_at) feed
+    // the per-row "Source · Verified · as of <date>" treatment in every export
+    // format via utils/compProvenance.deriveCompProvenance — the CLAUDE.md hard
+    // rule that comps must always surface source, freshness, and confidence.
     `SELECT project_name, developer, city, locality, project_type, bhk_config,
-      rate_per_sqft, launch_year, possession_year, source, is_verified
+      rate_per_sqft, launch_year, possession_year, source, is_verified,
+      data_type, source_url, as_of_date, updated_at
      FROM comps
      WHERE ${conditions.join(' AND ')}
      ORDER BY is_verified DESC, rate_per_sqft DESC NULLS LAST
