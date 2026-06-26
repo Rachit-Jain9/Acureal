@@ -114,6 +114,18 @@ const getBlob = () => {
   return blobClient;
 };
 
+// Org-scope the Vercel Blob key so NEW uploads are namespaced per organisation —
+// a foundation for per-org lifecycle + future path-based enforcement. NOTE: the
+// bucket is service-role-only today, so this prefix is organisation, not yet an
+// access boundary (true enforcement = the Supabase-Storage migration). Falls back
+// to the legacy `deals/<id>/...` shape when the org is unknown so existing callers
+// + stored rows are unaffected. Download keys off the full stored blob URL, never
+// this path, so read paths are untouched.
+const buildBlobPathname = (dealId, fileName, organizationId = null, ts = Date.now()) =>
+  (organizationId
+    ? `orgs/${organizationId}/deals/${dealId}/${ts}-${fileName}`
+    : `deals/${dealId}/${ts}-${fileName}`);
+
 /**
  * Upload a file. Returns { url, isBlob } where:
  *   url     = storage identifier stored in documents.file_url
@@ -124,7 +136,7 @@ const uploadFile = async (fileBuffer, fileName, mimeType, dealId, organizationId
 
   if (preferredProvider === 'vercel_blob') {
     const { put } = getBlob();
-    const pathname = `deals/${dealId}/${Date.now()}-${fileName}`;
+    const pathname = buildBlobPathname(dealId, fileName, organizationId);
     let access = getBlobAccess();
     let blob;
 
@@ -288,4 +300,5 @@ module.exports = {
   getStorageStatus,
   getPreferredStorageProvider,
   isPrivateVercelBlobUrl,
+  buildBlobPathname,
 };
