@@ -61,6 +61,20 @@ vi.mock('../../hooks/useDashboard', () => ({
     isError: false,
     refetch: vi.fn(),
   }),
+  // Pipeline Velocity widget self-fetches. Empty payload keeps this test on
+  // the layout regression; the widget's own suite verifies populated states.
+  usePipelineVelocity: () => ({
+    data: {
+      headline: {
+        total_deals: 0, live_deals: 0, dead_deals: 0, aging_count: 0,
+        median_days_to_active: null, biggest_dropoff: null,
+      },
+      funnel: [], time_in_stage: [], cycle_time: [], aging: [], throughput: [],
+    },
+    isLoading: false,
+    isError: false,
+    refetch: vi.fn(),
+  }),
   // Today's Attention panel self-fetches via this hook. The dashboard
   // test isolates itself by returning an empty/all-caught-up payload —
   // its own suite verifies the populated states.
