@@ -27,7 +27,7 @@ _Last updated: 2026-06-09._
 
 # 🔴 DO FIRST — protects your data and money (this week)
 
-## 1. ⏳ IN PROGRESS (operator purchasing Supabase Pro — 2026-06-25) — Turn on database backups — most important
+## 1. ✅ DONE (2026-06-25 — Supabase Pro active, verified via API; daily backups auto-included, first appears within 24h) — Turn on database backups — most important
 **Why:** Right now your database may have **no automatic backups**. If something
 ever goes wrong, deal data could be lost permanently.
 
