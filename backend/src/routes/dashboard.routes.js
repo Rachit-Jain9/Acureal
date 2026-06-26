@@ -2,6 +2,7 @@ const express = require('express');
 const dashboardService = require('../services/dashboard.service');
 const portfolioRiskRadarService = require('../services/portfolioRiskRadar.service');
 const portfolioReadinessService = require('../services/portfolioReadiness.service');
+const pipelineVelocityService = require('../services/pipelineVelocity.service');
 const attentionService = require('../services/attention.service');
 const { authenticate } = require('../middleware/auth');
 
@@ -51,6 +52,25 @@ router.get('/portfolio-readiness', authenticate, async (req, res, next) => {
     const includeArchived = String(req.query.includeArchived || '').toLowerCase() === 'true';
     const readiness = await portfolioReadinessService.getPortfolioReadiness({ includeArchived });
     res.json({ success: true, data: readiness });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /dashboard/pipeline-velocity
+//
+// Deterministic deal-flow analytics reconstructed from `deal_stage_history`:
+// the funnel (deals ever-reached per stage + conversion to next), median
+// time-in-stage, median cycle time to milestones (underwriting / IC / active),
+// the aging "needs a nudge" list, and monthly forward-advance throughput.
+// Org-scoped at the app layer (the pooled DB role bypasses RLS); INCLUDES dead
+// + closed deals (they reached/completed stages) but excludes archived.
+// Medians are gated to an honest "insufficient data" below MIN_SAMPLES dwells.
+// Migration-tolerant — empty payload if the history table is absent.
+router.get('/pipeline-velocity', authenticate, async (req, res, next) => {
+  try {
+    const velocity = await pipelineVelocityService.getPipelineVelocity();
+    res.json({ success: true, data: velocity });
   } catch (error) {
     next(error);
   }
