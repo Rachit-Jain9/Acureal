@@ -23,7 +23,12 @@
  *   - Mobile numbers ONLY when +91-anchored (the country code disambiguates a
  *     phone from a khata / survey / registration number).
  * A bare unspaced 12-digit run and a bare 10-digit number are NOT masked in
- * free text — too many collide with khata / survey / document numbers. In
+ * free text ON THEIR OWN — too many collide with khata / survey / document
+ * numbers — UNLESS a disambiguating keyword (aadhaar / uid, or mobile / phone /
+ * whatsapp) sits immediately before them, in which case the digits are
+ * unambiguously that PII and ARE masked (context-anchored: the keyword +
+ * separator are kept, only the identifier digits are replaced — recall lift
+ * without losing the precision that protects khata / survey numbers). In
  * structured fields, a value is additionally masked when its KEY names an
  * identity document (aadhaar / aadhar / pan / uid) or a contact channel
  * (mobile / phone / telephone / email / whatsapp) as a whole snake_case segment.
@@ -38,6 +43,17 @@ const EMAIL_RE = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b/g;
 // "+919876543210", "+91 9876543210", "+91-98765-43210". A bare 10-digit run is
 // deliberately NOT matched (it collides with khata / survey / document numbers).
 const MOBILE_INTL_RE = /\+91[\s-]?[6-9]\d{4}[\s-]?\d{5}\b/g;
+
+// Context-anchored masking (precision-preserving recall lift). A bare 12-digit
+// Aadhaar (spaced/hyphenated/unspaced) or a bare 10-digit Indian mobile collides
+// with khata / survey / registration numbers, so it is NOT masked on its own —
+// BUT when a disambiguating keyword (aadhaar/uid, or mobile/phone/whatsapp) sits
+// within a few non-digit chars before it, the digits are unambiguously that PII
+// and ARE masked. The keyword + separator are preserved; only the identifier
+// digits are replaced. The keyword→number gap is capped (15 / 12 non-digit chars)
+// so a far-away survey/khata number near the word "Aadhaar" is NOT swept in.
+const AADHAAR_CTX_RE = /\b(aadhaar|aadhar|uid)\b([^\d]{0,15})(\d{4}[\s-]?\d{4}[\s-]?\d{4})\b/gi;
+const MOBILE_CTX_RE = /\b(mobile|mob|phone|telephone|whatsapp)\b([^\d]{0,12})([6-9]\d{9})\b/gi;
 
 // Whole snake_case segment match — `pan`, `pan_number`, `seller_pan`,
 // `aadhaar_no`, `uid`. Deliberately segment-anchored so `company_name`
@@ -63,7 +79,17 @@ const redactText = (value) => {
     count += 1;
     return REDACTED;
   };
+  // Context-anchored masker: keep the disambiguating keyword + separator, mask
+  // only the trailing identifier digits.
+  const maskAfterKeyword = (_m, kw, sep) => {
+    count += 1;
+    return `${kw}${sep}${REDACTED}`;
+  };
   const text = value
+    // Context-anchored patterns run FIRST (most specific) so a "keyword + digits"
+    // unit is caught before the standalone patterns see the digits.
+    .replace(AADHAAR_CTX_RE, maskAfterKeyword)
+    .replace(MOBILE_CTX_RE, maskAfterKeyword)
     .replace(PAN_RE, bump)
     .replace(AADHAAR_SPACED_RE, bump)
     .replace(EMAIL_RE, bump)
