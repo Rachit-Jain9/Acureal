@@ -448,6 +448,10 @@ export const dashboardAPI = {
   // Phase 4 prologue — Portfolio Readiness rollup of every live deal's
   // IC + RERA readiness state. Backed by portfolioReadiness.service.js.
   portfolioReadiness: () => api.get('/dashboard/portfolio-readiness'),
+  // Deterministic deal-flow analytics (funnel / time-in-stage / cycle / aging /
+  // throughput) reconstructed from deal_stage_history. Backed by
+  // pipelineVelocity.service.js.
+  pipelineVelocity: () => api.get('/dashboard/pipeline-velocity'),
   // Today's Attention — specific item-level signals (overdue DD,
   // expiring approvals, recent risk flags, stale deals, recent activity).
   // Pairs with the Portfolio Risk Radar's aggregate counts to answer

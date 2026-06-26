@@ -23,6 +23,11 @@ export const DEFAULT_WIDGETS = [
   // handoff completeness).
   { id: 'portfolio_readiness',    label: 'Portfolio Readiness',      always: false, defaultVisible: true },
   { id: 'pipeline_chart',         label: 'Pipeline distribution',    always: false, defaultVisible: true },
+  // Pipeline Velocity — funnel conversion, median time-in-stage, cycle time,
+  // and the aging "needs a nudge" list. Sits right after the static
+  // distribution chart: distribution says "where deals sit now", velocity says
+  // "how fast they move + where they stall".
+  { id: 'pipeline_velocity',      label: 'Pipeline velocity',        always: false, defaultVisible: true },
   { id: 'cities_chart',           label: 'City distribution',        always: false, defaultVisible: true },
   { id: 'recent_activities',      label: 'Recent activities',        always: false, defaultVisible: true },
   { id: 'top_deals_irr',          label: 'Top deals by IRR',         always: false, defaultVisible: true },

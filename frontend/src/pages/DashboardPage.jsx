@@ -34,6 +34,7 @@ const CitiesChartWidget = lazy(() =>
   import('../components/dashboard/DashboardCharts').then((m) => ({ default: m.CitiesChartWidget })));
 import PortfolioRiskRadarWidget from '../components/dashboard/PortfolioRiskRadarWidget';
 import PortfolioReadinessWidget from '../components/dashboard/PortfolioReadinessWidget';
+import PipelineVelocityWidget from '../components/dashboard/PipelineVelocityWidget';
 import AttentionPanel from '../components/dashboard/AttentionPanel';
 import CustomizePopover from '../components/dashboard/CustomizePopover';
 import GettingStarted from '../components/dashboard/GettingStarted';
@@ -93,6 +94,9 @@ const buildWidgetRenderer = ({ data, chartPalette, tooltipStyle, canCurate }) =>
       <PipelineChartWidget stage_distribution={data?.stage_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />
     </Suspense>
   ),
+  // Pipeline Velocity — funnel / median time-in-stage / cycle / aging /
+  // throughput, reconstructed from deal_stage_history. Self-fetches.
+  pipeline_velocity:     () => <PipelineVelocityWidget />,
   cities_chart:          () => (
     <Suspense fallback={<SkeletonCard height="h-[332px]" />}>
       <CitiesChartWidget cities_distribution={data?.cities_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />

@@ -32,6 +32,17 @@ export function usePortfolioReadiness() {
   });
 }
 
+// Deterministic pipeline-velocity analytics (funnel, time-in-stage, cycle time,
+// aging, throughput) from deal_stage_history. Changes only on a stage move, so
+// a 60 s staleTime is plenty.
+export function usePipelineVelocity() {
+  return useQuery({
+    queryKey: ['pipeline-velocity'],
+    queryFn: () => dashboardAPI.pipelineVelocity().then((r) => r.data.data),
+    staleTime: 60_000,
+  });
+}
+
 // Today's Attention — specific item-level signals across the live portfolio
 // (overdue required DD, expiring approvals, recent risk flags, stale deals,
 // the last 10 audit-log entries). The companion read to usePortfolioRiskRadar:
