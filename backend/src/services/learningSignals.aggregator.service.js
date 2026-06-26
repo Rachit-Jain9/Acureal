@@ -47,6 +47,7 @@
 
 const { query } = require('../config/database');
 const log = require('../lib/logger').child({ module: 'learningSignals.aggregator' });
+const { isLegalFourTopic, LEGAL_FOUR_TOPIC_SET } = require('../constants/legalFourTopics');
 
 const PG_UNDEFINED_TABLE = '42P01';
 const isMissingTable = (err) => Boolean(err) && err.code === PG_UNDEFINED_TABLE;
@@ -168,18 +169,13 @@ const MULTIPLIER_FLOOR = 0.7;
 const MULTIPLIER_MILD = 0.85;
 const MULTIPLIER_NONE = 1.0;
 
-/**
- * Topics that NEVER de-rank — statutorily significant lanes where a high
- * dismiss rate just means the team is making bad triage choices. Mirrors
- * `recommendationRules.isLegalTopic`. Kept here so the aggregator stays
- * a pure pure-data layer; the consumer can override on demand.
- */
-const LEGAL_CARVE_OUT_TOPICS = new Set([
-  'legal_title',
-  'legal_rera',
-  'legal_approvals',
-  'legal_encumbrance',
-]);
+// Topics that NEVER de-rank — the statutory legal-four lanes, where a high
+// dismiss rate just means the team is making bad triage choices. The canonical
+// denylist + guard live in `constants/legalFourTopics` (single source of truth;
+// default-deny by `legal_` prefix), so this aggregator and every other learning
+// / recommendation path carve out the SAME lanes and a new `legal_*` lane is
+// excluded automatically. `LEGAL_CARVE_OUT_TOPICS` is re-exported below as a
+// back-compat alias of the canonical set.
 
 /**
  * Compute the sort-weight multiplier for one card.
@@ -197,7 +193,7 @@ const LEGAL_CARVE_OUT_TOPICS = new Set([
  * @returns {{multiplier:number, reason:string|null}}
  */
 const computeMultiplier = (topic, counts) => {
-  if (LEGAL_CARVE_OUT_TOPICS.has(String(topic || ''))) {
+  if (isLegalFourTopic(topic)) {
     return { multiplier: MULTIPLIER_NONE, reason: null };
   }
   if (!counts) return { multiplier: MULTIPLIER_NONE, reason: null };
@@ -261,6 +257,7 @@ module.exports = {
   MULTIPLIER_FLOOR,
   MULTIPLIER_MILD,
   MULTIPLIER_NONE,
-  LEGAL_CARVE_OUT_TOPICS,
+  // Back-compat alias of the canonical denylist (constants/legalFourTopics).
+  LEGAL_CARVE_OUT_TOPICS: LEGAL_FOUR_TOPIC_SET,
   emptyCounts,
 };

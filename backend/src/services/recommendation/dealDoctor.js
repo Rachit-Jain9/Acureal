@@ -34,6 +34,8 @@
 
 const { extractAllSignals } = require('./signalExtractors');
 
+const { isLegalFourTopic, LEGAL_FOUR_TOPICS } = require('../../constants/legalFourTopics');
+
 const DIAGNOSIS_VERBS = [
   'Diverges',
   'Lacks support',
@@ -61,13 +63,16 @@ const DIAGNOSTIC_GROUPS = {
   },
   legal: {
     label: 'Legal carve-out',
-    topics: ['legal_title', 'legal_rera', 'legal_approvals', 'legal_encumbrance'],
+    topics: [...LEGAL_FOUR_TOPICS],
     ai_narratable: false,
   },
 };
 
 const findSignal = (signals, kind) => signals.find((s) => s.kind === kind) || null;
-const isLegalTopic = (topic) => /^legal_/.test(topic);
+// Canonical legal-four denylist (constants/legalFourTopics) — same guard the
+// recommendation engine + learning aggregator use, so the legal carve-out can
+// never drift between the "what to do" and "what's wrong" surfaces.
+const isLegalTopic = (topic) => isLegalFourTopic(topic);
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
 const fmtPctRounded = (n) => `${Math.round(n * 1000) / 10}%`;
 
