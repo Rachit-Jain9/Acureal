@@ -9573,3 +9573,19 @@ Deep-reviewed the whole comps subsystem (multi-agent workflow over exports + in-
 - **Labeling #27/#31** (deterministic stat mislabeled "AI-assisted"; "Population (2011)").
 - **Data tidy (Phase 0):** re-tag the 32 withdrawn-but-`approved` far_rules rows.
 - **Operator-gated:** non-owner DB login (#3, will remind); website email domain; map engine; paused data streams.
+
+---
+
+## 2026-06-26 (Pro verified + data-learning safeguards: legal-four keystone + PII redaction) (PRs #895, #896 — merged; master green)
+
+- **Verified the Pro upgrades** (operator bought both): Supabase org plan = `pro` (management API) → daily backups now auto-included (operator task #1 closed); Vercel team = `Pro Plan · Active`. Updated `TODO_OPERATOR.md`. Map-tile self-host + uncapped crons now unblocked (offered to operator).
+- **Caught comps-provenance already shipped by a parallel session** (#891 exports, #892 in-app cell, #893 log) — deep-review-then-verify discipline avoided rebuilding it. Audited the shipped deriver: it correctly uses the honest `as_of_date` (every comp has one, Apr–May 2026), gates "Verified" on `is_verified===true` only, and keeps the raw source on hover + a live `source_url` link. Confirmed healthy: backend 3489 tests, frontend 1241 tests, build all green.
+- **#9/#21 AI-market-prose = obsolete, not pending.** Confirmed the DOCX already implements the operator's 2026-05-19 single-cover-disclaimer policy (per-section AI badges deliberately removed); adding per-section provenance would *violate* it. Dropped from the backlog.
+- **#895 — legal-four denylist keystone (data-learning "ship FIRST").** The "never touch title/encumbrance/RERA/approvals" carve-out was encoded 3 drifting ways (aggregator exact Set / recommendationRules `ai_narratable` flag / dealDoctor `/^legal_` regex). Consolidated into one canonical `constants/legalFourTopics.js` (default-deny by `legal_` prefix); all sites delegate; CI test enforces the single source + a drift guard. Zero behaviour change today; future drift removed.
+- **#896 — context-anchored Aadhaar/mobile redaction (DPDP).** The AI-pipeline scrubber deliberately skips bare 12/10-digit runs (they collide with khata/survey numbers) — so plainly-written "Aadhaar No. 123456789012" / "Mobile: 9876543210" slipped through. Now masked **when a keyword sits right before them**, lifting recall without losing the precision that protects product numbers.
+
+### What's left to do next
+- **Data-learning move #3:** portfolio/pipeline + time-to-stage dashboards (deterministic; attacks the "falls back to Excel" gap) — frontend+backend.
+- **Document-storage defense-in-depth:** migrate to Supabase Storage (org-scoped path + private bucket) now that Supabase Pro is active.
+- **Map-tile self-host** (unblocked by Vercel Pro) — operator offered; awaiting go-ahead.
+- **Operator-gated:** non-owner DB login (#3, will remind); website email domain; map engine Google-vs-Leaflet; paused data streams.
