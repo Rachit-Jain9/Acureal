@@ -35,6 +35,8 @@
  * data_consistency) are AI-narratable.
  */
 
+const { isLegalFourTopic } = require('../../constants/legalFourTopics');
+
 const RECOMMENDATION_VERBS = ['Recommend', 'Consider', 'Re-examine', 'Flag', 'Stress-test'];
 
 const TOPICS = {
@@ -53,7 +55,12 @@ const TOPICS = {
   legal_encumbrance: { label: 'Legal — encumbrance', ai_narratable: false },
 };
 
-const isLegalTopic = (topic) => TOPICS[topic] && TOPICS[topic].ai_narratable === false;
+// Delegates to the canonical legal-four denylist (constants/legalFourTopics) so
+// the recommendation engine, the learning aggregator, and the Deal Doctor all
+// gate on the SAME lanes (default-deny by `legal_` prefix). The TOPICS map's
+// `ai_narratable: false` flags are held in lockstep with this guard by
+// legalFourDenylist.test.js — a drift there fails the build.
+const isLegalTopic = (topic) => isLegalFourTopic(topic);
 
 // Helpers
 const fmtPct = (n) => `${(n * 100).toFixed(1)}%`;
