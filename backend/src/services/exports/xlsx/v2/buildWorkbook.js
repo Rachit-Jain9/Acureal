@@ -38,6 +38,7 @@ const JSZip = require('jszip');
 const { injectChartsIntoXlsx, injectSparklinesIntoXlsx } = require('./chartInjector');
 const { runMarketBenchmarkValidators } = require('./marketBenchmarkValidator');
 const { inferAssetClass } = require('../../../../utils/assetClass');
+const { formatAbsoluteDate, extractPeriodToken } = require('../../../../utils/compProvenance');
 const palette = require('../../shared/palette');
 
 const financialKernel = require('../../../../../../packages/financial-kernel/dist');
@@ -1285,7 +1286,14 @@ const buildSourceRegister = (ctx, options = {}) => {
       sourceType: 'Comparable transactions / listings',
       sourceName: comps[0]?.source || 'REDIP comps table',
       url: firstUrl,
-      freshness: comps[0]?.data_period || comps[0]?.possession_year || 'No verified freshness date',
+      // Honest freshness: the market-observation "as of" date, then a data_type
+      // period token — NEVER possession_year (a FUTURE construction milestone, not
+      // a data-currency date).
+      freshness: (() => {
+        const asOf = comps.map((c) => c.as_of_date).filter(Boolean).sort().slice(-1)[0];
+        if (asOf) return `as of ${formatAbsoluteDate(asOf)}`;
+        return extractPeriodToken(comps[0]?.data_type) || 'No verified freshness date';
+      })(),
       confidence: verifiedCount ? 'mixed-verified' : 'unverified-context-only',
       provenance: 'exportContext.market.exportComps',
       notes: 'Context only. Do not quote as authoritative unless each comp is verified.',

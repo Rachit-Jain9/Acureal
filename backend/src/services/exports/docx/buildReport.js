@@ -39,6 +39,7 @@ const palette = require('../shared/palette');
 const { computeDealScore } = require('../../../utils/scoring/dealScore');
 const { renderSiteMap } = require('../shared/googleMapsStaticMap.service');
 const { resolveCustomerIcOpinion } = require('../../export.insights.service');
+const { deriveCompProvenance, formatProvenanceLine } = require('../../../utils/compProvenance');
 const { generateSection } = require('../narrative/exportNarrative.service');
 // PR-NX18 (2026-05-16): asset-class × deal-structure × exit-strategy aware
 // briefing — shared across XLSX, DOCX, PPTX. Same service, same narrative
@@ -1093,24 +1094,26 @@ const buildBetterAlternatives = (ctx) => {
   const top3 = sorted.slice(0, 3);
 
   children.push(bodyPara(
-    'Three closest verified peers ranked by rate-per-sqft proximity to this deal\'s modeled pricing. ' +
-    'These are alternatives the same buyer could have considered — surface them for context, not as a recommendation.',
+    'Three closest peers ranked by rate-per-sqft proximity to this deal\'s modeled pricing. ' +
+    'These are alternatives the same buyer could have considered — surface them for context, not as a recommendation. ' +
+    'Source and verification status are shown per row; confirm freshness against external sources.',
     { italic: true, color: HEX('mutedHigh') },
   ));
   children.push(blank());
 
-  const headerRow = buildHeaderTableRow(['Project', 'Developer', 'Type', 'Units', 'Rate / sqft', 'Δ vs deal']);
+  const headerRow = buildHeaderTableRow(['Project', 'Developer', 'Type', 'Rate / sqft', 'Δ vs deal', 'Source · status']);
   const bodyRows = top3.map((c, idx) => {
     const delta = (dealRate != null && c.rate_per_sqft != null)
       ? `${c.rate_per_sqft > dealRate ? '+' : ''}${formatNumber((c.rate_per_sqft - dealRate) / dealRate * 100, 1)}%`
       : '–';
+    const prov = deriveCompProvenance(c);
     return buildBodyTableRow([
       firstText(c.project_name) || '–',
       firstText(c.developer) || '–',
       firstText(c.project_type, c.bhk_config) || '–',
-      c.total_units != null ? String(c.total_units) : '–',
       formatRate(c.rate_per_sqft),
       delta,
+      `${prov.sourceTypeLabel} · ${prov.verifiedLabel}`,
     ], { alt: idx % 2 === 1 });
   });
   children.push(new Table({
@@ -1129,20 +1132,23 @@ const buildComparables = (ctx) => {
   const comps = (ctx.exportContext?.market?.exportComps || []).slice(0, 8);
   if (comps.length === 0) {
     children.push(bodyPara(
-      'No verified comparable transactions are available for this micro-market at the time of generation. Manual input required.',
+      'No comparable transactions are available for this micro-market at the time of generation. Manual input required.',
       { italic: true, color: HEX('mutedHigh') },
     ));
     return children;
   }
 
-  const headerRow = buildHeaderTableRow(['Project', 'Developer', 'Type', 'Units', 'Rate / sqft', 'Verified']);
+  // Per-row provenance replaces the old bare "Verified Yes/No" (which read a null
+  // flag as "Yes"). Each row now carries source-type · verified status · the
+  // honest "as of <date>" freshness — the CLAUDE.md hard rule for comps.
+  const headerRow = buildHeaderTableRow(['Project', 'Developer', 'Type', 'Units', 'Rate / sqft', 'Source · status · freshness']);
   const bodyRows = comps.map((c, idx) => buildBodyTableRow([
     firstText(c.project_name) || '–',
     firstText(c.developer) || '–',
     firstText(c.project_type, c.bhk_config) || '–',
     c.total_units != null ? String(c.total_units) : '–',
     c.rate_per_sqft != null ? formatRate(c.rate_per_sqft) : '–',
-    c.is_verified === false ? 'No' : 'Yes',
+    formatProvenanceLine(c),
   ], { alt: idx % 2 === 1 }));
 
   children.push(new Table({
