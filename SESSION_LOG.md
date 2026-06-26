@@ -9555,3 +9555,21 @@ Produced a full, deduplicated pending-work inventory across every TODO file, roa
 - **AI disclosure — second half (#9/#21 remainder + #26):** per-row Source + verified-date labels on comps tables in exports (CLAUDE.md hard rule) + provenance line on the whyThisArea/demographics AI market prose. Confirm the comps rows carry per-row source/freshness data first.
 - **Data tidy (Phase 0):** the 32 withdrawn-but-`approved` far_rules rows are now never served but remain mis-tagged; re-tag them under the Phase-0 regulatory-correction work (with the `reference_audit_log` trail).
 - **Operator-gated:** non-owner DB login (#3, operator will remind); website email domain; map engine Google-vs-Leaflet; resume paused data streams when directed.
+
+---
+
+## 2026-06-25 (Comps provenance — every comp now shows source · verified · freshness; audit #26 closed) (PRs #891 exports, #892 in-app — merged; master green)
+
+Deep-reviewed the whole comps subsystem (multi-agent workflow over exports + in-app + design tokens) and confirmed the production data carries `data_type`, `source_url`, `is_verified`, and an honest `as_of_date` on all 81 comps. Built one deterministic provenance deriver, shared by exports + UI, and applied the CLAUDE.md hard rule ("comps must surface source, freshness, and confidence") everywhere.
+
+- **#891 (exports):** new `backend/src/utils/compProvenance.js` deriver (source-type from `data_type`/source keywords; verified from `is_verified===true` ONLY; freshness prefers `as_of_date` → period → `updated_at`, never "verified <date>"; confidence = the verified×source-type ordinal, never a fabricated %). Wired into DOCX (Comparables + Better Alternatives), PPTX, and the audience report packs; fixed the XLSX Source-Register freshness that was using `possession_year` (a future milestone). Fixed the overclaim where a null verified-flag rendered as "Verified".
+- **#892 (in-app):** a premium, restrained `ProvenanceCell` (source-type chip + verified pill + "as of <date>" line, semantic tokens, no decoration) on the Comps library + the deal Market/Comps tab. Also fixed the source filter chips + row badge that exact-matched suffixless `data_type` and silently matched nothing on real data.
+- Verified: backend 3467 + frontend 1241 tests, both builds, theme-token guard — all green.
+
+**Operator answers earlier this session** (recorded in TODO_OPERATOR.md): AI cost cap set; old Maps key deleted; Supabase/Vercel Pro purchasing; non-owner DB login parked (operator will remind); retention policy not required; SOC2 deferred; RMP-2015 already loaded (the cleanup shipped as #889).
+
+### What's left to do next
+- **Comps provenance follow-ups:** IntelligencePage §5e benchmark table (different shape), CompsMap selected-comp inset, a dedicated XLSX "Market Comparables" worksheet, and the AI-market-prose provenance line (#9/#21 remainder).
+- **Labeling #27/#31** (deterministic stat mislabeled "AI-assisted"; "Population (2011)").
+- **Data tidy (Phase 0):** re-tag the 32 withdrawn-but-`approved` far_rules rows.
+- **Operator-gated:** non-owner DB login (#3, will remind); website email domain; map engine; paused data streams.
