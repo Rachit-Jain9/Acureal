@@ -18,7 +18,8 @@ import { useCanEdit } from '../hooks/useCanEdit';
 import EmptyState from '../components/common/EmptyState';
 import PageHeader from '../components/common/PageHeader';
 import PageIntro from '../components/guide/PageIntro';
-import Badge from '../components/common/Badge';
+import ProvenanceCell from '../components/common/ProvenanceCell';
+import { deriveCompProvenance } from '../utils/compProvenance';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
 import { SkeletonList, confirm, Modal, Button } from '../design-system';
@@ -31,16 +32,15 @@ import { exportsAPI } from '../services/api';
 // chunk only fetches when they toggle to Split.
 const CompsMap = lazy(() => import('../components/comps/CompsMap'));
 
-const DATA_TYPE_LABEL = {
-  internal_benchmark_apr_2026: { tone: 'success', label: 'Verified · Apr 2026' },
-  listing_q1_2026:             { tone: 'info',    label: 'Listing · Q1 2026' },
-  ipc_q1_2026:                 { tone: 'premium', label: 'IPC · Q1 2026' },
-};
-
+// Source filters key on the deterministic provenance deriver (shared with the
+// exports), so they work on the REAL suffixed data_type values
+// (e.g. ipc_q1_2026_v0_2_premium_project) — the old exact-string matches silently
+// matched nothing on production data.
 const SOURCE_FILTER_OPTIONS = [
-  { value: 'verified', label: 'Verified',   matches: (c) => c.is_verified || c.data_type === 'internal_benchmark_apr_2026' },
-  { value: 'listing',  label: 'Listing',    matches: (c) => c.data_type === 'listing_q1_2026' },
-  { value: 'ipc',      label: 'IPC',        matches: (c) => c.data_type === 'ipc_q1_2026' },
+  { value: 'verified', label: 'Verified', matches: (c) => c.is_verified === true },
+  { value: 'research', label: 'Research', matches: (c) => deriveCompProvenance(c).sourceType === 'research' },
+  { value: 'internal', label: 'Internal', matches: (c) => deriveCompProvenance(c).sourceType === 'internal' },
+  { value: 'listing',  label: 'Listing',  matches: (c) => deriveCompProvenance(c).sourceType === 'listing' },
 ];
 
 const SORT_OPTIONS = [
@@ -816,9 +816,6 @@ export default function CompsPage() {
               </thead>
               <tbody className="divide-y divide-hairline">
                 {visible.map((comp) => {
-                  const dt = DATA_TYPE_LABEL[comp.data_type] || (comp.is_verified
-                    ? { tone: 'success', label: 'Verified' }
-                    : { tone: 'neutral', label: 'Internal' });
                   const yoy = comp.yoy_change_pct;
                   const yoyColor = yoy == null ? 'text-content-muted'
                     : yoy >= 20 ? 'text-data-positive font-semibold'
@@ -877,23 +874,8 @@ export default function CompsPage() {
                         {comp.total_units?.toLocaleString('en-IN') || '—'}
                       </td>
                       <td className="px-4 py-3 text-center text-content-secondary">{comp.launch_year || '—'}</td>
-                      <td className="px-4 py-3 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          {comp.source_url ? (
-                            <a
-                              href={comp.source_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
-                              className="inline-block transition-opacity duration-150 ease-out hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded-full"
-                              title={comp.source || 'Open source'}
-                            >
-                              <Badge tone={dt.tone}>{dt.label}</Badge>
-                            </a>
-                          ) : (
-                            <Badge tone={dt.tone} title={comp.source || comp.data_type}>{dt.label}</Badge>
-                          )}
-                        </div>
+                      <td className="px-4 py-3 align-top">
+                        <ProvenanceCell comp={comp} />
                       </td>
                       <td className="px-4 py-3 text-center">
                         {canEdit && (
