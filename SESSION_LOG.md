@@ -9589,3 +9589,19 @@ Deep-reviewed the whole comps subsystem (multi-agent workflow over exports + in-
 - **Document-storage defense-in-depth:** migrate to Supabase Storage (org-scoped path + private bucket) now that Supabase Pro is active.
 - **Map-tile self-host** (unblocked by Vercel Pro) — operator offered; awaiting go-ahead.
 - **Operator-gated:** non-owner DB login (#3, will remind); website email domain; map engine Google-vs-Leaflet; paused data streams.
+
+---
+
+## 2026-06-26 (cont. — "do all three": pipeline velocity dashboard + storage hardening + map-tile verification) (PRs #898, #899, #900 — merged; master green)
+
+Operator said "do all three" (pipeline dashboard / document-storage hardening / map-tile self-host). Scoped all three with a parallel review workflow (sequenced backend-first to avoid colliding with the active frontend session), then executed.
+
+- **#898 — Pipeline Velocity engine (backend).** New deterministic `GET /dashboard/pipeline-velocity` from `deal_stage_history` (verified populated: 57 history rows / all 20 deals): funnel (furthest-reached, dedupes dead→sourced revivals) + conversion, median time-in-stage, cycle time to milestones, the aging "needs a nudge" list, monthly throughput. Honest gating (median not mean; <3 dwells → "insufficient", em-dash not 0). Archived/closed/dead deals included in the historical funnel (13 of 20 are archived — excluding them would gut the analysis); current/aging views are live-only. 14 fixture tests.
+- **#900 — Pipeline Velocity widget (frontend).** The premium dashboard card: a horizontal-bar funnel (fuses reached + median dwell + conversion, draws in on mount, biggest-leak row tinted), cycle-time tiles, aging list (links to the deal), throughput sparkline. Semantic tokens only, restraint over decoration, em-dash never "0d". New widget + hook + small additive inserts; registered `pipeline_velocity` (default-visible). 5 widget tests + DashboardPage/layout/token guards green. *(Live screenshot pending — the automation Chrome tab isn't logged into REDIP; verified by tests + build.)*
+- **#899 — Document-storage hardening (track 2).** Org-prefix new Vercel Blob upload keys (`orgs/<org>/deals/<deal>/...`, legacy fallback). Dormant-provider defense-in-depth; honest note that it's organisation, not yet enforcement (Supabase path already org-scoped/private/signed). Pure helper + 3 tests.
+- **Map-tile self-host (track 3) — VERIFIED, blocked on 2 env vars only.** Re-ran the mirror action (token set) → log confirms **2580 RMP-2015 tiles PRESENT** in the Blob store (survived the Hobby suspension). Probed the prod proxy at z11/12/13 → **204 for every tile** = the env vars aren't set in Vercel. Exact values captured (see [[project_master_plan_map]]). Operator step: set `MASTER_PLAN_RMP2015_TILE_BASE` + `VITE_MASTER_PLAN_TILE_URL`, redeploy; then I flip the one-line `cadastralLayers.js` switch + verify. NOT flipped yet (env-set-but-base-missing = dark overlay, the #856 failure).
+
+### What's left to do next
+- **Map tiles:** operator sets the 2 Vercel env vars → I ship the one-liner + verify (the only remaining step; tiles confirmed present).
+- **Document storage (deeper):** the full Supabase-Storage migration (Approach B) for true path enforcement — deferred (high blast radius).
+- **Operator-gated:** non-owner DB login (#3); website email domain; map engine Google-vs-Leaflet; paused data streams.
