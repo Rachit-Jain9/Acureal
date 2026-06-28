@@ -22,8 +22,14 @@ export function mapProgrammeToInputs({ assetClass, programme, buildability }) {
   }
   if (fsi != null) out.fsi = String(Number(fsi.toFixed(2)));
 
+  // Branches mirror the site-yield engine's programme families
+  // (backend/src/utils/siteYield.js → FAMILY_BY_ASSET_CLASS). Asset-class
+  // keys are the canonical deal vocabulary from constants/assetClasses.js —
+  // anything else falls through to the build-cost-only default.
   switch (assetClass) {
-    case 'residential_apartments': {
+    case 'residential_apartments':
+    case 'mixed_use':
+    case 'redevelopment': {
       // Average carpet per unit from the residential unit mix
       const mix = Array.isArray(programme.unit_mix) ? programme.unit_mix : [];
       const totalUnits = mix.reduce((s, m) => s + (m.count || 0), 0);
@@ -36,15 +42,23 @@ export function mapProgrammeToInputs({ assetClass, programme, buildability }) {
       break;
     }
 
+    case 'villas':
+      // Plotted-form yield, but the financial model treats villas as
+      // residential — carry the per-sqft build cost across.
+      if (programme.build_cost_per_sqft) {
+        out.constructionCostPerSqft = String(Math.round(programme.build_cost_per_sqft));
+      }
+      break;
+
     case 'plotted_development':
+    case 'raw_land':
       if (programme.build_cost_per_sqft_infra) {
         out.devCostPerSqft = String(Math.round(programme.build_cost_per_sqft_infra));
       }
       break;
 
     case 'commercial_office':
-    case 'commercial_retail':
-    case 'mixed_use': {
+    case 'retail': {
       if (programme.leasable_sqft) out.leasableSqft = String(Math.round(programme.leasable_sqft));
       if (programme.build_cost_per_sqft) {
         out.hardCostPerSqft = String(Math.round(programme.build_cost_per_sqft));
@@ -55,8 +69,7 @@ export function mapProgrammeToInputs({ assetClass, programme, buildability }) {
       break;
     }
 
-    case 'industrial':
-    case 'warehousing':
+    case 'industrial_warehousing':
       if (programme.leasable_sqft) out.leasableSqft = String(Math.round(programme.leasable_sqft));
       if (programme.build_cost_per_sqft) {
         out.hardCostPerSqft = String(Math.round(programme.build_cost_per_sqft));
@@ -66,8 +79,8 @@ export function mapProgrammeToInputs({ assetClass, programme, buildability }) {
     case 'hospitality': {
       if (programme.keys) out.keys = String(programme.keys);
       if (programme.build_cost_per_sqft && realizedBua && programme.keys) {
-        // per-key cost: (total build cost + 12% soft/FFE rough) / keys,
-        // but keep to hard cost only — let the Financial tab layer softs.
+        // per-key hard cost: total build cost / keys — let the Financial tab
+        // layer soft costs / FF&E on top.
         const hardPerKey = Math.round((programme.build_cost_per_sqft * realizedBua) / programme.keys);
         out.constructionCostPerKey = String(hardPerKey);
       }
@@ -76,11 +89,6 @@ export function mapProgrammeToInputs({ assetClass, programme, buildability }) {
       break;
     }
 
-    case 'data_center':
-    case 'healthcare':
-    case 'education':
-    case 'senior_living':
-    case 'student_housing':
     default:
       if (programme.build_cost_per_sqft) {
         out.hardCostPerSqft = String(Math.round(programme.build_cost_per_sqft));
