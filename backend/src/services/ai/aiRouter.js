@@ -77,15 +77,50 @@ const loadCostTable = () => {
   }
 };
 
+// True when the provider:model pair has a price in the cost table (incl. any
+// AI_COST_OVERRIDES_JSON additions). Used to flag calls whose spend can't be
+// estimated so they don't silently escape the cost ledger + per-org daily cap.
+const isModelPriced = (provider, model) => {
+  if (!provider || !model) return false;
+  return Boolean(loadCostTable()[`${provider}:${model}`]);
+};
+
+// Deduped per-process so a newly-added model logs once, not once per call.
+const warnedUnpricedModels = new Set();
+
 const estimateCost = ({ provider, model, promptTokens, completionTokens }) => {
   if (!provider || !model || (!promptTokens && !completionTokens)) return null;
   const table = loadCostTable();
   const rates = table[`${provider}:${model}`];
-  if (!rates) return null;
+  if (!rates) {
+    // Unknown provider:model WITH real token usage. Its cost can't be priced,
+    // so without this warning it would silently log cost=null and never count
+    // against AI_DAILY_COST_CAP_USD — a real spend-leak. Surface it loudly
+    // (deduped) and let callers stamp the row `cost_unpriced` so dashboards
+    // can see the gap. Fix = add the pair to DEFAULT_COSTS_PER_M_TOKENS or
+    // AI_COST_OVERRIDES_JSON.
+    const key = `${provider}:${model}`;
+    if (!warnedUnpricedModels.has(key)) {
+      warnedUnpricedModels.add(key);
+      log.warn('ai_cost_model_unpriced', {
+        provider,
+        model,
+        hint: 'Add this provider:model to DEFAULT_COSTS_PER_M_TOKENS or AI_COST_OVERRIDES_JSON — its spend is not counted against the daily cap.',
+      });
+    }
+    return null;
+  }
   const inputCost = ((promptTokens || 0) * rates.input) / 1_000_000;
   const outputCost = ((completionTokens || 0) * rates.output) / 1_000_000;
   const total = inputCost + outputCost;
   return Math.round(total * 1_000_000) / 1_000_000;
+};
+
+// Flag a successful call whose cost couldn't be priced (real usage, unknown
+// model) so the call-log row carries `cost_unpriced: true` for cost dashboards.
+const unpricedMeta = (provider, model, tokens) => {
+  const hadUsage = tokens && (tokens.promptTokens != null || tokens.completionTokens != null);
+  return hadUsage && !isModelPriced(provider, model) ? { cost_unpriced: true } : {};
 };
 
 const extractTokenUsage = (rawResult) => {
@@ -560,6 +595,7 @@ const runAIInternal = async ({ task, provider, model, attach = {}, metadata = {}
       attempts: attemptsMade,
       ...(recoveredViaRetry ? { recovered_via_retry: true } : {}),
       ...cacheTelemetry,
+      ...unpricedMeta(resolvedProvider, resolvedModel, tokens),
       ...(_span ? { trace_id: _span.traceId, span_id: _span.spanId } : {}),
     },
     errorCode,
@@ -811,7 +847,7 @@ const runClaudeReasoningStream = async ({
         tokens,
         cost,
         attach,
-        metadata: { ...(metadata || {}), streamed: true, ...cacheTelemetry },
+        metadata: { ...(metadata || {}), streamed: true, ...cacheTelemetry, ...unpricedMeta(resolvedProvider, resolvedModel, tokens) },
       });
       log.info('ai_stream_completed', {
         task,
@@ -1045,6 +1081,7 @@ module.exports = {
   stripJsonFences,
   tryParseAndValidate,
   estimateCost,
+  isModelPriced,
   extractTokenUsage,
   resolveProviderForTask,
   resolveTaskRouting,

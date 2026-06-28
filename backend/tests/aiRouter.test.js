@@ -1,6 +1,6 @@
 'use strict';
 
-const { estimateCost, resolveProviderForTask, resolveDefaultModel, extractTokenUsage } = require('../src/services/ai/aiRouter');
+const { estimateCost, isModelPriced, resolveProviderForTask, resolveDefaultModel, extractTokenUsage } = require('../src/services/ai/aiRouter');
 
 describe('services/ai/aiRouter', () => {
   describe('estimateCost', () => {
@@ -46,6 +46,28 @@ describe('services/ai/aiRouter', () => {
       expect(
         estimateCost({ provider: 'custom', model: 'model-x', promptTokens: 1, completionTokens: 1 })
       ).toBeNull();
+      delete process.env.AI_COST_OVERRIDES_JSON;
+    });
+  });
+
+  describe('isModelPriced (cost-leak guard)', () => {
+    test('true for a model in the default cost table', () => {
+      expect(isModelPriced('gemini', 'gemini-2.5-flash')).toBe(true);
+    });
+
+    test('false for an unknown provider:model — these would escape the daily cap', () => {
+      expect(isModelPriced('acme', 'turbo-9')).toBe(false);
+    });
+
+    test('false when provider or model is missing', () => {
+      expect(isModelPriced(null, 'x')).toBe(false);
+      expect(isModelPriced('x', undefined)).toBe(false);
+    });
+
+    test('a model priced via AI_COST_OVERRIDES_JSON becomes known', () => {
+      expect(isModelPriced('newprov', 'newmodel')).toBe(false);
+      process.env.AI_COST_OVERRIDES_JSON = JSON.stringify({ 'newprov:newmodel': { input: 1, output: 2 } });
+      expect(isModelPriced('newprov', 'newmodel')).toBe(true);
       delete process.env.AI_COST_OVERRIDES_JSON;
     });
   });
