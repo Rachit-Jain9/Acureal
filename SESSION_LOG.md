@@ -4,6 +4,20 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-29 (Yield Studio — rename + deterministic scenario band) (PRs #906, #907 — merged + deployed; master green)
+
+Continuation of the Site Intelligence block. Operator found "Site Intelligence" generic; renamed the deal tab to **Yield Studio** (catchy + professional; "yield" = development density, "studio" = the live edit-and-recompute loop). Then continued into the highest-value next step both source plans called for — a scenario-comparison band.
+
+- **#906 — rename "Site Intelligence" → "Yield Studio".** User-facing label + all in-component copy; component + test files renamed `SiteIntelligenceTab` → `YieldStudioTab` (git renames, 99%/90%). **URL tab id stays `site`** so deep-links/bookmarks survive. Roadmap doc title updated (filename `docs/SITE_INTELLIGENCE_PLAN.md` kept for link stability). Pure rename, no behaviour change.
+- **#907 — deterministic scenario-comparison band.** Conservative / Base / Optimized strip; each point a full engine run flexing the single highest-leverage lever, all else held equal — built form FSI ×0.9/1.0/1.15, plotted saleable-land % ±5pts. Each card shows primary yield + realized GFA (or saleable plot area) + binding constraint; Base highlighted "Current". Captioned as a sensitivity view, NOT a claim of extra entitlement ("confirm achievable FSI incl. TDR"). Semantic tokens only (passes theme guard).
+
+Verification: full frontend suite **1258 passing** / 153 files (incl. theme + tailwind token guards); build clean. Yield Studio tab test 5/5.
+
+### Left for next (unchanged — see docs/SITE_INTELLIGENCE_PLAN.md)
+Walk: universal file ingestion (store→preview→parse→underwrite) + `file_assets`/`extraction_jobs`/`parcel_geometries` schema + boundary draw/upload + extraction excellence (eval harness first) + AI-cost Batch/cascade. Run: managed CAD/BIM (Autodesk APS), tier-gating, lazy 3D, Konva massing.
+
+---
+
 ## 2026-06-29 (Site Intelligence — deterministic site-yield engine + deal tab + AI cost-leak guard) (PRs #902, #903, #904 — all merged + deployed; master green)
 
 After a Maket teardown + an independent ChatGPT review, a multi-agent deep-dive (7 codebase readers + 4 SOTA researchers → synth → adversarial critic → final) produced a verified plan: REDIP was ~75% there in substrate (deterministic envelope kernels, audit spine, evidence model, pgvector, cost-aware AI router, reactive deal seam) and the genuine gap was a spatial/site-planning vertical. Shipped the highest-leverage slice end-to-end. Every claim was re-verified against live code before building.
