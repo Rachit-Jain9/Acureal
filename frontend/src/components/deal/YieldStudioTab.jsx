@@ -1,14 +1,15 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Building2, Ruler, Car, Layers, ArrowRight, SlidersHorizontal, Maximize2, GitCompare } from 'lucide-react';
+import { Building2, Ruler, Car, Layers, ArrowRight, SlidersHorizontal, Maximize2, GitCompare, Shapes } from 'lucide-react';
 import {
   Card, SectionHeader, MetricTile, StatTile, ErrorState, Button, Field, Input, Skeleton,
 } from '../../design-system';
 import Badge from '../common/Badge';
 import { toast } from '../common/Toast';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
-import { useProperty } from '../../hooks/useProperties';
+import { useProperty, useParcelIntelligence } from '../../hooks/useProperties';
 import { computeSiteYield, resolveFamily, DEFAULT_RESIDENTIAL_MIX } from '../../utils/siteYield';
 import { mapProgrammeToInputs, stashPrefill } from '../../utils/programmeToInputs';
+import { geojsonAreaSqft, polygonOutlineForSvg, reconcileArea } from '../../utils/geoArea';
 import { ASSET_CLASS_LABELS } from '../../utils/assetClasses';
 import BuildabilityMassing from './BuildabilityMassing';
 
@@ -211,6 +212,26 @@ export default function YieldStudioTab({ setTab }) {
     [result.ok, assetClass, family, engineEnvelope, engineAssumptions],
   );
 
+  // Parcel boundary from the K-GIS cadastral record — the real shape + a true
+  // geodesic area to reconcile against the typed plot area. Read-only; no new
+  // persistence (uploads + storage land with the parcel_geometries migration).
+  const { data: parcelIntel } = useParcelIntelligence(property?.id);
+  const boundaryGeojson = parcelIntel?.kgis?.geometry_geojson || null;
+  const boundaryAreaSqft = useMemo(() => geojsonAreaSqft(boundaryGeojson), [boundaryGeojson]);
+  const boundaryOutline = useMemo(() => polygonOutlineForSvg(boundaryGeojson, { size: 220, pad: 12 }), [boundaryGeojson]);
+  const reconciliation = useMemo(
+    () => reconcileArea(numOrUndef(env.landAreaSqft), boundaryAreaSqft),
+    [env.landAreaSqft, boundaryAreaSqft],
+  );
+  const boundarySeededRef = useRef(false);
+  // If the parcel has no stored land area but K-GIS gives a boundary, seed the
+  // plot area from the boundary's geodesic area (once; never clobbers edits).
+  useEffect(() => {
+    if (boundarySeededRef.current || !boundaryAreaSqft) return;
+    boundarySeededRef.current = true;
+    setEnv((e) => (e.landAreaSqft ? e : { ...e, landAreaSqft: String(boundaryAreaSqft) }));
+  }, [boundaryAreaSqft]);
+
   // Massing values (built-form only; needs ground coverage to draw).
   const massingValues = useMemo(() => {
     if (!result.ok || family === 'plotted') return null;
@@ -357,8 +378,16 @@ export default function YieldStudioTab({ setTab }) {
           </Card>
         </div>
 
-        {/* Right — massing + area schedule */}
+        {/* Right — boundary + massing + area schedule */}
         <div className="lg:col-span-3 space-y-5">
+          {boundaryGeojson && boundaryOutline && (
+            <BoundaryCard
+              outline={boundaryOutline}
+              areaSqft={boundaryAreaSqft}
+              reconciliation={reconciliation}
+              onAdopt={boundaryAreaSqft ? () => setEnv((e) => ({ ...e, landAreaSqft: String(boundaryAreaSqft) })) : null}
+            />
+          )}
           <Card className="p-5">
             <div className="flex items-center justify-between gap-3 mb-3">
               <SectionHeader size="sm" icon={Building2} title="Massing & binding constraint" className="mb-0" />
@@ -522,6 +551,63 @@ function AssumptionsEditor({ family, assumptions, setAssumptions }) {
         </div>
       </div>
     </div>
+  );
+}
+
+function BoundaryCard({ outline, areaSqft, reconciliation, onAdopt }) {
+  const sevTone = reconciliation
+    ? (reconciliation.severity === 'match' ? 'success' : reconciliation.severity === 'minor' ? 'warn' : 'danger')
+    : 'neutral';
+  const deltaText = reconciliation
+    ? `${Math.abs(reconciliation.deltaPct)}% ${reconciliation.deltaPct >= 0 ? 'above' : 'below'} boundary`
+    : null;
+  return (
+    <Card className="p-5">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <SectionHeader size="sm" icon={Shapes} title="Site boundary" className="mb-0" />
+        <Badge tone="neutral">K-GIS parcel</Badge>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+        <div className="flex items-center justify-center rounded-editorial border border-hairline bg-bg-secondary p-3">
+          <svg
+            viewBox={outline.viewBox}
+            className="w-full h-auto max-h-48"
+            role="img"
+            aria-label="Parcel boundary outline from the K-GIS cadastral record"
+          >
+            <polygon
+              points={outline.points}
+              className="fill-accent stroke-accent"
+              fillOpacity="0.14"
+              strokeWidth="1.5"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </div>
+        <div className="space-y-3">
+          <div>
+            <p className="text-[11px] text-content-muted">Boundary area (geodesic)</p>
+            <p className="font-display text-2xl font-semibold text-content-primary tabular-nums">
+              {areaSqft != null ? fmtInt(areaSqft) : '—'}<span className="text-sm text-content-muted"> sqft</span>
+            </p>
+          </div>
+          {deltaText && (
+            <Badge tone={sevTone}>
+              {reconciliation.severity === 'match' ? 'Matches entered area' : `Entry ${deltaText}`}
+            </Badge>
+          )}
+          {onAdopt && (
+            <div>
+              <Button variant="secondary" onClick={onAdopt}>Use boundary area</Button>
+            </div>
+          )}
+        </div>
+      </div>
+      <p className="mt-3 text-[11px] leading-relaxed text-content-muted">
+        Real parcel shape + area from the K-GIS cadastral record — a reference source. Verify against a
+        registered survey before relying on it.
+      </p>
+    </Card>
   );
 }
 
