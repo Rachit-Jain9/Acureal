@@ -8,6 +8,7 @@ import { toast } from '../common/Toast';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 import { useProperty, useParcelIntelligence } from '../../hooks/useProperties';
 import { computeSiteYield, resolveFamily, DEFAULT_RESIDENTIAL_MIX } from '../../utils/siteYield';
+import { numOrUndef, buildEngineAssumptions } from '../../utils/yieldStudioInputs';
 import { mapProgrammeToInputs, stashPrefill } from '../../utils/programmeToInputs';
 import { geojsonAreaSqft, polygonOutlineForSvg, reconcileArea } from '../../utils/geoArea';
 import { loadYieldStudy, saveYieldStudy, clearYieldStudy } from '../../utils/yieldStudioStore';
@@ -18,11 +19,6 @@ import BoundaryUploadButton from './BoundaryUploadButton';
 
 // ── formatters ──────────────────────────────────────────────────────────────
 const fmtInt = (n) => (Number.isFinite(n) ? Math.round(n).toLocaleString('en-IN') : '—');
-const numOrUndef = (v) => {
-  if (v === '' || v === null || v === undefined) return undefined;
-  const n = Number(v);
-  return Number.isFinite(n) ? n : undefined;
-};
 
 const BINDING_LABEL = {
   far: 'FAR / FSI',
@@ -51,31 +47,6 @@ function seedAssumptions(family) {
     parkingEcsPerUnit: 1.3,
     mix: DEFAULT_RESIDENTIAL_MIX.map((m) => ({ ...m })),
   };
-}
-
-// Map UI assumption state → engine assumptions (with correct units).
-function buildEngineAssumptions(family, a) {
-  const out = {};
-  if (family === 'residential') {
-    // Gate on numOrUndef (not a bare != null) so a CLEARED field ('') falls back
-    // to the engine's 30% default instead of sending loadingFactor: 0 (which the
-    // engine would treat as an explicit 0% loading → wrong saleable area).
-    if (numOrUndef(a.loadingFactorPct) != null) out.loadingFactor = Number(a.loadingFactorPct) / 100;
-    if (numOrUndef(a.parkingEcsPerUnit) != null) out.parkingEcsPerUnit = Number(a.parkingEcsPerUnit);
-    if (Array.isArray(a.mix)) out.unitMix = a.mix.map((m) => ({ ...m, share_pct: numOrUndef(m.share_pct) ?? 0 }));
-  } else if (family === 'commercial' || family === 'industrial') {
-    if (numOrUndef(a.leasableEfficiencyPct) != null) out.leasableEfficiency = Number(a.leasableEfficiencyPct) / 100;
-    if (numOrUndef(a.parkingEcsPer100Sqm) != null) out.parkingEcsPer100Sqm = Number(a.parkingEcsPer100Sqm);
-  } else if (family === 'hospitality') {
-    if (numOrUndef(a.grossAreaPerKeySqft) != null) out.grossAreaPerKeySqft = Number(a.grossAreaPerKeySqft);
-    if (numOrUndef(a.parkingEcsPerKey) != null) out.parkingEcsPerKey = Number(a.parkingEcsPerKey);
-  } else if (family === 'plotted') {
-    if (numOrUndef(a.saleableLandPct) != null) out.saleableLandPct = Number(a.saleableLandPct) / 100;
-    if (numOrUndef(a.avgPlotSizeSqft) != null) out.avgPlotSizeSqft = Number(a.avgPlotSizeSqft);
-    if (numOrUndef(a.villaPlotCoveragePct) != null) out.villaPlotCoveragePct = Number(a.villaPlotCoveragePct);
-    if (numOrUndef(a.villaFloors) != null) out.villaFloors = Number(a.villaFloors);
-  }
-  return out;
 }
 
 // KPI definitions per family, read from a computed yield result.

@@ -1,4 +1,5 @@
 const { query } = require('../config/database');
+const { buildSiteYieldSlice } = require('./exports/yieldProgramme.service');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { inferAssetClass } = require('../utils/assetClass');
 const { percentile } = require('../utils/percentile');
@@ -1013,8 +1014,14 @@ const getDealExportContext = async (dealId, options = {}) => {
     }
   })();
 
+  // Deterministic Yield Studio programme (recomputed server-side from the saved
+  // study, or screening defaults from the parcel). Null when no programme is
+  // computable. Best-effort — never fails the export.
+  const siteYield = await buildSiteYieldSlice({ deal }).catch(() => null);
+
   return {
     deal,
+    siteYield,
     recommendations: recommendationsSlice,
     deal_doctor: dealDoctorSlice,
     hasFinancialModel,
