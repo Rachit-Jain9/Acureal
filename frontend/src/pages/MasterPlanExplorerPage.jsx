@@ -10,10 +10,13 @@ import MasterPlanExplorer from '../components/masterplan/MasterPlanExplorer';
  */
 export default function MasterPlanExplorerPage() {
   return (
-    // Fill the dashboard content area so the map gets the remaining height and
-    // all its corner controls (search, controls, drawer) stay on-screen without
-    // a page scroll. `min-h-0` lets the flex child shrink so the map can size.
-    <div className="flex h-full min-h-[560px] flex-col gap-3">
+    // DEFINITE viewport height — mirrors the deals MapPage/MapCanvas pattern
+    // (`h-[calc(100vh-180px)] min-h-[720px]`). The dashboard shell is
+    // `min-h-screen` (not `h-screen`), so no ancestor has a definite height; an
+    // `h-full` chain here would collapse the inner Leaflet map to 0px (blank
+    // tiles + no zoom controls). A fixed calc height gives the flex-1 map host
+    // real space; `min-h-0` lets it shrink, `min-h-[720px]` guards short screens.
+    <div className="flex h-[calc(100vh-180px)] min-h-[720px] flex-col gap-3">
       <header className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div className="flex items-start gap-2.5">
           <span className="mt-0.5 rounded-md bg-accent-soft p-1.5 text-accent">
