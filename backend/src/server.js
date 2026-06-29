@@ -31,6 +31,7 @@ const ddRoutes = require('./routes/dd.routes');
 const approvalsRoutes = require('./routes/approvals.routes');
 const signoffRoutes = require('./routes/signoff.routes');
 const riskRoutes = require('./routes/risk.routes');
+const yieldStudioRoutes = require('./routes/yieldStudio.routes');
 const extractionRoutes = require('./routes/extraction.routes');
 // fx.routes retired 2026-05-24 — multi-currency display feature removed
 const parcelCronRoutes = require('./routes/parcelCron.routes');
@@ -211,6 +212,7 @@ app.use('/api', ddRoutes);
 app.use('/api', approvalsRoutes);
 app.use('/api', signoffRoutes);
 app.use('/api', riskRoutes);
+app.use('/api', yieldStudioRoutes);
 app.use('/api', promoterRoutes);
 app.use('/api', extractionRoutes);
 app.use('/api/cron', parcelCronRoutes);
