@@ -24,3 +24,25 @@ export function useSaveYieldStudy() {
     onError: (err) => toast.error(err?.response?.data?.message || 'Could not save the study'),
   });
 }
+
+// Analyst-uploaded / drawn parcel boundary (per property), persisted server-side.
+export function useParcelBoundary(propertyId) {
+  return useQuery({
+    queryKey: ['property', propertyId, 'boundary'],
+    queryFn: () => yieldStudioAPI.getBoundary(propertyId).then((r) => r.data.data),
+    enabled: !!propertyId,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useUploadParcelBoundary() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ propertyId, ...body }) => yieldStudioAPI.saveBoundary(propertyId, body).then((r) => r.data.data),
+    onSuccess: (saved, { propertyId }) => {
+      qc.setQueryData(['property', propertyId, 'boundary'], saved);
+      toast.success('Parcel boundary saved.');
+    },
+    onError: (err) => toast.error(err?.response?.data?.message || 'Boundary upload failed'),
+  });
+}

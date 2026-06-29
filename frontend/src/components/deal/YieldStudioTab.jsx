@@ -11,9 +11,10 @@ import { computeSiteYield, resolveFamily, DEFAULT_RESIDENTIAL_MIX } from '../../
 import { mapProgrammeToInputs, stashPrefill } from '../../utils/programmeToInputs';
 import { geojsonAreaSqft, polygonOutlineForSvg, reconcileArea } from '../../utils/geoArea';
 import { loadYieldStudy, saveYieldStudy, clearYieldStudy } from '../../utils/yieldStudioStore';
-import { useYieldStudy, useSaveYieldStudy } from '../../hooks/useYieldStudio';
+import { useYieldStudy, useSaveYieldStudy, useParcelBoundary } from '../../hooks/useYieldStudio';
 import { ASSET_CLASS_LABELS } from '../../utils/assetClasses';
 import BuildabilityMassing from './BuildabilityMassing';
+import BoundaryUploadButton from './BoundaryUploadButton';
 
 // ── formatters ──────────────────────────────────────────────────────────────
 const fmtInt = (n) => (Number.isFinite(n) ? Math.round(n).toLocaleString('en-IN') : '—');
@@ -274,7 +275,11 @@ export default function YieldStudioTab({ setTab }) {
   // geodesic area to reconcile against the typed plot area. Read-only; no new
   // persistence (uploads + storage land with the parcel_geometries migration).
   const { data: parcelIntel } = useParcelIntelligence(property?.id);
-  const boundaryGeojson = parcelIntel?.kgis?.geometry_geojson || null;
+  // An analyst-uploaded boundary (their own survey/file) takes precedence over
+  // the community K-GIS reference; fall back to K-GIS when none is uploaded.
+  const { data: uploadedBoundary } = useParcelBoundary(property?.id);
+  const boundaryGeojson = uploadedBoundary?.geometry_geojson || parcelIntel?.kgis?.geometry_geojson || null;
+  const boundarySource = uploadedBoundary ? 'uploaded' : (parcelIntel?.kgis?.geometry_geojson ? 'kgis' : null);
   const boundaryAreaSqft = useMemo(() => geojsonAreaSqft(boundaryGeojson), [boundaryGeojson]);
   const boundaryOutline = useMemo(() => polygonOutlineForSvg(boundaryGeojson, { size: 220, pad: 12 }), [boundaryGeojson]);
   const reconciliation = useMemo(
@@ -466,14 +471,14 @@ export default function YieldStudioTab({ setTab }) {
 
         {/* Right — boundary + massing + area schedule */}
         <div className="lg:col-span-3 space-y-5">
-          {boundaryGeojson && boundaryOutline && (
-            <BoundaryCard
-              outline={boundaryOutline}
-              areaSqft={boundaryAreaSqft}
-              reconciliation={reconciliation}
-              onAdopt={boundaryAreaSqft ? () => setEnv((e) => ({ ...e, landAreaSqft: String(boundaryAreaSqft) })) : null}
-            />
-          )}
+          <BoundaryCard
+            outline={boundaryOutline}
+            areaSqft={boundaryAreaSqft}
+            source={boundarySource}
+            reconciliation={reconciliation}
+            onAdopt={boundaryAreaSqft ? () => setEnv((e) => ({ ...e, landAreaSqft: String(boundaryAreaSqft) })) : null}
+            uploadButton={<BoundaryUploadButton propertyId={property.id} dealId={dealId} />}
+          />
           <Card className="p-5">
             <div className="flex items-center justify-between gap-3 mb-3">
               <SectionHeader size="sm" icon={Building2} title="Massing & binding constraint" className="mb-0" />
@@ -640,58 +645,77 @@ function AssumptionsEditor({ family, assumptions, setAssumptions }) {
   );
 }
 
-function BoundaryCard({ outline, areaSqft, reconciliation, onAdopt }) {
+const BOUNDARY_SOURCE_LABEL = { uploaded: 'Uploaded', kgis: 'K-GIS parcel' };
+
+function BoundaryCard({ outline, areaSqft, source, reconciliation, onAdopt, uploadButton }) {
   const sevTone = reconciliation
     ? (reconciliation.severity === 'match' ? 'success' : reconciliation.severity === 'minor' ? 'warn' : 'danger')
     : 'neutral';
   const deltaText = reconciliation
     ? `${Math.abs(reconciliation.deltaPct)}% ${reconciliation.deltaPct >= 0 ? 'above' : 'below'} boundary`
     : null;
+  const hasBoundary = !!outline;
   return (
     <Card className="p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
         <SectionHeader size="sm" icon={Shapes} title="Site boundary" className="mb-0" />
-        <Badge tone="neutral">K-GIS parcel</Badge>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
-        <div className="flex items-center justify-center rounded-editorial border border-hairline bg-bg-secondary p-3">
-          <svg
-            viewBox={outline.viewBox}
-            className="w-full h-auto max-h-48"
-            role="img"
-            aria-label="Parcel boundary outline from the K-GIS cadastral record"
-          >
-            <polygon
-              points={outline.points}
-              className="fill-accent stroke-accent"
-              fillOpacity="0.14"
-              strokeWidth="1.5"
-              strokeLinejoin="round"
-            />
-          </svg>
+        <div className="flex items-center gap-2 shrink-0">
+          {source && <Badge tone={source === 'uploaded' ? 'success' : 'neutral'}>{BOUNDARY_SOURCE_LABEL[source]}</Badge>}
+          {uploadButton}
         </div>
-        <div className="space-y-3">
-          <div>
-            <p className="text-[11px] text-content-muted">Boundary area (geodesic)</p>
-            <p className="font-display text-2xl font-semibold text-content-primary tabular-nums">
-              {areaSqft != null ? fmtInt(areaSqft) : '—'}<span className="text-sm text-content-muted"> sqft</span>
-            </p>
+      </div>
+
+      {hasBoundary ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-center">
+          <div className="flex items-center justify-center rounded-editorial border border-hairline bg-bg-secondary p-3">
+            <svg
+              viewBox={outline.viewBox}
+              className="w-full h-auto max-h-48"
+              role="img"
+              aria-label={`Parcel boundary outline (${source === 'uploaded' ? 'uploaded file' : 'K-GIS cadastral record'})`}
+            >
+              <polygon
+                points={outline.points}
+                className="fill-accent stroke-accent"
+                fillOpacity="0.14"
+                strokeWidth="1.5"
+                strokeLinejoin="round"
+              />
+            </svg>
           </div>
-          {deltaText && (
-            <Badge tone={sevTone}>
-              {reconciliation.severity === 'match' ? 'Matches entered area' : `Entry ${deltaText}`}
-            </Badge>
-          )}
-          {onAdopt && (
+          <div className="space-y-3">
             <div>
-              <Button variant="secondary" onClick={onAdopt}>Use boundary area</Button>
+              <p className="text-[11px] text-content-muted">Boundary area (geodesic)</p>
+              <p className="font-display text-2xl font-semibold text-content-primary tabular-nums">
+                {areaSqft != null ? fmtInt(areaSqft) : '—'}<span className="text-sm text-content-muted"> sqft</span>
+              </p>
             </div>
-          )}
+            {deltaText && (
+              <Badge tone={sevTone}>
+                {reconciliation.severity === 'match' ? 'Matches entered area' : `Entry ${deltaText}`}
+              </Badge>
+            )}
+            {onAdopt && (
+              <div>
+                <Button variant="secondary" onClick={onAdopt}>Use boundary area</Button>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="rounded-editorial border border-dashed border-hairline-strong p-6 text-center">
+          <Shapes size={18} className="mx-auto text-content-muted mb-2" />
+          <p className="text-sm text-content-secondary">
+            No parcel boundary yet. Upload a <span className="font-medium text-content-primary">.geojson</span> or{' '}
+            <span className="font-medium text-content-primary">.kml</span> to ground the study in the real plot shape and area.
+          </p>
+        </div>
+      )}
+
       <p className="mt-3 text-[11px] leading-relaxed text-content-muted">
-        Real parcel shape + area from the K-GIS cadastral record — a reference source. Verify against a
-        registered survey before relying on it.
+        {source === 'uploaded'
+          ? 'Outline + area from your uploaded file. Verify against a registered survey before relying on it.'
+          : 'Real parcel shape + area from the K-GIS cadastral record — a reference source. Verify against a registered survey before relying on it.'}
       </p>
     </Card>
   );
