@@ -90,6 +90,26 @@ describe('YieldStudioTab', () => {
     expect(setTab).toHaveBeenCalledWith('financial');
   });
 
+  it('clearing the loading-factor field falls back to the 30% default (not 0%)', () => {
+    render(<YieldStudioTab setTab={setTab} />);
+    // The seeded loading-factor input shows "30"; clear it.
+    fireEvent.change(screen.getByDisplayValue('30'), { target: { value: '' } });
+    // The engine must still apply the 30% default — echoed in the area schedule.
+    expect(screen.getByText('Loading factor')).toBeInTheDocument();
+    expect(screen.getAllByText('30%').length).toBeGreaterThan(0);
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+  });
+
+  it('Reset falls back to the K-GIS boundary area when the parcel has no stored land area', () => {
+    h.state.propertyData = { id: 'p1', permissible_fsi: 2.5 }; // no land_area_sqft
+    h.state.parcelIntel = { kgis: { geometry_geojson: ACRE_POLY } };
+    render(<YieldStudioTab setTab={setTab} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Reset$/i }));
+    const plot = screen.getByPlaceholderText('e.g. 43560');
+    expect(plot.value).not.toBe('');
+    expect(Number(plot.value)).toBeGreaterThan(0);
+  });
+
   it('restores a saved study from localStorage on mount', () => {
     localStorage.setItem('redip:yieldstudio:d1', JSON.stringify({
       env: { landAreaSqft: '50000', effectiveFsi: '3.7', groundCoveragePct: '', allowedHeightM: '' },

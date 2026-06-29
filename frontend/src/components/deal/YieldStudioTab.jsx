@@ -55,7 +55,10 @@ function seedAssumptions(family) {
 function buildEngineAssumptions(family, a) {
   const out = {};
   if (family === 'residential') {
-    if (a.loadingFactorPct != null) out.loadingFactor = Number(a.loadingFactorPct) / 100;
+    // Gate on numOrUndef (not a bare != null) so a CLEARED field ('') falls back
+    // to the engine's 30% default instead of sending loadingFactor: 0 (which the
+    // engine would treat as an explicit 0% loading → wrong saleable area).
+    if (numOrUndef(a.loadingFactorPct) != null) out.loadingFactor = Number(a.loadingFactorPct) / 100;
     if (numOrUndef(a.parkingEcsPerUnit) != null) out.parkingEcsPerUnit = Number(a.parkingEcsPerUnit);
     if (Array.isArray(a.mix)) out.unitMix = a.mix.map((m) => ({ ...m, share_pct: numOrUndef(m.share_pct) ?? 0 }));
   } else if (family === 'commercial' || family === 'industrial') {
@@ -276,7 +279,10 @@ export default function YieldStudioTab({ setTab }) {
     boundarySeededRef.current = false;
     familyRef.current = family;
     setEnv({
-      landAreaSqft: property?.land_area_sqft ?? '',
+      // Fall back to the K-GIS boundary area when the parcel has no stored land
+      // area — mirrors the mount-time boundary seed, so Reset never leaves a
+      // boundary-only parcel with an empty plot area.
+      landAreaSqft: property?.land_area_sqft ?? (boundaryAreaSqft != null ? String(boundaryAreaSqft) : ''),
       effectiveFsi: property?.permissible_fsi ?? '',
       groundCoveragePct: '',
       allowedHeightM: '',
