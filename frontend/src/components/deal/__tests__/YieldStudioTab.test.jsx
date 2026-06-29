@@ -14,12 +14,14 @@ if (!window.matchMedia) {
 const h = vi.hoisted(() => ({
   toast: { success: () => {}, error: () => {} },
   saveMutate: () => {},
+  uploadMutate: () => {},
   state: {
     dealRecord: { asset_class: 'residential_apartments', property_id: 'p1' },
     propertyData: { id: 'p1', land_area_sqft: 43560, permissible_fsi: 2.5 },
     parcelIntel: undefined,
     serverStudy: undefined,
     studyLoaded: false,
+    uploadedBoundary: undefined,
   },
 }));
 
@@ -35,6 +37,8 @@ vi.mock('../../common/Toast', () => ({ toast: h.toast }));
 vi.mock('../../../hooks/useYieldStudio', () => ({
   useYieldStudy: () => ({ data: h.state.serverStudy, isSuccess: h.state.studyLoaded }),
   useSaveYieldStudy: () => ({ mutate: h.saveMutate }),
+  useParcelBoundary: () => ({ data: h.state.uploadedBoundary }),
+  useUploadParcelBoundary: () => ({ mutateAsync: h.uploadMutate, isPending: false }),
 }));
 
 import YieldStudioTab from '../YieldStudioTab';
@@ -57,7 +61,9 @@ beforeEach(() => {
   h.state.parcelIntel = undefined;
   h.state.serverStudy = undefined;
   h.state.studyLoaded = false;
+  h.state.uploadedBoundary = undefined;
   h.saveMutate = vi.fn();
+  h.uploadMutate = vi.fn();
 });
 
 describe('YieldStudioTab', () => {
@@ -80,9 +86,19 @@ describe('YieldStudioTab', () => {
     expect(screen.getByRole('button', { name: /Use boundary area/i })).toBeInTheDocument();
   });
 
-  it('omits the boundary card when no K-GIS geometry is available', () => {
+  it('shows the boundary card with an upload prompt when no boundary exists', () => {
     render(<YieldStudioTab setTab={setTab} />);
-    expect(screen.queryByText('Site boundary')).not.toBeInTheDocument();
+    expect(screen.getByText('Site boundary')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Upload boundary/i })).toBeInTheDocument();
+    expect(screen.getByText(/No parcel boundary yet/i)).toBeInTheDocument();
+  });
+
+  it('prefers an uploaded boundary over K-GIS and badges it "Uploaded"', () => {
+    h.state.parcelIntel = { kgis: { geometry_geojson: ACRE_POLY } };
+    h.state.uploadedBoundary = { geometry_geojson: ACRE_POLY, area_sqft: 43560, source: 'geojson' };
+    render(<YieldStudioTab setTab={setTab} />);
+    expect(screen.getByText('Uploaded')).toBeInTheDocument();
+    expect(screen.queryByText('K-GIS parcel')).not.toBeInTheDocument();
   });
 
   it('renders a deterministic scenario band (Conservative / Base / Optimized)', () => {
