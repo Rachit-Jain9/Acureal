@@ -41,6 +41,7 @@ const ACRE_POLY = {
 };
 
 beforeEach(() => {
+  localStorage.clear();
   setTab.mockReset();
   h.toast.success = vi.fn();
   h.toast.error = vi.fn();
@@ -87,6 +88,24 @@ describe('YieldStudioTab', () => {
     fireEvent.click(screen.getByRole('button', { name: /Apply to Financials/i }));
     expect(h.toast.success).toHaveBeenCalledTimes(1);
     expect(setTab).toHaveBeenCalledWith('financial');
+  });
+
+  it('restores a saved study from localStorage on mount', () => {
+    localStorage.setItem('redip:yieldstudio:d1', JSON.stringify({
+      env: { landAreaSqft: '50000', effectiveFsi: '3.7', groundCoveragePct: '', allowedHeightM: '' },
+      assumptions: { loadingFactorPct: 30, parkingEcsPerUnit: 1.3, mix: [{ key: '2bhk', label: '2 BHK', carpet_sqft: 1000, share_pct: 100 }] },
+    }));
+    render(<YieldStudioTab setTab={setTab} />);
+    expect(screen.getByDisplayValue('3.7')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('50000')).toBeInTheDocument();
+  });
+
+  it('Reset discards the study and re-seeds from the parcel', () => {
+    render(<YieldStudioTab setTab={setTab} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Reset$/i }));
+    expect(h.toast.success).toHaveBeenCalledTimes(1);
+    // parcel FSI (2.5) is restored into the envelope input
+    expect(screen.getByDisplayValue('2.5')).toBeInTheDocument();
   });
 
   it('prompts to link a property when none is attached', () => {
