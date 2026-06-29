@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Building2, Ruler, Car, Layers, ArrowRight, SlidersHorizontal, Maximize2, GitCompare, Shapes } from 'lucide-react';
+import { Building2, Ruler, Car, Layers, ArrowRight, SlidersHorizontal, Maximize2, GitCompare, Shapes, RotateCcw } from 'lucide-react';
 import {
   Card, SectionHeader, MetricTile, StatTile, ErrorState, Button, Field, Input, Skeleton,
 } from '../../design-system';
@@ -10,6 +10,7 @@ import { useProperty, useParcelIntelligence } from '../../hooks/useProperties';
 import { computeSiteYield, resolveFamily, DEFAULT_RESIDENTIAL_MIX } from '../../utils/siteYield';
 import { mapProgrammeToInputs, stashPrefill } from '../../utils/programmeToInputs';
 import { geojsonAreaSqft, polygonOutlineForSvg, reconcileArea } from '../../utils/geoArea';
+import { loadYieldStudy, saveYieldStudy, clearYieldStudy } from '../../utils/yieldStudioStore';
 import { ASSET_CLASS_LABELS } from '../../utils/assetClasses';
 import BuildabilityMassing from './BuildabilityMassing';
 
@@ -171,10 +172,16 @@ export default function YieldStudioTab({ setTab }) {
   const { data: hydratedProperty, isLoading: propertyLoading } = useProperty(propertyStub?.id);
   const property = hydratedProperty ? { ...propertyStub, ...hydratedProperty } : propertyStub;
 
-  // Editable envelope (sourced from the parcel, every field overridable).
-  const [env, setEnv] = useState({ landAreaSqft: '', effectiveFsi: '', groundCoveragePct: '', allowedHeightM: '' });
-  const [assumptions, setAssumptions] = useState(() => seedAssumptions(family));
-  const seededRef = useRef(false);
+  // Restore a saved study (env + assumptions) for this deal if one exists — the
+  // analyst's working scratch survives reloads/revisits. Falls back to
+  // parcel-seeded defaults.
+  const savedStudy = useMemo(() => loadYieldStudy(dealId), [dealId]);
+  const [env, setEnv] = useState(
+    () => savedStudy?.env || { landAreaSqft: '', effectiveFsi: '', groundCoveragePct: '', allowedHeightM: '' },
+  );
+  const [assumptions, setAssumptions] = useState(() => savedStudy?.assumptions || seedAssumptions(family));
+  const seededRef = useRef(!!savedStudy?.env); // a restored study already carries its envelope
+  const familyRef = useRef(family);
 
   // Seed the envelope from the parcel once it hydrates (don't clobber edits).
   useEffect(() => {
@@ -187,8 +194,18 @@ export default function YieldStudioTab({ setTab }) {
     }));
   }, [property]);
 
-  // Re-seed assumptions when the asset-class family changes.
-  useEffect(() => { setAssumptions(seedAssumptions(family)); }, [family]);
+  // Re-seed assumptions only when the asset-class family ACTUALLY changes — not
+  // on mount, which would clobber a restored study.
+  useEffect(() => {
+    if (familyRef.current === family) return;
+    familyRef.current = family;
+    setAssumptions(seedAssumptions(family));
+  }, [family]);
+
+  // Persist the study (object is tiny; no debounce needed).
+  useEffect(() => {
+    if (dealId) saveYieldStudy(dealId, { env, assumptions });
+  }, [dealId, env, assumptions]);
 
   const engineEnvelope = useMemo(() => ({
     landAreaSqft: numOrUndef(env.landAreaSqft),
@@ -253,6 +270,21 @@ export default function YieldStudioTab({ setTab }) {
     if (setTab) setTab('financial');
   };
 
+  // Discard the saved study and re-seed from the parcel + family defaults.
+  const resetStudy = () => {
+    clearYieldStudy(dealId);
+    boundarySeededRef.current = false;
+    familyRef.current = family;
+    setEnv({
+      landAreaSqft: property?.land_area_sqft ?? '',
+      effectiveFsi: property?.permissible_fsi ?? '',
+      groundCoveragePct: '',
+      allowedHeightM: '',
+    });
+    setAssumptions(seedAssumptions(family));
+    toast.success('Reset to parcel defaults.');
+  };
+
   // ── empty / guard states ────────────────────────────────────────────────
   if (!property?.id) {
     return (
@@ -294,15 +326,25 @@ export default function YieldStudioTab({ setTab }) {
         title={`Screening yield${assetClass ? ` · ${ASSET_CLASS_LABELS[assetClass] || assetClass}` : ''}`}
         sub="Deterministic buildable-area, programme and parking from the regulatory envelope and editable assumptions. Numbers are screening estimates — not a surveyed or sanctioned plan."
         action={(
-          <Button
-            variant="primary"
-            rightIcon={<ArrowRight size={14} />}
-            onClick={applyToFinancials}
-            disabled={!result.ok}
-            title={result.ok ? 'Send the programme into the Financial Engine' : 'Complete the inputs to enable'}
-          >
-            Apply to Financials
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              leftIcon={<RotateCcw size={14} />}
+              onClick={resetStudy}
+              title="Discard edits and re-seed from the parcel"
+            >
+              Reset
+            </Button>
+            <Button
+              variant="primary"
+              rightIcon={<ArrowRight size={14} />}
+              onClick={applyToFinancials}
+              disabled={!result.ok}
+              title={result.ok ? 'Send the programme into the Financial Engine' : 'Complete the inputs to enable'}
+            >
+              Apply to Financials
+            </Button>
+          </div>
         )}
       />
 
