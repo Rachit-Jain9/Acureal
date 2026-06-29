@@ -416,6 +416,7 @@ const SECTION_ORDER = [
   'Executive Summary',
   'Site Information',
   'Overview',
+  'Site Yield & Massing',
   'Demographics',
   'Why This Area',
   'Job Growth & Micro-Market',
@@ -684,6 +685,83 @@ const buildOverview = (ctx) => {
     labelValueRow('Investment thesis', firstText(ctx.deal.investment_thesis) || '–'),
   ];
   children.push(buildLabelValueTable(rows));
+  return children;
+};
+
+const SITE_YIELD_BINDING_LABEL = {
+  far: 'FAR / FSI',
+  coverage_height: 'Ground coverage × height',
+  plot_subdivision: 'Plot subdivision',
+};
+
+// Site Yield & Massing — the deterministic site-yield programme (units / keys /
+// plots, area schedule, parking, binding constraint) recomputed server-side
+// from the saved Yield Studio study (or screening defaults from the parcel).
+// Platform data (the deterministic kernel), never AI. Auto-hidden when no
+// programme is available (ctx.siteYield null).
+const buildSiteYield = (ctx) => {
+  const sy = ctx.siteYield;
+  if (!sy || !sy.computed || !sy.computed.ok) return [];
+  const c = sy.computed;
+  const e = c.envelope || {};
+  const a = c.areaSchedule || {};
+  const t = c.totals || {};
+  const intl = (n) => (Number.isFinite(Number(n)) ? Math.round(Number(n)).toLocaleString('en-IN') : '–');
+
+  const children = [];
+  children.push(sectionHeading('Site Yield & Massing', { pageBreakBefore: true }));
+  children.push(platformBadge());
+  if (sy.mode === 'screening_defaults') {
+    children.push(bodyPara(
+      'Screening estimate from the parcel’s land area and FSI — no saved study yet. Open Yield Studio to refine the assumptions.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+  }
+
+  const rows = [];
+  if (e.realized_gfa_sqft != null) rows.push(labelValueRow('Realized GFA', formatArea(e.realized_gfa_sqft)));
+  if (e.effective_fsi != null) rows.push(labelValueRow('Effective FSI', String(e.effective_fsi)));
+  if (e.floors != null) rows.push(labelValueRow('Floors', String(e.floors)));
+  rows.push(labelValueRow('Binding constraint', SITE_YIELD_BINDING_LABEL[c.bindingConstraint] || c.bindingConstraint || '–'));
+  if (t.units != null) rows.push(labelValueRow('Units', intl(t.units)));
+  if (t.keys != null) rows.push(labelValueRow('Keys', intl(t.keys)));
+  if (t.plots != null) rows.push(labelValueRow(t.villas != null ? 'Villas' : 'Plots', intl(t.villas != null ? t.villas : t.plots)));
+  if (a.saleable_sqft != null) rows.push(labelValueRow('Saleable (SBA)', formatArea(a.saleable_sqft)));
+  if (a.leasable_sqft != null) rows.push(labelValueRow('Leasable', formatArea(a.leasable_sqft)));
+  if (a.net_saleable_sqft != null) rows.push(labelValueRow('Net saleable', formatArea(a.net_saleable_sqft)));
+  if (a.saleable_plot_area_sqft != null) rows.push(labelValueRow('Saleable plot area', formatArea(a.saleable_plot_area_sqft)));
+  if (c.parking && c.parking.required_ecs != null) rows.push(labelValueRow('Parking (ECS)', intl(c.parking.required_ecs)));
+  if (rows.length) children.push(buildLabelValueTable(rows));
+
+  if (Array.isArray(c.unitMix) && c.unitMix.length) {
+    children.push(blank());
+    children.push(eyebrow('Unit mix'));
+    children.push(new Table({
+      width: { size: 100, type: WidthType.PERCENTAGE },
+      borders: TABLE_BORDER,
+      rows: [
+        buildHeaderTableRow(['Type', 'Units', 'Carpet (sqft)']),
+        ...c.unitMix.map((u, i) => buildBodyTableRow(
+          [u.label || u.key, intl(u.count), intl(u.carpet_total_sqft)],
+          { alt: i % 2 === 1 },
+        )),
+      ],
+    }));
+  }
+
+  if (Number(c.unrealizedFarPct) > 0) {
+    children.push(bodyPara(
+      `${c.unrealizedFarPct}% of permitted FAR is unrealised at this height — ground coverage × floors caps the build.`,
+      { color: HEX('mutedHigh') },
+    ));
+  }
+  if (sy.boundary) {
+    children.push(bodyPara(
+      `Parcel boundary: ${sy.boundary.source}${sy.boundary.area_sqft != null ? ` · ${formatArea(sy.boundary.area_sqft)}` : ''} · ${sy.boundary.review_status || 'pending'} (verify against a registered survey).`,
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+  }
+  if (c.disclaimer) children.push(bodyPara(c.disclaimer, { italic: true, color: HEX('mutedHigh') }));
   return children;
 };
 
@@ -2671,6 +2749,7 @@ const buildDealReportDocx = async (exportContext = {}, options = {}) => {
     ...buildExecutiveSummary(ctx),
     ...siteSection,
     ...buildOverview(ctx),
+    ...buildSiteYield(ctx),
     ...buildDemographics(ctx),
     ...buildWhyThisArea(ctx),
     ...buildJobGrowth(ctx),
