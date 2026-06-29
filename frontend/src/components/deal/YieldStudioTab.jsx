@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Building2, Ruler, Car, Layers, ArrowRight, SlidersHorizontal, Maximize2 } from 'lucide-react';
+import { Building2, Ruler, Car, Layers, ArrowRight, SlidersHorizontal, Maximize2, GitCompare } from 'lucide-react';
 import {
   Card, SectionHeader, MetricTile, StatTile, ErrorState, Button, Field, Input, Skeleton,
 } from '../../design-system';
@@ -112,6 +112,54 @@ function kpisFor(family, r) {
   ];
 }
 
+// Headline yield metric per family for a scenario card.
+function primaryYield(family, r) {
+  if (!r?.ok) return { label: '—', value: null };
+  const t = r.totals || {};
+  const a = r.areaSchedule || {};
+  if (family === 'plotted') {
+    const isVilla = t.villas != null;
+    return { label: isVilla ? 'Villas' : 'Plots', value: isVilla ? t.villas : t.plots };
+  }
+  if (family === 'hospitality') return { label: 'Keys', value: t.keys };
+  if (family === 'commercial' || family === 'industrial') return { label: 'Leasable', value: a.leasable_sqft, unit: 'sqft' };
+  return { label: 'Units', value: t.units };
+}
+
+// Build a 3-point deterministic sensitivity band by flexing the single
+// highest-leverage lever. Built form → FSI ×0.9/1.0/1.15; plotted → saleable
+// land % ±5 pts. Each point is a full engine run; nothing is interpolated.
+function buildScenarios({ assetClass, family, engineEnvelope, engineAssumptions }) {
+  const run = (envOverride, asmOverride) => computeSiteYield({
+    assetClass,
+    envelope: { ...engineEnvelope, ...envOverride },
+    assumptions: { ...engineAssumptions, ...asmOverride },
+  });
+
+  if (family === 'plotted') {
+    const base = engineAssumptions.saleableLandPct != null ? engineAssumptions.saleableLandPct : 0.55;
+    return [
+      { key: 'cons', label: 'Conservative', d: -0.05 },
+      { key: 'base', label: 'Base', d: 0 },
+      { key: 'opt', label: 'Optimized', d: 0.05 },
+    ].map((v) => {
+      const pct = Math.max(0.4, Math.min(0.7, Math.round((base + v.d) * 100) / 100));
+      return { key: v.key, label: v.label, isBase: v.key === 'base', note: `${Math.round(pct * 100)}% saleable`, result: run({}, { saleableLandPct: pct }) };
+    });
+  }
+
+  const baseFsi = engineEnvelope.effectiveFsi;
+  if (!baseFsi) return null;
+  return [
+    { key: 'cons', label: 'Conservative', m: 0.9 },
+    { key: 'base', label: 'Base', m: 1.0 },
+    { key: 'opt', label: 'Optimized', m: 1.15 },
+  ].map((v) => {
+    const fsi = Math.round(baseFsi * v.m * 100) / 100;
+    return { key: v.key, label: v.label, isBase: v.key === 'base', note: `FSI ${fsi.toFixed(2)}`, result: run({ effectiveFsi: fsi }, {}) };
+  });
+}
+
 export default function YieldStudioTab({ setTab }) {
   const { dealId } = useDealContext();
   const deal = useDealRecord();
@@ -148,9 +196,19 @@ export default function YieldStudioTab({ setTab }) {
     allowedHeightM: numOrUndef(env.allowedHeightM),
   }), [env]);
 
+  const engineAssumptions = useMemo(() => buildEngineAssumptions(family, assumptions), [family, assumptions]);
+
   const result = useMemo(
-    () => computeSiteYield({ assetClass, envelope: engineEnvelope, assumptions: buildEngineAssumptions(family, assumptions) }),
-    [assetClass, family, engineEnvelope, assumptions],
+    () => computeSiteYield({ assetClass, envelope: engineEnvelope, assumptions: engineAssumptions }),
+    [assetClass, family, engineEnvelope, engineAssumptions],
+  );
+
+  // Deterministic scenario band — flex the single highest-leverage lever (FSI for
+  // built form, saleable-land % for plotted) ±, holding everything else equal. A
+  // sensitivity view, not a claim of extra entitlement (the caption says so).
+  const scenarios = useMemo(
+    () => (result.ok ? buildScenarios({ assetClass, family, engineEnvelope, engineAssumptions }) : null),
+    [result.ok, assetClass, family, engineEnvelope, engineAssumptions],
   );
 
   // Massing values (built-form only; needs ground coverage to draw).
@@ -361,6 +419,21 @@ export default function YieldStudioTab({ setTab }) {
         </div>
       </div>
 
+      {/* Scenario band — deterministic sensitivity on the key lever */}
+      {scenarios && scenarios.length > 1 && (
+        <Card className="p-5">
+          <SectionHeader
+            size="sm"
+            icon={GitCompare}
+            title="Scenario comparison"
+            sub={family === 'plotted'
+              ? 'Layout-efficiency sensitivity — saleable-land % flexed ±5 pts. Verify against layout/open-space norms.'
+              : 'FSI sensitivity — your entered FSI flexed ±. Confirm the achievable FSI (incl. any TDR/premium) against the FAR rule before relying on the upside.'}
+          />
+          <ScenarioStrip scenarios={scenarios} family={family} />
+        </Card>
+      )}
+
       {/* Warnings + disclaimer */}
       {result.warnings?.length > 0 && (
         <ErrorState tone="warn" title="Worth checking">
@@ -448,6 +521,53 @@ function AssumptionsEditor({ family, assumptions, setAssumptions }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ScenarioStrip({ scenarios, family }) {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {scenarios.map((s) => {
+        const r = s.result;
+        const yld = primaryYield(family, r);
+        const gfa = family === 'plotted' ? r.areaSchedule?.saleable_plot_area_sqft : r.envelope?.realized_gfa_sqft;
+        const gfaLabel = family === 'plotted' ? 'Saleable plot area' : 'Realized GFA';
+        return (
+          <div
+            key={s.key}
+            className={`rounded-editorial border p-4 transition-colors duration-150 ${
+              s.isBase ? 'border-accent bg-accent-soft' : 'border-hairline bg-bg-secondary'
+            }`}
+          >
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-sm font-semibold text-content-primary">{s.label}</span>
+              {s.isBase && <Badge tone="info">Current</Badge>}
+            </div>
+            <p className="text-[11px] text-content-muted mb-3 tabular-nums">{s.note}</p>
+            {r.ok ? (
+              <div className="space-y-2">
+                <div>
+                  <p className="text-[11px] text-content-muted">{yld.label}</p>
+                  <p className="font-display text-xl font-semibold text-content-primary tabular-nums">
+                    {fmtInt(yld.value)}{yld.unit ? ` ${yld.unit}` : ''}
+                  </p>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-content-muted">{gfaLabel}</span>
+                  <span className="tabular-nums text-content-secondary">{fmtInt(gfa)} sqft</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-content-muted">Binds on</span>
+                  <span className="text-content-secondary">{BINDING_LABEL[r.bindingConstraint] || r.bindingConstraint}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-xs text-content-muted">Insufficient inputs</p>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
