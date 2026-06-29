@@ -16,6 +16,7 @@ const h = vi.hoisted(() => ({
   state: {
     dealRecord: { asset_class: 'residential_apartments', property_id: 'p1' },
     propertyData: { id: 'p1', land_area_sqft: 43560, permissible_fsi: 2.5 },
+    parcelIntel: undefined,
   },
 }));
 
@@ -25,6 +26,7 @@ vi.mock('../../../hooks/useDealContext', () => ({
 }));
 vi.mock('../../../hooks/useProperties', () => ({
   useProperty: () => ({ data: h.state.propertyData, isLoading: false }),
+  useParcelIntelligence: () => ({ data: h.state.parcelIntel }),
 }));
 vi.mock('../../common/Toast', () => ({ toast: h.toast }));
 
@@ -32,12 +34,19 @@ import YieldStudioTab from '../YieldStudioTab';
 
 const setTab = vi.fn();
 
+// A small square polygon (~1 acre) near Bengaluru for the boundary case.
+const ACRE_POLY = {
+  type: 'Polygon',
+  coordinates: [[[77.5, 13.0], [77.50059, 13.0], [77.50059, 13.00057], [77.5, 13.00057], [77.5, 13.0]]],
+};
+
 beforeEach(() => {
   setTab.mockReset();
   h.toast.success = vi.fn();
   h.toast.error = vi.fn();
   h.state.dealRecord = { asset_class: 'residential_apartments', property_id: 'p1' };
   h.state.propertyData = { id: 'p1', land_area_sqft: 43560, permissible_fsi: 2.5 };
+  h.state.parcelIntel = undefined;
 });
 
 describe('YieldStudioTab', () => {
@@ -49,6 +58,20 @@ describe('YieldStudioTab', () => {
     expect(screen.getAllByText('Units').length).toBeGreaterThan(0);
     expect(screen.getByText('Massing & binding constraint')).toBeInTheDocument();
     expect(screen.getByText(/Binds on FAR/)).toBeInTheDocument();
+  });
+
+  it('renders the K-GIS parcel boundary card with a geodesic area when available', () => {
+    h.state.parcelIntel = { kgis: { geometry_geojson: ACRE_POLY } };
+    render(<YieldStudioTab setTab={setTab} />);
+    expect(screen.getByText('Site boundary')).toBeInTheDocument();
+    expect(screen.getByText('K-GIS parcel')).toBeInTheDocument();
+    expect(screen.getByText('Boundary area (geodesic)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Use boundary area/i })).toBeInTheDocument();
+  });
+
+  it('omits the boundary card when no K-GIS geometry is available', () => {
+    render(<YieldStudioTab setTab={setTab} />);
+    expect(screen.queryByText('Site boundary')).not.toBeInTheDocument();
   });
 
   it('renders a deterministic scenario band (Conservative / Base / Optimized)', () => {
