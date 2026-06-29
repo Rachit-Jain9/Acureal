@@ -55,6 +55,10 @@ const SUPPORTED_EVENT_TYPES = new Set([
   'approval_created', 'approval_updated', 'approval_deleted',
   'dd_item_created', 'dd_item_updated', 'dd_item_deleted',
   'document_deleted', 'document_purged',
+  // Yield Studio — saved study + uploaded parcel boundary (one row per save /
+  // delete / upload so the Audit tab shows the lifecycle of a deal's site study).
+  'yield_study_saved', 'yield_study_deleted',
+  'parcel_boundary_uploaded', 'parcel_boundary_deleted',
 ]);
 
 // Postgres error codes we treat as "feature gracefully unavailable"
