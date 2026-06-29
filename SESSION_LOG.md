@@ -4,6 +4,21 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-29 (Master Plan map fix + persistence migration prepared + session-code hardening) (PRs #912, #913, #914 — merged + deployed; master green)
+
+- **#913 — Master Plan Explorer map was blank (real pre-existing bug, not from this session).** Root cause: the dashboard shell is `min-h-screen` (Layout.jsx), not `h-screen`, so no ancestor has a definite height; the Explorer page used an `h-full → flex-1 → MapContainer h-full` chain that collapsed to 0px (blank tiles + no zoom controls + no attribution, while the `min-h` boxes/panels still painted). Ruled out CSP (img-src allows OSM/Esri/Map Warper) and the tile URLs. Fix: use the DEFINITE height the deals map already uses under this same shell — `h-[calc(100vh-180px)] min-h-[720px]` (MapCanvas.jsx:319 / MapPage.jsx:274) — instead of `h-full`. Surgical, one page, no global layout change. (Deferred the deeper `min-h-screen→h-screen` shell fix: correct but app-wide scroll change, unverifiable while logged out.)
+- **#912 — persistence migration PREPARED (operator-apply pending).** `database/migrations/20260720_yield_studio_persistence.sql` adds two tenant-scoped tables: `parcel_boundaries` (GeoJSON-as-JSONB + geodesic area + provenance; one active per org+property) and `yield_studies` (envelope+assumptions JSONB; one active per org+deal). ENABLE+FORCE RLS, soft-delete, partial-unique active indexes, idempotent, no CONCURRENTLY. Pre-flight verified vs prod (project `niamgjbxxgmmffggumvj`): referenced tables exist, new ones don't, uuid_generate_v4 + current_organization_id present. Unlocks boundary upload + server-saved studies + yield-in-exports — all blocked until the operator runs it.
+- **#914 — session-code hardening (adversarial review workflow).** A 3-lens + adversarial-verify review of all new Yield Studio code found exactly two real bugs (rest verified false-positives): (a) clearing the residential loading-factor field sent `loadingFactor:0` instead of the 30% default (bare `!= null` vs the siblings' `numOrUndef`); (b) Reset on a boundary-only parcel (no stored land area) blanked the plot area. Both fixed + regression-tested.
+
+Verification: full frontend suite **1280 passing** / 155 files; build clean.
+
+### Operator-gated next steps (the session has reached the safe-code-only boundary)
+1. **Apply migration #912** in Supabase SQL editor → reply "done" → I verify + build boundary upload + server-saved studies + Yield Studio in IC/Excel/PPT exports.
+2. **Confirm the map fix** visually (hard-refresh Master Plan after deploy).
+3. **AI price-pinning** (parked by operator) → unlocks Batch + cheap-first cascade AI-cost work.
+
+---
+
 ## 2026-06-29 (Yield Studio — K-GIS boundary intelligence + per-deal persistence) (PRs #909, #910 — merged + deployed; master green)
 
 Continued the Walk tier with the two highest-value steps that need NO database migration (no operator blocker), keeping the lighter/less-cluttered bar.
