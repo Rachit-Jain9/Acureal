@@ -38,7 +38,7 @@ import { isValidPair as isValidStructurePair } from '../utils/dealStructureMatri
 // only download when the operator actually clicks into them.
 import OverviewTab from '../components/deal/OverviewTab';
 const ParcelTab    = lazy(() => import('../components/deal/ParcelTab'));
-const SiteIntelligenceTab = lazy(() => import('../components/deal/SiteIntelligenceTab'));
+const YieldStudioTab = lazy(() => import('../components/deal/YieldStudioTab'));
 const DocumentsTab = lazy(() => import('../components/deal/DocumentsTab'));
 const ActivityTab  = lazy(() => import('../components/deal/ActivityTab'));
 const FinancialTab = lazy(() => import('../components/deal/FinancialTab'));
@@ -63,7 +63,7 @@ const TabSuspenseFallback = () => (
 const TABS = [
   { id: 'overview',   label: 'Overview' },
   { id: 'parcel',     label: 'Parcel / Site' },
-  { id: 'site',       label: 'Site Intelligence' },
+  { id: 'site',       label: 'Yield Studio' },
   { id: 'zoning',     label: 'Regulatory / Zoning' },
   { id: 'documents',  label: 'Documents' },
   { id: 'activity',   label: 'Activity' },
@@ -410,7 +410,7 @@ export default function DealDetailPage() {
           {activeTab === 'overview' && <OverviewTab setTab={setTab} />}
           <Suspense fallback={<TabSuspenseFallback />}>
             {activeTab === 'parcel' && <ParcelTab canEdit={canEdit} />}
-            {activeTab === 'site' && <SiteIntelligenceTab setTab={setTab} />}
+            {activeTab === 'site' && <YieldStudioTab setTab={setTab} />}
             {activeTab === 'zoning' && <ZoningTab setTab={setTab} />}
             {activeTab === 'documents' && <DocumentsTab />}
             {activeTab === 'activity' && <ActivityTab />}

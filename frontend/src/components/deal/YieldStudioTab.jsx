@@ -112,7 +112,7 @@ function kpisFor(family, r) {
   ];
 }
 
-export default function SiteIntelligenceTab({ setTab }) {
+export default function YieldStudioTab({ setTab }) {
   const { dealId } = useDealContext();
   const deal = useDealRecord();
   const assetClass = deal?.asset_class || '';
@@ -190,7 +190,7 @@ export default function SiteIntelligenceTab({ setTab }) {
           </button>
         ) : null}
       >
-        Site Intelligence turns a parcel + zoning into a screening development programme — link a
+        Yield Studio turns a parcel + zoning into a screening development programme — link a
         property so its land area and FSI can seed the study.
       </ErrorState>
     );
@@ -198,7 +198,7 @@ export default function SiteIntelligenceTab({ setTab }) {
 
   if (propertyStub?.id && propertyLoading && !hydratedProperty) {
     return (
-      <div className="space-y-5" role="status" aria-busy="true" aria-label="Loading site intelligence">
+      <div className="space-y-5" role="status" aria-busy="true" aria-label="Loading Yield Studio">
         <Skeleton className="h-24 w-full rounded-editorial border border-hairline" />
         <Skeleton className="h-72 w-full rounded-editorial border border-hairline" />
       </div>
@@ -211,7 +211,7 @@ export default function SiteIntelligenceTab({ setTab }) {
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow="Site Intelligence"
+        eyebrow="Yield Studio"
         title={`Screening yield${assetClass ? ` · ${ASSET_CLASS_LABELS[assetClass] || assetClass}` : ''}`}
         sub="Deterministic buildable-area, programme and parking from the regulatory envelope and editable assumptions. Numbers are screening estimates — not a surveyed or sanctioned plan."
         action={(
