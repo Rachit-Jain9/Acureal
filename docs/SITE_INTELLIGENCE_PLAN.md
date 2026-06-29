@@ -1,6 +1,6 @@
-# Site Intelligence — architecture & roadmap
+# Yield Studio — architecture & roadmap
 
-Status as of 2026-06-29. The **Crawl** tier shipped (PRs #902, #903, #904). This doc is the canonical reference for what exists and what's next — extend it, don't rebuild.
+Status as of 2026-06-29. The deal tab is named **Yield Studio** (renamed from the working title "Site Intelligence"; this file keeps its original name for link stability). The **Crawl** tier shipped (PRs #902, #903, #904). This doc is the canonical reference for what exists and what's next — extend it, don't rebuild.
 
 ## Thesis
 
@@ -12,7 +12,7 @@ Turn a parcel + regulatory envelope into an **investable development programme**
 |---|---|---|
 | Site-yield engine | `backend/src/utils/siteYield.js` + `frontend/src/utils/siteYield.js` (parity-tested) | Pure deterministic. Envelope + assumptions → realized GFA, binding constraint, area schedule, unit/key/plot counts, parking. Emits `programme` + `buildability` for the underwriting bridge. |
 | Underwriting bridge fix | `frontend/src/utils/programmeToInputs.js` | Switch now uses canonical asset-class vocabulary; branches align to the engine's families. |
-| Site Intelligence tab | `frontend/src/components/deal/SiteIntelligenceTab.jsx` | New deal tab between Parcel and Zoning. Live generate-then-edit cockpit; one-click Apply to Financials. |
+| Yield Studio tab | `frontend/src/components/deal/YieldStudioTab.jsx` | New deal tab (label "Yield Studio", URL id `site`) between Parcel and Zoning. Live generate-then-edit cockpit; one-click Apply to Financials. |
 | AI cost-leak guard | `backend/src/services/ai/aiRouter.js` (`isModelPriced`, `cost_unpriced`) | Unknown-model spend can no longer silently bypass the daily cap. |
 
 ### Engine contract (load-bearing)
