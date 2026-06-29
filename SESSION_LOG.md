@@ -4,6 +4,20 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-29 (Yield Studio — K-GIS boundary intelligence + per-deal persistence) (PRs #909, #910 — merged + deployed; master green)
+
+Continued the Walk tier with the two highest-value steps that need NO database migration (no operator blocker), keeping the lighter/less-cluttered bar.
+
+- **#909 — real K-GIS parcel boundary.** Yield Studio now reads the parcel's actual cadastral boundary from the existing parcel-intelligence cache (`parcelIntel.kgis.geometry_geojson`) and (a) draws the REAL parcel shape as a fitted SVG outline — finally replacing the "representative square" assumption — (b) computes its true geodesic area via a new dependency-free util `frontend/src/utils/geoArea.js` (the standard spherical ring-area formula `@turf/area` uses; <2% vs a known 1-acre square), (c) reconciles it against the typed plot area with a match/minor/major delta chip + one-click "Use boundary area", (d) auto-seeds the plot area from the boundary when the parcel has none. Zero migration, zero new dep, read-only, honestly captioned ("reference source — verify against a survey"). 10 geoArea unit tests + 2 tab tests.
+- **#910 — per-deal study persistence + Reset.** The study (envelope + assumptions) survives reloads/revisits via `frontend/src/utils/yieldStudioStore.js` (localStorage, per deal, guarded), with a header "Reset to parcel defaults". Working scratch only — committed output still flows via Apply to Financials; server-side study persistence waits for the migration. Also fixed a latent bug: the assumptions re-seed effect now fires only on a real asset-class-family change, not every mount. 6 store unit tests + 2 tab tests.
+
+Verification: full frontend suite **1278 passing** / 155 files (incl. theme + tailwind token guards); build clean. Tab tests 9/9.
+
+### Left for next (needs ONE operator DB migration — the gate)
+Boundary UPLOAD (.geojson/.kml) + server-side persistence and putting the Yield Studio programme into IC exports both require the `parcel_geometries` / `site_plans` schema. That migration is the next operator action; once applied, the upload UI + export plumbing ship. Extraction-excellence eval harness needs labelled docs (operator data). AI-cost Batch/cascade is code-only but deferred behind price-pinning.
+
+---
+
 ## 2026-06-29 (Yield Studio — rename + deterministic scenario band) (PRs #906, #907 — merged + deployed; master green)
 
 Continuation of the Site Intelligence block. Operator found "Site Intelligence" generic; renamed the deal tab to **Yield Studio** (catchy + professional; "yield" = development density, "studio" = the live edit-and-recompute loop). Then continued into the highest-value next step both source plans called for — a scenario-comparison band.
