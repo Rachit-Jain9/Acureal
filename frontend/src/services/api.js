@@ -294,6 +294,18 @@ export const dealsAPI = {
   getSharedWithMe: () => api.get('/deals/shared-with-me'),
 };
 
+// Yield Studio — server-saved study (per deal) + uploaded parcel boundary
+// (per property). Groups return the raw axios response; hooks unwrap
+// `.then((r) => r.data.data)`, matching propertiesAPI.
+export const yieldStudioAPI = {
+  getStudy: (dealId) => api.get(`/deals/${dealId}/yield-study`),
+  saveStudy: (dealId, body) => api.put(`/deals/${dealId}/yield-study`, body),
+  deleteStudy: (dealId) => api.delete(`/deals/${dealId}/yield-study`),
+  getBoundary: (propertyId) => api.get(`/properties/${propertyId}/boundary`),
+  saveBoundary: (propertyId, body) => api.put(`/properties/${propertyId}/boundary`, body),
+  deleteBoundary: (propertyId) => api.delete(`/properties/${propertyId}/boundary`),
+};
+
 // Properties
 export const propertiesAPI = {
   list: (params) => api.get('/properties', { params }),

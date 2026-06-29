@@ -11,6 +11,7 @@ import { computeSiteYield, resolveFamily, DEFAULT_RESIDENTIAL_MIX } from '../../
 import { mapProgrammeToInputs, stashPrefill } from '../../utils/programmeToInputs';
 import { geojsonAreaSqft, polygonOutlineForSvg, reconcileArea } from '../../utils/geoArea';
 import { loadYieldStudy, saveYieldStudy, clearYieldStudy } from '../../utils/yieldStudioStore';
+import { useYieldStudy, useSaveYieldStudy } from '../../hooks/useYieldStudio';
 import { ASSET_CLASS_LABELS } from '../../utils/assetClasses';
 import BuildabilityMassing from './BuildabilityMassing';
 
@@ -186,6 +187,14 @@ export default function YieldStudioTab({ setTab }) {
   const seededRef = useRef(!!savedStudy?.env); // a restored study already carries its envelope
   const familyRef = useRef(family);
 
+  // Server is the source of truth (cross-device / team); the localStorage cache
+  // above gives an instant first paint. Once the server query settles we
+  // hydrate from it (it wins) and then debounce-save edits back up.
+  const { data: serverStudy, isSuccess: studyLoaded } = useYieldStudy(dealId);
+  const serverHydratedRef = useRef(false);
+  const serverSaveTimer = useRef(null);
+  const saveStudyMut = useSaveYieldStudy();
+
   // Seed the envelope from the parcel once it hydrates (don't clobber edits).
   useEffect(() => {
     if (!property || seededRef.current) return;
@@ -205,10 +214,39 @@ export default function YieldStudioTab({ setTab }) {
     setAssumptions(seedAssumptions(family));
   }, [family]);
 
-  // Persist the study (object is tiny; no debounce needed).
+  // Hydrate from the server once its query settles — the server row wins over
+  // the local cache. When no server study exists yet, still flip the flag so
+  // saving is enabled for a brand-new study.
+  useEffect(() => {
+    if (serverHydratedRef.current || !studyLoaded) return;
+    serverHydratedRef.current = true;
+    if (serverStudy?.envelope) setEnv((e) => ({ ...e, ...serverStudy.envelope }));
+    if (serverStudy?.assumptions) setAssumptions(serverStudy.assumptions);
+    if (serverStudy) seededRef.current = true; // server row carries the envelope
+  }, [studyLoaded, serverStudy]);
+
+  // Persist: localStorage instantly (fast cache) + the server debounced (source
+  // of truth). Don't push to the server before the first hydrate, or the seed
+  // would overwrite a just-loaded server row. The study is stored UI-shaped
+  // (env + assumptions) for an exact cross-device editor restore.
   useEffect(() => {
     if (dealId) saveYieldStudy(dealId, { env, assumptions });
-  }, [dealId, env, assumptions]);
+    if (!dealId || !serverHydratedRef.current) return undefined;
+    clearTimeout(serverSaveTimer.current);
+    serverSaveTimer.current = setTimeout(() => {
+      saveStudyMut.mutate({
+        dealId,
+        envelope: env,
+        assumptions,
+        asset_class: assetClass,
+        selected_scenario: 'base',
+        engine_version: 'siteYield@1',
+      });
+    }, 700);
+    return () => clearTimeout(serverSaveTimer.current);
+    // saveStudyMut is stable from react-query; excluded to avoid resubscribing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dealId, env, assumptions, assetClass]);
 
   const engineEnvelope = useMemo(() => ({
     landAreaSqft: numOrUndef(env.landAreaSqft),
