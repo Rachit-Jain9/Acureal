@@ -4,6 +4,24 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-30 (Yield Studio persistence + exports: A→D) (PRs #916, #917, #918, #919 — merged + deployed; master green)
+
+Operator applied the #912 migration (verified: `parcel_boundaries` + `yield_studies`, RLS enabled+forced, 1 policy each). Built the full persistence + exports phase on top, idiomatically (per a verified blueprint).
+
+- **#916 — backend persistence API.** `yieldStudio.service.js` (study CRUD, one active per org+deal) + `parcelBoundary.service.js` (boundary CRUD, one active per org+property) + `yieldStudio.routes.js` (GET/PUT/DELETE `/deals/:id/yield-study` + `/properties/:id/boundary`). Tenancy copies risk.service exactly (RLS-bypassing role → `organization_id = current_organization_id()` on every read/write; INSERT omits org → DEFAULT fills it). Active-row swap in a transaction; 42P01-tolerant; mutations audited (4 new event types). 9 service tests.
+- **#917 — server-saved studies.** `useYieldStudio` (query+mutation, setQueryData echo). Server is source of truth; localStorage stays a fast first-paint cache; debounced (700ms) save after first hydrate; study stored UI-shaped for exact cross-device restore.
+- **#918 — boundary upload (.geojson/.kml).** `kmlToGeoJson.js` (dep-free) + `BoundaryUploadButton` (parse client-side, area via geoArea, POST as JSON). Uploaded boundary takes precedence over K-GIS; Site-boundary card always renders (empty-state upload prompt + source badge).
+- **#919 — Yield Studio in the IC memo (DOCX).** Extracted `buildEngineAssumptions` → mirrored `yieldStudioInputs` util (parity-tested) so the server recompute matches the tab. `exports/yieldProgramme.service.js` recomputes deterministically from the saved study (or screening defaults). DOCX `buildSiteYield` section (platformBadge, not aiBadge) + SECTION_ORDER/ToC. `siteYield` slice added to the shared export context.
+
+Verification: full backend suite **3580 passing** / 224 suites (incl. cross-product reconciliation); full frontend suite **1286 passing**; builds clean.
+
+### Left for next (small)
+- **PPTX + XLSX yield sections** — the `siteYield` slice is already in the shared export context (dealExport.service.js); each format just needs its renderer (a slide in pptx/slides.js + deckContext, a sheet in xlsx/v2/buildWorkbook).
+- **AI price-pinning** (parked by operator) → unlocks Batch + cheap-first cascade.
+- Live click-through of the persistence chain (upload boundary → study saves → reopen on another device → IC memo shows the section).
+
+---
+
 ## 2026-06-29 (Master Plan map fix + persistence migration prepared + session-code hardening) (PRs #912, #913, #914 — merged + deployed; master green)
 
 - **#913 — Master Plan Explorer map was blank (real pre-existing bug, not from this session).** Root cause: the dashboard shell is `min-h-screen` (Layout.jsx), not `h-screen`, so no ancestor has a definite height; the Explorer page used an `h-full → flex-1 → MapContainer h-full` chain that collapsed to 0px (blank tiles + no zoom controls + no attribution, while the `min-h` boxes/panels still painted). Ruled out CSP (img-src allows OSM/Esri/Map Warper) and the tile URLs. Fix: use the DEFINITE height the deals map already uses under this same shell — `h-[calc(100vh-180px)] min-h-[720px]` (MapCanvas.jsx:319 / MapPage.jsx:274) — instead of `h-full`. Surgical, one page, no global layout change. (Deferred the deeper `min-h-screen→h-screen` shell fix: correct but app-wide scroll change, unverifiable while logged out.)
