@@ -13,10 +13,13 @@ if (!window.matchMedia) {
 // live in vi.hoisted() to be reachable from inside the factories.
 const h = vi.hoisted(() => ({
   toast: { success: () => {}, error: () => {} },
+  saveMutate: () => {},
   state: {
     dealRecord: { asset_class: 'residential_apartments', property_id: 'p1' },
     propertyData: { id: 'p1', land_area_sqft: 43560, permissible_fsi: 2.5 },
     parcelIntel: undefined,
+    serverStudy: undefined,
+    studyLoaded: false,
   },
 }));
 
@@ -29,6 +32,10 @@ vi.mock('../../../hooks/useProperties', () => ({
   useParcelIntelligence: () => ({ data: h.state.parcelIntel }),
 }));
 vi.mock('../../common/Toast', () => ({ toast: h.toast }));
+vi.mock('../../../hooks/useYieldStudio', () => ({
+  useYieldStudy: () => ({ data: h.state.serverStudy, isSuccess: h.state.studyLoaded }),
+  useSaveYieldStudy: () => ({ mutate: h.saveMutate }),
+}));
 
 import YieldStudioTab from '../YieldStudioTab';
 
@@ -48,6 +55,9 @@ beforeEach(() => {
   h.state.dealRecord = { asset_class: 'residential_apartments', property_id: 'p1' };
   h.state.propertyData = { id: 'p1', land_area_sqft: 43560, permissible_fsi: 2.5 };
   h.state.parcelIntel = undefined;
+  h.state.serverStudy = undefined;
+  h.state.studyLoaded = false;
+  h.saveMutate = vi.fn();
 });
 
 describe('YieldStudioTab', () => {
@@ -108,6 +118,17 @@ describe('YieldStudioTab', () => {
     const plot = screen.getByPlaceholderText('e.g. 43560');
     expect(plot.value).not.toBe('');
     expect(Number(plot.value)).toBeGreaterThan(0);
+  });
+
+  it('hydrates the study from the server (server wins over the local cache)', () => {
+    h.state.serverStudy = {
+      envelope: { landAreaSqft: '70000', effectiveFsi: '3.1', groundCoveragePct: '', allowedHeightM: '' },
+      assumptions: { loadingFactorPct: 25, parkingEcsPerUnit: 1.3, mix: [{ key: '2bhk', label: '2 BHK', carpet_sqft: 1000, share_pct: 100 }] },
+    };
+    h.state.studyLoaded = true;
+    render(<YieldStudioTab setTab={setTab} />);
+    expect(screen.getByDisplayValue('70000')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('3.1')).toBeInTheDocument();
   });
 
   it('restores a saved study from localStorage on mount', () => {
