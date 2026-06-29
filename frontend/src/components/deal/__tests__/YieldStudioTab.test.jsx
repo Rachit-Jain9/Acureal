@@ -51,6 +51,14 @@ describe('YieldStudioTab', () => {
     expect(screen.getByText(/Binds on FAR/)).toBeInTheDocument();
   });
 
+  it('renders a deterministic scenario band (Conservative / Base / Optimized)', () => {
+    render(<YieldStudioTab setTab={setTab} />);
+    expect(screen.getByText('Scenario comparison')).toBeInTheDocument();
+    expect(screen.getByText('Conservative')).toBeInTheDocument();
+    expect(screen.getByText('Optimized')).toBeInTheDocument();
+    expect(screen.getByText('Current')).toBeInTheDocument();
+  });
+
   it('applies the programme to the financial engine and navigates', () => {
     render(<YieldStudioTab setTab={setTab} />);
     fireEvent.click(screen.getByRole('button', { name: /Apply to Financials/i }));
