@@ -4,6 +4,21 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-30 (AI cost: pin prices + close the cap-escape hole; honest "already optimized" finding) (PR #926 — merged + deployed; master green)
+
+Operator chose the full "tracking + cut the bill" scope for the parked AI price-pinning item. Did the deep technical review first (the design workflow rate-limited out, so mapped the cost/routing path directly + verified live prices from the providers' own pricing pages).
+
+- **#926 — pinned verified prices + fail-safe cap.** The in-code price table fed the per-org daily spend cap (costGuard sums cost_usd) but was stale + incomplete, and an unpriced model logged cost=null (→ 0 in the cap sum → spend escaped the cap). The app's ACTUAL default models were the ones escaping: Opus 4.8/4.7/4.6/4.5 (real $5/$25) were absent (table only had retired opus-4 @ $15/$75); Haiku 4.5 ($1/$5) absent; Gemini 2.5 Flash was $0.075/$0.30 vs real $0.30/$2.50. Fix: pinned the full current table (verified 2026-06-30 from platform.claude.com/docs + ai.google.dev) with provenance; `estimateCost` now prices unknown models at a conservative Opus-tier fallback ($15/$75) so spend ALWAYS counts toward the cap, still flagged cost_unpriced + warned. aiRouter tests +2; full backend 3587.
+
+- **Finding (deep review): REDIP AI is already substantially cost-optimized — no safe quick "cut the bill" lever remains.** High-volume extraction/classification already runs on cheap Gemini; expensive models are reserved for low-volume reasoning; aiMarketContext/exportNarrative/icMemo already use the full-response cache (identical inputs → no paid call); export.insights already uses Anthropic prompt caching. A cheap-first cascade on *reasoning* would risk investor-grade quality (hard rule); a cascade on *extraction* needs the golden-set eval harness FIRST (documented discipline) + has real OCR-quality risk on scanned Kannada/Hindi; Batch API (~50% off) only helps non-urgent BULK work, and REDIP's AI is predominantly interactive with no nightly bulk-AI job to feed a batch lane today. So Phase 1 was the genuine win. Captured in memory `project_ai_cost_optimization.md`.
+
+### Left for next (AI cost — operator decisions, not blocked code)
+- **Turn the safety brake ON**: confirm `AI_DAILY_COST_CAP_USD` is actually set in Vercel — the cap is now accurate but is a no-op if unset.
+- **Optional, safe**: per-task daily caps (`AI_DAILY_COST_CAP_BY_TASK_JSON`, already hinted in costGuard) — finer control, small build.
+- **Future**: a Batch lane becomes worth building if/when a bulk non-urgent AI workload is added (needs a durable jobs table + cron = a database update). An extraction cascade becomes viable AFTER the golden-set eval harness ships.
+
+---
+
 ## 2026-06-30 (Export trio completed + export credibility) (PRs #921, #922, #923, #924 — merged + deployed; master green)
 
 Finished the "Left for next (small)" from the A→D entry below, then closed two documented export-credibility gaps. Every number stays the deterministic kernel's; no AI mention in PPTX/XLSX; cover disclaimer covers DOCX synthesis.
