@@ -173,10 +173,41 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       ]);
       expect(names.length).toBeLessThanOrEqual(8);
       expect(names).not.toContain('Export QA & Sources');
+      // Site Yield tab is conditional — absent without a computed programme.
+      expect(names).not.toContain('Site Yield');
       const calc = wb.getWorksheet('Calculations');
       expect(calc).toBeDefined();
       // Hidden by default — power users right-click → Unhide
       expect(calc.state).toBe('hidden');
+    });
+
+    test('adds a Site Yield sheet with the recomputed programme when one is present', async () => {
+      const ctx = {
+        ...minimalContext(),
+        siteYield: {
+          mode: 'saved',
+          computed: {
+            ok: true,
+            envelope: { realized_gfa_sqft: 108900, effective_fsi: 2.5, floors: 14 },
+            areaSchedule: { saleable_sqft: 87773, carpet_sqft: 67518, loading_factor_pct: 30 },
+            totals: { units: 65 },
+            parking: { required_ecs: 85, norm: '1.3 ECS / unit' },
+            unitMix: [{ key: '2bhk', label: '2 BHK', count: 37, carpet_total_sqft: 37000 }],
+            bindingConstraint: 'far',
+            unrealizedFarPct: 0,
+            disclaimer: 'Deterministic screening estimate.',
+          },
+          boundary: null,
+        },
+      };
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const sheet = wb.getWorksheet('Site Yield');
+      expect(sheet).toBeDefined();
+      expect(findValueCellByLabel(sheet, 'Realized GFA (sqft)').value).toBe(108900);
+      expect(findValueCellByLabel(sheet, 'Units').value).toBe(65);
+      expect(findValueCellByLabel(sheet, 'Binding constraint').value).toBe('FAR / FSI');
       const zip = await JSZip.loadAsync(buffer);
       const worksheetXml = await Promise.all(
         zip.file(/^xl\/worksheets\/sheet\d+\.xml$/).map((file) => file.async('string')),
