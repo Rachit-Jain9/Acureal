@@ -39,21 +39,33 @@ const inLowerInclusiveUpperExclusiveBand = (value, min, max) => {
   return true;
 };
 
-export const citeFarRule = (rule = {}) => ({
-  id: rule.id ? `far-rule-${rule.id}` : 'far-rule',
-  kind: 'rmp_far_rule',
-  // Operative source = RMP 2015 Vol III (BDA; G.O. UDD 540 BEM AA SE 2004 dated
-  // 22-06-2007). Keep in lockstep with backend/src/utils/parcelBuildability.js.
-  label: rule.source_section || 'RMP 2015 Vol III FAR rule',
-  source_title:
-    rule.source_title
-    || 'Revised Master Plan 2015 — Volume III: Zoning of Land Use and Regulations (BDA)',
-  source_url: rule.source_url || null,
-  authority: rule.authority_name || 'Bangalore Development Authority (RMP 2015, operative)',
-  page: rule.source_page || null,
-  section: rule.source_section || null,
-  status: rule.plan_status || 'operative',
-});
+// Keep in lockstep with backend/src/utils/parcelBuildability.js (parity test).
+// Provenance comes from the rule's OWN evidence source; when absent we fall back
+// to its plan_version (never blindly to BDA / RMP-2015, which would assert a
+// false statutory authority on an org-authored or future-LPA rule). Operative
+// BDA source = RMP 2015 Vol III (G.O. UDD 540 BEM AA SE 2004 dated 22-06-2007).
+export const citeFarRule = (rule = {}) => {
+  const planLabel = rule.plan_version || null;
+  return {
+    id: rule.id ? `far-rule-${rule.id}` : 'far-rule',
+    kind: 'rmp_far_rule',
+    label: rule.source_section || (planLabel ? `${planLabel} FAR rule` : 'Master-plan FAR rule'),
+    source_title:
+      rule.source_title
+      || (planLabel
+        ? `${planLabel} — Zoning of Land Use and Regulations`
+        : 'Master-plan zoning regulations (verify with source)'),
+    source_url: rule.source_url || null,
+    authority:
+      rule.authority_name
+      || (planLabel
+        ? `Governing authority — ${planLabel} (verify with source)`
+        : 'Governing master-plan authority (verify with source)'),
+    page: rule.source_page || null,
+    section: rule.source_section || null,
+    status: rule.plan_status || 'operative',
+  };
+};
 
 export const selectFarRule = (rules = [], { landAreaSqft, roadWidthMtrs } = {}) => {
   const areaSqm = sqftToSqm(landAreaSqft);
