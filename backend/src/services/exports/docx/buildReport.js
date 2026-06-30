@@ -332,6 +332,26 @@ const blank = () => new Paragraph({ children: [new TextRun({ text: '' })], spaci
 // variant — remain structurally intact.
 const augmentQuotaCallout = () => null;
 
+// Market-intelligence provenance line for the AI general-knowledge augment paths
+// (demographics / whyThisArea / jobGrowth fallbacks). CLAUDE.md hard rule: never
+// expose unverified market intelligence as authoritative — always surface source,
+// freshness, and confidence. The cover-page disclaimer covers model-assisted
+// synthesis report-wide (operator policy: no per-section AI banners or provider
+// names), so this line carries only the DATA caveat — unverified source +
+// confidence — without naming AI or a provider. Returns null for the structured/
+// verified paths (which cite their real sources).
+const augmentProvenanceLine = (augment) => {
+  if (!augment || !augment.available) return null;
+  const conf = typeof augment.confidence === 'string' && augment.confidence
+    ? ` Confidence: ${augment.confidence.charAt(0).toUpperCase()}${augment.confidence.slice(1)}.`
+    : '';
+  return bodyPara(
+    'Unverified market context — general-area estimate, not a verified REDIP feed. '
+    + `Verify named facts, distances, and trends against primary sources before any IC decision.${conf}`,
+    { italic: true, color: HEX('mutedHigh') },
+  );
+};
+
 // ─────────────────────────────────────────────────────────────────────────
 // Section builders
 // ─────────────────────────────────────────────────────────────────────────
@@ -842,6 +862,8 @@ const buildDemographics = (ctx) => {
     }
     if (augment?.available && augment.paragraph) {
       children.push(bodyPara(augment.paragraph));
+      const prov = augmentProvenanceLine(augment);
+      if (prov) children.push(prov);
       } else {
       children.push(bodyPara(
         'Demographic data is not yet available for this micro-market. Manual input required — populate population, income tier, age mix, and literacy on the deal\'s market record before this section can render.',
@@ -893,6 +915,8 @@ const buildWhyThisArea = (ctx) => {
       children.push(blank());
       children.push(bodyPara(`Summary: ${augment.summary}`, { bold: true, color: HEX('accent') }));
     }
+      const prov = augmentProvenanceLine(augment);
+      if (prov) children.push(prov);
       return children;
   }
 
@@ -948,6 +972,8 @@ const buildJobGrowth = (ctx) => {
           if (b && String(b).trim()) children.push(bodyPara(`•  ${b}`));
         });
       }
+      const prov = augmentProvenanceLine(augment);
+      if (prov) children.push(prov);
       } else {
       children.push(bodyPara(
         'No verified intelligence briefs on micro-market job growth are linked to this deal yet. Manual input required — populate Market Intelligence with relevant briefs (GCC announcements, tech-park expansions, employment-area trends) to surface this section.',

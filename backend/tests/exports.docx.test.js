@@ -222,6 +222,36 @@ describe('services/exports/docx/buildReport', () => {
       expect(Buffer.isBuffer(buffer)).toBe(true);
       expect(buffer.length).toBeGreaterThan(5000);
     }, 30000);
+
+    // Audit #9/#21 — the AI general-knowledge market augment paths must surface
+    // the market-intelligence caveat (unverified source + confidence) per the
+    // CLAUDE.md hard rule, WITHOUT a per-section AI banner or provider name
+    // (operator disclosure policy — the cover disclaimer covers synthesis).
+    test('AI market augment renders an unverified-source + confidence provenance line (#9/#21)', async () => {
+      const JSZip = require('jszip');
+      const ctx = minimalContext();
+      ctx.market.demographics = null; // force the general-knowledge augment path
+      ctx.market.aiAugment = {
+        demographics: {
+          available: true,
+          paragraph: 'Whitefield skews toward upper-middle tech households with strong rental demand.',
+          confidence: 'medium',
+          provider: 'claude',
+          disclaimer: 'AI-GENERATED FROM GENERAL KNOWLEDGE',
+        },
+      };
+      const buffer = await buildDealReportDocx(ctx);
+      const zip = await JSZip.loadAsync(buffer);
+      const docXml = await zip.file('word/document.xml').async('string');
+      // The synthesized prose renders…
+      expect(docXml).toContain('upper-middle tech households');
+      // …followed by the unverified-source caveat + capitalized confidence.
+      expect(docXml).toContain('Unverified market context');
+      expect(docXml).toContain('Confidence: Medium');
+      // Operator policy: the raw "AI-GENERATED…" framing + provider name are NOT
+      // rendered into the customer DOCX (the cover disclaimer covers synthesis).
+      expect(docXml).not.toContain('AI-GENERATED FROM GENERAL KNOWLEDGE');
+    }, 30000);
   });
 
   // ────────────────────────────────────────────────────────────────────
