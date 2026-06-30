@@ -130,3 +130,45 @@ describe('parcelBuildability — backend ↔ frontend parity', () => {
     });
   });
 });
+
+// Audit #5 (2026-06-26): citeFarRule must NEVER blindly attribute a rule to BDA /
+// RMP-2015. Provenance is the rule's own evidence source; absent that, it falls
+// back to the rule's plan_version, else a neutral label — so an org-authored rule
+// or a future LPA plan (BIAAPA/Hoskote/etc.) ingested without an authority can't
+// be falsely stamped "Bangalore Development Authority (RMP 2015, operative)".
+describe('citeFarRule — provenance fallback never asserts a false authority', () => {
+  const expectIdentical = (rule) => {
+    const be = backend.citeFarRule(rule);
+    const fe = frontend.citeFarRule(rule);
+    expect(fe).toEqual(be);
+    return be;
+  };
+
+  test('uses the rule’s own evidence source verbatim when present', () => {
+    const cite = expectIdentical({
+      id: 'r1', authority_name: 'Bangalore Development Authority',
+      source_title: 'RMP 2015 — Volume III', source_url: 'https://x', plan_version: 'RMP 2015',
+      source_section: 'Table 6', plan_status: 'operative',
+    });
+    expect(cite.authority).toBe('Bangalore Development Authority');
+    expect(cite.source_title).toBe('RMP 2015 — Volume III');
+  });
+
+  test('a non-BDA plan with no evidence source falls back to its OWN plan, not BDA', () => {
+    const cite = expectIdentical({
+      id: 'r2', plan_version: 'Anekal LPA MP 2031', plan_status: 'operative',
+    });
+    expect(cite.authority).toBe('Governing authority — Anekal LPA MP 2031 (verify with source)');
+    expect(cite.authority).not.toMatch(/Bangalore Development Authority/);
+    expect(cite.source_title).toBe('Anekal LPA MP 2031 — Zoning of Land Use and Regulations');
+    expect(cite.label).toBe('Anekal LPA MP 2031 FAR rule');
+  });
+
+  test('an org-authored rule with no plan_version gets a neutral, non-BDA citation', () => {
+    const cite = expectIdentical({ id: 'r3', org_id: 'org-1' });
+    expect(cite.authority).toBe('Governing master-plan authority (verify with source)');
+    expect(cite.authority).not.toMatch(/Bangalore Development Authority/);
+    expect(cite.source_title).toBe('Master-plan zoning regulations (verify with source)');
+    expect(cite.label).toBe('Master-plan FAR rule');
+  });
+});

@@ -34,23 +34,40 @@ const inLowerInclusiveUpperExclusiveBand = (value, min, max) => {
   return true;
 };
 
-const citeFarRule = (rule = {}) => ({
-  id: rule.id ? `far-rule-${rule.id}` : 'far-rule',
-  kind: 'rmp_far_rule',
-  // Operative source is the Revised Master Plan 2015, Volume III (BDA),
-  // approved vide G.O. No. UDD 540 BEM AA SE 2004 dated 22-06-2007. The
-  // earlier "RMP 2031 / Volume 6" framing referenced a draft that was never
-  // notified (provisional approval withdrawn Jul 2020) — do not reintroduce it.
-  label: rule.source_section || 'RMP 2015 Vol III FAR rule',
-  source_title:
-    rule.source_title
-    || 'Revised Master Plan 2015 — Volume III: Zoning of Land Use and Regulations (BDA)',
-  source_url: rule.source_url || null,
-  authority: rule.authority_name || 'Bangalore Development Authority (RMP 2015, operative)',
-  page: rule.source_page || null,
-  section: rule.source_section || null,
-  status: rule.plan_status || 'operative',
-});
+const citeFarRule = (rule = {}) => {
+  // Provenance comes from the rule's OWN evidence source (authority_name /
+  // source_title / source_url, joined in loadFarRules from evidence_sources).
+  // When a rule carries no evidence source — an org-authored FAR rule, or a
+  // future LPA plan (BIAAPA / Hoskote / etc.) ingested without one — DO NOT
+  // borrow BDA / RMP-2015's identity: stamping "Bangalore Development Authority
+  // (RMP 2015)" onto someone else's rule asserts a false statutory authority.
+  // Fall back to the rule's own plan_version, else a neutral "verify with
+  // source" label. The operative BDA source is RMP 2015 Vol III (G.O. UDD 540
+  // BEM AA SE 2004 dated 22-06-2007) — named only when a rule resolves to it,
+  // never as a blind default. (Verified 2026-06-26: every served operative rule
+  // — 51 RMP-2015 + 41 Anekal — populates authority_name, so this fallback is
+  // dormant for them; it guards org-authored + future-plan rules only.)
+  const planLabel = rule.plan_version || null;
+  return {
+    id: rule.id ? `far-rule-${rule.id}` : 'far-rule',
+    kind: 'rmp_far_rule',
+    label: rule.source_section || (planLabel ? `${planLabel} FAR rule` : 'Master-plan FAR rule'),
+    source_title:
+      rule.source_title
+      || (planLabel
+        ? `${planLabel} — Zoning of Land Use and Regulations`
+        : 'Master-plan zoning regulations (verify with source)'),
+    source_url: rule.source_url || null,
+    authority:
+      rule.authority_name
+      || (planLabel
+        ? `Governing authority — ${planLabel} (verify with source)`
+        : 'Governing master-plan authority (verify with source)'),
+    page: rule.source_page || null,
+    section: rule.source_section || null,
+    status: rule.plan_status || 'operative',
+  };
+};
 
 const selectFarRule = (rules = [], { landAreaSqft, roadWidthMtrs } = {}) => {
   const areaSqm = sqftToSqm(landAreaSqft);
