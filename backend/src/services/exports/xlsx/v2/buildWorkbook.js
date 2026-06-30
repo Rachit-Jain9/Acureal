@@ -38,7 +38,7 @@ const JSZip = require('jszip');
 const { injectChartsIntoXlsx, injectSparklinesIntoXlsx } = require('./chartInjector');
 const { runMarketBenchmarkValidators } = require('./marketBenchmarkValidator');
 const { inferAssetClass } = require('../../../../utils/assetClass');
-const { formatAbsoluteDate, extractPeriodToken } = require('../../../../utils/compProvenance');
+const { formatAbsoluteDate, extractPeriodToken, deriveCompProvenance } = require('../../../../utils/compProvenance');
 const palette = require('../../shared/palette');
 
 const financialKernel = require('../../../../../../packages/financial-kernel/dist');
@@ -94,6 +94,7 @@ const SHEETS = {
   waterfall: 'Sponsor LP Waterfall',
   unitMix: 'Unit Mix',
   siteYield: 'Site Yield',
+  marketComparables: 'Market Comparables',
   calculations: 'Calculations',
 };
 
@@ -8454,6 +8455,86 @@ const buildSiteYieldSheet = (workbook, ctx) => {
   return sheet;
 };
 
+// Market Comparables — the individual comp set used for the export, with HONEST
+// per-row provenance (CLAUDE.md hard rule: never present comps as authoritative;
+// surface source, verification, freshness). Filterable in Excel — the reason this
+// belongs in the workbook (DOCX/PPTX show only a top-N table). Read-only; every
+// provenance descriptor is the deterministic `deriveCompProvenance` deriver, the
+// same twin the DOCX/PPTX/in-app surfaces use. Conditional — only when comps exist.
+const buildMarketComparablesSheet = (workbook, ctx) => {
+  const comps = Array.isArray(ctx.exportContext?.market?.exportComps)
+    ? ctx.exportContext.market.exportComps
+    : [];
+  const sheet = workbook.addWorksheet(SHEETS.marketComparables, { views: [{ showGridLines: false, state: 'frozen', xSplit: 0, ySplit: 4 }] });
+  sheet.columns = [
+    { width: 28 }, // A: Project
+    { width: 20 }, // B: Developer
+    { width: 16 }, // C: Type
+    { width: 18 }, // D: Micro-market
+    { width: 10 }, // E: Units
+    { width: 16 }, // F: Rate (INR/sqft)
+    { width: 18 }, // G: Source type
+    { width: 12 }, // H: Verified
+    { width: 22 }, // I: Freshness
+  ];
+
+  sheet.mergeCells('A1:I1');
+  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Market Comparables`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.getRow(1).height = 26;
+
+  const verifiedCount = comps.filter((c) => c.is_verified === true).length;
+  sheet.mergeCells('A2:I2');
+  sheet.getCell('A2').value = comps.length
+    ? `${comps.length} comparable${comps.length === 1 ? '' : 's'} (${verifiedCount} verified). Context only — do not quote a comp as authoritative unless its row shows "Verified". Confirm freshness against primary sources before any IC decision.`
+    : 'No comparable transactions are linked to this deal. Manual input required — attach verified comps in the same micro-market.';
+  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
+  sheet.getRow(2).height = 32;
+
+  if (comps.length === 0) return sheet;
+
+  const headers = ['Project', 'Developer', 'Type', 'Micro-market', 'Units', 'Rate (INR/sqft)', 'Source type', 'Verified', 'Freshness'];
+  headers.forEach((label, idx) => {
+    const cell = sheet.getCell(4, idx + 1);
+    cell.value = label;
+    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    cell.fill = FILL(palette.xlsx('inkDeep'));
+    cell.alignment = { horizontal: idx === 4 || idx === 5 ? 'right' : 'left', vertical: 'middle', wrapText: true };
+  });
+  sheet.getRow(4).height = 24;
+
+  const firstText = (...vals) => vals.find((v) => v != null && String(v).trim() !== '') ?? null;
+  comps.forEach((c, idx) => {
+    const r = 5 + idx;
+    const prov = deriveCompProvenance(c);
+    const cells = [
+      firstText(c.project_name, c.property_name) || '–',
+      firstText(c.developer) || '–',
+      firstText(c.project_type, c.bhk_config, c.transaction_type) || '–',
+      firstText(c.micro_market, c.locality) || '–',
+      c.total_units != null ? Number(c.total_units) : '–',
+      c.rate_per_sqft != null ? Number(c.rate_per_sqft) : '–',
+      prov.sourceTypeLabel,
+      prov.verifiedLabel,
+      prov.freshnessLabel || 'No verified date',
+    ];
+    cells.forEach((value, ci) => {
+      const cell = sheet.getCell(r, ci + 1);
+      cell.value = value;
+      cell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('ink') } };
+      cell.alignment = { horizontal: ci === 4 || ci === 5 ? 'right' : 'left', vertical: 'middle' };
+      if ((ci === 4 || ci === 5) && typeof value === 'number') cell.numFmt = NUMBER_FORMATS.integer;
+      cell.border = {
+        top: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+        bottom: { style: 'thin', color: { argb: palette.xlsx('hairline') } },
+      };
+    });
+  });
+
+  return sheet;
+};
+
 const buildCalculationsSheet = (workbook, ctx) => {
   const sheet = workbook.addWorksheet(SHEETS.calculations, {
     state: 'hidden', // power users can unhide via right-click
@@ -8647,6 +8728,10 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   // Deterministic Yield Studio programme — only when one was computed (mirrors
   // the DOCX/PPTX auto-hide; no empty tab for deals without a study).
   if (ctx.exportContext?.siteYield?.computed?.ok) buildSiteYieldSheet(workbook, ctx);
+  // Individual comparables with honest per-row provenance — only when comps exist.
+  if (Array.isArray(ctx.exportContext?.market?.exportComps) && ctx.exportContext.market.exportComps.length > 0) {
+    buildMarketComparablesSheet(workbook, ctx);
+  }
   const { definedNames } = buildInputsSheet(workbook, ctx);
   if (ctx.assetClass === 'hospitality') buildHospitalityUsaliSheet(workbook, ctx);
 
