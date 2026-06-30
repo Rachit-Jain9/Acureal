@@ -41,6 +41,7 @@ const {
   renderLocationContext,
   renderPlanningContext,
   renderAssetSnapshot,
+  renderSiteYield,
   renderReadiness,
   renderFinancialOverview,
   renderCashFlowSensitivity,
@@ -152,6 +153,7 @@ const renderSlide = (pptx, slide, context, slideDef, pageNumber, totalSlides) =>
     case 'planningContext': renderPlanningContext(pptx, slide, context, pageNumber, totalSlides); return;
     case 'dividerAsset': addSectionDivider(pptx, slide, context, 'About the Asset', `${context.assetClassLabel} | site, title, and delivery context`, pageNumber, totalSlides, { rightPanel: buildDividerRightPanel('asset', context) }); return;
     case 'assetSnapshot': renderAssetSnapshot(pptx, slide, context, pageNumber, totalSlides); return;
+    case 'siteYield': renderSiteYield(pptx, slide, context, pageNumber, totalSlides); return;
     case 'readiness': renderReadiness(pptx, slide, context, pageNumber, totalSlides); return;
     case 'dividerFinancial': addSectionDivider(pptx, slide, context, 'Financial Summary', `${context.assetClassLabel} | current underwriting outputs`, pageNumber, totalSlides, { rightPanel: buildDividerRightPanel('financial', context) }); return;
     case 'financialOverview': renderFinancialOverview(pptx, slide, context, pageNumber, totalSlides); return;
