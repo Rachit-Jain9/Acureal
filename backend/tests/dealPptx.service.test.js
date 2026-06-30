@@ -604,12 +604,22 @@ describe('dealPptx.service', () => {
 
     // Slide manifest should include the new slide between location and asset.
     const slideTitles = context.slideManifest.map((s) => s.title);
-    expect(slideTitles).toContain('Planning Context — RMP 2031');
-    const planningIdx = slideTitles.indexOf('Planning Context — RMP 2031');
+    expect(slideTitles).toContain('Planning Context — RMP 2031 (Reference Only)');
+    const planningIdx = slideTitles.indexOf('Planning Context — RMP 2031 (Reference Only)');
     const locationIdx = slideTitles.indexOf('Location & Site Context');
     const assetIdx = slideTitles.indexOf('About the Asset');
     expect(planningIdx).toBeGreaterThan(locationIdx);
     expect(planningIdx).toBeLessThan(assetIdx);
+
+    // Credibility guard: the populated commentary must mark RMP 2031 as a
+    // withdrawn draft / reference-only and must NOT imply it is operative or
+    // "reviewer-approved" (RMP 2031's provisional approval was withdrawn in
+    // July 2020; the operative plan is RMP 2015).
+    const commentary = context.planningCommentary.join(' ');
+    expect(commentary).toMatch(/withdrawn draft/i);
+    expect(commentary).toMatch(/not operative/i);
+    expect(commentary).not.toMatch(/reviewer-approved/i);
+    expect(commentary).not.toMatch(/verified RMP 2031/i);
   });
 
   test('omits the Planning Context slide when no callouts are present', () => {
@@ -624,7 +634,13 @@ describe('dealPptx.service', () => {
 
     expect(context.hasPlanningContext).toBe(false);
     const slideTitles = context.slideManifest.map((s) => s.title);
-    expect(slideTitles).not.toContain('Planning Context — RMP 2031');
+    expect(slideTitles).not.toContain('Planning Context — RMP 2031 (Reference Only)');
+
+    // Even the empty-state commentary must carry the withdrawn / reference-only
+    // framing — never present RMP 2031 as the authoritative plan to ingest.
+    const commentary = context.planningCommentary.join(' ');
+    expect(commentary).toMatch(/withdrawn draft/i);
+    expect(commentary).toMatch(/operative plan is RMP 2015/i);
   });
 
   test('renders a defensive Planning Context slide when context is entirely missing', () => {
@@ -639,7 +655,7 @@ describe('dealPptx.service', () => {
     expect(context.planningRows).toEqual([]);
     expect(context.hasPlanningContext).toBe(false);
     const slideTitles = context.slideManifest.map((s) => s.title);
-    expect(slideTitles).not.toContain('Planning Context — RMP 2031');
+    expect(slideTitles).not.toContain('Planning Context — RMP 2031 (Reference Only)');
   });
 
   test('inserts a Site Yield slide after Asset Snapshot when a programme is present', () => {

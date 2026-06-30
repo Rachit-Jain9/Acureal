@@ -2408,16 +2408,19 @@ const renderDisclaimer = (pptx, slide, context, pageNumber, totalSlides) => {
 
 // Planning Context slide — surfaces RMP 2031 city-level callouts (SDZ
 // corridors, NGT drain buffers, heritage zones, Peripheral Ring Road)
-// inside the IC deck so reviewers see the planning constraints without
-// having to flip to the admin terminal. Layout:
+// inside the IC deck so reviewers see the draft planning constraints without
+// having to flip to the admin terminal. RMP 2031's provisional approval was
+// withdrawn in July 2020 — these are descriptive reference only, NOT an
+// operative regulatory source (the operative plan is RMP 2015). The slide must
+// label them as such and never imply they are authoritative. Layout:
 //   - Top half: 2-column commentary card (narrative bullets)
 //   - Bottom half: 4-up callout grid, one tile per RMP fact category
 const renderPlanningContext = (pptx, slide, context, pageNumber, totalSlides) => {
   addTopHeader(
     pptx, slide, context,
-    'Planning Context — RMP 2031',
+    'Planning Context — RMP 2031 (Reference Only)',
     pageNumber, totalSlides,
-    `${context.deal.city || 'Bengaluru'} | verified land-use facts`,
+    `${context.deal.city || 'Bengaluru'} | withdrawn draft — descriptive reference, not operative`,
   );
 
   // Commentary card (top, full width)
@@ -2438,11 +2441,11 @@ const renderPlanningContext = (pptx, slide, context, pageNumber, totalSlides) =>
   const rows = Array.isArray(context.planningRows) ? context.planningRows : [];
   if (rows.length === 0) {
     addCard(pptx, slide, { x: 0.55, y: 3.25, w: 12.23, h: 3.4, bandColor: COLORS.sandDeep, fill: COLORS.white });
-    slide.addText('No verified RMP 2031 callouts ingested yet.', {
+    slide.addText('No RMP 2031 reference callouts ingested yet.', {
       x: 0.85, y: 3.55, w: 11.6, h: 0.3,
       fontFace: FONT, fontSize: 12, bold: true, color: COLORS.charcoal,
     });
-    slide.addText('Once the Existing Land Use 2015 + Proposed Land Use 2031 maps and Volume 4 PDR have been ingested, this slide auto-populates with SDZ corridors, NGT drain buffers, heritage radii, and the Peripheral Ring Road alignment — every one page-cited and reviewer-approved.', {
+    slide.addText('RMP 2031’s provisional approval was withdrawn in July 2020 — it is descriptive reference only, not an operative regulatory source (the operative plan is RMP 2015). Once its reference maps and Volume 4 PDR are ingested, this slide surfaces the draft SDZ corridors, NGT drain buffers, heritage radii, and Peripheral Ring Road alignment — each page-cited and to be verified against primary records before quoting in IC.', {
       x: 0.85, y: 3.95, w: 11.6, h: 1.5,
       fontFace: FONT, fontSize: 10, color: COLORS.muted, fit: 'shrink',
     });
