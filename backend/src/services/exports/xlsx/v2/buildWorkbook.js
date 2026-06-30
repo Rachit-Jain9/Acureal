@@ -93,6 +93,7 @@ const SHEETS = {
   debtAndAmort: 'Debt Sizing & Amortization',
   waterfall: 'Sponsor LP Waterfall',
   unitMix: 'Unit Mix',
+  siteYield: 'Site Yield',
   calculations: 'Calculations',
 };
 
@@ -8331,6 +8332,128 @@ const buildUnitMixSheet = (workbook, ctx) => {
   return sheet;
 };
 
+// Site Yield — the deterministic Yield Studio programme (recomputed server-side
+// from the saved study, or screening defaults from the parcel). Read-only
+// display tab — every figure is the kernel's; no AI. Renders an honest empty
+// state when no programme is available. Neutral tab name (no AI wording).
+const SITE_YIELD_BINDING_LABEL = {
+  far: 'FAR / FSI',
+  coverage_height: 'Ground coverage × height',
+  plot_subdivision: 'Plot subdivision',
+};
+
+const buildSiteYieldSheet = (workbook, ctx) => {
+  const sheet = workbook.addWorksheet(SHEETS.siteYield, { views: [{ showGridLines: false }] });
+  sheet.columns = [{ width: 30 }, { width: 24 }, { width: 22 }, { width: 16 }];
+
+  sheet.mergeCells('A1:D1');
+  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Site Yield & Massing`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.getRow(1).height = 26;
+
+  const sy = ctx.exportContext && ctx.exportContext.siteYield;
+  if (!sy || !sy.computed || !sy.computed.ok) {
+    sheet.mergeCells('A3:D8');
+    sheet.getCell('A3').value =
+      'No site-yield programme available yet. Open Yield Studio (the Site tab on the deal), enter a plot area '
+      + 'and FSI (or draw/upload a boundary), then re-download — this tab will show the buildable programme.';
+    sheet.getCell('A3').font = { name: FONT, size: 11, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell('A3').alignment = { vertical: 'top', wrapText: true };
+    return sheet;
+  }
+
+  const c = sy.computed;
+  const e = c.envelope || {};
+  const a = c.areaSchedule || {};
+  const t = c.totals || {};
+
+  sheet.mergeCells('A2:D2');
+  sheet.getCell('A2').value = sy.mode === 'screening_defaults'
+    ? 'Screening estimate from the parcel’s land area and FSI — no saved study yet. Deterministic kernel output; verify against a survey and RMP 2015.'
+    : 'Recomputed from the saved Yield Studio study. Deterministic kernel output; verify against a survey and RMP 2015.';
+  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
+  sheet.getRow(2).height = 30;
+
+  const headerCell = (cell, text) => {
+    cell.value = text;
+    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('paperElevated') } };
+    cell.fill = FILL(palette.xlsx('inkDeep'));
+    cell.alignment = { horizontal: 'left', vertical: 'middle' };
+  };
+  const valueCell = (cell, value) => {
+    cell.value = value;
+    cell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('ink') } };
+    cell.alignment = { horizontal: 'left', vertical: 'middle' };
+    if (typeof value === 'number') cell.numFmt = NUMBER_FORMATS.integer;
+  };
+
+  // Programme metric / value table.
+  const rows = [];
+  const add = (label, value) => { if (value != null && value !== '') rows.push([label, value]); };
+  add('Realized GFA (sqft)', e.realized_gfa_sqft);
+  add('Effective FSI', e.effective_fsi);
+  add('Floors', e.floors);
+  add('Binding constraint', SITE_YIELD_BINDING_LABEL[c.bindingConstraint] || c.bindingConstraint);
+  if (t.units != null) add('Units', t.units);
+  if (t.keys != null) add('Keys', t.keys);
+  if (t.plots != null) add(t.villas != null ? 'Villas' : 'Plots', t.villas != null ? t.villas : t.plots);
+  if (a.saleable_sqft != null) add('Saleable / SBA (sqft)', a.saleable_sqft);
+  if (a.leasable_sqft != null) add('Leasable (sqft)', a.leasable_sqft);
+  if (a.net_saleable_sqft != null) add('Net saleable (sqft)', a.net_saleable_sqft);
+  if (a.carpet_sqft != null) add('Carpet pool (sqft)', a.carpet_sqft);
+  if (a.saleable_plot_area_sqft != null) add('Saleable plot area (sqft)', a.saleable_plot_area_sqft);
+  if (c.parking && c.parking.required_ecs != null) add('Parking required (ECS)', c.parking.required_ecs);
+  if (c.parking && c.parking.norm) add('Parking norm', c.parking.norm);
+  if (sy.boundary) {
+    const ba = sy.boundary.area_sqft != null ? ` (${Math.round(sy.boundary.area_sqft).toLocaleString('en-IN')} sqft)` : '';
+    add('Boundary source', `${sy.boundary.source}${ba}`);
+  }
+
+  let r = 4;
+  headerCell(sheet.getCell(`A${r}`), 'Metric');
+  headerCell(sheet.getCell(`B${r}`), 'Value');
+  sheet.getRow(r).height = 22;
+  r += 1;
+  rows.forEach(([label, value]) => {
+    styleLabelCell(sheet.getCell(`A${r}`));
+    sheet.getCell(`A${r}`).value = label;
+    valueCell(sheet.getCell(`B${r}`), value);
+    r += 1;
+  });
+
+  // Unit mix (residential).
+  if (Array.isArray(c.unitMix) && c.unitMix.length) {
+    r += 1;
+    sheet.mergeCells(`A${r}:D${r}`);
+    sheet.getCell(`A${r}`).value = 'Unit mix';
+    styleSectionTitle(sheet.getCell(`A${r}`));
+    r += 1;
+    headerCell(sheet.getCell(`A${r}`), 'Type');
+    headerCell(sheet.getCell(`B${r}`), 'Units');
+    headerCell(sheet.getCell(`C${r}`), 'Carpet total (sqft)');
+    r += 1;
+    c.unitMix.forEach((u) => {
+      styleLabelCell(sheet.getCell(`A${r}`));
+      sheet.getCell(`A${r}`).value = u.label || u.key;
+      valueCell(sheet.getCell(`B${r}`), u.count);
+      valueCell(sheet.getCell(`C${r}`), u.carpet_total_sqft);
+      r += 1;
+    });
+  }
+
+  // Disclaimer.
+  if (c.disclaimer) {
+    r += 1;
+    sheet.mergeCells(`A${r}:D${r + 2}`);
+    sheet.getCell(`A${r}`).value = c.disclaimer;
+    sheet.getCell(`A${r}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    sheet.getCell(`A${r}`).alignment = { vertical: 'top', wrapText: true };
+  }
+
+  return sheet;
+};
+
 const buildCalculationsSheet = (workbook, ctx) => {
   const sheet = workbook.addWorksheet(SHEETS.calculations, {
     state: 'hidden', // power users can unhide via right-click
@@ -8521,6 +8644,9 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   // the workbook has cross-product parity with the DOCX + PPTX exports.
   buildAiSynthesisSheet(workbook, ctx);
   buildDashboardSheet(workbook, ctx);
+  // Deterministic Yield Studio programme — only when one was computed (mirrors
+  // the DOCX/PPTX auto-hide; no empty tab for deals without a study).
+  if (ctx.exportContext?.siteYield?.computed?.ok) buildSiteYieldSheet(workbook, ctx);
   const { definedNames } = buildInputsSheet(workbook, ctx);
   if (ctx.assetClass === 'hospitality') buildHospitalityUsaliSheet(workbook, ctx);
 
