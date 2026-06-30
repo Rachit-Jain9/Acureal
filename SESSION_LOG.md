@@ -4,6 +4,24 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-26 (GBA master-plan coverage checklist + closing the regulatory-credibility audit tail) (PRs #928, #929, #930 — merged + deployed; master green)
+
+Two themes: (1) answer the operator's question "can we add 2031/zoning for GBA areas RMP 2015 doesn't cover?" with a verified, durable plan; (2) close the last open regulatory-credibility items from the 2026-06-23 audit.
+
+- **#928 — GBA coverage checklist (`docs/GBA_COVERAGE_CHECKLIST.md`).** Established from primary sources (BMRDA's own Local-Planning-Areas register + each authority's `*.tpa.gov.in` portal) that the operator's RMP/Masterplan PDF folders are all RMP-2031-DRAFT existing-land-use sheets for BDA districts ALREADY inside RMP 2015 — they can't fill the gap. The real gap = the BMRDA Local Planning Authorities other than BDA(have)+Anekal(have): a prioritized, sourced "what to gather" register — BIAAPA MP 2021 (airport belt) → Hoskote → Nelamangala → Doddaballapura → Ramanagara/Kanakapura/Magadi/Channapatna/STRR — each with its official download portal + plain-English steps + the standing "RMP 2031 is withdrawn, never ingest as authoritative" guard. Maps the 2025 GBA transition (GBA = 712km² core planning authority; BDA = periphery; BMRDA coordinates the 12 LPAs).
+- **#929 — PPTX stops framing the withdrawn RMP 2031 as authoritative.** The IC deck's "Planning Context — RMP 2031" slide called the draft's numbers "verified land-use facts … reviewer-approved" — the same overclaim PR #860 fixed in DOCX, the LAST customer-facing surface still implying RMP 2031 is operative. Retitled "… (Reference Only)"; subtitle + commentary now carry the canonical masterplan.service wording (withdrawn July 2020 · descriptive reference only · not operative · operative plan is RMP 2015); dropped "reviewer-approved"/"verified RMP 2031 fact". +credibility-guard test assertions so it can't regress.
+- **#930 — FAR citation never blind-attributes a rule to BDA/RMP 2015 (audit #5).** `citeFarRule` (both mirrored `parcelBuildability.js`) defaulted label/source_title/authority to "Bangalore Development Authority (RMP 2015, operative)" when a rule lacked an evidence source. Verified prod FIRST (`regulatory_data.far_rules` ⋈ `evidence_sources`): every served operative rule already carries its own authority (51 RMP-2015 + 41 Anekal "BMRDA (Anekal PA)", zero NULLs) → fallback dormant, change degrades nothing; but org-authored rules + future LPA plans (BIAAPA/Hoskote) would've been falsely stamped BDA. New fallback derives from the rule's own `plan_version` else neutral "verify with source". +3 parity-test cases on both mirrors.
+- Also verified #27 (Ward-spread "AI-assisted" mislabel) + #31 ("Population (2011)") are already resolved. **The 2026-06-23 audit is now effectively closed** — only the operator-gated #3 (non-owner DB role) + two minor comps-surface provenance follow-ups remain.
+
+Verification: backend `dealPptx` (25/25), `parcelBuildability.parity` (15/15 incl. 3 new), `parcelIntelligence`/`resolveStatutoryPlan`, frontend `ParcelIntelligenceStrips` (8/8) all green; each PR CI-green before squash-merge.
+
+### Left for next
+- **Operator to gather** (browser downloads — govt portals block server fetches): the LPA master plans from `docs/GBA_COVERAGE_CHECKLIST.md`, starting BIAAPA → Hoskote; drop the PDFs in chat and they get ingested the same proven way as Anekal.
+- Map-tile self-host (Track 3): proxy still 204s despite env vars set + 2580 tiles in Blob — root cause unresolved (live overlay works client-side from Map Warper, so not user-blocking). Now on Vercel Pro, the old Blob op-cap blocker is lifted.
+- Comps follow-ups: IntelligencePage §5e benchmark-table provenance, CompsMap selected-comp inset. Operator-gated: non-owner DB role (#3).
+
+---
+
 ## 2026-06-30 (AI cost: pin prices + close the cap-escape hole; honest "already optimized" finding) (PR #926 — merged + deployed; master green)
 
 Operator chose the full "tracking + cut the bill" scope for the parked AI price-pinning item. Did the deep technical review first (the design workflow rate-limited out, so mapped the cost/routing path directly + verified live prices from the providers' own pricing pages).
