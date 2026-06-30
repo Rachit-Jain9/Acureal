@@ -173,8 +173,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       ]);
       expect(names.length).toBeLessThanOrEqual(8);
       expect(names).not.toContain('Export QA & Sources');
-      // Site Yield tab is conditional — absent without a computed programme.
+      // Site Yield + Market Comparables tabs are conditional — absent here.
       expect(names).not.toContain('Site Yield');
+      expect(names).not.toContain('Market Comparables');
       const calc = wb.getWorksheet('Calculations');
       expect(calc).toBeDefined();
       // Hidden by default — power users right-click → Unhide
@@ -208,6 +209,30 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(findValueCellByLabel(sheet, 'Realized GFA (sqft)').value).toBe(108900);
       expect(findValueCellByLabel(sheet, 'Units').value).toBe(65);
       expect(findValueCellByLabel(sheet, 'Binding constraint').value).toBe('FAR / FSI');
+    });
+
+    test('adds a Market Comparables sheet with honest per-row provenance when comps exist', async () => {
+      const ctx = {
+        ...minimalContext(),
+        market: {
+          exportComps: [
+            { project_name: 'Whitefield Heights', developer: 'Prestige', project_type: '2 BHK', micro_market: 'Whitefield', total_units: 240, rate_per_sqft: 11800, is_verified: true, data_type: 'ipc_q1_2026', as_of_date: '2026-03-15', source: 'JLL India' },
+            { project_name: 'Brookefield Greens', developer: 'Sobha', project_type: '3 BHK', micro_market: 'Brookefield', total_units: 180, rate_per_sqft: 12600, is_verified: false, source: 'Listing portal' },
+          ],
+        },
+      };
+      const buffer = await buildDealWorkbookV2(ctx);
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buffer);
+      const sheet = wb.getWorksheet('Market Comparables');
+      expect(sheet).toBeDefined();
+      // Header row (row 4) + two comp rows (5, 6).
+      expect(sheet.getCell('A4').value).toBe('Project');
+      expect(sheet.getCell('A5').value).toBe('Whitefield Heights');
+      expect(sheet.getCell('F5').value).toBe(11800); // numeric rate, filterable
+      // Honest verification: explicit true → Verified; absent/false → Unverified.
+      expect(sheet.getCell('H5').value).toBe('Verified');
+      expect(sheet.getCell('H6').value).toBe('Unverified');
       const zip = await JSZip.loadAsync(buffer);
       const worksheetXml = await Promise.all(
         zip.file(/^xl\/worksheets\/sheet\d+\.xml$/).map((file) => file.async('string')),
