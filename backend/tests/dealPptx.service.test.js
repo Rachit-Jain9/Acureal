@@ -279,6 +279,42 @@ describe('dealPptx.service', () => {
     expect(result.length).toBeGreaterThan(1000);
   });
 
+  test('renders the Site Yield slide in the full deck without throwing', () => {
+    const ctxObj = {
+      ...createExportContext(),
+      siteYield: {
+        mode: 'saved',
+        computed: {
+          ok: true,
+          envelope: { realized_gfa_sqft: 108900, effective_fsi: 2.5, floors: 14 },
+          areaSchedule: { gfa_sqft: 108900, carpet_sqft: 67518, saleable_sqft: 87773, loading_factor_pct: 30 },
+          totals: { units: 65 },
+          parking: { required_ecs: 85, norm: '1.3 ECS / unit' },
+          unitMix: [{ key: '2bhk', label: '2 BHK', count: 37, carpet_total_sqft: 37000 }],
+          bindingConstraint: 'far',
+          unrealizedFarPct: 0,
+          disclaimer: 'Deterministic screening estimate.',
+        },
+        boundary: { source: 'kml', area_sqft: 43560, review_status: 'pending' },
+      },
+    };
+    const script = `
+      const { buildDealDeckPptx } = require('./src/services/dealPptx.service');
+      const exportContext = ${JSON.stringify(ctxObj)};
+      (async () => {
+        const buffer = await buildDealDeckPptx(exportContext, { brandName: 'REDIP', userName: 'Test', generatedAt: '2026-04-15T10:00:00Z' });
+        process.stdout.write(JSON.stringify({ isBuffer: Buffer.isBuffer(buffer), signature: buffer.slice(0, 2).toString('utf8') }));
+      })().catch((error) => { console.error(error); process.exit(1); });
+    `;
+    const output = execFileSync(process.execPath, ['-e', script], {
+      cwd: require('path').resolve(__dirname, '..'),
+      encoding: 'utf8',
+    });
+    const result = JSON.parse(output);
+    expect(result.isBuffer).toBe(true);
+    expect(result.signature).toBe('PK');
+  });
+
   // The Cash Flow & Sensitivity slide previously rendered a single-series
   // column chart of net cash flow only. A reader couldn't see the
   // cumulative trajectory at a glance — when does the deal turn positive?
@@ -604,6 +640,38 @@ describe('dealPptx.service', () => {
     expect(context.hasPlanningContext).toBe(false);
     const slideTitles = context.slideManifest.map((s) => s.title);
     expect(slideTitles).not.toContain('Planning Context — RMP 2031');
+  });
+
+  test('inserts a Site Yield slide after Asset Snapshot when a programme is present', () => {
+    const exportContext = {
+      ...createExportContext(),
+      siteYield: {
+        mode: 'saved',
+        computed: {
+          ok: true,
+          envelope: { realized_gfa_sqft: 108900, effective_fsi: 2.5, floors: 14 },
+          areaSchedule: { gfa_sqft: 108900, carpet_sqft: 67518, saleable_sqft: 87773, loading_factor_pct: 30 },
+          totals: { units: 65 },
+          parking: { required_ecs: 85, norm: '1.3 ECS / unit' },
+          unitMix: [{ key: '2bhk', label: '2 BHK', count: 37, carpet_total_sqft: 37000 }],
+          bindingConstraint: 'far',
+          unrealizedFarPct: 0,
+          disclaimer: 'Deterministic screening estimate.',
+        },
+        boundary: null,
+      },
+    };
+    const context = __testables.buildDeckContext(exportContext, { brandName: 'REDIP', generatedAt: '2026-04-15T10:00:00Z' });
+    expect(context.hasSiteYield).toBe(true);
+    const titles = context.slideManifest.map((s) => s.title);
+    expect(titles).toContain('Site Yield & Massing');
+    expect(titles.indexOf('Site Yield & Massing')).toBeGreaterThan(titles.indexOf('Asset Snapshot'));
+  });
+
+  test('omits the Site Yield slide when no programme was computed', () => {
+    const context = __testables.buildDeckContext(createExportContext(), { brandName: 'REDIP', generatedAt: '2026-04-15T10:00:00Z' });
+    expect(context.hasSiteYield).toBe(false);
+    expect(context.slideManifest.map((s) => s.title)).not.toContain('Site Yield & Massing');
   });
 
   describe('precomputeDeckAssets', () => {

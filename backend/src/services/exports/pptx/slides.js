@@ -2477,6 +2477,102 @@ const renderPlanningContext = (pptx, slide, context, pageNumber, totalSlides) =>
 };
 
 
+const SITE_YIELD_BINDING_LABEL = {
+  far: 'FAR / FSI',
+  coverage_height: 'Coverage × height',
+  plot_subdivision: 'Plot subdivision',
+};
+
+/**
+ * Site Yield & Massing slide. The deterministic site-yield programme (recomputed
+ * server-side from the saved Yield Studio study, or screening defaults from the
+ * parcel): headline KPI cards + an area schedule + the unit mix, with the
+ * binding constraint. Platform data — no AI mention (operator policy); the
+ * deck-wide disclaimer slide covers it. Auto-skipped when no programme.
+ */
+const renderSiteYield = (pptx, slide, context, pageNumber, totalSlides) => {
+  addTopHeader(
+    pptx, slide, context,
+    'Site Yield & Massing',
+    pageNumber, totalSlides,
+    `${context.assetClassLabel} | deterministic screening programme`,
+  );
+  const sy = context.siteYield;
+  if (!sy || !sy.computed || !sy.computed.ok) {
+    addCard(pptx, slide, { x: 0.55, y: 1.4, w: 12.23, h: 1.1, bandColor: COLORS.sandDeep, fill: COLORS.white });
+    slide.addText('No site-yield programme available yet — enter a plot area and FSI in Yield Studio.', {
+      x: 0.85, y: 1.7, w: 11.6, h: 0.4, fontFace: FONT, fontSize: 12, color: COLORS.charcoal,
+    });
+    return;
+  }
+
+  const c = sy.computed;
+  const e = c.envelope || {};
+  const a = c.areaSchedule || {};
+  const t = c.totals || {};
+  const intl = (n) => (Number.isFinite(Number(n)) ? Math.round(Number(n)).toLocaleString('en-IN') : 'N/A');
+
+  if (sy.mode === 'screening_defaults') {
+    slide.addText('Screening estimate from the parcel’s land area and FSI — no saved study yet.', {
+      x: 0.55, y: 1.18, w: 12.23, h: 0.26, fontFace: FONT, fontSize: 9.5, italic: true, color: COLORS.muted,
+    });
+  }
+
+  // Headline KPI cards (4-up).
+  const kpis = [{ label: 'Realized GFA', value: e.realized_gfa_sqft != null ? `${intl(e.realized_gfa_sqft)} sqft` : 'N/A' }];
+  if (t.units != null) kpis.push({ label: 'Units', value: intl(t.units) });
+  else if (t.keys != null) kpis.push({ label: 'Keys', value: intl(t.keys) });
+  else if (t.plots != null) kpis.push({ label: t.villas != null ? 'Villas' : 'Plots', value: intl(t.villas != null ? t.villas : t.plots) });
+  else if (a.leasable_sqft != null) kpis.push({ label: 'Leasable', value: `${intl(a.leasable_sqft)} sqft` });
+  kpis.push({ label: 'Parking (ECS)', value: c.parking && c.parking.required_ecs != null ? intl(c.parking.required_ecs) : 'N/A' });
+  kpis.push({ label: 'Binding constraint', value: SITE_YIELD_BINDING_LABEL[c.bindingConstraint] || c.bindingConstraint || '—' });
+
+  const cardW = 2.95;
+  const gap = 0.13;
+  kpis.slice(0, 4).forEach((k, i) => addKpiCard(pptx, slide, {
+    x: 0.55 + i * (cardW + gap), y: 1.6, w: cardW, h: 1.35,
+    label: k.label, value: k.value, tone: i % 2 === 0 ? COLORS.plum : COLORS.sandDeep,
+  }));
+
+  // Area schedule (label / value).
+  const headerCell = (text) => ({ text, options: { bold: true, fill: COLORS.mist, color: COLORS.charcoal } });
+  const schedRows = [[headerCell('Metric'), headerCell('Value')]];
+  const pushRow = (label, value) => { if (value != null && value !== '') schedRows.push([label, String(value)]); };
+  pushRow('Effective FSI', e.effective_fsi != null ? String(e.effective_fsi) : null);
+  pushRow('Floors', e.floors != null ? String(e.floors) : null);
+  if (a.saleable_sqft != null) pushRow('Saleable (SBA)', `${intl(a.saleable_sqft)} sqft`);
+  if (a.leasable_sqft != null) pushRow('Leasable', `${intl(a.leasable_sqft)} sqft`);
+  if (a.net_saleable_sqft != null) pushRow('Net saleable', `${intl(a.net_saleable_sqft)} sqft`);
+  if (a.carpet_sqft != null) pushRow('Carpet pool', `${intl(a.carpet_sqft)} sqft`);
+  if (a.saleable_plot_area_sqft != null) pushRow('Saleable plot area', `${intl(a.saleable_plot_area_sqft)} sqft`);
+  if (c.parking && c.parking.norm) pushRow('Parking norm', c.parking.norm);
+  if (sy.boundary) pushRow('Boundary', `${sy.boundary.source}${sy.boundary.area_sqft != null ? ` · ${intl(sy.boundary.area_sqft)} sqft` : ''}`);
+
+  const hasUnitMix = Array.isArray(c.unitMix) && c.unitMix.length > 0;
+  if (schedRows.length > 1) {
+    addTable(slide, schedRows, { x: 0.55, y: 3.3, w: hasUnitMix ? 6.0 : 12.23, colW: hasUnitMix ? [2.6, 3.4] : [4.0, 8.23], fontSize: 9.5, rowH: 0.32 });
+  }
+
+  // Unit mix (residential).
+  if (hasUnitMix) {
+    const mixRows = [[headerCell('Type'), headerCell('Units'), headerCell('Carpet (sqft)')]];
+    c.unitMix.forEach((u) => mixRows.push([u.label || u.key, intl(u.count), intl(u.carpet_total_sqft)]));
+    addTable(slide, mixRows, { x: 6.85, y: 3.3, w: 5.93, colW: [2.43, 1.5, 2.0], fontSize: 9.5, rowH: 0.32 });
+  }
+
+  if (Number(c.unrealizedFarPct) > 0) {
+    slide.addText(`${c.unrealizedFarPct}% of permitted FAR unrealised at this height — coverage × floors caps the build.`, {
+      x: 0.55, y: 6.55, w: 12.23, h: 0.26, fontFace: FONT, fontSize: 9, color: COLORS.muted, fit: 'shrink',
+    });
+  }
+  if (c.disclaimer) {
+    slide.addText(c.disclaimer, {
+      x: 0.55, y: 6.84, w: 12.23, h: 0.5, fontFace: FONT, fontSize: 7.5, italic: true, color: COLORS.muted, fit: 'shrink',
+    });
+  }
+};
+
+
 /**
  * Pros & Cons slide. Two-column layout, deterministic-then-AI synthesis.
  * Renders even when prosCons narrative is unavailable — falls back to
@@ -2988,6 +3084,7 @@ module.exports = {
   renderLocationContext,
   renderPlanningContext,
   renderAssetSnapshot,
+  renderSiteYield,
   renderReadiness,
   renderFinancialOverview,
   renderCashFlowSensitivity,

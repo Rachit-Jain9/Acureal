@@ -97,6 +97,10 @@ const buildSlideManifest = (context) => {
     { key: 'assetSnapshot', title: 'Asset Snapshot' },
   );
 
+  if (context.hasSiteYield) {
+    slides.push({ key: 'siteYield', title: 'Site Yield & Massing' });
+  }
+
   if (context.showReadinessSlide) {
     slides.push({
       key: 'readiness',
@@ -306,6 +310,11 @@ const buildDeckContext = (exportContext, options = {}) => {
   context.planningCommentary = buildPlanningCommentary(exportContext);
   context.hasPlanningContext = (Array.isArray(context.planningRows) && context.planningRows.length > 0)
     || Boolean(exportContext?.planning?.zone);
+  // Deterministic Yield Studio programme slice (recomputed server-side in
+  // dealExport.service via exports/yieldProgramme.service). Slide renders only
+  // when a programme was computed.
+  context.siteYield = exportContext.siteYield || null;
+  context.hasSiteYield = !!(context.siteYield && context.siteYield.computed && context.siteYield.computed.ok);
   context.slideManifest = buildSlideManifest(context);
 
   return context;
