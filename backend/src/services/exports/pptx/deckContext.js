@@ -89,7 +89,7 @@ const buildSlideManifest = (context) => {
   );
 
   if (context.hasPlanningContext) {
-    slides.push({ key: 'planningContext', title: 'Planning Context — RMP 2031' });
+    slides.push({ key: 'planningContext', title: 'Planning Context — RMP 2031 (Reference Only)' });
   }
 
   slides.push(

@@ -837,12 +837,12 @@ const buildPlanningCommentary = (exportContext) => {
   const callouts = Array.isArray(planning.callouts) ? planning.callouts : [];
   if (!callouts.length) {
     return [
-      'No verified RMP 2031 callouts have been ingested for Bengaluru yet.',
-      'Once the Existing Land Use 2015 + Proposed Land Use 2031 maps and Volume 4 PDR land in the corpus, this slide will surface SDZ corridors, NGT drain buffers, heritage radii, and the Peripheral Ring Road alignment automatically.',
+      'RMP 2031 is a withdrawn draft (provisional approval withdrawn July 2020) — descriptive reference only, not an operative source. The operative plan is RMP 2015.',
+      'Once the RMP 2031 reference maps and Volume 4 PDR are ingested, this slide surfaces its draft SDZ corridors, NGT drain buffers, heritage radii, and Peripheral Ring Road alignment — each page-cited, to be verified against primary records before quoting.',
     ];
   }
   const bullets = [
-    `Drawn from ${callouts.length} verified RMP 2031 fact${callouts.length === 1 ? '' : 's'}; every callout is page-cited and reviewer-approved.`,
+    `Drawn from ${callouts.length} RMP 2031 reference fact${callouts.length === 1 ? '' : 's'} (withdrawn draft, July 2020 — descriptive reference only, not operative). Each callout is page-cited; verify against primary records before quoting in IC.`,
     'Cross-reference each callout against the parcel\'s exact location before underwriting — heritage and NGT buffers can disqualify entire envelopes.',
   ];
   return bullets;
