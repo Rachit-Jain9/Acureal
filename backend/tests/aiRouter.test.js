@@ -8,10 +8,20 @@ describe('services/ai/aiRouter', () => {
       expect(estimateCost({ provider: 'gemini', model: 'gemini-2.5-flash' })).toBeNull();
     });
 
-    test('returns null for unknown provider/model', () => {
-      expect(
-        estimateCost({ provider: 'no-such', model: 'no-such', promptTokens: 100, completionTokens: 100 })
-      ).toBeNull();
+    test('prices an UNKNOWN model at the conservative fallback so it still counts toward the cap', () => {
+      // Fail-safe: a model missing from the table must NOT log cost=null (which
+      // contributes 0 to the daily cap), it's estimated at the Opus-tier fallback
+      // (input $15/M, output $75/M). 100k in + 100k out → 1.5 + 7.5 = 9.0.
+      const cost = estimateCost({ provider: 'no-such', model: 'no-such', promptTokens: 100_000, completionTokens: 100_000 });
+      expect(cost).toBe(9.0);
+      expect(cost).not.toBeNull();
+    });
+
+    test('prices the current default models at their verified rates', () => {
+      // Opus 4.8 = $5/$25, Sonnet 4.6 = $3/$15, Haiku 4.5 = $1/$5 (per MTok).
+      expect(estimateCost({ provider: 'claude', model: 'claude-opus-4-8', promptTokens: 1_000_000, completionTokens: 1_000_000 })).toBe(30.0);
+      expect(estimateCost({ provider: 'claude', model: 'claude-sonnet-4-6', promptTokens: 1_000_000, completionTokens: 1_000_000 })).toBe(18.0);
+      expect(estimateCost({ provider: 'claude', model: 'claude-haiku-4-5', promptTokens: 1_000_000, completionTokens: 1_000_000 })).toBe(6.0);
     });
 
     test('computes a finite cost for a well-known model', () => {
@@ -21,8 +31,8 @@ describe('services/ai/aiRouter', () => {
         promptTokens: 100_000,
         completionTokens: 10_000,
       });
-      // input @ 0.075/M + output @ 0.30/M → 0.0075 + 0.003 = 0.0105
-      expect(cost).toBeCloseTo(0.0105, 4);
+      // input @ 0.30/M + output @ 2.50/M → 0.03 + 0.025 = 0.055
+      expect(cost).toBeCloseTo(0.055, 4);
     });
 
     test('honors AI_COST_OVERRIDES_JSON when valid', () => {
@@ -39,13 +49,13 @@ describe('services/ai/aiRouter', () => {
       delete process.env.AI_COST_OVERRIDES_JSON;
     });
 
-    test('returns null gracefully on bad override JSON', () => {
+    test('does not throw on bad override JSON; unknown model still priced at fallback', () => {
       process.env.AI_COST_OVERRIDES_JSON = '{not json';
       // No throw. With bad JSON the table falls back to defaults; an unknown
-      // model still returns null, demonstrating fail-safe behavior.
-      expect(
-        estimateCost({ provider: 'custom', model: 'model-x', promptTokens: 1, completionTokens: 1 })
-      ).toBeNull();
+      // model is priced at the conservative fallback (not null) so its spend
+      // still counts toward the cap — fail-safe.
+      const cost = estimateCost({ provider: 'custom', model: 'model-x', promptTokens: 1_000_000, completionTokens: 1_000_000 });
+      expect(cost).toBe(90.0); // 15 + 75 fallback
       delete process.env.AI_COST_OVERRIDES_JSON;
     });
   });
@@ -55,7 +65,10 @@ describe('services/ai/aiRouter', () => {
       expect(isModelPriced('gemini', 'gemini-2.5-flash')).toBe(true);
     });
 
-    test('false for an unknown provider:model — these would escape the daily cap', () => {
+    test('false for an unknown provider:model — flags the row cost_unpriced (estimated at fallback)', () => {
+      // No longer "escapes the cap" — estimateCost prices unknowns at the
+      // fallback so they count; isModelPriced=false just marks the row as an
+      // estimate rather than a real list price.
       expect(isModelPriced('acme', 'turbo-9')).toBe(false);
     });
 
