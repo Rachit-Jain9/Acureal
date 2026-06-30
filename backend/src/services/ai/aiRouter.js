@@ -43,29 +43,58 @@ const { withRetry, isRetriableProviderError, DEFAULT_RETRY_OPTIONS } = require('
 const routingConfigService = require('./routingConfig');
 const { withAiSpan } = require('../../lib/aiTrace');
 
-// Approximate USD cost per 1M tokens, sourced from public pricing pages.
-// Used as a directional signal for cost dashboards — not as a billing
-// ledger. Override in env via AI_COST_OVERRIDES_JSON if pricing shifts.
+// USD cost per 1M tokens (standard tier — base input + output). This feeds BOTH
+// the cost dashboards AND the per-org daily spend cap (lib/costGuard.js sums
+// cost_usd). So a model must never be missing here and silently log cost=null —
+// that contributes 0 to the cap and lets spend escape it. Unknown models are
+// therefore priced at a conservative fallback (see estimateCost), not null.
+//
+//   Claude prices verified 2026-06-30 from platform.claude.com/docs (about-claude/pricing).
+//   Gemini prices verified 2026-06-30 from ai.google.dev/gemini-api/docs/pricing.
+//
+// Override any of these live via AI_COST_OVERRIDES_JSON — no deploy needed —
+// e.g. for an enterprise/negotiated rate. Pro models (Gemini 2.5/3.x) have a
+// higher >200k-token tier; the ≤200k base rate is used (REDIP prompts are small).
 const DEFAULT_COSTS_PER_M_TOKENS = {
-  'gemini:gemini-3-flash-preview': { input: 0.50,  output: 3.00 },
-  'gemini:gemini-2.5-flash':       { input: 0.075, output: 0.30 },
-  'gemini:gemini-2.5-pro':         { input: 1.25,  output: 5.00 },
-  'gemini:gemini-1.5-pro':         { input: 1.25,  output: 5.00 },
-  'gemini:gemini-1.5-flash':       { input: 0.075, output: 0.30 },
-  'claude:claude-sonnet-4-6':      { input: 3.00,  output: 15.00 },
-  'claude:claude-opus-4':          { input: 15.0,  output: 75.00 },
-  'claude:claude-haiku-4':         { input: 0.80,  output: 4.00 },
+  // ── Claude (Anthropic) — verified 2026-06-30 ──
+  'claude:claude-fable-5':     { input: 10.0, output: 50.0 },
+  'claude:claude-opus-4-8':    { input: 5.00, output: 25.0 },
+  'claude:claude-opus-4-7':    { input: 5.00, output: 25.0 },
+  'claude:claude-opus-4-6':    { input: 5.00, output: 25.0 },
+  'claude:claude-opus-4-5':    { input: 5.00, output: 25.0 },
+  'claude:claude-opus-4-1':    { input: 15.0, output: 75.0 }, // deprecated
+  'claude:claude-opus-4':      { input: 15.0, output: 75.0 }, // retired
+  'claude:claude-sonnet-4-6':  { input: 3.00, output: 15.0 },
+  'claude:claude-sonnet-4-5':  { input: 3.00, output: 15.0 },
+  'claude:claude-sonnet-4':    { input: 3.00, output: 15.0 },
+  'claude:claude-haiku-4-5':   { input: 1.00, output: 5.00 },
+  'claude:claude-haiku-3-5':   { input: 0.80, output: 4.00 }, // retired
+  // ── Gemini (Google) — verified 2026-06-30 (≤200k base tier) ──
+  'gemini:gemini-3.5-flash':       { input: 1.50, output: 9.00 },
+  'gemini:gemini-3.1-flash-lite':  { input: 0.25, output: 1.50 },
+  'gemini:gemini-3.1-pro-preview': { input: 2.00, output: 12.0 },
+  'gemini:gemini-2.5-flash':       { input: 0.30, output: 2.50 },
+  'gemini:gemini-2.5-pro':         { input: 1.25, output: 10.0 },
+  'gemini:gemini-2.5-flash-lite':  { input: 0.10, output: 0.40 },
+  // App default GEMINI_MODEL — a preview not on Google's current price page;
+  // estimated at the GA successor (gemini-3.5-flash) rate pending confirmation.
+  'gemini:gemini-3-flash-preview': { input: 1.50, output: 9.00 },
+  // ── OpenAI — UNVERIFIED (A/B eval harness only; not on the live path) ──
   'openai:gpt-5.5':                { input: 5.00,  output: 30.00 },
-  'openai:gpt-5.5-pro':             { input: 15.0,  output: 75.00 },
+  'openai:gpt-5.5-pro':            { input: 15.0,  output: 75.00 },
   'openai:gpt-5.4':                { input: 2.50,  output: 10.00 },
-  'openai:gpt-5.4-mini':            { input: 0.25,  output: 1.00 },
+  'openai:gpt-5.4-mini':           { input: 0.25,  output: 1.00 },
   'openai:gpt-4o-mini':            { input: 0.15,  output: 0.60 },
   'openai:gpt-4o':                 { input: 2.50,  output: 10.00 },
   // Embeddings — `output` is 0 since embeddings have no completion tokens.
-  // Pricing here is per-million input tokens for the embedding call.
   'openai:text-embedding-3-small': { input: 0.02,  output: 0.00 },
   'openai:text-embedding-3-large': { input: 0.13,  output: 0.00 },
 };
+
+// Most-expensive standard rate (Opus-tier). When a model is missing from the
+// table, estimateCost prices the call at this fallback so its spend STILL
+// counts toward the daily cap — fail-safe: overestimate, never undercount.
+const FALLBACK_RATE_PER_M = { input: 15.0, output: 75.0 };
 
 const loadCostTable = () => {
   if (!process.env.AI_COST_OVERRIDES_JSON) return DEFAULT_COSTS_PER_M_TOKENS;
@@ -91,24 +120,25 @@ const warnedUnpricedModels = new Set();
 const estimateCost = ({ provider, model, promptTokens, completionTokens }) => {
   if (!provider || !model || (!promptTokens && !completionTokens)) return null;
   const table = loadCostTable();
-  const rates = table[`${provider}:${model}`];
+  let rates = table[`${provider}:${model}`];
   if (!rates) {
-    // Unknown provider:model WITH real token usage. Its cost can't be priced,
-    // so without this warning it would silently log cost=null and never count
-    // against AI_DAILY_COST_CAP_USD — a real spend-leak. Surface it loudly
-    // (deduped) and let callers stamp the row `cost_unpriced` so dashboards
-    // can see the gap. Fix = add the pair to DEFAULT_COSTS_PER_M_TOKENS or
-    // AI_COST_OVERRIDES_JSON.
+    // Unknown provider:model WITH real token usage. We price it at the
+    // conservative fallback so its spend STILL counts against
+    // AI_DAILY_COST_CAP_USD (returning null would log cost=null → 0 in the cap
+    // sum → a real spend-leak). The row is still flagged `cost_unpriced` (see
+    // unpricedMeta) so dashboards show it's an estimate, not a real price.
+    // Surface it loudly (deduped). Fix = add the pair to
+    // DEFAULT_COSTS_PER_M_TOKENS or AI_COST_OVERRIDES_JSON.
     const key = `${provider}:${model}`;
     if (!warnedUnpricedModels.has(key)) {
       warnedUnpricedModels.add(key);
       log.warn('ai_cost_model_unpriced', {
         provider,
         model,
-        hint: 'Add this provider:model to DEFAULT_COSTS_PER_M_TOKENS or AI_COST_OVERRIDES_JSON — its spend is not counted against the daily cap.',
+        hint: 'Add this provider:model to DEFAULT_COSTS_PER_M_TOKENS or AI_COST_OVERRIDES_JSON. Until then it is estimated at the most-expensive known rate so its spend still counts toward AI_DAILY_COST_CAP_USD.',
       });
     }
-    return null;
+    rates = FALLBACK_RATE_PER_M;
   }
   const inputCost = ((promptTokens || 0) * rates.input) / 1_000_000;
   const outputCost = ((completionTokens || 0) * rates.output) / 1_000_000;
