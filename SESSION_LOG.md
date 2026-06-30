@@ -4,6 +4,24 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-06-30 (Export trio completed + export credibility) (PRs #921, #922, #923, #924 — merged + deployed; master green)
+
+Finished the "Left for next (small)" from the A→D entry below, then closed two documented export-credibility gaps. Every number stays the deterministic kernel's; no AI mention in PPTX/XLSX; cover disclaimer covers DOCX synthesis.
+
+- **#921 — Site Yield slide in the IC deck (PPTX).** `slides.js` `renderSiteYield` (headline KPI cards + area-schedule + unit-mix tables + screening caption + engine disclaimer, via the existing primitives). `deckContext` computes `siteYield`/`hasSiteYield` + inserts after Asset Snapshot; `dealPptx.service` switch case. Auto-omitted when no programme. +3 tests incl. a full-deck render-smoke.
+- **#922 — Site Yield sheet in the IC workbook (XLSX).** `buildSiteYieldSheet` (programme metric/value + unit-mix tables, neutral tab name). Conditional (mirrors the DOCX/PPTX auto-hide) so deals without a study keep their exact worksheet set. +1 test.
+- **#923 — unverified-source + confidence line on AI market prose in the DOCX (#9/#21).** The demographics/whyThisArea/jobGrowth general-knowledge augment paths rendered AI market prose with NO provenance — violating the CLAUDE.md market-intelligence rule. New shared `augmentProvenanceLine` adds a quiet "Unverified market context … Confidence: <level>" caveat; honors the disclosure policy (no per-section AI banner, no provider name, raw "AI-GENERATED…" not printed). +1 test.
+- **#924 — Market Comparables worksheet (XLSX).** Comps appeared in DOCX/PPTX but the XLSX only had a one-line summary. New filterable tab (Project/Developer/Type/Micro-market/Units/Rate/Source/Verified/Freshness), numeric rate+units, honest per-row provenance via the shared `deriveCompProvenance` deriver (only `is_verified===true` → "Verified"). Conditional. +1 test.
+
+Verification: full backend suite **3586 passing** / 224 suites (incl. cross-product reconciliation) at each step; every PR CI-green before squash-merge. (OneDrive index flaked on local sync twice; recovered non-destructively via scoped `git checkout origin/master -- <files>` + ff-merge — remote merges always clean.)
+
+### Left for next
+- **AI price-pinning** (parked by operator until "no work left") → unlocks Batch API + cheap-first cascade AI-cost work. Operator-gated on the actual live price values (never fabricate). Say "let's pin prices" to start.
+- Live click-through of the persistence chain (auth-gated; operator to verify on deploy).
+- Comps follow-ups still open: IntelligencePage §5e benchmark-table provenance, CompsMap selected-comp inset. Regulatory track: far_rules RMP-2031 citation (#5) + the PPTX "Planning Context — RMP 2031" slide. Operator-gated: non-owner DB role (#3).
+
+---
+
 ## 2026-06-30 (Yield Studio persistence + exports: A→D) (PRs #916, #917, #918, #919 — merged + deployed; master green)
 
 Operator applied the #912 migration (verified: `parcel_boundaries` + `yield_studies`, RLS enabled+forced, 1 policy each). Built the full persistence + exports phase on top, idiomatically (per a verified blueprint).
