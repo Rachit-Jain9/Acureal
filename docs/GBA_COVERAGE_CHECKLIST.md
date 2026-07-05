@@ -67,6 +67,34 @@ Regulations PDF.
 
 ---
 
+## ⚠️ Retrieval findings (2026-07-05) — what these sites actually publish
+
+Attempted a live retrieval of BIAAPA + Hoskote. Key learnings (save re-hunting):
+
+- **The `*.tpa.gov.in` "Planning" tiles are broken buttons** — no click handler, no link behind them
+  (verified in-DOM). Ignore the tiles; use the direct file URLs below.
+- **Direct, working master-plan file URLs discovered** (these DO download):
+  - BIAAPA Master Plan 2021: `http://biaapa.tpa.gov.in/sites/biaapa.tpa.gov.in/files/MASTER-PLAN-2021.pdf` (90.8 MB, 42 sheets)
+  - Hoskote Master Plan 2031: `http://hoskote.tpa.gov.in/sites/hoskote.tpa.gov.in/files/Master_Plans.pdf` (166 MB, 87 sheets — "MAPS Vol")
+  - Real page (not the tile): `…/en/master-plan`. `HEAD` returns a 2516-byte soft-404 for **everything**, so probe with `GET`, not `HEAD`.
+- **These PDFs are scanned MAP ATLASES only** — land-use / boundary map sheets (images, ~0 text layer).
+  They do **NOT** contain the numeric **zoning-regulation tables** (FAR / setbacks / ground coverage /
+  plot-area bands by zone) that the deterministic engine needs (the Anekal-style rulebook). So they can
+  seed a **reference map overlay** (like RMP 2015), but **cannot** seed FAR rules.
+- **The FAR/zoning rulebook is a SEPARATE document** (gazette notification / DTCP zonal-regulations
+  booklet) not published on these LPA map sites. Sourcing it is a **manual blocker** — do NOT fabricate
+  FAR/setback numbers for these areas. (`kum.karnataka.gov.in`, the host earlier web-search cited for the
+  BIAAPA zonal regs, is **dead DNS** from this network — NXDOMAIN.)
+- **Nelamangala** (`npa.karnataka.gov.in`) was **down** (connection timed out) on 2026-07-05.
+- **Retrieval method that works** (this session runs on the operator's Windows box): a direct
+  `Invoke-WebRequest` with the sandbox disabled reaches `*.tpa.gov.in` (the sandboxed shell can't resolve
+  them). Large files need a background download (they exceed the 2-min foreground cap → truncate).
+
+**Net:** map overlays for these LPAs = feasible (files in hand). FAR-rule ingestion = blocked on the
+separate zonal-regulations document per LPA. See `TODO_DATA.md`.
+
+---
+
 ## What to send me, and what I'll do
 
 For each area you want next: download the **Proposed Land Use map** + the **Zonal Regulations PDF**
