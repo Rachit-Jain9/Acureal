@@ -17,6 +17,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { exportsAPI } from '../services/api';
+import { extractPeriodToken } from '../utils/compProvenance';
 import {
   useDailyBrief,
   useMarketTransactions,
@@ -308,7 +309,7 @@ function BenchmarksTable({ rows }) {
                     {row.sro_rate_per_sqft != null ? `₹${Number(row.sro_rate_per_sqft).toLocaleString('en-IN')}` : '—'}
                   </td>
                   <td className="py-2.5 px-3 text-content-secondary">{row.anchor_hub || '—'}</td>
-                  <td className="py-2.5 px-3 whitespace-nowrap">
+                  <td className="py-2.5 px-3 whitespace-nowrap align-top">
                     {row.source_url ? (
                       <a href={row.source_url} target="_blank" rel="noopener noreferrer"
                          className="text-accent hover:text-accent underline-offset-2 hover:underline text-[11px]"
@@ -317,6 +318,13 @@ function BenchmarksTable({ rows }) {
                       </a>
                     ) : (
                       <span className="text-content-muted text-[11px]">{row.source || '—'}</span>
+                    )}
+                    {/* Per-row freshness — the hard rule wants source + freshness
+                        per data point, not just a table-level footer note. */}
+                    {(extractPeriodToken(row.data_type) || row.data_period) && (
+                      <span className="block text-[10px] text-content-muted tabular-nums">
+                        {extractPeriodToken(row.data_type) || row.data_period}
+                      </span>
                     )}
                   </td>
                 </tr>

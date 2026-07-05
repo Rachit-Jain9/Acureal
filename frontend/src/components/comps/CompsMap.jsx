@@ -3,6 +3,7 @@ import { GoogleMap, useJsApiLoader, OverlayView } from '@react-google-maps/api';
 import { Building2, MapPin, Layers, MousePointerClick, AlertTriangle } from 'lucide-react';
 import useTheme from '../../hooks/useTheme';
 import { Skeleton } from '../../design-system';
+import ProvenanceCell from '../common/ProvenanceCell';
 
 // Bengaluru fallback center for the comps map. The seed data is residential
 // Bengaluru-only as of audit; this keeps the map oriented even before any
@@ -768,6 +769,12 @@ export default function CompsMap({
             {formatRate(selectedComp.rate_per_sqft)}
             {selectedComp.locality && <span> · {selectedComp.locality}</span>}
           </p>
+          {/* Honest provenance (CLAUDE.md: never surface a comp without source +
+              freshness + verified). Reuses the shared ProvenanceCell so the inset
+              reads identically to the Comps table + exports. */}
+          <div className="mt-1.5 pt-1.5 border-t border-hairline-soft">
+            <ProvenanceCell comp={selectedComp} compact />
+          </div>
           {!selectedCompIsMapped && (
             <p className="mt-1 pt-1 border-t border-hairline text-[10px] text-premium leading-snug">
               No coordinates on file for this row — it appears in the table but not on the map.
