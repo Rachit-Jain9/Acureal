@@ -1994,3 +1994,41 @@ describe('confirmSourceDocumentUpload — server-derived file_type (stored-XSS p
     expect(storedFileType()).toBe('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   });
 });
+
+describe('masterplan.service getRegulatoryCoverage', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  test('maps operative authorities → coverage with overlay flag, rule counts, and summary', async () => {
+    query.mockResolvedValueOnce({
+      rows: [
+        { authority_code: 'BDA', authority_name: 'Bangalore Development Authority', authority_status: 'active', plan_code: 'RMP_2015', plan_name: 'Revised Master Plan 2015', horizon_year: 2015, far_rules: '51', zones: '13' },
+        { authority_code: 'ANEKAL_PA', authority_name: 'Anekal Planning Authority', authority_status: 'active', plan_code: 'ANEKAL_LPA_MP_2031', plan_name: 'Anekal LPA MP 2031', horizon_year: 2031, far_rules: '41', zones: '10' },
+        { authority_code: 'BIAAPA', authority_name: 'Bengaluru International Airport Area Planning Authority', authority_status: 'active', plan_code: 'BIAAPA_MP_2021', plan_name: 'BIAAPA MP 2021', horizon_year: 2021, far_rules: '37', zones: '10' },
+      ],
+    });
+
+    const out = await service.getRegulatoryCoverage();
+
+    // Only RMP 2015 has a georeferenced map overlay; the LPAs are rules-only.
+    const bda = out.authorities.find((a) => a.authority_code === 'BDA');
+    const biaapa = out.authorities.find((a) => a.authority_code === 'BIAAPA');
+    expect(bda.has_map_overlay).toBe(true);
+    expect(biaapa.has_map_overlay).toBe(false);
+    // Counts are numbers (not the raw string rows), and rules_loaded is derived.
+    expect(bda.far_rules).toBe(51);
+    expect(biaapa.far_rules).toBe(37);
+    expect(biaapa.zones).toBe(10);
+    expect(biaapa.rules_loaded).toBe(true);
+    // Human area labels for the known authorities.
+    expect(biaapa.area).toMatch(/Airport belt/i);
+    // Summary rolls up.
+    expect(out.summary).toEqual({ authorities: 3, plans_with_rules: 3, total_far_rules: 129 });
+  });
+
+  test('is migration-tolerant — an absent registry returns an empty coverage set', async () => {
+    query.mockRejectedValueOnce(new Error('relation "regulatory_data.planning_authorities" does not exist'));
+    const out = await service.getRegulatoryCoverage();
+    expect(out.authorities).toEqual([]);
+    expect(out.summary.total_far_rules).toBe(0);
+  });
+});

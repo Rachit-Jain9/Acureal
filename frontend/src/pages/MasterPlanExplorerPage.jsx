@@ -27,7 +27,7 @@ export default function MasterPlanExplorerPage() {
               Master Plan Explorer
             </h1>
             <p className="mt-0.5 max-w-2xl text-sm text-content-secondary">
-              The BDA Revised Master Plan 2015 proposed land use, georeferenced over the city — fade it over satellite, search a location, and click your deals for their regulatory context.
+              The BDA Revised Master Plan 2015 land use, georeferenced over the city — fade it over satellite, search a location, and click a deal for its regulatory context. It&apos;s one layer of REDIP&apos;s regulatory coverage: the airport-belt (BIAAPA) and Anekal rulebooks are loaded too, applied on each deal.
             </p>
           </div>
         </div>

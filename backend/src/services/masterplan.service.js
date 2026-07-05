@@ -2722,8 +2722,86 @@ async function importZoneGeoJSON({
   return summary;
 }
 
+// ── Regulatory coverage read model ──────────────────────────────────────────
+// The operative planning authorities REDIP holds a rulebook for, with FAR-rule +
+// zone counts and whether a georeferenced land-use MAP overlay exists. Powers the
+// Master Plan Explorer "Regulatory coverage" panel so the RMP-2015-only visual
+// reads as ONE layer of a broader, deliberate system — not "coverage stops at the
+// city". Global reference rows only (org_id IS NULL); self-updating as new LPAs are
+// seeded; migration-tolerant (returns an empty set if the registry isn't applied).
+const PLANS_WITH_MAP_OVERLAY = new Set(['RMP_2015']); // only the BDA raster is georeferenced (Map Warper)
+const COVERAGE_AREA_LABELS = {
+  BDA: 'Bengaluru city + BDA periphery',
+  ANEKAL_PA: 'Anekal · Jigani · Attibele belt',
+  BIAAPA: 'Airport belt · Devanahalli',
+};
+
+async function getRegulatoryCoverage() {
+  let rows;
+  try {
+    const result = await query(
+      `SELECT
+          pa.authority_code,
+          pa.authority_name,
+          pa.status              AS authority_status,
+          sp.plan_code,
+          sp.plan_name,
+          sp.horizon_year,
+          -- COUNT(DISTINCT ...) on BOTH aggregates — the far_rules × zones join
+          -- fans each rule out once per zone, so a plain COUNT(fr.id) would report
+          -- rules × zones (e.g. 51×13=663 instead of 51). DISTINCT de-fans it.
+          COUNT(DISTINCT fr.id) FILTER (WHERE fr.review_status = 'approved') AS far_rules,
+          COUNT(DISTINCT mz.id)                                              AS zones
+        FROM regulatory_data.planning_authorities pa
+        JOIN regulatory_data.statutory_plans sp
+          ON sp.authority_id = pa.id
+         AND sp.legal_status = 'operative'
+         AND sp.org_id IS NULL
+        LEFT JOIN regulatory_data.far_rules fr
+          ON fr.statutory_plan_id = sp.id AND fr.org_id IS NULL
+        LEFT JOIN regulatory_data.master_plan_zones mz
+          ON mz.statutory_plan_id = sp.id
+        WHERE pa.org_id IS NULL
+        GROUP BY pa.authority_code, pa.authority_name, pa.status,
+                 sp.plan_code, sp.plan_name, sp.horizon_year
+        ORDER BY (COUNT(DISTINCT fr.id) FILTER (WHERE fr.review_status = 'approved')) DESC, pa.authority_code`,
+    );
+    rows = result.rows || [];
+  } catch {
+    // Registry not applied (or a DB hiccup) → honest empty coverage; UI degrades.
+    return { authorities: [], summary: { authorities: 0, plans_with_rules: 0, total_far_rules: 0 } };
+  }
+
+  const authorities = rows.map((r) => {
+    const farRules = Number(r.far_rules) || 0;
+    return {
+      authority_code: r.authority_code,
+      authority_name: r.authority_name,
+      authority_status: r.authority_status,
+      area: COVERAGE_AREA_LABELS[r.authority_code] || null,
+      plan_code: r.plan_code,
+      plan_name: r.plan_name,
+      horizon_year: r.horizon_year ?? null,
+      far_rules: farRules,
+      zones: Number(r.zones) || 0,
+      rules_loaded: farRules > 0,
+      has_map_overlay: PLANS_WITH_MAP_OVERLAY.has(r.plan_code),
+    };
+  });
+
+  return {
+    authorities,
+    summary: {
+      authorities: authorities.length,
+      plans_with_rules: authorities.filter((a) => a.rules_loaded).length,
+      total_far_rules: authorities.reduce((s, a) => s + a.far_rules, 0),
+    },
+  };
+}
+
 module.exports = {
   calculateEffectiveFSI,
+  getRegulatoryCoverage,
   getSourceDocumentReadiness,
   searchZones,
   getZoneById,
