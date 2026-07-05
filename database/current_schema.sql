@@ -1,95 +1,172 @@
 -- ============================================================================
--- REDIP — Schema consolidation manifest (P7)
--- Last reviewed: 2026-04-30
+-- REDIP - Database Setup Manifest (authoritative index of every migration)
+-- Regenerated: 2026-07-05. Reflects all 123 migrations through 20260724.
 -- ============================================================================
--- This file is NOT applied directly. It is the *ordered manifest* of every
--- migration in `database/migrations/`. New environments (Supabase preview
--- branches, local dev, fresh staging) should apply the listed files in the
--- exact order shown — they are date-sorted and idempotent (each guarded by
--- IF NOT EXISTS / DROP IF EXISTS).
 --
--- To rebuild a fresh database:
---   1. Apply core extensions:  uuid-ossp, pgcrypto, postgis, pg_trgm
---      (handled inside migrations themselves where required)
---   2. Apply the migration files below in listed order.
---   3. Run the seed inserts inside `20260420_master_plan.sql` and
---      `20260427_masterplan_guidance_intake.sql` for the 27 RMP 2031 Draft
---      FAR rows (org_id IS NULL — global reference).
+-- WHAT THIS FILE IS
+--   A single, ordered index of every migration in `database/migrations/`. It is
+--   NOT executed directly - it is the map. Fresh environments apply the files in
+--   the exact order listed below (date-sorted). Every migration is idempotent
+--   (guarded IF NOT EXISTS / DROP ... IF EXISTS / guarded DO blocks), so re-runs
+--   are safe no-ops.
 --
--- Production source of truth: Supabase project `lsbhrbvuynzqhdtzczco`,
--- `supabase_migrations.schema_migrations` table.
+-- PRODUCTION IS FULLY APPLIED
+--   All migrations below are live on the production Supabase project
+--   (niamgjbxxgmmffggumvj, ap-south-1). They are applied MANUALLY via the
+--   Supabase SQL editor (paste + Run) - there is no auto-runner. Do not expect a
+--   re-run to change anything on prod; the guards make re-runs no-ops.
+--
+-- THE OTHER FILES IN database/
+--   - schema.sql   Base schema (extensions, functions, enums, core tables).
+--                  `npm run migrate` (backend) applies it - a convenience start
+--                  point that the migrations below extend.
+--   - seed.sql     Intentional NO-OP (REDIP ships without demo data; `npm run seed`).
+--   - seeds/       Standalone reference-data seed(s).
+--
+-- TO BUILD A FRESH DATABASE (dev / preview / staging)
+--   1. Create extensions:  uuid-ossp, pgcrypto, pg_trgm, postgis.
+--   2. Apply `schema.sql` (the base).
+--   3. Apply every migration below, in the listed order (each is idempotent).
+--   4. `seed.sql` is a no-op; add real data through the app.
+--
+-- FULL MIGRATION LEDGER (123 migrations, oldest -> newest):
 -- ============================================================================
 
--- ────────────────────────────────────────────────────────────────────────────
--- Phase 0 — foundation (organizations, users, deals, properties, documents)
--- ────────────────────────────────────────────────────────────────────────────
-\i 20260327_remove_demo_records.sql
-\i 20260327_workflow_upgrade.sql
-\i 20260331_financials_asset_class.sql
-\i 20260331_market_notes.sql
-\i 20260403_bengaluru_comps_seed.sql
-\i 20260403_rls_and_security.sql
-\i 20260404_market_data.sql
+-- === March 2026  (4) ===================================
+--   20260327_remove_demo_records.sql
+--   20260327_workflow_upgrade.sql
+--   20260331_financials_asset_class.sql
+--   20260331_market_notes.sql
 
--- ────────────────────────────────────────────────────────────────────────────
--- Phase 1 — deal-centric expansion + multi-tenancy hardening
--- ────────────────────────────────────────────────────────────────────────────
-\i 20260411_deal_centric_expansion.sql
-\i 20260411_documents_and_security_alignment.sql
-\i 20260413_exchange_rates.sql
-\i 20260413_property_geocode_enhancement.sql
-\i 20260413_rls_fix.sql
-\i 20260416_deal_shares.sql
-\i 20260416_enforce_org_scoping.sql
-\i 20260416_merge_bangalore_bengaluru.sql
-\i 20260416_multitenancy_foundation.sql
+-- === April 2026  (32) ===================================
+--   20260403_bengaluru_comps_seed.sql
+--   20260403_rls_and_security.sql
+--   20260404_market_data.sql
+--   20260411_deal_centric_expansion.sql
+--   20260411_documents_and_security_alignment.sql
+--   20260413_exchange_rates.sql
+--   20260413_property_geocode_enhancement.sql
+--   20260413_rls_fix.sql
+--   20260416_deal_shares.sql
+--   20260416_enforce_org_scoping.sql
+--   20260416_merge_bangalore_bengaluru.sql
+--   20260416_multitenancy_foundation.sql
+--   20260418_intelligence_monitoring.sql
+--   20260419_financial_scenarios_and_waterfall.sql
+--   20260420_master_plan.sql
+--   20260422_deal_events.sql
+--   20260425_evidence_ingestion_indexes.sql
+--   20260425_parcel_intelligence_phase1.sql
+--   20260425_parcel_intelligence_phase1_1.sql
+--   20260426_ai_call_logs.sql
+--   20260426_evidence_links.sql
+--   20260427_masterplan_guidance_intake.sql
+--   20260428_parcel_intelligence_signature.sql
+--   20260429_osm_road_cache.sql
+--   20260430_feature_flag_cohorts_write_policy.sql
+--   20260430_function_search_path_lockdown.sql
+--   20260430_master_plan_document_versions.sql
+--   20260430_rls_no_policy_tables.sql
+--   20260430_source_document_pages_and_uav.sql
+--   20260430_source_document_registry_metadata.sql
+--   20260430_unindexed_fk_covering_indexes.sql
+--   20260430_users_rls_and_summary_invoker.sql
 
--- ────────────────────────────────────────────────────────────────────────────
--- Phase 2 — intelligence / financials / waterfall / deal events
--- ────────────────────────────────────────────────────────────────────────────
-\i 20260418_intelligence_monitoring.sql
-\i 20260419_financial_scenarios_and_waterfall.sql
-\i 20260422_deal_events.sql            -- HMAC-signed audit trail (deal_events)
+-- === May 2026  (38) ===================================
+--   20260501_extraction_started_at.sql
+--   20260501_master_plan_zones_unique_active.sql
+--   20260504_legal_documents_and_acceptances.sql
+--   20260504_login_attempts.sql
+--   20260505_email_verification.sql
+--   20260505_market_data_q1_2026_refresh.sql
+--   20260506_user_oauth.sql
+--   20260507_named_premium_comps_q1_2026.sql
+--   20260507_q1_2026_v0_2_data_refresh.sql
+--   20260507_refresh_tokens.sql
+--   20260508_db_cleanup_and_restore_gba_load.sql
+--   20260508_gba_rate_card_comprehensive_load.sql
+--   20260508_geocode_basket_localities.sql
+--   20260508_geocode_unmapped_comps.sql
+--   20260508_password_set_flag.sql
+--   20260508_residential_apartment_baskets_q1_2026.sql
+--   20260508_residential_segmented_benchmarks_data.sql
+--   20260508_residential_segmented_benchmarks_schema.sql
+--   20260509_ai_response_cache.sql
+--   20260510_ai_artifacts_and_log_dimensions.sql
+--   20260511_account_closure.sql
+--   20260512_ai_routing_config.sql
+--   20260513_mfa_totp.sql
+--   20260514_pgvector_document_embeddings.sql
+--   20260515_comps_review_queue.sql
+--   20260516_comps_geocode_quality.sql
+--   20260517_ai_artifacts_numerical_drifts.sql
+--   20260518_deal_qa_history.sql
+--   20260520_comps_queue_assignment.sql
+--   20260524_deal_audit_log.sql
+--   20260525_niche_asset_class_benchmarks.sql
+--   20260526_ab_eval_runs.sql
+--   20260527_export_events.sql
+--   20260528_bbmp_street_index.sql
+--   20260529_planning_district_demographics.sql
+--   20260530_bbmp_uav_rate_card.sql
+--   20260530_document_access_log.sql
+--   20260531_land_use_insight_and_city_callouts.sql
 
--- ────────────────────────────────────────────────────────────────────────────
--- Phase 3 — parcel intelligence + evidence vault (regulatory_data schema)
--- ────────────────────────────────────────────────────────────────────────────
-\i 20260420_master_plan.sql                    -- master_plan_zones, far_rules, guidance_values base
-\i 20260425_parcel_intelligence_phase1.sql     -- evidence_sources, evidence_facts, kgis_cache, snapshots
-\i 20260425_parcel_intelligence_phase1_1.sql   -- evidence_facts indexes + relations
-\i 20260425_evidence_ingestion_indexes.sql     -- pg_trgm gin indexes on guidance_values
-\i 20260426_ai_call_logs.sql                   -- AI telemetry (cost / latency / failures)
-\i 20260426_evidence_links.sql                 -- polymorphic evidence_links
-\i 20260427_masterplan_guidance_intake.sql     -- 27 RMP 2031 Draft FAR rows (seed)
-\i 20260428_parcel_intelligence_signature.sql  -- HMAC snapshot signing (T4)
-\i 20260429_osm_road_cache.sql                 -- OSM Overpass road-width cache (T6)
-\i 20260430_source_document_registry_metadata.sql -- source authority/status/OCR metadata
-\i 20260430_master_plan_document_versions.sql  -- audit trail for source registry edits
-\i 20260430_source_document_pages_and_uav.sql  -- page ledger + BBMP UAV review rows
+-- === June 2026  (32) ===================================
+--   20260601_rmp_vol3_vol1_callouts_and_rules.sql
+--   20260602_document_extractions_reaper.sql
+--   20260602_properties_auto_derived_context_columns.sql
+--   20260603_comps_locality_precision_corrections.sql
+--   20260603_domain_claim_verified_uniqueness.sql
+--   20260604_ai_augment_usage_quota.sql
+--   20260605_security_events.sql
+--   20260606_ai_call_logs_status_constraint.sql
+--   20260607_user_consents.sql
+--   20260608_improvement_signals.sql
+--   20260609_deal_promoter_profiles.sql
+--   20260610_deal_comp_reliance.sql
+--   20260611_extraction_field_verdicts.sql
+--   20260612_organization_consents.sql
+--   20260613_drop_exchange_rates.sql
+--   20260613_rls_coverage_market_data_and_master_plan_docs.sql
+--   20260614_deal_recommendation_runs.sql
+--   20260615_deal_recommendation_verdicts.sql
+--   20260616_micro_market_intelligence.sql
+--   20260617_karnataka_rera_tracker.sql
+--   20260618_promoter_rera_link.sql
+--   20260619_district_localities.sql
+--   20260620_deals_list_perf_indexes.sql
+--   20260621_pd_existing_land_use.sql
+--   20260622_globalize_masterplan_reference.sql
+--   20260623_fix_rls_cross_tenant_select.sql
+--   20260624_deal_audit_log_durable_on_delete.sql
+--   20260625_organization_domains_and_audit.sql
+--   20260627_advisor_cleanup_rls_and_search_path.sql
+--   20260628_scope_market_reference_dataapi.sql
+--   20260629_deal_workspace_cache.sql
+--   20260630_deal_rera_inputs.sql
 
--- ────────────────────────────────────────────────────────────────────────────
--- Phase 4 — RLS hardening (Bet 2 from 2026-04-29 audit)
--- ────────────────────────────────────────────────────────────────────────────
-\i 20260430_users_rls_and_summary_invoker.sql  -- public.users RLS + deal_summary as security_invoker
-\i 20260430_function_search_path_lockdown.sql  -- pin search_path on REDIP functions
-\i 20260430_feature_flag_cohorts_write_policy.sql -- drop USING(true) write policy
-\i 20260430_unindexed_fk_covering_indexes.sql  -- 38 CREATE INDEX CONCURRENTLY for FK coverage
-\i 20260430_rls_no_policy_tables.sql           -- policies for the 5 RLS-on-no-policy tables
+-- === July 2026  (17) ===================================
+--   20260701_deal_signoffs.sql
+--   20260701_rmp2015_zonal_regulations_seed.sql
+--   20260702_bbmp_street_register_completion.sql
+--   20260711_far_rules_default_pending.sql
+--   20260712_statutory_plan_registry.sql
+--   20260713_guidance_values_field_completion.sql
+--   20260714_anekal_lpa_mp2031_zonal_regulations_seed.sql
+--   20260715_anekal_source_url_fix.sql
+--   20260716_tidy_failed_rmp2031_documents.sql
+--   20260717_igr_gandhinagara_guidance_values_seed.sql
+--   20260718_igr_anekal_belt_guidance_values_seed.sql
+--   20260719_entity_soft_delete.sql
+--   20260720_yield_studio_persistence.sql
+--   20260721_biaapa_planning_authority_registry.sql
+--   20260722_biaapa_mp2021_zonal_regulations_seed.sql
+--   20260723_hoskote_planning_authority_registry.sql
+--   20260724_hoskote_lpa_mp2031_zonal_regulations_seed.sql
 
 -- ============================================================================
--- After applying:
---   1. Verify: SELECT COUNT(*) FROM regulatory_data.far_rules WHERE org_id IS NULL;
---      → expect 27 (RMP 2031 Draft Zones A–B, residential + commercial)
---   2. Set required env vars on the deployment target:
---        DATABASE_URL                — Supabase connection string
---        JWT_SECRET                  — token signing
---        DEAL_EVENTS_HMAC_KEY        — financial audit trail signing
---        PARCEL_SIGNING_SECRET       — parcel snapshot signing (T4)
---        GEMINI_API_KEY              — document extraction
---        ANTHROPIC_API_KEY           — Claude reasoning
---        BLOB_READ_WRITE_TOKEN       — Vercel Blob (or Supabase Storage equivalent)
---        SUPABASE_URL / SUPABASE_KEY — server-side admin client
---        CRON_SECRET                 — Vercel cron auth (P4)
---   3. (Optional) Apply UI smoke check via run-redip.ps1 fullstack and exercise the
---      compose chain: deal → property → upload RMP PDF → extract → review → snapshot.
+-- End of manifest. To add a migration: create
+-- database/migrations/<YYYYMMDD>_<name>.sql (idempotent), apply it to prod via
+-- the Supabase SQL editor, then regenerate this manifest.
 -- ============================================================================
