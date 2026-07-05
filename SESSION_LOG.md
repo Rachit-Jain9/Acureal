@@ -4,6 +4,22 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-05 (Regulatory-coverage panel + Hoskote rulebook; airport-belt map/circle-rate scope) (PRs #935–#937 — merged)
+
+Continuation of the BIAAPA work. Three threads: a coverage panel (operator flagged the map "looked like it stopped at 2015"), the Hoskote ingestion, and scoping the airport-belt map + circle rates.
+
+- **#936 — "Regulatory coverage" panel on the Master Plan Explorer.** The Explorer only draws the RMP-2015 raster, so with Anekal + BIAAPA rulebooks live it read as if coverage stopped at the BDA city. New backend `masterplanService.getRegulatoryCoverage()` + `GET /master-plan/coverage` (operative authorities + FAR-rule/zone counts + a has_map_overlay flag; global reference; self-updating; migration-tolerant) → a premium side-panel card (BDA "Map + rules"; LPAs "Rules · on deals") + honest note that only RMP 2015 has an overlay. GOTCHA fixed pre-ship: the far_rules×zones join fanned each rule out per zone → plain COUNT(fr.id) gave rules×zones (51×13=663); COUNT(DISTINCT fr.id) fixes it — verified vs prod. Page copy reframed. Tests + theme-guard + build clean.
+- **#937 — Hoskote LPA Master Plan 2031 ingested.** Same Anekal/BIAAPA pipeline. `20260723` registry (Hoskote PA, taluk alias 'hoskote', BMRDA) + HOSKOTE_LPA_MP_2031 plan (source is a PROVISIONAL master plan → registered operative so the resolver routes to it, provisional status flagged in notes + a fact + confidence 0.90). `20260724` seed: 9 zones (8 §10 use-zones + IT/BT), **40 far_rules**, 6 facts from Chapter 10 Tables 4/5/10/11 (Res/Com 1.50→2.50, PSP 1.25→2.00; group housing 2.00/2.25/2.50/2.75; industrial cov 80→45%; IT/BT 1.50→2.50). **5-agent adversarial verification → CLEAN.** Resolver test 'hoskote'→HOSKOTE_PA. **Pending operator apply** (20260723 then 20260724).
+- **Airport-belt circle rates — BLOCKED on source (operator-supply).** The full Devanahalli SRO guidance-value tables aren't publicly downloadable (open-data mirror has only city-wide change circulars; full tables are behind the Kaveri portal per-village form). Operator has the SRO gazette files (~257; supplied the Anekal/Attibele/Jigani ones) → needs the Devanahalli SRO gazette dropped in chat, then run the existing `parse-igr-*`/`build-igr-*`/vision-verify pipeline.
+- **Anekal (+ other LPA) map overlays — need manual georeferencing.** The land-use rasters must be georeferenced on Map Warper (manual control-point placement) like RMP 2015 was; can't be reliably auto-georeferenced (GIS-accuracy hard rule). The coverage panel (#936) already makes the "only 2015 has an overlay" state honest/intentional, so it's optional polish, not a broken flow.
+
+### Left for next
+- Operator applies Hoskote (20260723 + 20260724) — then it auto-appears in the coverage panel.
+- Circle rates: operator drops the Devanahalli SRO gazette → run the IGR pipeline (also brings the airport belt to parity with the Anekal belt, which has both rules + rates).
+- Optional: georeference the LPA land-use maps (Map Warper) for map overlays.
+
+---
+
 ## 2026-07-05 (BIAAPA airport-belt zoning rulebook — retrieved, ingested & LIVE) (PRs #931–#934 — merged; migrations applied to prod)
 
 Followed the GBA checklist through to a real ingestion. Operator hit broken buttons on the LPA govt sites; diagnosed + solved retrieval, then ingested the BIAAPA rulebook end-to-end.
