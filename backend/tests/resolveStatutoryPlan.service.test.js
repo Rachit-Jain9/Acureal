@@ -55,6 +55,21 @@ const REGISTRY_ROWS = [
     plan_version_label: 'base-2009',
     plan_notes: null,
   },
+  {
+    authority_id: 'auth-hoskote',
+    authority_code: 'HOSKOTE_PA',
+    authority_name: 'Hoskote Planning Authority',
+    authority_kind: 'lpa',
+    authority_status: 'active',
+    status_note: 'Hoskote LPA under BMRDA',
+    taluk_aliases: ['hoskote'],
+    plan_id: 'plan-hoskote',
+    plan_code: 'HOSKOTE_LPA_MP_2031',
+    plan_name: 'Hoskote LPA Master Plan 2031 (Provisional)',
+    plan_legal_status: 'operative',
+    plan_version_label: 'provisional-2031',
+    plan_notes: null,
+  },
 ];
 
 describe('resolveStatutoryPlan', () => {
@@ -81,6 +96,15 @@ describe('resolveStatutoryPlan', () => {
     expect(res.method).toBe('taluk_alias');
     expect(res.confidence).toBeGreaterThanOrEqual(0.85);
     expect(res.needs_authority_confirmation).toBe(false);
+  });
+
+  test('routes a Hoskote taluk to Hoskote PA + Hoskote LPA MP 2031 (east belt)', async () => {
+    const res = await resolveStatutoryPlan({ taluk: 'Hoskote' });
+    expect(res.resolved).toBe(true);
+    expect(res.authority.code).toBe('HOSKOTE_PA');
+    expect(res.plan.code).toBe('HOSKOTE_LPA_MP_2031');
+    expect(res.method).toBe('taluk_alias');
+    expect(res.confidence).toBeGreaterThanOrEqual(0.85);
   });
 
   test('routes a BDA taluk to BDA + RMP 2015', async () => {
