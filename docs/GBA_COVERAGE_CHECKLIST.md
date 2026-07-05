@@ -36,6 +36,7 @@ Local-Planning-Areas register + each authority's `*.tpa.gov.in` portal). Pairs w
 |---|---|---|---|
 | **BDA** | Bengaluru city core + BMA periphery | **RMP 2015** (operative; still being amended) | ✅ ingested (51 far_rules, 13 zones) |
 | **Anekal PA** | Jigani, Attibele, Anekal | **Anekal LPA Master Plan 2031** (G.O. UDD 151 BMR 2013, 03-09-2014) | ✅ ingested (41 far_rules, 10 zones) |
+| **BIAAPA** | Airport belt / Devanahalli | **BIAAPA Master Plan 2021** (gazette 29-01-2009) | ✅ **ingested + LIVE 2026-07-05** (37 far_rules, 10 zones, 5 facts; PR #934, migrations 20260721/22 applied to prod; 5-agent verified) |
 
 ---
 
