@@ -40,6 +40,21 @@ const REGISTRY_ROWS = [
     plan_version_label: 'base-2014',
     plan_notes: null,
   },
+  {
+    authority_id: 'auth-biaapa',
+    authority_code: 'BIAAPA',
+    authority_name: 'Bengaluru International Airport Area Planning Authority',
+    authority_kind: 'lpa',
+    authority_status: 'active',
+    status_note: 'BIAAPA airport belt under BMRDA',
+    taluk_aliases: ['devanahalli'],
+    plan_id: 'plan-biaapa',
+    plan_code: 'BIAAPA_MP_2021',
+    plan_name: 'BIAAPA Master Plan 2021 — Zoning of Land Use and Regulations',
+    plan_legal_status: 'operative',
+    plan_version_label: 'base-2009',
+    plan_notes: null,
+  },
 ];
 
 describe('resolveStatutoryPlan', () => {
@@ -53,6 +68,16 @@ describe('resolveStatutoryPlan', () => {
     expect(res.resolved).toBe(true);
     expect(res.authority.code).toBe('ANEKAL_PA');
     expect(res.plan.code).toBe('ANEKAL_LPA_MP_2031');
+    expect(res.method).toBe('taluk_alias');
+    expect(res.confidence).toBeGreaterThanOrEqual(0.85);
+    expect(res.needs_authority_confirmation).toBe(false);
+  });
+
+  test('routes a Devanahalli taluk to BIAAPA + BIAAPA MP 2021 (airport belt)', async () => {
+    const res = await resolveStatutoryPlan({ taluk: 'Devanahalli' });
+    expect(res.resolved).toBe(true);
+    expect(res.authority.code).toBe('BIAAPA');
+    expect(res.plan.code).toBe('BIAAPA_MP_2021');
     expect(res.method).toBe('taluk_alias');
     expect(res.confidence).toBeGreaterThanOrEqual(0.85);
     expect(res.needs_authority_confirmation).toBe(false);
