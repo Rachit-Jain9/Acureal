@@ -157,6 +157,23 @@ next session should:
 
 ---
 
+## GBA / new-LPA zoning-regulation tables (BIAAPA, Hoskote, …) — MANUAL
+
+- Status: MANUAL (blocked on the separate zonal-regulations document per LPA)
+- Context: extending FAR-rule coverage beyond BDA/RMP-2015 + Anekal to the other planning
+  authorities now around GBA. Full authority list + official portals: `docs/GBA_COVERAGE_CHECKLIST.md`.
+- Finding (2026-07-05): the LPA sites (`*.tpa.gov.in`) publish only the **master-plan MAP atlases**
+  (scanned land-use/boundary sheets, ~0 text layer) — NOT the numeric zoning-regulation tables
+  (FAR / setbacks / ground coverage / plot-area bands by zone) the deterministic engine needs.
+  Retrieved & verified: BIAAPA Master Plan 2021 (`…/files/MASTER-PLAN-2021.pdf`, 42 sheets) and
+  Hoskote Master Plan 2031 (`…/files/Master_Plans.pdf`, 87 sheets). Both maps-only.
+- Workaround: source each LPA's **zonal-regulations booklet / gazette notification** (separate doc),
+  then run the same deterministic parse → adversarial verify → operator-applied migration as Anekal.
+  Do NOT fabricate FAR/setback numbers for these areas. `kum.karnataka.gov.in` (earlier-cited BIAAPA
+  zonal-regs host) is dead DNS.
+- Secondary: the map atlases CAN seed reference land-use overlays (RMP-2015-style) — feasible but a
+  separate georeferencing/overlay effort, not FAR data.
+
 ## Notes
 - All data gaps above are handled via the document upload + Gemini extraction pipeline
 - No government data is fabricated anywhere in the codebase
