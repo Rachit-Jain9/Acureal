@@ -67,31 +67,34 @@ Regulations PDF.
 
 ---
 
-## ⚠️ Retrieval findings (2026-07-05) — what these sites actually publish
+## ✅ Retrieval findings (2026-07-05) — rulebooks FOUND & retrieved (BIAAPA + Hoskote)
 
-Attempted a live retrieval of BIAAPA + Hoskote. Key learnings (save re-hunting):
+Live retrieval of BIAAPA + Hoskote. **The FAR/zoning rulebooks ARE published on these sites** (under
+non-obvious filenames the broken tiles never exposed) and are **clean, extractable text — ingestible
+like Anekal.** Files retrieved to the session scratchpad (`…/scratchpad/gba_plans/`).
 
-- **The `*.tpa.gov.in` "Planning" tiles are broken buttons** — no click handler, no link behind them
-  (verified in-DOM). Ignore the tiles; use the direct file URLs below.
-- **Direct, working master-plan file URLs discovered** (these DO download):
-  - BIAAPA Master Plan 2021: `http://biaapa.tpa.gov.in/sites/biaapa.tpa.gov.in/files/MASTER-PLAN-2021.pdf` (90.8 MB, 42 sheets)
-  - Hoskote Master Plan 2031: `http://hoskote.tpa.gov.in/sites/hoskote.tpa.gov.in/files/Master_Plans.pdf` (166 MB, 87 sheets — "MAPS Vol")
-  - Real page (not the tile): `…/en/master-plan`. `HEAD` returns a 2516-byte soft-404 for **everything**, so probe with `GET`, not `HEAD`.
-- **These PDFs are scanned MAP ATLASES only** — land-use / boundary map sheets (images, ~0 text layer).
-  They do **NOT** contain the numeric **zoning-regulation tables** (FAR / setbacks / ground coverage /
-  plot-area bands by zone) that the deterministic engine needs (the Anekal-style rulebook). So they can
-  seed a **reference map overlay** (like RMP 2015), but **cannot** seed FAR rules.
-- **The FAR/zoning rulebook is a SEPARATE document** (gazette notification / DTCP zonal-regulations
-  booklet) not published on these LPA map sites. Sourcing it is a **manual blocker** — do NOT fabricate
-  FAR/setback numbers for these areas. (`kum.karnataka.gov.in`, the host earlier web-search cited for the
-  BIAAPA zonal regs, is **dead DNS** from this network — NXDOMAIN.)
-- **Nelamangala** (`npa.karnataka.gov.in`) was **down** (connection timed out) on 2026-07-05.
-- **Retrieval method that works** (this session runs on the operator's Windows box): a direct
-  `Invoke-WebRequest` with the sandbox disabled reaches `*.tpa.gov.in` (the sandboxed shell can't resolve
-  them). Large files need a background download (they exceed the 2-min foreground cap → truncate).
+- **The `*.tpa.gov.in` "Planning" tiles are broken buttons** (no handler/link in DOM). Ignore them; use
+  the direct file URLs. Discovery is by web-search / crawling doc sections, NOT `HEAD` (`HEAD` returns a
+  2516-byte soft-404 for **everything** → probe with `GET`).
+- **BIAAPA — Zoning Regulations 2021** ✅ `http://biaapa.tpa.gov.in/sites/biaapa.tpa.gov.in/files/ZR-BIAAPA-2021.pdf`
+  (0.54 MB, **59 pp, ~85k chars real text**; Table 9 = Coverage/FAR/Setbacks for Industrial, plus
+  residential/commercial/etc. — plot-area bands → coverage% → FAR → setbacks → road width). **This is the
+  ingestible rulebook.** Land-use MAP atlas (overlay-only, scanned) is separate: `…/files/MASTER-PLAN-2021.pdf` (90.8 MB, 42 sheets).
+- **Hoskote — Zonal Regulations 2031** ✅ `http://hoskote.tpa.gov.in/sites/hoskote.tpa.gov.in/files/Zonal%20Regulations-2031.pdf`
+  (2.03 MB, **75 pp, ~137k chars real text**; "Chapter 10 – Zonal Regulations", full FAR/setback/coverage
+  tables). Map atlas (overlay-only) separate: `…/files/Master_Plans.pdf` (166 MB, 87 sheets, "MAPS Vol").
+- **Pattern for the other LPAs:** the map site publishes BOTH a scanned MAP atlas (overlay-only) AND a
+  text ZONING-REGULATIONS PDF (the ingestible rulebook, often named `ZR-*.pdf` or `Zonal Regulations-*.pdf`).
+  Find the ZR file via web-search (`<LPA> zoning regulations pdf tpa.gov.in`) — the on-site tile is broken.
+- **Nelamangala** (`npa.karnataka.gov.in`) was **down** (timeout) on 2026-07-05 — retry later.
+  `kum.karnataka.gov.in` is **dead DNS** (NXDOMAIN) — ignore that host.
+- **Retrieval method** (this session runs on the operator's Windows box): direct `Invoke-WebRequest` with
+  the sandbox disabled reaches `*.tpa.gov.in` (the sandboxed shell + Anthropic-side WebFetch cannot).
+  Large map files exceed the 2-min foreground cap → download in the background.
 
-**Net:** map overlays for these LPAs = feasible (files in hand). FAR-rule ingestion = blocked on the
-separate zonal-regulations document per LPA. See `TODO_DATA.md`.
+**Net:** ✅ BIAAPA + Hoskote FAR rulebooks retrieved + verified ingestible → **Option B (add real
+build-rules) is viable**; ingest via the Anekal pipeline (deterministic parse → adversarial verify →
+operator-applied migration). Map overlays also feasible later (atlases in hand). See `TODO_DATA.md`.
 
 ---
 
