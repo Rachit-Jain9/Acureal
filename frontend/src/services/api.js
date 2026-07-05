@@ -729,6 +729,7 @@ export const bestUseAPI = {
 
 // Master Plan (regulatory zones)
 export const masterPlanAPI = {
+  coverage:     ()                    => api.get('/master-plan/coverage'),
   listZones:    (params)              => api.get('/master-plan/zones', { params }),
   getZone:      (id, params)          => api.get(`/master-plan/zones/${id}`, { params }),
   getVersions:  (id)                  => api.get(`/master-plan/zones/${id}/versions`),

@@ -10,12 +10,12 @@ import {
 } from 'react-leaflet';
 import { Link } from 'react-router-dom';
 import {
-  Search, Layers, Crosshair, MapPin, X as XIcon, ExternalLink, Info,
+  Search, Layers, Crosshair, MapPin, X as XIcon, ExternalLink, Info, Landmark,
 } from 'lucide-react';
 import clsx from 'clsx';
 import 'leaflet/dist/leaflet.css';
 import { useQuery } from '@tanstack/react-query';
-import { dealsAPI, propertiesAPI } from '../../services/api';
+import { dealsAPI, propertiesAPI, masterPlanAPI } from '../../services/api';
 import { toast } from '../common/Toast';
 import {
   isInRmp2015Bounds,
@@ -183,6 +183,52 @@ function ContextDrawer({ selected, onClose }) {
   );
 }
 
+// Regulatory coverage — the operative authorities REDIP holds a rulebook for.
+// Makes the RMP-2015-only land-use overlay read as ONE layer of a deliberate,
+// multi-authority system rather than "coverage stops at the city". Honest: only
+// RMP 2015 has a georeferenced map overlay; the LPA rulebooks apply per-deal.
+// Data-driven (self-updating as new LPAs are seeded); renders nothing until loaded.
+function RegulatoryCoveragePanel({ authorities }) {
+  if (!authorities?.length) return null;
+  return (
+    <div className="shrink-0 overflow-hidden rounded-editorial border border-hairline bg-bg-elevated shadow-md">
+      <div className="flex items-center gap-1.5 border-b border-hairline-soft px-3 py-2">
+        <Landmark size={12} className="text-content-secondary" aria-hidden="true" />
+        <span className="text-[11px] font-semibold text-content-primary">Regulatory coverage</span>
+      </div>
+      <ul className="divide-y divide-hairline-soft">
+        {authorities.map((a) => (
+          <li key={a.authority_code} className="px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="truncate text-[11px] font-medium text-content-primary">
+                {a.area || a.authority_name}
+              </span>
+              <span
+                className={clsx(
+                  'shrink-0 rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.05em]',
+                  a.has_map_overlay ? 'bg-accent-soft text-accent' : 'bg-premium-soft text-premium',
+                )}
+              >
+                {a.has_map_overlay ? 'Map + rules' : 'Rules · on deals'}
+              </span>
+            </div>
+            <p className="mt-0.5 truncate text-[10px] text-content-muted">
+              {(a.plan_code || a.plan_name || '').replace(/_/g, ' ')}
+              {a.rules_loaded && (
+                <span className="tabular-nums"> · {a.far_rules} rules · {a.zones} zones</span>
+              )}
+            </p>
+          </li>
+        ))}
+      </ul>
+      <p className="border-t border-hairline-soft px-3 py-2 text-[10px] leading-snug text-content-muted">
+        <span className="font-medium text-content-secondary">Only RMP 2015 has a land-use map overlay</span>{' '}
+        (shown here). Each LPA rulebook applies on its deals&apos; Parcel / Zoning tab; their map overlays are reference-pending.
+      </p>
+    </div>
+  );
+}
+
 export default function MasterPlanExplorer() {
   const [basemap, setBasemap] = useState('satellite');
   const [mpEnabled, setMpEnabled] = useState(true);
@@ -201,6 +247,17 @@ export default function MasterPlanExplorer() {
     queryFn: () => dealsAPI.list({ limit: 500, fields: 'summary' }),
     staleTime: 60_000,
   });
+
+  // Regulatory coverage — the operative authorities REDIP holds a rulebook for.
+  // Powers the "Regulatory coverage" panel so the RMP-2015-only overlay reads as
+  // one layer of a broader system. Reference data → long staleTime.
+  const { data: coverageResp } = useQuery({
+    queryKey: ['masterplan-regulatory-coverage'],
+    queryFn: () => masterPlanAPI.coverage(),
+    staleTime: 300_000,
+  });
+  const coverageAuthorities =
+    coverageResp?.data?.data?.authorities || coverageResp?.data?.authorities || [];
 
   const dealPins = useMemo(() => {
     const rows = dealsResp?.data?.data || dealsResp?.data || [];
@@ -404,6 +461,8 @@ export default function MasterPlanExplorer() {
             )}
           </div>
         </div>
+
+        <RegulatoryCoveragePanel authorities={coverageAuthorities} />
 
         <MasterPlanLegend collapsible defaultOpen className="shrink-0" />
       </div>
