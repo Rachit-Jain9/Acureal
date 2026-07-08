@@ -1,5 +1,6 @@
 import { Component, Fragment } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
+import * as Sentry from '@sentry/react';
 
 // Detect "stale chunk" errors that happen after a deploy lands new bundle
 // hashes but the user's HTML still references the old ones. The dynamic
@@ -78,6 +79,14 @@ export class ErrorBoundary extends Component {
   componentDidCatch(error, info) {
     const isChunk = isChunkLoadError(error);
     console.error('[ErrorBoundary]', isChunk ? '[chunk-load]' : '', error, info?.componentStack);
+    // Report genuine render crashes to Sentry (no-op until init'd in prod).
+    // Chunk-load errors are benign + auto-recovered by the reload below, so we
+    // skip them to keep the error feed signal-rich.
+    if (!isChunk) {
+      Sentry.captureException(error, {
+        contexts: { react: { componentStack: info?.componentStack } },
+      });
+    }
     if (isChunk && !safeSession.get(RELOAD_GUARD_KEY)) {
       // Set the guard BEFORE reloading so the next page-load knows we've
       // already tried once. Small delay lets the UI paint the reload

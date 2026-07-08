@@ -1,6 +1,12 @@
 require('./config/loadEnv');
 require('./config/validateEnv').validateEnv();
 
+// Initialise Sentry BEFORE Express / pg are required so the SDK's
+// auto-instrumentation can attach. No-op under tests; only runs in the
+// deployed runtime (Vercel / production).
+const { Sentry, initSentry } = require('./lib/sentry');
+const sentryEnabled = initSentry();
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -256,6 +262,16 @@ app.use('/api/capital-stack-optimizer', capitalStackOptimizerRoutes);
 
 // 404 handler
 app.use(notFoundHandler);
+
+// Sentry error capture — must sit AFTER the routes and BEFORE the custom
+// handler. It reports server faults (5xx) then passes the error on so
+// errorHandler still shapes the client response. 4xx (validation / auth /
+// not-found) are intentionally NOT reported — they're expected, not incidents.
+if (sentryEnabled) {
+  Sentry.setupExpressErrorHandler(app, {
+    shouldHandleError: (err) => Number(err.statusCode || err.status || 500) >= 500,
+  });
+}
 
 // Global error handler
 app.use(errorHandler);

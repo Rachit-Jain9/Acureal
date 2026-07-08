@@ -9,6 +9,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   plugins: [react()],
+  // Build-time constant: the short git SHA of the deploy, injected so Sentry
+  // can attribute an error to the exact release that introduced it. Vercel sets
+  // VERCEL_GIT_COMMIT_SHA at build; falls back to 'dev' locally.
+  define: {
+    __APP_RELEASE__: JSON.stringify(
+      process.env.VERCEL_GIT_COMMIT_SHA ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7) : 'dev',
+    ),
+  },
   build: {
     // PR-E (2026-05-25) — named vendor chunks for the largest libraries so
     // they cache as stable artifacts across page navs and so the page-bundle
@@ -53,6 +61,9 @@ export default defineConfig({
           if (id.includes('node_modules/react-router')) return 'vendor-react-router';
           if (id.includes('node_modules/@tanstack/')) return 'vendor-tanstack';
           if (id.includes('node_modules/lucide-react/')) return 'vendor-icons';
+          // Sentry (error monitoring) — its own named, cacheable vendor chunk
+          // so it stays isolated and easy to size-review.
+          if (id.includes('node_modules/@sentry/')) return 'vendor-sentry';
           return undefined;
         },
       },

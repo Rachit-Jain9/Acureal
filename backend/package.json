@@ -16,6 +16,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
     "@google/generative-ai": "^0.21.0",
+    "@sentry/node": "^10.64.0",
     "@supabase/supabase-js": "^2.103.0",
     "@vercel/blob": "^2.3.3",
     "@vercel/functions": "^3.5.0",

@@ -3,7 +3,12 @@ import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { isChunkLoadError } from './components/common/ErrorBoundary';
+import { initSentry } from './lib/sentry';
 import './index.css';
+
+// Start error monitoring as early as possible so init-time errors are captured.
+// No-op in dev / tests (only runs in the deployed production build).
+initSentry();
 
 // ─── Stale-chunk auto-recovery (global handler) ──────────────────────────────
 // The React ErrorBoundary catches stale-chunk errors that surface during a
