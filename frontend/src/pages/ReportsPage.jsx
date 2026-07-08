@@ -366,7 +366,7 @@ export default function ReportsPage() {
               className={`border-b-2 pb-3 text-sm font-medium transition whitespace-nowrap ${
                 activeTab === tab.key
                   ? 'border-accent text-accent'
-                  : 'border-transparent text-content-secondary hover:text-content-secondary dark:hover:text-content-muted'
+                  : 'border-transparent text-content-secondary hover:text-content-primary dark:hover:text-content-muted'
               }`}
             >
               {tab.label}

@@ -102,13 +102,13 @@ function PropertyMarker({ property, isSelected, onSelectProperty }) {
               <button
                 type="button"
                 onClick={() => onSelectProperty(property.id)}
-                className="text-sm font-medium text-accent hover:text-accent"
+                className="text-sm font-medium text-accent hover:text-accent-hover"
               >
                 Focus property
               </button>
               <Link
                 to={`/dashboard/properties/${property.id}`}
-                className="text-sm font-medium text-accent hover:text-accent"
+                className="text-sm font-medium text-accent hover:text-accent-hover"
               >
                 Open detail
               </Link>

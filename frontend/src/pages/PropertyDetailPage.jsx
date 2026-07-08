@@ -226,7 +226,7 @@ export default function PropertyDetailPage() {
     <div className="space-y-6">
       <button
         onClick={() => navigate('/dashboard/deals')}
-        className="flex items-center gap-1 text-sm text-content-secondary hover:text-content-secondary dark:hover:text-content-muted"
+        className="flex items-center gap-1 text-sm text-content-secondary hover:text-content-primary dark:hover:text-content-muted"
       >
         <ArrowLeft size={16} /> Back to Properties
       </button>
@@ -333,7 +333,7 @@ export default function PropertyDetailPage() {
                       type="button"
                       disabled={geocodeMutation.isPending}
                       onClick={() => geocodeMutation.mutate(id)}
-                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent disabled:opacity-50"
+                      className="mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent-hover disabled:opacity-50"
                     >
                       <RefreshCw size={12} className={geocodeMutation.isPending ? 'animate-spin' : ''} />
                       {geocodeMutation.isPending ? 'Re-geocoding...' : 'Re-geocode from address'}
@@ -409,7 +409,7 @@ export default function PropertyDetailPage() {
                       href={googleMapsUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 font-medium text-accent hover:text-accent"
+                      className="inline-flex items-center gap-1 font-medium text-accent hover:text-accent-hover"
                     >
                       Open map
                       <ExternalLink size={13} />

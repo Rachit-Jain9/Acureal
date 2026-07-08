@@ -20,18 +20,6 @@ export function usePortfolioRiskRadar() {
   });
 }
 
-// Portfolio Readiness — workspace-level rollup of every live deal's IC +
-// RERA readiness state. Pairs with the per-deal IC Readiness Pack on the
-// DD tab (this is the same posture surfaced at portfolio zoom). 30 s
-// staleTime matches the per-deal pack.
-export function usePortfolioReadiness() {
-  return useQuery({
-    queryKey: ['portfolio-readiness'],
-    queryFn: () => dashboardAPI.portfolioReadiness().then((r) => r.data.data),
-    staleTime: 30_000,
-  });
-}
-
 // Today's Attention — specific item-level signals across the live portfolio
 // (overdue required DD, expiring approvals, recent risk flags, stale deals,
 // the last 10 audit-log entries). The companion read to usePortfolioRiskRadar:

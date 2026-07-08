@@ -127,7 +127,7 @@ export function OfficeBenchmarksTable({ rows }) {
       <button
         type="button"
         onClick={() => setShowSubmarkets((v) => !v)}
-        className="mt-3 text-xs font-medium text-accent hover:text-accent flex items-center gap-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 -mx-1"
+        className="mt-3 text-xs font-medium text-accent hover:text-accent-hover flex items-center gap-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 -mx-1"
       >
         <ChevronDown size={13} className={`transition-transform duration-150 ${showSubmarkets ? 'rotate-180' : ''}`} />
         {showSubmarkets ? 'Hide submarket Grade A range' : `Show ${subRows.length} submarket Grade A range${subRows.length === 1 ? '' : 's'}`}

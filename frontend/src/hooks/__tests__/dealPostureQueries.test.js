@@ -92,7 +92,6 @@ describe('canonical key set', () => {
       'portfolio-risk-radar',
       'dashboard',
       'dashboard-attention',
-      'portfolio-readiness',
     ]);
   });
 });

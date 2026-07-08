@@ -362,7 +362,7 @@ function CoordinatesGateExplainer({ gate, kgisHierarchy, onSwitchToCoords }) {
             <button
               type="button"
               onClick={onSwitchToCoords}
-              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-data-negative text-content-inverse hover:bg-data-negative transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative active:scale-[0.98]"
+              className="inline-flex items-center gap-1 text-[11px] px-2 py-1 rounded bg-data-negative text-content-inverse hover:opacity-90 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative active:scale-[0.98]"
             >
               Switch to coordinate input
             </button>

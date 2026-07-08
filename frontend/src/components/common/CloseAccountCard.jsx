@@ -108,7 +108,7 @@ export default function CloseAccountCard() {
                 type="button"
                 onClick={handleClose}
                 disabled={!canConfirm || submitting}
-                className="text-sm font-medium text-content-inverse bg-data-negative hover:bg-data-negative disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-4 py-2 flex items-center gap-1.5 transition-colors"
+                className="text-sm font-medium text-content-inverse bg-data-negative hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg px-4 py-2 flex items-center gap-1.5 transition-colors"
               >
                 {submitting && <Loader2 size={14} className="animate-spin" />}
                 {submitting ? 'Closing…' : 'Close account permanently'}
