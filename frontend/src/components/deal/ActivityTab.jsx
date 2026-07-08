@@ -30,6 +30,7 @@ import {
 import Badge from '../common/Badge';
 import { SectionHeader, SkeletonList, confirm } from '../../design-system';
 import AuditTrailChip from '../financials/AuditTrailChip';
+import DealAccessSection from './DealAccessSection';
 import {
   formatDate,
   formatRelativeTime,
@@ -137,6 +138,10 @@ export default function ActivityTab() {
 
   return (
     <div className="space-y-4">
+      {/* Team & access — sharing the deal workspace with people lives here,
+          where operators naturally look for "who's on this deal". */}
+      <DealAccessSection />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

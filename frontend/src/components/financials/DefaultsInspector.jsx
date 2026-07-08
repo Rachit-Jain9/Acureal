@@ -166,7 +166,7 @@ export default function DefaultsInspector({
             onClick={close}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-2xl flex-col bg-bg-elevated shadow-2xl">
-            <header className="relative overflow-hidden border-b border-hairline-strong bg-surface-2 px-6 py-5 text-content-primary">
+            <header className="relative shrink-0 overflow-hidden border-b border-hairline-strong bg-surface-2 px-6 py-5 text-content-primary">
               <div className="relative flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-content-secondary">
@@ -176,26 +176,27 @@ export default function DefaultsInspector({
                   <p className="mt-1 max-w-xl text-sm text-content-secondary">
                     Every default value fed into the <span className="font-semibold text-content-primary">{label}</span> model —
                     with unit, typical range, citation, and last review date. Sourced from
-                    <code className="mx-1 rounded bg-white/10 px-1.5 py-0.5 text-[10px]">config/defaults.ts</code>.
+                    <code className="mx-1 rounded bg-bg-secondary px-1.5 py-0.5 text-[10px] text-content-secondary">config/defaults.ts</code>.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={close}
-                  className="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white"
+                  aria-label="Close defaults inspector"
+                  className="shrink-0 rounded-lg p-2 text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 >
                   <X size={18} />
                 </button>
               </div>
 
               <div className="relative mt-5 flex flex-col gap-3">
-                <div className="flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5">
+                <div className="flex items-center gap-2 rounded-full border border-hairline bg-bg-elevated px-3 py-1.5">
                   <Search size={14} className="text-content-muted" />
                   <input
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Search key, source, unit, description…"
-                    className="flex-1 bg-transparent text-sm text-white placeholder-cyan-200/70 outline-none"
+                    className="flex-1 bg-transparent text-sm text-content-primary placeholder:text-content-muted outline-none"
                   />
                   {search && (
                     <button
@@ -214,7 +215,7 @@ export default function DefaultsInspector({
                       active={activeCategory === 'all'}
                       onClick={() => setActiveCategory('all')}
                       icon={Filter}
-                      accent="from-white/30 to-white/10"
+                      accent="from-accent to-accent"
                       label={`All (${totalCount})`}
                     />
                     {visibleCategories.map((c) => (
@@ -232,7 +233,7 @@ export default function DefaultsInspector({
               </div>
             </header>
 
-            <div className="flex-1 overflow-y-auto bg-bg-secondary">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-bg-secondary">
               {loading && (
                 <div className="p-6">
                   <SkeletonList rows={8} columns={3} />
@@ -273,7 +274,7 @@ export default function DefaultsInspector({
               )}
             </div>
 
-            <footer className="border-t border-hairline-strong bg-bg-elevated px-6 py-3 text-[11px] text-content-secondary">
+            <footer className="shrink-0 border-t border-hairline-strong bg-bg-elevated px-6 py-3 text-[11px] text-content-secondary">
               <div className="flex items-center justify-between gap-3">
                 <span>
                   Bengaluru-shaped baseline · India-first · Values are institutional guidelines, not prescriptions.

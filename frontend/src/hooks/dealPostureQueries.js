@@ -48,10 +48,14 @@ const POSTURE_KEYS_FOR_DEAL = [
 const PORTFOLIO_ROLLUP_KEYS = [
   'portfolio-risk-radar',
   'dashboard',
-  // The Dashboard's "Today's Attention" worklist and "Portfolio Readiness" tile
-  // are driven by DD / approval / risk state, so a posture mutation must refresh
-  // them too — otherwise they show already-cleared items until a hard reload.
+  // The Dashboard's "Today's Attention" worklist is driven by DD / approval /
+  // risk state, so a posture mutation must refresh it too — otherwise it shows
+  // already-cleared items until a hard reload.
   'dashboard-attention',
+  // The Deals-list per-deal IC-readiness chips (DealsPage → DealCard) read the
+  // portfolio-readiness rollup, itself derived from DD / approval / risk state,
+  // so a posture mutation must refresh it too. (The former dashboard "Portfolio
+  // Readiness" tile was removed; this key now serves only the Deals-list chips.)
   'portfolio-readiness',
 ];
 

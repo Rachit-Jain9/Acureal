@@ -33,8 +33,6 @@ const PipelineChartWidget = lazy(() =>
 const CitiesChartWidget = lazy(() =>
   import('../components/dashboard/DashboardCharts').then((m) => ({ default: m.CitiesChartWidget })));
 import PortfolioRiskRadarWidget from '../components/dashboard/PortfolioRiskRadarWidget';
-import PortfolioReadinessWidget from '../components/dashboard/PortfolioReadinessWidget';
-import PipelineVelocityWidget from '../components/dashboard/PipelineVelocityWidget';
 import AttentionPanel from '../components/dashboard/AttentionPanel';
 import CustomizePopover from '../components/dashboard/CustomizePopover';
 import GettingStarted from '../components/dashboard/GettingStarted';
@@ -83,9 +81,6 @@ const buildWidgetRenderer = ({ data, chartPalette, tooltipStyle, canCurate }) =>
   // Self-fetches via usePortfolioRiskRadar — independent of the dashboard
   // stats payload so it can refetch on its own staleTime cadence.
   portfolio_risk_radar:  () => <PortfolioRiskRadarWidget />,
-  // Phase 4 prologue — Portfolio Readiness rollup of every live deal's
-  // IC + RERA readiness state. Self-fetches via usePortfolioReadiness.
-  portfolio_readiness:   () => <PortfolioReadinessWidget />,
   // Today's Attention — specific item-level signals (overdue DD, expiring
   // approvals, recent risks, stale deals, recent activity). Self-fetches.
   attention_panel:       () => <AttentionPanel />,
@@ -94,9 +89,6 @@ const buildWidgetRenderer = ({ data, chartPalette, tooltipStyle, canCurate }) =>
       <PipelineChartWidget stage_distribution={data?.stage_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />
     </Suspense>
   ),
-  // Pipeline Velocity — funnel / median time-in-stage / cycle / aging /
-  // throughput, reconstructed from deal_stage_history. Self-fetches.
-  pipeline_velocity:     () => <PipelineVelocityWidget />,
   cities_chart:          () => (
     <Suspense fallback={<SkeletonCard height="h-[332px]" />}>
       <CitiesChartWidget cities_distribution={data?.cities_distribution} chartPalette={chartPalette} tooltipStyle={tooltipStyle} />
@@ -222,15 +214,39 @@ export default function DashboardPage() {
     new Set(['ai_cost_summary', 'audit_trail_tail']),
   ];
 
+  // The pairing below keys off ADJACENCY in the render list, so a widget
+  // wedged between a pair's two members (or a user reorder) would drop them
+  // back to full-width stacking. Normalize a working copy: for each declared
+  // pair, if BOTH members are present + visible + renderable, pull the second
+  // up to sit right after the first (first member wins its position). The
+  // persisted layout and Customize order are untouched — this affects render
+  // order only, so "Pipeline distribution" and "City distribution" always sit
+  // side-by-side regardless of what's stored.
+  const orderedLayout = [...layout];
+  for (const set of SIDE_BY_SIDE_PAIRS) {
+    const [first, second] = [...set];
+    const canRender = (id) => {
+      const e = orderedLayout.find((x) => x.id === id);
+      return Boolean(e && e.visible && renderer[id]);
+    };
+    if (!canRender(first) || !canRender(second)) continue;
+    const secondIdx = orderedLayout.findIndex((x) => x.id === second);
+    const firstIdx = orderedLayout.findIndex((x) => x.id === first);
+    if (secondIdx === firstIdx + 1) continue; // already adjacent, in order
+    const [moved] = orderedLayout.splice(secondIdx, 1);
+    const anchorIdx = orderedLayout.findIndex((x) => x.id === first);
+    orderedLayout.splice(anchorIdx + 1, 0, moved);
+  }
+
   const blocks = [];
   let i = 0;
-  while (i < layout.length) {
-    const entry = layout[i];
+  while (i < orderedLayout.length) {
+    const entry = orderedLayout[i];
     if (!entry.visible || !renderer[entry.id]) {
       i += 1;
       continue;
     }
-    const next = layout[i + 1];
+    const next = orderedLayout[i + 1];
     const pair = SIDE_BY_SIDE_PAIRS.find(
       (set) =>
         set.has(entry.id)
