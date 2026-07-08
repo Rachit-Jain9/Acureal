@@ -2,10 +2,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { propertiesAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
 
-export function useProperties(params = {}) {
+// `options` forwards react-query settings (e.g. { enabled, staleTime }) so a
+// caller can defer the fetch until it's actually needed — e.g. the Deals page
+// only needs the property picker once the New-Deal modal opens, not on every
+// list visit. Backward-compatible: existing callers pass only params.
+export function useProperties(params = {}, options = {}) {
   return useQuery({
     queryKey: ['properties', params],
     queryFn: () => propertiesAPI.list(params).then((r) => r.data),
+    ...options,
   });
 }
 

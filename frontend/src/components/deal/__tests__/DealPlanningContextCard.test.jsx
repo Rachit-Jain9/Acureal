@@ -80,9 +80,12 @@ describe('DealPlanningContextCard', () => {
     expect(screen.getByText(/Bellary Road/)).toBeInTheDocument();
   });
 
-  it('surfaces the RMP 2031 draft / not-notified caveat', () => {
+  it('surfaces the RMP 2031 draft caveat in its footnote', () => {
+    // The generic RmpStatusBanner was removed from this card (it duplicated —
+    // and once a zone is assigned, contradicted — the plan-aware banner in
+    // MasterPlanZonePanel). The card keeps its own draft caveat in the footnote.
     renderWithRouter();
-    expect(screen.getByText(/never legally notified/i)).toBeInTheDocument();
+    expect(screen.getByText(/RMP 2031 \(Draft\)/i)).toBeInTheDocument();
   });
 
   it('does NOT show the hollow "not ingested yet" state when callouts are present', () => {
@@ -99,7 +102,7 @@ describe('DealPlanningContextCard', () => {
     };
     renderWithRouter();
     expect(screen.getByText(/have not been ingested yet/i)).toBeInTheDocument();
-    expect(screen.getByText(/never legally notified/i)).toBeInTheDocument();
+    expect(screen.getByText(/RMP 2031 \(Draft\)/i)).toBeInTheDocument();
   });
 
   it('never interpolates "undefined" when callout objects are hollow', () => {

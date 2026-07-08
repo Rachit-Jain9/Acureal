@@ -407,24 +407,12 @@ async function getDealWorkspace(dealId, options = {}) {
     };
   }, 'dealDoctor');
 
-  // Run the two narrator-bearing slices concurrently instead of summing their
-  // latencies. They share no data dependency — both derive from the read-only
-  // `composed` payload — and the only consumer of dealDoctorSlice (IC readiness,
-  // below) runs after this await. Per-card narration is now response-cached, so
-  // an unchanged deal resolves both slices with zero SDK round-trips; on a cold
-  // (changed) deal the two narration batches overlap instead of serialising.
-  const [recommendationsSlice, dealDoctorSlice] = await Promise.all([
-    recommendationsPromise,
-    dealDoctorPromise,
-  ]);
-
   // PR P1-PR2 — Micro-Market Intelligence slice. Classify the deal's parcel
   // (via lat/lng if present) into one of the 20 Bengaluru micro-markets, then
-  // fetch the briefing (benchmarks + demand signals) for that locality. The
-  // panel on the Overview tab renders this; the deal-create form pre-fills
-  // defaults from `getDefaultsForDealCreate`. Migration-tolerant — empty
-  // shape when the seed isn't applied yet.
-  const microMarketSlice = await optional(async () => {
+  // fetch the briefing (benchmarks + demand signals) for that locality.
+  // Migration-tolerant — empty shape when the seed isn't applied yet. Built as
+  // a promise (not awaited inline) so it overlaps the batch below.
+  const microMarketPromise = optional(async () => {
     const lat = Number(deal.property_lat ?? deal.parcel_lat ?? deal.latitude);
     const lng = Number(deal.property_lng ?? deal.parcel_lng ?? deal.longitude);
     if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
@@ -452,6 +440,44 @@ async function getDealWorkspace(dealId, options = {}) {
       reason: null,
     };
   }, 'microMarket');
+
+  // Karnataka RERA Readiness slice. Derives from the already-loaded deal +
+  // approvals + documentsFlat, plus one cheap signoffs fetch (migration-
+  // tolerant → [] before the table exists) and the deterministic consistency
+  // findings. Built as a promise so it overlaps the batch below.
+  const reraReadinessPromise = optional(async () => {
+    const signoffs = await signoffService.listByDeal(dealId);
+    const reraCtx = buildReraContext(deal, {
+      approvals,
+      documents: documentsFlat,
+      extractedFields: {}, // future hook: structured extracted fields per document
+      signoffs,
+    });
+    const slice = karnatakaReraReadiness.composeReadiness(reraCtx);
+    // Co-locate the deterministic cross-document consistency findings (reuses
+    // inconsistencyDetector — pure comparators, no persistence here).
+    slice.consistency = await reraConsistency.composeReraConsistency(dealId, deal);
+    // Deterministic post-registration compliance calendar — pure compute.
+    slice.compliance_calendar = complianceCalendar.composeComplianceCalendar(reraCtx, {
+      applicabilityStatus: slice.applicability && slice.applicability.status,
+    });
+    return slice;
+  }, 'karnatakaReraReadiness');
+
+  // Overlap the four independent slices instead of summing their latencies:
+  // the two narrator-bearing slices (recommendations, deal-doctor — response-
+  // cached so unchanged deals resolve with zero SDK round-trips) and the two
+  // DB-backed slices (micro-market classify+briefing, K-RERA signoffs+
+  // consistency). None share a data dependency — all derive from the read-only
+  // `composed`/`deal` inputs — and their consumers (best-use, deal-structure,
+  // IC readiness) run after this await. On the app's hottest read (every deal-
+  // page open) this overlaps ~4 Supabase round-trips that were serialised.
+  const [recommendationsSlice, dealDoctorSlice, microMarketSlice, reraReadinessSlice] = await Promise.all([
+    recommendationsPromise,
+    dealDoctorPromise,
+    microMarketPromise,
+    reraReadinessPromise,
+  ]);
 
   // Best Use Simulator — Phase 2 / Pillar 2. Pure compute over the
   // micro-market slice's already-fetched briefing — no extra DB round-trips.
@@ -508,38 +534,6 @@ async function getDealWorkspace(dealId, options = {}) {
       financials: financials || null,
     });
   })();
-
-  // Karnataka RERA Readiness — Phase 3 / Pillar 4. Pure compute over the
-  // deal's asset class + the already-loaded approvals + documents (no extra
-  // DB round-trips beyond a single optional approvals fetch).
-  const reraReadinessSlice = await optional(async () => {
-    // `approvals` + `documentsFlat` are the batch-fetched, single-source
-    // views computed once above — no per-slice refetch / reflatten. The
-    // context derives land area (sqm), joint-development flag, RERA number and
-    // the operator's rera_inputs from the already-loaded deal — no extra DB.
-    // One cheap signoffs fetch (migration-tolerant → [] before the table
-    // exists): a SIGNED professional sign-off marks its matching certificate
-    // item verified in the cockpit. The cache invalidates correctly because
-    // every sign-off write bumps deals.updated_at (already fingerprinted).
-    const signoffs = await signoffService.listByDeal(dealId);
-    const reraCtx = buildReraContext(deal, {
-      approvals,
-      documents: documentsFlat,
-      extractedFields: {}, // future hook: structured extracted fields per document
-      signoffs,
-    });
-    const slice = karnatakaReraReadiness.composeReadiness(reraCtx);
-    // Co-locate the deterministic cross-document consistency findings (reuses
-    // inconsistencyDetector — pure comparators, no persistence here) so the
-    // cockpit surfaces title/parcel/RERA mismatches next to the checklist.
-    slice.consistency = await reraConsistency.composeReraConsistency(dealId, deal);
-    // Deterministic post-registration compliance calendar — pure compute over
-    // the deal's own dates + today (no DB, no writes).
-    slice.compliance_calendar = complianceCalendar.composeComplianceCalendar(reraCtx, {
-      applicabilityStatus: slice.applicability && slice.applicability.status,
-    });
-    return slice;
-  }, 'karnatakaReraReadiness');
 
   // IC Readiness — Phase 3 / Pillar 5. Pure composer over ALL of the
   // slices we've already loaded above (financial, dd, risk, approvals,

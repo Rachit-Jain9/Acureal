@@ -27,7 +27,7 @@ const primaryNavItems = [
 // actually contribute (editor and above). Viewers see nothing here — they
 // don't approve zones or evidence facts.
 const adminNavItems = [
-  { to: '/dashboard/admin/master-plan',          icon: Map,      label: 'Master Plan',         tourId: 'nav-master-plan' },
+  { to: '/dashboard/admin/master-plan',          icon: Map,      label: 'Master Plan Studio',  tourId: 'nav-master-plan' },
   { to: '/dashboard/admin/parcel-intelligence',  icon: Database, label: 'Parcel Intelligence', tourId: 'nav-parcel-intel' },
   { to: '/dashboard/admin/comps-queue',          icon: Inbox,    label: 'Comps Review Queue',  tourId: 'nav-comps-queue' },
   { to: '/dashboard/admin/ai-usage',             icon: Activity, label: 'AI Usage & Cost',     tourId: 'nav-ai-usage' },

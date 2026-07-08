@@ -31,22 +31,21 @@ describe('buildSetupChecklist — role shaping', () => {
 });
 
 describe('buildSetupChecklist — completion detection', () => {
-  it('detects each build signal from real deal rows', () => {
+  it('detects each build signal from the server-computed flags', () => {
     const items = buildSetupChecklist({
       role: 'admin',
       totalDeals: 3,
-      deals: [
-        { property_id: 'p1', document_count: 0, irr_pct: null },
-        { property_id: null, document_count: 2, irr_pct: 18.4 },
-      ],
+      hasLinkedParcel: true,
+      hasDocument: true,
+      hasModel: true,
       memberCount: 2,
       exploredIntel: true,
     });
     expect(doneIds(items)).toEqual([
       'create-deal',     // totalDeals > 0
-      'link-parcel',     // a row has property_id
-      'upload-doc',      // a row has document_count > 0
-      'run-model',       // a row has irr_pct
+      'link-parcel',     // hasLinkedParcel
+      'upload-doc',      // hasDocument
+      'run-model',       // hasModel
       'explore-intel',   // flag set
       'invite-teammate', // memberCount > 1
     ]);
@@ -57,7 +56,9 @@ describe('buildSetupChecklist — completion detection', () => {
     const items = buildSetupChecklist({
       role: 'editor',
       totalDeals: 1,
-      deals: [{ property_id: null, document_count: 0, irr_pct: null }],
+      hasLinkedParcel: false,
+      hasDocument: false,
+      hasModel: false,
       exploredIntel: false,
     });
     expect(doneIds(items)).toEqual(['create-deal']);
