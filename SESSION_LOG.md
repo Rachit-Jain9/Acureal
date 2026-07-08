@@ -9785,3 +9785,24 @@ Operator said "do all three" (pipeline dashboard / document-storage hardening / 
 **Verification:** frontend build clean; frontend 1276 tests pass; backend 3580 tests pass; CI green; prod deploy READY. Authenticated live click-through not performed (would require logging into the operator's account — declined per safety rules; operator can self-verify in their logged-in tab).
 
 **Left to do next:** (a) Operator to approve the Supabase Tier-1 safe fixes (SQL prepared) if wanted. (b) Decide whether the Deals-list per-deal readiness chip should also go (kept for now). (c) Optional follow-ups from the diagnosis: org-id in react-query keys (cross-org cache hygiene), migrate the two hand-rolled drawers to the shared design-system Modal primitive.
+
+---
+
+## 2026-07-08 (cont.) — Quality sweep: perf, redundancy, 2 bugs, hover polish (PR #943)
+
+**What was worked on (plain English):** Ran a 5-dimension multi-agent quality sweep (perf / redundancy / bugs / backend hot-paths / UX polish), each finding adversarially verified against the real code. 16 candidates → 8 confirmed safe-to-ship; 5 weak ones refuted (incl. an admin-gate that would have blanked real users' dashboards, and a lite/full workspace re-fetch that was a non-issue).
+
+**Shipped (PR #943):**
+- **[perf] Leaflet off the Deals route.** `DealsPage` statically imported `PropertyCaptureField` → `ReadOnlyPropertyMap` → leaflet, pulling the `vendor-leaflet` chunk (~150KB + leaflet.css) onto every deals-list visit. Made `PropertyCaptureField` `React.lazy` (its only use is the New-Deal capture modal) + Suspense fallback. Verified: leaflet now referenced only by the async PropertyCaptureField chunk.
+- **[perf] Dashboard checklist flags folded into stats.** The setup checklist fired `useDeals({limit:100})` — the full `dealSelect` (~11 correlated subqueries/row) + recommendation batch — just to derive 3 booleans. Added `has_linked_parcel` / `has_document` / `has_model` as `bool_or` aggregates on the existing single-row dashboard stats query (scoped via `buildVisibleDealCondition('d')`; correct across ALL deals, not just first 100). `buildSetupChecklist` now takes the 3 booleans; `useDeals` fetch + import removed from DashboardPage. SQL validated live against prod via Supabase MCP (executes clean). No dashboard.service test exists — CI mocks the DB — so the prod-execute check was the real gate.
+- **[perf] Deals property fetch deferred.** `useProperties` gained an `options` arg; DealsPage gates the up-to-200-row picker fetch on `{ enabled: showModal, staleTime: 60_000 }` (was firing on every list visit).
+- **[perf] getDealWorkspace tail parallelized.** micro-market + K-RERA readiness slices folded into the existing recommendation/deal-doctor `Promise.all` (were two more sequential DB waves). Pure reorder — bestUse/dealStructure/capitalStack stay after (read microMarketSlice); icReadiness last (reads all). Payload byte-identical. dealWorkspace.service test (120 tests incl. microMarket/rera/icReadiness) pass.
+- **[bug] Comps "NaN" chips.** `sourceCounts` seed omitted `research`/`internal` → `undefined++` → literal "NaN" badge. Seeded all 4 keys.
+- **[bug] Add-Comparable data loss.** Form reset on submit (not open) wiped all typed fields on a failed create. Reset on open via `useEffect([isOpen])` instead.
+- **[redundancy/credibility] Zoning tab double RMP banner.** `RmpStatusBanner` rendered twice — identical when no zone, self-CONTRADICTING once an operative zone was assigned (green "operative" + amber "never notified"). Removed the always-amber generic instance in `DealPlanningContextCard` (kept its own RMP-2031 draft footnote); the plan-aware `MasterPlanZonePanel` banner is the single source. 2 tests re-baselined to the card's `/RMP 2031 \(Draft\)/` footnote; unused import removed.
+- **[redundancy] Sidebar "Master Plan" ×2.** Primary-nav Explorer + Admin curation both read "Master Plan". Admin one renamed "Master Plan Studio".
+- **[polish] Dead hover states.** High-traffic inline links (Deals Clear filter, Create-new-property, ParcelTab Change / Open-in-Maps / Satellite / picker toggles) had `hover:` token == base token. Swapped to `text-accent-hover` / `text-content-primary` + 150ms transitions (per FRONTEND_GUIDELINES).
+
+**Verification:** frontend build clean; frontend 1276 tests pass; backend dealWorkspace+microMarket+K-RERA+IC-readiness (120 tests) pass; full backend + frontend suites green in CI; dashboard SQL executed live against prod. PR #943 merged (squash), Vercel production deployed.
+
+**Deferred (offered to operator, not done):** (a) Supabase Tier-1 safe hardening (spatial_ref_sys RLS + duplicate-index drops + FK indexes + st_estimatedextent revoke) — low-urgency, awaiting explicit go-ahead before touching prod DB. (b) Broader hover-consistency sweep on ~10 more dead-hover links in lower-traffic pages (MapPage, PropertyDetailPage, IntelligencePage, etc.). (c) The refuted findings are recorded as not-worth-doing.
