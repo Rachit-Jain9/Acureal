@@ -577,7 +577,7 @@ function AuthorityInputPanel({ dealId, onClose }) {
             <button
               type="submit"
               disabled={mutation.isPending}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent disabled:opacity-60"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-white hover:bg-accent-hover disabled:opacity-60"
             >
               <PlusCircle size={14} />
               {mutation.isPending ? 'Saving...' : 'Save Authority Input'}
@@ -640,9 +640,9 @@ function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending, se
       <td className="px-3 py-3">
         <div className="flex flex-wrap gap-1.5">
           {[
-            ['approved', 'Approve', 'bg-pos-soft text-data-positive hover:bg-pos-soft'],
-            ['needs_review', 'Needs Review', 'bg-premium-soft text-premium hover:bg-premium-soft'],
-            ['rejected', 'Reject', 'bg-neg-soft text-data-negative hover:bg-neg-soft'],
+            ['approved', 'Approve', 'bg-pos-soft text-data-positive hover:brightness-95'],
+            ['needs_review', 'Needs Review', 'bg-premium-soft text-premium hover:brightness-95'],
+            ['rejected', 'Reject', 'bg-neg-soft text-data-negative hover:brightness-95'],
           ].map(([status, label, klass]) => (
             <button
               key={status}
@@ -659,7 +659,7 @@ function ReviewQueueRow({ item, onReview, onPromote, pending, promotePending, se
               type="button"
               disabled={pending || promotePending || !promotion.promotable}
               onClick={() => onPromote({ id: item.id })}
-              className="inline-flex items-center gap-1 rounded bg-accent-soft px-2 py-1 text-xs font-medium text-accent hover:bg-accent-soft disabled:opacity-45"
+              className="inline-flex items-center gap-1 rounded bg-accent-soft px-2 py-1 text-xs font-medium text-accent hover:brightness-95 disabled:opacity-45"
               title={reason || 'Promote reviewed fact to linked property'}
             >
               <ArrowRight size={12} />
@@ -847,7 +847,7 @@ export default function ParcelIntelligenceAdminPage() {
             <button
               type="button"
               onClick={() => setShowAuthorityInput((value) => !value)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-accent-soft px-3 py-2 text-sm font-medium text-accent hover:bg-accent-soft"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-accent-soft px-3 py-2 text-sm font-medium text-accent hover:brightness-95"
             >
               <PlusCircle size={14} />
               Authority Input
@@ -856,7 +856,7 @@ export default function ParcelIntelligenceAdminPage() {
               type="button"
               disabled={eligiblePromotionIds.length === 0 || isDecisionPending}
               onClick={() => promoteBatchMutation.mutate({ ids: eligiblePromotionIds })}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-accent-soft px-3 py-2 text-sm font-medium text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-accent-soft px-3 py-2 text-sm font-medium text-accent hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
               title={eligiblePromotionIds.length ? 'Promote approved visible facts into blank linked property inputs' : 'No eligible approved facts in this view'}
             >
               <ArrowRight size={14} />
@@ -869,7 +869,7 @@ export default function ParcelIntelligenceAdminPage() {
               type="button"
               disabled={selectedReviewItems.length === 0 || isDecisionPending}
               onClick={() => reviewSelected('approved')}
-              className="rounded-lg bg-pos-soft px-3 py-2 text-sm font-medium text-data-positive hover:bg-pos-soft disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-lg bg-pos-soft px-3 py-2 text-sm font-medium text-data-positive hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
             >
               Approve Selected
               {selectedReviewItems.length > 0 && (
@@ -880,7 +880,7 @@ export default function ParcelIntelligenceAdminPage() {
               type="button"
               disabled={selectedReviewItems.length === 0 || isDecisionPending}
               onClick={() => reviewSelected('needs_review')}
-              className="rounded-lg bg-premium-soft px-3 py-2 text-sm font-medium text-premium hover:bg-premium-soft disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-lg bg-premium-soft px-3 py-2 text-sm font-medium text-premium hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
             >
               Needs Review
             </button>
@@ -888,7 +888,7 @@ export default function ParcelIntelligenceAdminPage() {
               type="button"
               disabled={selectedReviewItems.length === 0 || isDecisionPending}
               onClick={() => reviewSelected('rejected')}
-              className="rounded-lg bg-neg-soft px-3 py-2 text-sm font-medium text-data-negative hover:bg-neg-soft disabled:cursor-not-allowed disabled:opacity-45"
+              className="rounded-lg bg-neg-soft px-3 py-2 text-sm font-medium text-data-negative hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
             >
               Reject Selected
             </button>
@@ -896,7 +896,7 @@ export default function ParcelIntelligenceAdminPage() {
               type="button"
               disabled={selectedEligiblePromotionIds.length === 0 || isDecisionPending}
               onClick={promoteSelected}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-accent-soft px-3 py-2 text-sm font-medium text-accent hover:bg-accent-soft disabled:cursor-not-allowed disabled:opacity-45"
+              className="inline-flex items-center gap-1.5 rounded-lg border border-hairline bg-accent-soft px-3 py-2 text-sm font-medium text-accent hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-45"
             >
               <ArrowRight size={14} />
               Promote Selected

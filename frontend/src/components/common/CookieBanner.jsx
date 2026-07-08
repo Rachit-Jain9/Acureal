@@ -53,7 +53,7 @@ export default function CookieBanner() {
           tracking.{' '}
           <a
             href="/cookies"
-            className="text-accent underline underline-offset-2 hover:text-accent"
+            className="text-accent underline underline-offset-2 hover:text-accent-hover"
           >
             Learn more
           </a>

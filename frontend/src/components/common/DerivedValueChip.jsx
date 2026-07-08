@@ -34,8 +34,8 @@ import { Info } from 'lucide-react';
 
 const TONE_CLASS = {
   info: 'bg-bg-secondary border-hairline text-content-secondary hover:bg-bg-elevated hover:border-hairline-strong',
-  success: 'bg-pos-soft border-hairline text-data-positive hover:bg-pos-soft',
-  warn: 'bg-premium-soft border-hairline text-premium hover:bg-premium-soft',
+  success: 'bg-pos-soft border-hairline text-data-positive hover:brightness-95',
+  warn: 'bg-premium-soft border-hairline text-premium hover:brightness-95',
   neutral: 'bg-bg-secondary border-hairline text-content-muted hover:bg-bg-elevated',
 };
 

@@ -182,7 +182,7 @@ export default function ZoneLibrary({ canEdit }) {
                         {z.review_status !== 'approved' && (
                           <button
                             onClick={() => reviewMut.mutate({ id: z.id, status: 'approved' })}
-                            className="px-2 py-1 rounded text-xs bg-pos-soft text-data-positive hover:bg-pos-soft"
+                            className="px-2 py-1 rounded text-xs bg-pos-soft text-data-positive hover:brightness-95"
                           >
                             Approve
                           </button>

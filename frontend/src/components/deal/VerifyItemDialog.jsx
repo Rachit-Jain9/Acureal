@@ -123,7 +123,7 @@ export default function VerifyItemDialog({ item, onClose, onSubmit, isPending })
             type="submit"
             disabled={isPending}
             className={clsx(
-              'rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent',
+              'rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent-hover',
               isPending && 'opacity-60'
             )}
           >

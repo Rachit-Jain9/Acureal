@@ -201,7 +201,7 @@ export default function SourceExplorerDrawer({ citation, onClose }) {
               href={citation.source_url}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex w-full items-center justify-center gap-2 rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent transition-colors"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent-hover transition-colors"
             >
               Open source
               <ExternalLink size={12} />

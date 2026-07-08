@@ -336,7 +336,7 @@ export default function ActivityTab() {
                             <button
                               onClick={() => handleMarkComplete(activity.id)}
                               disabled={updateStatus.isPending}
-                              className="text-xs text-data-positive hover:text-data-positive flex items-center gap-1"
+                              className="text-xs text-data-positive hover:underline flex items-center gap-1"
                             >
                               <CheckCircle2 size={12} />
                               Mark complete
@@ -345,7 +345,7 @@ export default function ActivityTab() {
                           <button
                             onClick={() => handleDelete(activity.id)}
                             disabled={deleteActivity.isPending}
-                            className="text-xs text-data-negative hover:text-data-negative flex items-center gap-1"
+                            className="text-xs text-data-negative hover:underline flex items-center gap-1"
                           >
                             <Trash2 size={12} />
                             Delete

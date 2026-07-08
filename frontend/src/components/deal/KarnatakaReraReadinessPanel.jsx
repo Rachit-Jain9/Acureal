@@ -348,7 +348,7 @@ function ProjectFactsForm({ dealId, currentInputs, onSaved }) {
           <div className="flex items-center gap-2">
             <button
               type="button" onClick={save} disabled={saving}
-              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded bg-accent text-content-inverse hover:bg-accent disabled:opacity-60 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded bg-accent text-content-inverse hover:bg-accent-hover disabled:opacity-60 transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
             >
               {saving ? <Loader2 size={12} className="animate-spin" /> : <CheckCircle2 size={12} />}
               {saving ? 'Saving…' : 'Save facts'}

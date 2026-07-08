@@ -498,7 +498,7 @@ export default function ReadOnlyPropertyMap({
               type="button"
               onClick={saveRelocatedPin}
               disabled={!pendingPin || saving}
-              className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-[11px] font-semibold text-content-inverse hover:bg-accent disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-[11px] font-semibold text-content-inverse hover:bg-accent-hover disabled:opacity-50 transition-colors"
             >
               <Check size={11} />
               {saving ? 'Saving…' : 'Save pin'}

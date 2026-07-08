@@ -243,7 +243,7 @@ function PropertyClusterLayer({ properties, selectedProperty, showClusters, onSe
                   key={property.id}
                   type="button"
                   onClick={() => onSelectProperty(property.id)}
-                  className="flex w-full items-center justify-between rounded-lg bg-bg-secondary px-3 py-2 text-left hover:bg-bg-secondary"
+                  className="flex w-full items-center justify-between rounded-lg bg-bg-secondary px-3 py-2 text-left hover:brightness-95"
                 >
                   <div>
                     <p className="text-sm font-medium text-content-primary">{property.name}</p>

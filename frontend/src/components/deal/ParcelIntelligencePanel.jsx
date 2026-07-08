@@ -960,7 +960,7 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
               type="button"
               onClick={() => refreshMutation.mutate(propertyId)}
               disabled={refreshMutation.isPending}
-              className="inline-flex items-center gap-2 rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent disabled:opacity-60 transition-colors"
+              className="inline-flex items-center gap-2 rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent-hover disabled:opacity-60 transition-colors"
             >
               <RefreshCw size={14} className={clsx(refreshMutation.isPending && 'animate-spin')} />
               Refresh

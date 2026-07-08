@@ -352,7 +352,7 @@ function DDSection({ dealId, canEdit }) {
                 <button
                   type="button"
                   onClick={() => toggleGroup(catKey)}
-                  className="w-full flex items-center justify-between px-4 py-3 bg-bg-secondary hover:bg-bg-secondary transition-colors text-left"
+                  className="w-full flex items-center justify-between px-4 py-3 bg-bg-secondary hover:brightness-95 transition-colors text-left"
                 >
                   <span className="text-sm font-semibold text-content-primary">{catLabel}</span>
                   <div className="flex items-center gap-2">

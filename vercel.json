@@ -1,6 +1,7 @@
 {
   "version": 2,
   "framework": null,
+  "regions": ["bom1"],
   "buildCommand": "cd frontend && npm install --include=dev && npm run build",
   "outputDirectory": "frontend/dist",
   "installCommand": "npm install --prefix backend && npm install --include=dev --prefix frontend && npm install --prefix packages/financial-kernel --include=dev && (cd packages/financial-kernel && npx tsc -p tsconfig.build.json)",
@@ -26,7 +27,7 @@
     },
     {
       "path": "/api/cron/comps-queue/process-pending",
-      "schedule": "50 3 * * *"
+      "schedule": "50 * * * *"
     },
     {
       "path": "/api/cron/quality-baseline/daily",

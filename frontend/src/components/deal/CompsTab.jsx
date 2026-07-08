@@ -559,7 +559,7 @@ export default function CompsTab() {
       <div className="flex items-center justify-end">
         <a
           href="/dashboard/comps"
-          className="text-sm text-accent transition-colors duration-150 ease-out hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded inline-flex items-center gap-1"
+          className="text-sm text-accent transition-colors duration-150 ease-out hover:text-accent-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded inline-flex items-center gap-1"
         >
           View full comps library <ExternalLink size={13} />
         </a>

@@ -267,7 +267,7 @@ export default function SettingsPage() {
           <button
             type="submit"
             disabled={savingProfile}
-            className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
           >
             {savingProfile ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             Save Profile
@@ -332,7 +332,7 @@ export default function SettingsPage() {
               <button
                 type="submit"
                 disabled={settingFirstPassword}
-                className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
               >
                 {settingFirstPassword ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
                 Set Password
@@ -372,7 +372,7 @@ export default function SettingsPage() {
             <button
               type="submit"
               disabled={changingPassword}
-              className="flex items-center gap-2 px-4 py-2 bg-data-negative hover:bg-data-negative text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
+              className="flex items-center gap-2 px-4 py-2 bg-data-negative hover:opacity-90 text-white rounded-lg text-sm font-medium transition disabled:opacity-50"
             >
               {changingPassword ? <Loader2 size={14} className="animate-spin" /> : <Lock size={14} />}
               Change Password
@@ -395,7 +395,7 @@ export default function SettingsPage() {
         </p>
         <Link
           to="/dashboard/privacy"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
         >
           <Shield size={14} />
           Open Privacy Centre
@@ -415,7 +415,7 @@ export default function SettingsPage() {
           </p>
           <Link
             to="/dashboard/settings/team"
-            className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
           >
             <Users size={14} />
             Manage team
@@ -519,7 +519,7 @@ export default function SettingsPage() {
                 <button
                   onClick={() => handleNotesSave(key)}
                   disabled={saveMarketNotes.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-accent hover:bg-accent text-white rounded-lg text-xs font-medium transition disabled:opacity-50"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-accent hover:bg-accent-hover text-white rounded-lg text-xs font-medium transition disabled:opacity-50"
                 >
                   {saveMarketNotes.isPending ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
                   Save
