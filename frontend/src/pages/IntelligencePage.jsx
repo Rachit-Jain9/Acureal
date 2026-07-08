@@ -160,7 +160,7 @@ function TransactionTable({ rows }) {
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="mt-3 text-xs font-medium text-accent hover:text-accent flex items-center gap-1"
+          className="mt-3 text-xs font-medium text-accent hover:text-accent-hover flex items-center gap-1"
         >
           <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
           {expanded ? 'Show less' : `Show all ${rows.length} transactions`}
@@ -312,7 +312,7 @@ function BenchmarksTable({ rows }) {
                   <td className="py-2.5 px-3 whitespace-nowrap align-top">
                     {row.source_url ? (
                       <a href={row.source_url} target="_blank" rel="noopener noreferrer"
-                         className="text-accent hover:text-accent underline-offset-2 hover:underline text-[11px]"
+                         className="text-accent hover:text-accent-hover underline-offset-2 hover:underline text-[11px]"
                          title={row.source}>
                         {row.source?.split(' ').slice(0, 3).join(' ') || 'Link'}
                       </a>
@@ -337,7 +337,7 @@ function BenchmarksTable({ rows }) {
         <button
           type="button"
           onClick={() => setShowAll((v) => !v)}
-          className="mt-3 text-xs font-medium text-accent hover:text-accent flex items-center gap-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 -mx-1"
+          className="mt-3 text-xs font-medium text-accent hover:text-accent-hover flex items-center gap-1 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 -mx-1"
         >
           <ChevronDown size={13} className={`transition-transform duration-150 ${showAll ? 'rotate-180' : ''}`} />
           {showAll ? 'Show less' : `Show all ${sortedRows.length} rows`}

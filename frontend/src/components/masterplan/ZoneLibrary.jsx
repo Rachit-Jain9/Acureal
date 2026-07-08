@@ -190,7 +190,7 @@ export default function ZoneLibrary({ canEdit }) {
                         {z.review_status !== 'rejected' && (
                           <button
                             onClick={() => reviewMut.mutate({ id: z.id, status: 'rejected' })}
-                            className="px-2 py-1 rounded text-xs bg-neg-soft text-data-negative hover:bg-neg-soft"
+                            className="px-2 py-1 rounded text-xs bg-neg-soft text-data-negative hover:brightness-95 transition-colors duration-150 ease-out"
                           >
                             Reject
                           </button>

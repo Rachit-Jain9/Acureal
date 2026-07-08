@@ -39,24 +39,7 @@ import UrgencyStrip from './UrgencyStrip';
  * click-through resolves instantly. The full opacity-0 → group-hover
  * checkbox affordance mirrors the comps queue's multi-select pattern.
  */
-// IC readiness tier → design-system Badge tone. Theme-aware (CSS-var backed),
-// so it fixes the pale bg-*-50 dark-mode contrast and matches the card's
-// stage/priority badges instead of hand-rolled chip-soup tints.
-const READINESS_TIER_TONE = {
-  ic_ready:  'success',
-  pre_ic:    'info',
-  diligence: 'warn',
-  early:     'neutral',
-};
-
-const READINESS_TIER_LABEL = {
-  ic_ready:  'IC-ready',
-  pre_ic:    'Pre-IC',
-  diligence: 'Diligence',
-  early:     'Early',
-};
-
-function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) {
+function DealCard({ deal, selected = false, onToggleSelect }) {
   const user = useAuthStore((state) => state.user);
   const isAdmin = user?.role === 'owner' || user?.role === 'admin';
   const deleteDeal = useDeleteDeal();
@@ -270,32 +253,6 @@ function DealCard({ deal, readiness = null, selected = false, onToggleSelect }) 
             </span>
           )}
         </div>
-
-        {/* Phase 4 prologue — IC Readiness chip. Reads from the portfolio
-            readiness aggregator (one query, shared across the deal list +
-            the dashboard widget). Hides cleanly when the deal isn't in
-            the live cohort (closed / dead / archived). */}
-        {readiness && (
-          <div className="flex items-center gap-1.5 mb-3 flex-wrap">
-            <Badge
-              tone={READINESS_TIER_TONE[readiness.tier] || 'neutral'}
-              title="IC readiness tier — composed from kernel, DD, approvals, documents, promoter and deal-breaker signals."
-            >
-              {READINESS_TIER_LABEL[readiness.tier] || readiness.tier}
-            </Badge>
-            <span className="text-xs text-content-secondary tabular-nums" title="Readiness score 0-100">
-              {readiness.score}/100
-            </span>
-            {readiness.top_blocker && (
-              <span
-                className="text-xs text-content-muted truncate max-w-[200px]"
-                title={readiness.top_blocker}
-              >
-                · {readiness.top_blocker}
-              </span>
-            )}
-          </div>
-        )}
 
         {/* Urgency strip — surfaces the same per-deal signals the dashboard's
             "Today's Attention" panel rolls up portfolio-wide. Each chip means

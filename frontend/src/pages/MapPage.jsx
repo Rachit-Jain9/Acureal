@@ -534,7 +534,7 @@ export default function MapPage() {
 
                   <Link
                     to={`/dashboard/properties/${selectedProperty.id}`}
-                    className="mt-3 inline-flex text-sm font-medium text-accent hover:text-accent"
+                    className="mt-3 inline-flex text-sm font-medium text-accent hover:text-accent-hover"
                   >
                     Open property detail
                   </Link>
@@ -643,14 +643,14 @@ export default function MapPage() {
                         <button
                           type="button"
                           onClick={() => setSelectedPropertyId(property.id)}
-                          className="inline-flex items-center gap-1 text-content-secondary hover:text-content-secondary"
+                          className="inline-flex items-center gap-1 text-content-secondary hover:text-content-primary"
                         >
                           <MapPin size={14} />
                           Focus on map
                         </button>
                         <Link
                           to={`/dashboard/properties/${property.id}`}
-                          className="font-medium text-accent hover:text-accent"
+                          className="font-medium text-accent hover:text-accent-hover"
                         >
                           Open detail
                         </Link>

@@ -264,7 +264,7 @@ export default function PrivacyCentrePage() {
               phone number, use{' '}
               <Link
                 to="/dashboard/settings"
-                className="text-accent hover:text-accent underline underline-offset-2"
+                className="text-accent hover:text-accent-hover underline underline-offset-2"
               >
                 Settings
               </Link>
@@ -387,7 +387,7 @@ export default function PrivacyCentrePage() {
                           href={link}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:text-accent transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 py-0.5 shrink-0"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-accent hover:text-accent-hover transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1 py-0.5 shrink-0"
                         >
                           View <ExternalLink size={12} />
                         </a>

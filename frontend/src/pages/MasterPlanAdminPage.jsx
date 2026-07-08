@@ -79,7 +79,7 @@ export default function MasterPlanAdminPage() {
             onClick={() => setTab(t.key)}
             className={clsx(
               'px-3 py-2 text-sm font-medium border-b-2 -mb-px',
-              tab === t.key ? 'border-accent text-accent' : 'border-transparent text-content-secondary hover:text-content-secondary',
+              tab === t.key ? 'border-accent text-accent' : 'border-transparent text-content-secondary hover:text-content-primary',
             )}
           >
             {t.label}

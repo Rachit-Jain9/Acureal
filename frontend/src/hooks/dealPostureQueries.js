@@ -52,11 +52,6 @@ const PORTFOLIO_ROLLUP_KEYS = [
   // risk state, so a posture mutation must refresh it too — otherwise it shows
   // already-cleared items until a hard reload.
   'dashboard-attention',
-  // The Deals-list per-deal IC-readiness chips (DealsPage → DealCard) read the
-  // portfolio-readiness rollup, itself derived from DD / approval / risk state,
-  // so a posture mutation must refresh it too. (The former dashboard "Portfolio
-  // Readiness" tile was removed; this key now serves only the Deals-list chips.)
-  'portfolio-readiness',
 ];
 
 /**
