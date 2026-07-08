@@ -4,7 +4,6 @@ import { ArrowRight, AlertTriangle, Settings2 } from 'lucide-react';
 
 import { useDashboard } from '../hooks/useDashboard';
 import { useDashboardLayout } from '../hooks/useDashboardLayout';
-import { useDeals } from '../hooks/useDeals';
 import { useOrganizationMembers } from '../hooks/useOrganization';
 import useAuthStore from '../store/authStore';
 import useTourStore from '../store/tourStore';
@@ -126,17 +125,21 @@ export default function DashboardPage() {
   // is admin-scoped, so it's gated by role too.
   const checklistActive = onboardingForceShown || !onboardingDismissed;
   const isOrgAdmin = roleSatisfies(userRole, ['admin']);
-  const { data: dealsData } = useDeals({ limit: 100 }, { enabled: checklistActive, staleTime: 60_000 });
   const { data: orgMembers } = useOrganizationMembers(checklistActive && isOrgAdmin);
+  // The parcel/document/model flags now ride on the dashboard stats payload
+  // (computed server-side across all deals), so the checklist no longer fires
+  // a separate heavy 100-deal fetch on every dashboard mount.
   const checklistItems = useMemo(
     () => buildSetupChecklist({
       role: userRole,
       totalDeals: data?.stats?.total_deals ?? 0,
-      deals: dealsData?.data ?? [],
+      hasLinkedParcel: data?.stats?.has_linked_parcel ?? false,
+      hasDocument: data?.stats?.has_document ?? false,
+      hasModel: data?.stats?.has_model ?? false,
       memberCount: orgMembers?.length ?? 1,
       exploredIntel: hasExploredIntel(),
     }),
-    [userRole, data, dealsData, orgMembers],
+    [userRole, data, orgMembers],
   );
   const checklistComplete = isChecklistComplete(checklistItems);
 

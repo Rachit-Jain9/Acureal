@@ -28,21 +28,22 @@ export function markIntelExplored() {
   }
 }
 
-// `deals` are rows from useDeals' full projection — each carries property_id,
-// document_count and irr_pct. `memberCount` is the workspace member count
-// (> 1 ⇒ a teammate has been invited).
+// `hasLinkedParcel` / `hasDocument` / `hasModel` are booleans computed
+// server-side in the dashboard stats aggregate (across ALL of the user's
+// deals). They replace an earlier client-side `.some()` over a separate
+// 100-deal fetch — see dashboard.service.js. `memberCount` is the workspace
+// member count (> 1 ⇒ a teammate has been invited).
 export function buildSetupChecklist({
   role,
   totalDeals = 0,
-  deals = [],
+  hasLinkedParcel = false,
+  hasDocument = false,
+  hasModel = false,
   memberCount = 1,
   exploredIntel = false,
 }) {
   const canCreate = roleSatisfies(role, ['editor']);
   const canInvite = roleSatisfies(role, ['admin']);
-  const anyParcel = deals.some((d) => d?.property_id);
-  const anyDoc = deals.some((d) => (d?.document_count ?? 0) > 0);
-  const anyModel = deals.some((d) => d?.irr_pct != null);
 
   const items = [];
 
@@ -59,7 +60,7 @@ export function buildSetupChecklist({
       id: 'link-parcel',
       label: 'Add the site to a deal',
       hint: 'Link or capture the property so the site facts flow into everything downstream.',
-      done: anyParcel,
+      done: hasLinkedParcel,
       to: '/dashboard/deals',
       cta: 'Open deals',
     });
@@ -67,7 +68,7 @@ export function buildSetupChecklist({
       id: 'upload-doc',
       label: 'Upload a document',
       hint: 'Drop in a title doc or RERA filing — AI reads it so you don’t have to.',
-      done: anyDoc,
+      done: hasDocument,
       to: '/dashboard/deals',
       cta: 'Open deals',
     });
@@ -75,7 +76,7 @@ export function buildSetupChecklist({
       id: 'run-model',
       label: 'Run a financial model',
       hint: 'Underwrite a deal — IRR, NPV and sensitivities, computed deterministically.',
-      done: anyModel,
+      done: hasModel,
       to: '/dashboard/deals',
       cta: 'Open deals',
     });

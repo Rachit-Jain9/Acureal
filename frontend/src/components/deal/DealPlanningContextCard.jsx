@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom';
 import { Layers, AlertTriangle, ArrowUpRight, MapPin, Trees, Compass, Landmark } from 'lucide-react';
 import { Card, ErrorState, SectionHeader, Skeleton } from '../../design-system';
 import { useLandUseIntelligence } from '../../hooks/useMasterPlan';
-import RmpStatusBanner from '../masterplan/RmpStatusBanner';
 
 const fmt = (value) => {
   const n = Number(value);
@@ -110,7 +109,13 @@ export default function DealPlanningContextCard() {
         )}
       />
 
-      <RmpStatusBanner className="mt-3" />
+      {/* RMP status is shown once per Zoning tab by the plan-aware banner in
+          MasterPlanZonePanel (which correctly reads the assigned plan — green
+          for operative RMP 2015 / Anekal, amber for draft / unassigned). This
+          card keeps its own draft caveat in the footnote below (its callouts
+          are RMP-2031-derived), so a second generic banner here only duplicated
+          it in the common case and CONTRADICTED it once an operative zone was
+          assigned. */}
 
       {hasAny ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-3">

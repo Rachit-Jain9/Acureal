@@ -45,7 +45,17 @@ const getDashboardStats = async (userId) => {
         COUNT(*) FILTER (WHERE d.is_archived = FALSE AND d.stage = 'dead') as dead_deals,
         COUNT(*) FILTER (WHERE d.is_archived = TRUE) as archived_deals,
         COALESCE(SUM(f.total_revenue_cr) FILTER (WHERE d.is_archived = FALSE AND d.stage = ANY($1::deal_stage[])), 0) as total_pipeline_value_cr,
-        AVG(f.irr_pct) FILTER (WHERE f.irr_pct IS NOT NULL AND d.is_archived = FALSE AND d.stage = ANY($1::deal_stage[])) as avg_irr_pct
+        AVG(f.irr_pct) FILTER (WHERE f.irr_pct IS NOT NULL AND d.is_archived = FALSE AND d.stage = ANY($1::deal_stage[])) as avg_irr_pct,
+        -- First-run setup-checklist flags. Folded into this already-running
+        -- single-row aggregate so the dashboard no longer fires a separate
+        -- (heavy, full-projection) 100-deal fetch just to derive three booleans.
+        -- Scoped to the same visible-deal set as total_deals, and evaluated
+        -- across ALL the user's deals (not just the first 100 the old fetch saw).
+        COALESCE(bool_or(${buildVisibleDealCondition('d')} AND d.property_id IS NOT NULL), FALSE) as has_linked_parcel,
+        COALESCE(bool_or(${buildVisibleDealCondition('d')} AND EXISTS (
+          SELECT 1 FROM documents doc WHERE doc.deal_id = d.id AND doc.deleted_at IS NULL
+        )), FALSE) as has_document,
+        COALESCE(bool_or(${buildVisibleDealCondition('d')} AND f.irr_pct IS NOT NULL), FALSE) as has_model
        FROM deals d
        LEFT JOIN financials f ON d.id = f.deal_id
        WHERE (d.organization_id = current_organization_id() OR d.id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id()))`,
@@ -179,6 +189,10 @@ const getDashboardStats = async (userId) => {
       total_pipeline_value_cr: parseFloat(dealsStats.total_pipeline_value_cr) || 0,
       avg_irr_pct: dealsStats.avg_irr_pct ? parseFloat(dealsStats.avg_irr_pct) : null,
       total_properties: totalProperties,
+      // First-run setup-checklist flags (replaces a separate 100-deal fetch).
+      has_linked_parcel: dealsStats.has_linked_parcel === true,
+      has_document: dealsStats.has_document === true,
+      has_model: dealsStats.has_model === true,
       // Tier-0 ingestion queue surface — feeds the dashboard's "Action items"
       // row that links straight to the reviewer. Numbers are 0 for orgs
       // without any queue activity yet, so the tile hides cleanly.

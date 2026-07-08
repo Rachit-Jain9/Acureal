@@ -80,6 +80,15 @@ const EMPTY_COMP = {
 function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
   const [form, setForm] = useState(EMPTY_COMP);
 
+  // Reset the form when the modal OPENS, not when it submits. The create
+  // mutation is fire-and-forget (never throws), so resetting on submit wiped
+  // every typed field on a failed save while the modal stayed open. Resetting
+  // on open keeps the user's data intact for a retry; a successful save closes
+  // the modal, so the next open re-seeds a clean form.
+  useEffect(() => {
+    if (isOpen) setForm(EMPTY_COMP);
+  }, [isOpen]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
@@ -102,7 +111,6 @@ function AddCompModal({ isOpen, onClose, onSubmit, isLoading }) {
       reraNumber: form.reraNumber || undefined,
       source: form.source || undefined,
     });
-    setForm(EMPTY_COMP);
   };
 
   return (
@@ -382,7 +390,10 @@ export default function CompsPage() {
   // Per-source-type counts for the chip group (uses the API-filtered rows
   // — i.e. respects city/projectType/search but not source-type itself).
   const sourceCounts = useMemo(() => {
-    const c = { verified: 0, listing: 0, ipc: 0 };
+    // Seed every real SOURCE_FILTER_OPTIONS value at 0 so `c[o.value]++` starts
+    // from an integer. A missing key made `research`/`internal` read undefined
+    // → `undefined++` → the chips rendered a literal "NaN" badge.
+    const c = { verified: 0, research: 0, internal: 0, listing: 0 };
     for (const r of rawRows) {
       for (const o of SOURCE_FILTER_OPTIONS) if (o.matches(r)) c[o.value]++;
     }

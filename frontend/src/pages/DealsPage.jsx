@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, lazy, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Plus, Search, X, Briefcase, ChevronLeft, ChevronRight,
@@ -27,7 +27,11 @@ import { useProperties } from '../hooks/useProperties';
 // users don't have to save-as-draft, navigate to the deal, and only then
 // link a property. Paste a Maps link / Plus Code / address / coords /
 // survey number / broker narrative and REDIP creates the parcel inline.
-import PropertyCaptureField from '../components/deal/PropertyCaptureField';
+// Lazy-loaded: it (transitively) pulls in the Leaflet map vendor chunk via
+// ReadOnlyPropertyMap, and only ever renders inside the New-Deal modal's
+// capture branch — so code-splitting it keeps ~150KB of map JS + leaflet.css
+// off the frequently-hit /deals route until capture mode is actually opened.
+const PropertyCaptureField = lazy(() => import('../components/deal/PropertyCaptureField'));
 import AmountReadout from '../components/common/AmountReadout';
 import { handleNumericPaste } from '../components/common/numericPaste';
 import { useSavedDealViews } from '../hooks/useSavedDealViews';
@@ -172,7 +176,11 @@ export default function DealsPage() {
     !!(search || stageFilter || typeFilter || priorityFilter || assignedToMe);
 
   const { data, isLoading, isError, refetch } = useDeals(params);
-  const { data: propertiesData } = useProperties({ limit: 200 });
+  // The property list feeds ONLY the New-Deal modal's picker, so defer the
+  // (up-to-200-row) fetch until the modal is open instead of firing it on
+  // every visit to the deals list. staleTime keeps it warm if the user opens
+  // the modal, closes it, and reopens shortly after.
+  const { data: propertiesData } = useProperties({ limit: 200 }, { enabled: showModal, staleTime: 60_000 });
   const createDeal = useCreateDeal();
 
   const deals = data?.data || [];
@@ -572,7 +580,7 @@ export default function DealsPage() {
         />
 
         {hasFilters && (
-          <button onClick={handleFilterReset} className="text-sm text-content-secondary hover:text-content-secondary flex items-center gap-1">
+          <button onClick={handleFilterReset} className="text-sm text-content-secondary hover:text-content-primary flex items-center gap-1 transition-colors duration-150 ease-out">
             <X size={14} /> Clear
           </button>
         )}
@@ -988,7 +996,7 @@ export default function DealsPage() {
                     <button
                       type="button"
                       onClick={() => setPropertyMode('capture')}
-                      className="text-xs text-accent hover:text-accent font-medium"
+                      className="text-xs text-accent hover:text-accent-hover font-medium transition-colors duration-150 ease-out"
                     >
                       + Create new (paste link / Plus Code / address)
                     </button>
@@ -1032,11 +1040,13 @@ export default function DealsPage() {
                   </>
                 ) : (
                   <div className="rounded-lg border border-hairline bg-accent-soft p-3">
-                    <PropertyCaptureField
-                      onSaved={handlePropertyCaptured}
-                      onCancel={() => setPropertyMode('pick')}
-                      compact
-                    />
+                    <Suspense fallback={<div className="h-40 redip-skeleton rounded-lg" />}>
+                      <PropertyCaptureField
+                        onSaved={handlePropertyCaptured}
+                        onCancel={() => setPropertyMode('pick')}
+                        compact
+                      />
+                    </Suspense>
                   </div>
                 )}
               </div>

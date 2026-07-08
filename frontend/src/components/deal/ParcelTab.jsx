@@ -126,7 +126,7 @@ function PropertyPickerModal({ dealId, onClose }) {
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
               mode === 'search'
                 ? 'bg-accent-soft text-accent'
-                : 'text-content-secondary hover:text-content-secondary'
+                : 'text-content-secondary hover:text-content-primary'
             }`}
           >
             Search existing
@@ -136,7 +136,7 @@ function PropertyPickerModal({ dealId, onClose }) {
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
               mode === 'create'
                 ? 'bg-accent-soft text-accent'
-                : 'text-content-secondary hover:text-content-secondary'
+                : 'text-content-secondary hover:text-content-primary'
             }`}
           >
             <Plus size={13} /> Create new
@@ -324,7 +324,7 @@ export default function ParcelTab({ canEdit }) {
             {canEdit && (
               <button
                 onClick={() => setShowPicker(true)}
-                className="text-xs text-accent hover:text-accent font-medium"
+                className="text-xs text-accent hover:text-accent-hover font-medium transition-colors duration-150 ease-out"
               >
                 Change
               </button>
@@ -440,7 +440,7 @@ export default function ParcelTab({ canEdit }) {
                 href={`https://www.google.com/maps/search/?api=1&query=${deal.lat},${deal.lng}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-accent hover:text-accent flex items-center gap-1"
+                className="text-accent hover:text-accent-hover flex items-center gap-1 transition-colors duration-150 ease-out"
               >
                 Open in Google Maps <ExternalLink size={12} />
               </a>
@@ -448,7 +448,7 @@ export default function ParcelTab({ canEdit }) {
                 href={`https://www.google.com/maps/@${deal.lat},${deal.lng},17z/data=!3m1!1e3`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-accent hover:text-accent flex items-center gap-1"
+                className="text-accent hover:text-accent-hover flex items-center gap-1 transition-colors duration-150 ease-out"
               >
                 Satellite view <ExternalLink size={12} />
               </a>
@@ -480,7 +480,7 @@ export default function ParcelTab({ canEdit }) {
             {!hasProperty && canEdit && (
               <button
                 onClick={() => setShowPicker(true)}
-                className="mt-1 text-xs text-accent hover:text-accent font-medium flex items-center gap-1"
+                className="mt-1 text-xs text-accent hover:text-accent-hover font-medium flex items-center gap-1 transition-colors duration-150 ease-out"
               >
                 <Link2 size={12} /> Link a property to enable geocoding
               </button>
