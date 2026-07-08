@@ -9839,3 +9839,19 @@ Operator said "do all three" (pipeline dashboard / document-storage hardening / 
 **Verified:** build clean; bundle within budget; 155 files / 1,277 tests pass; migration lint clean; prod deploy `96f67e2` READY on the new region; `/api/health` 200.
 
 **Phase 2 (next, mine):** Playwright E2E smoke vs PR preview URLs (dedicated seeded test org + GH secrets; spec in plan §2), weekly automated health check, monthly quality sweep. **Waiting on operator (~10 min, plan §6):** Fluid Compute verify, Skew Protection, Vercel spend cap, Sentry account → DSN.
+
+---
+
+## 2026-07-08 (cont.) — Sentry error monitoring wired + verified live (PR #949)
+
+**What was worked on (plain English):** Operator created a Sentry account (EU data residency) and provided the DSN. Wired the production error-alarm system — the "nothing watches production" gap from PLATFORM_OPERATIONS_PLAN.md §1 — across frontend + backend, and verified it end-to-end on the live site.
+
+**Shipped (PR #949):**
+- **Frontend** `@sentry/react` 10.64.0: `frontend/src/lib/sentry.js` (init gated to the PROD build; EU residency; `sendDefaultPii:false`; ignores browser-extension message-channel noise + stale-chunk errors). `main.jsx` inits before render; `ErrorBoundary.componentDidCatch` reports genuine (non-chunk) render crashes with the React component stack. `vite.config`: `vendor-sentry` manualChunk (88KB / 30KB gz) + `__APP_RELEASE__` git-SHA define.
+- **Backend** `@sentry/node` 10.64.0: `backend/src/lib/sentry.js` (init gated to VERCEL/production). `server.js` inits it BEFORE express is required (auto-instrumentation) and registers `setupExpressErrorHandler` with `shouldHandleError ≥500` (server faults reported; expected 4xx not).
+- **CSP**: `vercel.json` `connect-src` now includes `https://*.ingest.de.sentry.io` — REQUIRED or the browser blocks frontend error reports.
+- DSN is a public send-only identifier → committed as a safe fallback; `VITE_SENTRY_DSN`/`SENTRY_DSN` env override to rotate/disable. No Vercel env-var step required for it to work.
+
+**Live production verification (deploy a222f10):** Sent a real Sentry envelope from the deployed page context → HTTP 200 + accepted event id (`f7d9a7a…`), `cspAllowedIngest:true` (CSP block would have thrown). Confirmed the SDK is initialized on the live page (`window.__SENTRY__` v10.64.0). Backend init verified via module-load (no-op under tests). Build clean; bundle within budget (Sentry isolated, largest chunk unchanged); 155 files / 1277 tests pass; prod audit still 0 high/critical.
+
+**Left to do next (Phase 2, mine):** Playwright E2E smoke vs PR preview URLs (dedicated seeded test org + GH secrets), weekly automated health check, monthly quality sweep. **Operator remaining (plan §6):** Vercel spend cap ($30, in progress), Supabase account MFA. (Fluid Compute + Skew Protection already done.)
