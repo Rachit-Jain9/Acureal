@@ -37,7 +37,7 @@ export default function ZoningTab({ setTab }) {
             <button
               type="button"
               onClick={() => setTab('parcel')}
-              className="rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent"
+              className="rounded-editorial bg-accent px-3 py-2 text-xs font-semibold text-content-inverse hover:bg-accent-hover"
             >
               Open Parcel
             </button>

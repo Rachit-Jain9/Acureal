@@ -550,7 +550,7 @@ export default function ReportsPage() {
                             onClick={() => handleExportPptx(deal.id, deal.name)}
                             disabled={exportingPptx === deal.id}
                             title="Download PPTX investor deck"
-                            className="inline-flex items-center gap-1 rounded-lg bg-premium-soft px-2 py-1 text-xs font-medium text-premium transition hover:bg-premium-soft disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-lg bg-premium-soft px-2 py-1 text-xs font-medium text-premium transition hover:brightness-95 disabled:opacity-50"
                           >
                             {exportingPptx === deal.id ? (
                               <Loader2 size={11} className="animate-spin" />
@@ -563,7 +563,7 @@ export default function ReportsPage() {
                             onClick={() => handleExportXlsx(deal.id, deal.name)}
                             disabled={exportingXlsx === deal.id}
                             title="Download Excel workbook"
-                            className="inline-flex items-center gap-1 rounded-lg bg-pos-soft px-2 py-1 text-xs font-medium text-data-positive transition hover:bg-pos-soft disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-lg bg-pos-soft px-2 py-1 text-xs font-medium text-data-positive transition hover:brightness-95 disabled:opacity-50"
                           >
                             {exportingXlsx === deal.id ? (
                               <Loader2 size={11} className="animate-spin" />
@@ -576,7 +576,7 @@ export default function ReportsPage() {
                             onClick={() => handleExportPdf(deal.id, deal.name)}
                             disabled={exportingPdf === deal.id}
                             title="Download PDF report"
-                            className="inline-flex items-center gap-1 rounded-lg bg-accent-soft px-2 py-1 text-xs font-medium text-accent transition hover:bg-accent-soft disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-lg bg-accent-soft px-2 py-1 text-xs font-medium text-accent transition hover:brightness-95 disabled:opacity-50"
                           >
                             {exportingPdf === deal.id ? (
                               <Loader2 size={11} className="animate-spin" />
@@ -589,7 +589,7 @@ export default function ReportsPage() {
                             onClick={() => handleExportDocx(deal.id, deal.name)}
                             disabled={exportingDocx === deal.id}
                             title="Download 22-section institutional underwriting report (DOCX)"
-                            className="inline-flex items-center gap-1 rounded-lg bg-accent-soft px-2 py-1 text-xs font-medium text-accent transition hover:bg-accent-soft disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-lg bg-accent-soft px-2 py-1 text-xs font-medium text-accent transition hover:brightness-95 disabled:opacity-50"
                           >
                             {exportingDocx === deal.id ? (
                               <Loader2 size={11} className="animate-spin" />

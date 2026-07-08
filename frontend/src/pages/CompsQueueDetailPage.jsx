@@ -385,7 +385,7 @@ function RejectModal({ open, onClose, onConfirm, isSubmitting }) {
             type="button"
             onClick={() => onConfirm(reason.trim() || null)}
             disabled={isSubmitting}
-            className="px-3 py-1.5 text-sm bg-data-negative text-white rounded hover:bg-data-negative disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative/40"
+            className="px-3 py-1.5 text-sm bg-data-negative text-white rounded hover:opacity-90 disabled:opacity-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-data-negative/40"
           >
             {isSubmitting ? 'Rejecting…' : 'Reject'}
           </button>
@@ -648,7 +648,7 @@ export default function CompsQueueDetailPage() {
                   type="button"
                   onClick={() => approveMut.mutate(id)}
                   disabled={approveMut.isPending || validComps.length === 0}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-data-positive text-white rounded hover:bg-data-positive transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-data-positive text-white rounded hover:opacity-90 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
                   title={validComps.length === 0 ? 'No valid comps to commit (required: project name, city, rate per sqft)' : `Commit ${validComps.length} comps to the database`}
                 >
                   <CheckCircle2 size={13} />

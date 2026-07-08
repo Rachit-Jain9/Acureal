@@ -54,7 +54,7 @@ export default function CloseAccountCard() {
         <button
           type="button"
           onClick={() => { setOpen(true); setConfirmText(''); }}
-          className="text-sm font-medium text-data-negative hover:text-data-negative border border-hairline hover:border-hairline-strong rounded-lg px-4 py-2 transition-colors"
+          className="text-sm font-medium text-data-negative hover:underline border border-hairline hover:border-hairline-strong rounded-lg px-4 py-2 transition-colors"
         >
           Close my account
         </button>

@@ -128,7 +128,7 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
               <button
                 type="submit"
                 disabled={sharing}
-                className="px-4 py-2 bg-accent hover:bg-accent text-content-inverse rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-1.5"
+                className="px-4 py-2 bg-accent hover:bg-accent-hover text-content-inverse rounded-lg text-sm font-medium transition disabled:opacity-50 flex items-center gap-1.5"
               >
                 {sharing ? <Loader2 size={14} className="animate-spin" /> : <Share2 size={14} />}
                 Share

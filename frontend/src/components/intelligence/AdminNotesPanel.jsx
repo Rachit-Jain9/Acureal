@@ -84,7 +84,7 @@ function NotesEditor({ section, initialItems, onSave, saving }) {
           type="button"
           onClick={add}
           disabled={!newItem.trim()}
-          className="inline-flex items-center gap-1 rounded-lg bg-bg-secondary px-3 py-2 text-sm font-medium text-content-secondary hover:bg-bg-secondary disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded-lg bg-bg-secondary px-3 py-2 text-sm font-medium text-content-secondary hover:brightness-95 disabled:opacity-50"
         >
           <PlusCircle size={14} />
           Add
@@ -94,7 +94,7 @@ function NotesEditor({ section, initialItems, onSave, saving }) {
         type="button"
         onClick={() => onSave(items)}
         disabled={saving}
-        className="inline-flex items-center gap-2 rounded-lg bg-bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-bg-primary disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-lg bg-bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
       >
         {saving ? <RefreshCw size={13} className="animate-spin" /> : <Save size={13} />}
         Save section

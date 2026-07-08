@@ -226,7 +226,7 @@ function ClusterListPopup({ comps, selectedCompId, onSelect, onClose }) {
                   className={[
                     'w-full text-left px-3 py-2 transition-colors flex items-start gap-2',
                     isSel
-                      ? 'bg-accent-soft hover:bg-accent-soft ring-1 ring-inset ring-accent/40'
+                      ? 'bg-accent-soft hover:brightness-95 ring-1 ring-inset ring-accent/40'
                       : 'hover:bg-bg-secondary',
                   ].join(' ')}
                 >

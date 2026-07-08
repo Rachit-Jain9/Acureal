@@ -244,7 +244,7 @@ export default function PrivacyCentrePage() {
             <button
               type="button"
               onClick={load}
-              className="text-sm font-medium text-data-negative hover:text-data-negative transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40 rounded px-1"
+              className="text-sm font-medium text-data-negative hover:underline transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400/40 rounded px-1"
             >
               Try again
             </button>
@@ -441,7 +441,7 @@ export default function PrivacyCentrePage() {
               <button
                 type="button"
                 onClick={() => setExportOpen(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
+                className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98]"
               >
                 <Download size={14} />
                 Download my data
@@ -477,7 +477,7 @@ export default function PrivacyCentrePage() {
                     type="button"
                     onClick={handleExport}
                     disabled={exporting || (passwordNeeded && !exportPassword)}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover text-white rounded-lg text-sm font-medium transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {exporting ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
                     {exporting ? 'Preparing…' : 'Confirm & download'}

@@ -166,7 +166,7 @@ export default function MfaCard() {
             type="button"
             onClick={handleDisable}
             disabled={busy}
-            className="text-sm font-medium text-data-negative hover:text-data-negative border border-hairline hover:border-hairline-strong rounded-lg px-4 py-2 transition-colors flex items-center gap-1.5"
+            className="text-sm font-medium text-data-negative hover:underline border border-hairline hover:border-hairline-strong rounded-lg px-4 py-2 transition-colors flex items-center gap-1.5"
           >
             {busy ? <Loader2 size={14} className="animate-spin" /> : <KeyRound size={14} />}
             Disable two-factor

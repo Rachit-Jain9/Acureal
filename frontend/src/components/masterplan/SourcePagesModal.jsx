@@ -125,7 +125,7 @@ export default function SourcePagesModal({
               type="button"
               onClick={onPrepare}
               disabled={!canPrepare || preparing}
-              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent transition-colors duration-150 ease-out hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-accent-soft px-3 py-1.5 text-xs font-medium text-accent transition-colors duration-150 ease-out hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {preparing ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
               {preparing ? 'Preparing...' : 'Prepare pages'}

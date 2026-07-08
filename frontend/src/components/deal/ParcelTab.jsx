@@ -331,7 +331,7 @@ export default function ParcelTab({ canEdit }) {
             )}
             <Link
               to={`/dashboard/properties/${deal.property_id}`}
-              className="text-sm text-accent font-medium hover:text-accent flex items-center gap-1"
+              className="text-sm text-accent font-medium hover:text-accent-hover flex items-center gap-1"
             >
               View / Edit Property Record <ExternalLink size={13} />
             </Link>
@@ -344,7 +344,7 @@ export default function ParcelTab({ canEdit }) {
           action={canEdit && (
             <button
               onClick={() => setShowPicker(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-premium px-3 py-1.5 text-xs font-medium text-content-inverse transition-colors hover:bg-premium"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-premium px-3 py-1.5 text-xs font-medium text-content-inverse transition-colors hover:opacity-90"
             >
               <Link2 size={13} /> Link Property
             </button>

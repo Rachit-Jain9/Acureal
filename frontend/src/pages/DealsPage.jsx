@@ -697,7 +697,7 @@ export default function DealsPage() {
               type="button"
               onClick={() => setDeleteModalOpen(true)}
               disabled={bulkBusy}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-neg-soft text-data-negative hover:bg-neg-soft transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md border border-hairline bg-neg-soft text-data-negative hover:brightness-95 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
               title="Hard-delete the selected deals — irreversible"
             >
               <Trash2 size={13} />

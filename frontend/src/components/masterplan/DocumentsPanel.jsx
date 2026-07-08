@@ -590,7 +590,7 @@ export default function DocumentsPanel({ canEdit }) {
                         onClick={() => handleExtract(doc)}
                         disabled={busy || extractingId !== null || !readiness.canExtract}
                         title={readiness.blockReason || readiness.description}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs font-medium text-accent transition-colors duration-150 ease-out hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-accent-soft px-2.5 py-1.5 text-xs font-medium text-accent transition-colors duration-150 ease-out hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:scale-[0.98] disabled:opacity-50"
                       >
                         {busy ? <Loader2 size={13} className="animate-spin" /> : <FileSearch size={13} />}
                         {busy ? 'Extracting...' : readiness.actionLabel}

@@ -464,7 +464,7 @@ export default function MapPage() {
                     className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
                       nearbyRadiusKm === radius
                         ? 'bg-accent text-white'
-                        : 'bg-bg-secondary text-content-secondary hover:bg-bg-secondary'
+                        : 'bg-bg-secondary text-content-secondary hover:brightness-95'
                     }`}
                   >
                     {radius} km

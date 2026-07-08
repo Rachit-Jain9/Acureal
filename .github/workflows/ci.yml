@@ -69,6 +69,10 @@ jobs:
         env:
           # Vite warns on undefined VITE_* in build; surface as failure.
           CI: true
+      # Bundle-size budget — fails if a chunk (or the total) exceeds budget,
+      # catching heavyweight vendors creeping onto hot routes (see
+      # docs/PLATFORM_OPERATIONS_PLAN.md §2 and PR #943's Leaflet finding).
+      - run: node frontend/scripts/check-bundle-budget.cjs
       - run: npm test --prefix frontend -- --run
 
   audit:

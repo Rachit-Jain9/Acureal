@@ -860,7 +860,7 @@ export default function CompsQueuePage() {
             type="button"
             onClick={handleBulkApprove}
             disabled={bulkApprove.isPending || bulkReject.isPending}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-data-positive text-white hover:bg-data-positive transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md bg-data-positive text-white hover:opacity-90 transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
           >
             {bulkApprove.isPending ? <Loader2 size={13} className="animate-spin" /> : <CheckCircle2 size={13} />}
             {bulkApprove.isPending ? 'Approving…' : `Approve ${selectedIds.size}`}
@@ -952,7 +952,7 @@ export default function CompsQueuePage() {
                 type="button"
                 onClick={handleBulkRejectConfirm}
                 disabled={bulkReject.isPending}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-data-negative text-white rounded hover:bg-data-negative transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-data-negative text-white rounded hover:opacity-90 transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-500/40"
               >
                 {bulkReject.isPending ? <Loader2 size={13} className="animate-spin" /> : <XCircle size={13} />}
                 {bulkReject.isPending ? 'Rejecting…' : `Reject ${selectedIds.size}`}
