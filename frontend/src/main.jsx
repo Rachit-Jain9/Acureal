@@ -45,12 +45,34 @@ window.addEventListener('error', (event) => {
 });
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Resilient first-open policy. The dashboard fires ~10 independent queries in
+// parallel at mount; on a Vercel serverless cold start (or a brief network
+// blip) the first wave can hit a not-yet-warm function and fail with a 5xx /
+// timeout / network error. With the old `retry: 1`, a single transient failure
+// froze that widget into a "no data" state until a manual full-page reload —
+// the exact "I have to refresh" symptom. We now retry TRANSIENT failures with
+// bounded exponential backoff so they self-heal, while never retrying auth /
+// client 4xx (the axios interceptor already owns 401 refresh+replay; 403/404/
+// 422 won't improve on retry). `refetchOnWindowFocus` stays false globally so
+// the expensive AI-narrated deal-workspace read isn't re-run on every tab
+// focus; `refetchOnReconnect` is on so a dropped-then-restored connection
+// recovers on its own.
+const isTransientError = (error) => {
+  const status = error?.response?.status;
+  if (status == null) return true; // network error / timeout — no response
+  if (status >= 500) return true; // server error — likely a cold/overloaded fn
+  if (status === 408 || status === 429) return true; // timeout / rate-limit
+  return false; // 4xx (incl. 401/403/404/422) — don't retry
+};
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
-      retry: 1,
+      retry: (failureCount, error) => isTransientError(error) && failureCount < 3,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 8000),
       refetchOnWindowFocus: false,
+      refetchOnReconnect: true,
     },
   },
 });

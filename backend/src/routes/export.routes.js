@@ -1122,12 +1122,31 @@ router.get(
       const useV2 = !explicitV1;
       const builder = useV2 ? buildDealWorkbookV2 : buildDealWorkbookXlsx;
 
-      const xlsxBuffer = await builder(exportContext, {
+      // Strict-then-graceful build. The v2 workbook normally hard-blocks
+      // (422) when a deal is missing a required underwriting input — great
+      // for a finished IC deal, but it stops the operator downloading a
+      // workbook for a live/sourcing-stage deal that is still being filled
+      // in. Per CLAUDE.md ("support incomplete live data — never block early
+      // sourcing"), we retry once with validation relaxed so the export
+      // always succeeds; the missing/invalid inputs are then disclosed on the
+      // workbook's own "Export QA & Sources" sheet instead of aborting the
+      // download. Structural-integrity checks (validateXlsxBufferForDownload)
+      // still run unconditionally, so a genuinely corrupt buffer is refused.
+      const buildOpts = {
         brandName: 'REDIP',
         userName: req.user?.name || 'REDIP',
         generatedAt: new Date().toISOString(),
-        strictValidation: useV2,
-      });
+      };
+      let xlsxBuffer;
+      try {
+        xlsxBuffer = await builder(exportContext, { ...buildOpts, strictValidation: useV2 });
+      } catch (buildError) {
+        if (buildError && buildError.name === 'XlsxExportValidationError') {
+          xlsxBuffer = await builder(exportContext, { ...buildOpts, strictValidation: false });
+        } else {
+          throw buildError;
+        }
+      }
       const xlsxSafeName = ((exportContext.deal && exportContext.deal.name) || 'deal')
         .replace(/[^a-z0-9]/gi, '-')
         .toLowerCase();

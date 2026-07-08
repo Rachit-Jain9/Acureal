@@ -180,7 +180,7 @@ export default function MethodologyExplorer({
             onClick={close}
           />
           <aside className="relative ml-auto flex h-full w-full max-w-3xl flex-col bg-bg-elevated shadow-2xl">
-            <header className="relative overflow-hidden border-b border-hairline-strong bg-surface-2 px-6 py-5 text-content-primary">
+            <header className="relative shrink-0 overflow-hidden border-b border-hairline-strong bg-surface-2 px-6 py-5 text-content-primary">
               <div className="relative flex items-start justify-between">
                 <div>
                   <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-widest text-content-secondary">
@@ -195,7 +195,8 @@ export default function MethodologyExplorer({
                 <button
                   type="button"
                   onClick={close}
-                  className="rounded-lg p-2 text-white/80 hover:bg-white/10 hover:text-white"
+                  aria-label="Close methodology"
+                  className="shrink-0 rounded-lg p-2 text-content-secondary transition-colors duration-150 ease-out hover:bg-bg-secondary hover:text-content-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                 >
                   <X size={18} />
                 </button>
@@ -222,7 +223,7 @@ export default function MethodologyExplorer({
               </nav>
             </header>
 
-            <div className="flex-1 overflow-y-auto bg-bg-secondary">
+            <div className="min-h-0 flex-1 overflow-y-auto bg-bg-secondary">
               <div className="mx-auto max-w-2xl px-6 py-6">
                 {tab === 'overview'  && <OverviewSection />}
                 {tab === 'dcfflow'   && <DCFFlowSection assetClass={assetClass} />}
