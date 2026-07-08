@@ -9822,3 +9822,20 @@ Operator said "do all three" (pipeline dashboard / document-storage hardening / 
 **Verified:** frontend build clean; frontend 1276 tests pass; migration lint clean; dashboard.routes loads; zero remaining portfolioReadiness references; Supabase changes re-queried on prod. PR #945 merged (squash), Vercel production deployed.
 
 **Left to do next:** All operator-reported issues + the quality sweep + the 3 follow-ups are shipped. Remaining open items are operator-side (lawyer for DPA/AUP, sending domain + Resend key for email, optional guidance-value PDF) and Tier-2 Supabase (RLS-policy perf rewrites / FORCE RLS — need operator sign-off + isolation retest). Await operator direction for the next focus.
+
+---
+
+## 2026-07-08 (cont.) — Platform Operations Plan + Phase 1 shipped (PR #947)
+
+**What was worked on (plain English):** Operator asked "how do we make sure this never happens again + get max value from Vercel Pro / Supabase Pro." Answered with a grounded plan (verified against the real deployment, not generic advice) — canonical doc `docs/PLATFORM_OPERATIONS_PLAN.md`, memory pointer `project_platform_operations.md` — and shipped Phase 1 in the same block.
+
+**Key discovery:** Supabase is in `ap-south-1` (Mumbai) but Vercel functions ran in the default `iad1` (Washington DC) — every DB round-trip crossed the planet (~200ms × dozens per deal-open). Confirmed the pooler (`:6543`) and pool sizing were already correct.
+
+**Shipped (PR #947):**
+- `vercel.json`: `"regions": ["bom1"]` — functions co-located with the DB + Bengaluru users (single biggest latency lever available; Vercel validated the region on the PR preview deploy). Comps-queue cron daily → hourly (`50 * * * *`) — was shaped by the old Hobby cap; costGuard bounds AI spend.
+- **New CI guards:** `frontend/scripts/check-bundle-budget.cjs` (+ ci.yml step; chunk ≤520KB, total ≤4MB raw, calibrated vs the healthy 3.09MB build) and `frontend/scripts/check-hover-states.cjs` + `hoverStateGuard.test.js` (generalized same-token no-op hover detector, ternary-aware, ALLOWLIST for deliberate exceptions).
+- **59 more dead hovers fixed** — the generalized detector caught what the earlier narrow sweeps (#943/#945) missed, incl. primary `bg-accent` buttons (SettingsPage ×6, ShareDealPanel, dialogs), queue Approve/Reject, soft chips, admin surfaces. Rule-driven fix: `bg-accent→hover:bg-accent-hover`, `text-accent→hover:text-accent-hover`, solid fills→`hover:opacity-90`, soft/neutral surfaces→`hover:brightness-95`, colored text links→`hover:underline`. Guard now reports zero and gates CI.
+
+**Verified:** build clean; bundle within budget; 155 files / 1,277 tests pass; migration lint clean; prod deploy `96f67e2` READY on the new region; `/api/health` 200.
+
+**Phase 2 (next, mine):** Playwright E2E smoke vs PR preview URLs (dedicated seeded test org + GH secrets; spec in plan §2), weekly automated health check, monthly quality sweep. **Waiting on operator (~10 min, plan §6):** Fluid Compute verify, Skew Protection, Vercel spend cap, Sentry account → DSN.
