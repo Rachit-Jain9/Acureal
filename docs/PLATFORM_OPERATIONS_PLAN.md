@@ -42,7 +42,7 @@ deployment, not generic advice._
 | CI: **hover-state guard** (`hoverStateGuard.test.js`) | the no-op hover class regressing (fixed twice in #943/#945) | ✅ added (this PR) |
 | CI: **bundle budget** (`check-bundle-budget.cjs`) | heavyweight vendors creeping onto routes; chunk/total size creep | ✅ added (this PR) |
 | CI: **Playwright E2E smoke** against the PR's Vercel preview | blank pages, dead buttons, invisible controls, broken downloads — the entire class unit tests can't see | 🔜 Phase 2 (next work block) |
-| Prod: **Sentry error monitoring** (free tier) | runtime errors real users hit, with stack traces + alert email | 🔜 needs operator account (5 min) |
+| Prod: **Sentry error monitoring** (free tier, EU data residency) | runtime errors real users hit, with stack traces + alert email | ✅ wired frontend + backend (public DSN committed w/ env override; prod-only; privacy-first no-PII; 4xx not reported; browser-extension + chunk noise filtered) |
 | Prod: **Vercel Skew Protection** | stale-chunk errors after deploys (replaces the main.jsx reload hack as primary defense) | 🔜 operator toggle |
 | Cadence: **weekly automated health check** (scheduled cloud agent) | deploy failures, error spikes, Supabase advisor drift | 🔜 Phase 2 |
 | Cadence: **monthly multi-agent quality sweep** (like #943's) | slow accumulation of redundancy/perf/UX debt | operator-triggered |
