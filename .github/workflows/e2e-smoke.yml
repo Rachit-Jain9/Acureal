@@ -116,7 +116,9 @@ jobs:
           E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
           E2E_BYPASS_SECRET: ${{ secrets.E2E_BYPASS_SECRET }}
-        run: npx playwright test --reporter=github,list
+        # html reporter generates playwright-report/ (with failure screenshots +
+        # traces) so the artifact upload below has something to upload.
+        run: npx playwright test --reporter=github,list,html
 
       - name: Upload Playwright report
         if: always() && steps.reachable.outputs.run == 'true'
