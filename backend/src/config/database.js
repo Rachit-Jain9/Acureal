@@ -62,12 +62,29 @@ const describeDatabaseError = (error) => {
   return 'Database operation failed.';
 };
 
-const applyRequestContext = async (client) => {
+// Set the per-request tenant context (user + organization) that the RLS helper
+// functions `current_user_id()` / `current_organization_id()` read via
+// `current_setting('app.current_*', true)`.
+//
+// CRITICAL: `is_local = true` (the 3rd arg), and this MUST run inside an
+// explicit transaction alongside the query it scopes. We connect through
+// Supabase's TRANSACTION-mode pooler (:6543), where the unit of backend
+// assignment is a transaction, not a session. A session-level `SET` (is_local
+// = false) issued as its OWN statement does NOT reliably carry to the next
+// statement — the pooler can hand the follow-up query a DIFFERENT backend that
+// never saw the SET, so `current_organization_id()` returns NULL and every
+// org-scoped query silently returns ZERO rows. That produced the intermittent
+// empty dashboard widgets / empty Deals list (worse under load, as pool
+// contention makes the mis-route more likely). SET LOCAL inside one
+// transaction pins the context + query to a single backend, and the context is
+// discarded at COMMIT so it can never leak into the next request that reuses
+// that pooled backend.
+const setRequestContext = async (client) => {
   const context = getRequestContext();
   await client.query(
     `SELECT
-       set_config('app.current_user_id', $1, false),
-       set_config('app.current_organization_id', $2, false)`,
+       set_config('app.current_user_id', $1, true),
+       set_config('app.current_organization_id', $2, true)`,
     [context.userId || '', context.organizationId || '']
   );
 };
@@ -75,15 +92,23 @@ const applyRequestContext = async (client) => {
 const query = async (text, params) => {
   const start = Date.now();
   const client = await pool.connect();
+  let inTransaction = false;
   try {
-    await applyRequestContext(client);
+    await client.query('BEGIN');
+    inTransaction = true;
+    await setRequestContext(client);
     const res = await client.query(text, params);
+    await client.query('COMMIT');
+    inTransaction = false;
     const duration = Date.now() - start;
     if (process.env.NODE_ENV === 'development') {
       console.log('Query executed:', { text: text.substring(0, 100), duration, rows: res.rowCount });
     }
     return res;
   } catch (error) {
+    if (inTransaction) {
+      try { await client.query('ROLLBACK'); } catch { /* connection already broken */ }
+    }
     const message = describeDatabaseError(error);
     console.error('Database query error:', { text: text.substring(0, 100), error: message });
     if (!error.message) {
@@ -101,7 +126,7 @@ const transaction = async (callback) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await applyRequestContext(client);
+    await setRequestContext(client);
     const result = await callback(client);
     await client.query('COMMIT');
     return result;
