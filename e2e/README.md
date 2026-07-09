@@ -40,10 +40,16 @@ in GitHub Actions secrets: `E2E_EMAIL`, `E2E_PASSWORD` (and `E2E_ORG_ID`).
 
 ## CI
 
-`.github/workflows/e2e-smoke.yml` triggers on Vercel's `deployment_status` for
-each PR preview and runs this suite against the live preview URL. It's
-**advisory** (not a required check) until it's proven stable, then promote it to
-required in branch protection.
+`.github/workflows/e2e-smoke.yml` runs this suite three ways:
+
+- **On each PR preview** (`deployment_status`) — against the live preview URL.
+  **Advisory** (not a required check) until proven stable, then promote to
+  required in branch protection.
+- **Daily against production** (`schedule`, 02:00 UTC) — a synthetic monitor for
+  the "healthy 200 but empty" class Sentry can't see, and any regression that
+  slips in between PRs. No secret needed (production is public).
+- **On demand** (`workflow_dispatch`) — against any URL you pass (defaults to
+  production).
 
 If preview URLs are ever put behind Vercel Deployment Protection, add an
 `E2E_BYPASS_SECRET` repo secret (the project's protection-bypass token); the

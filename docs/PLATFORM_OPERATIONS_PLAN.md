@@ -44,7 +44,8 @@ deployment, not generic advice._
 | CI: **Playwright E2E smoke** against the PR's Vercel preview | blank pages, dead buttons, invisible controls, broken downloads — the entire class unit tests can't see | ✅ shipped (#952) — advisory; runs vs preview once operator enables Protection Bypass (§6.6) |
 | Prod: **Sentry error monitoring** (free tier, EU data residency) | runtime errors real users hit, with stack traces + alert email | ✅ wired frontend + backend (public DSN committed w/ env override; prod-only; privacy-first no-PII; 4xx not reported; browser-extension + chunk noise filtered) |
 | Prod: **Vercel Skew Protection** | stale-chunk errors after deploys (replaces the main.jsx reload hack as primary defense) | 🔜 operator toggle |
-| Cadence: **weekly automated health check** (scheduled cloud agent) | deploy failures, error spikes, Supabase advisor drift | 🔜 Phase 2 |
+| Cadence: **scheduled synthetic monitor** — daily production smoke run (`e2e-smoke.yml` cron) | the "healthy 200 but empty" class Sentry can't see + post-deploy regressions between PRs | ✅ shipped (#954) |
+| Cadence: **weekly health check** — Supabase advisor drift + deploy status + cron success | slow config drift, RLS/perf lints, failed crons | 🔜 (token-gated: needs Supabase + Vercel API tokens) |
 | Cadence: **monthly multi-agent quality sweep** (like #943's) | slow accumulation of redundancy/perf/UX debt | operator-triggered |
 | Process: **feature check-in before building new surfaces** | build-then-remove waste | standing rule |
 
