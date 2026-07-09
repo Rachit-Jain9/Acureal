@@ -17,6 +17,13 @@ name: E2E Smoke (preview)
 
 on:
   deployment_status:
+  schedule:
+    # Daily synthetic monitor against production (02:00 UTC ≈ 07:30 IST). Catches
+    # the "healthy 200 but empty" class Sentry can't see (no error is thrown) and
+    # any post-deploy regression that lands between PRs. Production is public, so
+    # no bypass secret is needed. GitHub emails the workflow's last committer if a
+    # scheduled run fails.
+    - cron: '0 2 * * *'
   workflow_dispatch:
     inputs:
       base_url:
@@ -37,6 +44,7 @@ jobs:
     # manual dispatch. Skips the production deployment that follows each merge.
     if: >
       github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'schedule' ||
       (github.event.deployment_status.state == 'success' &&
        github.event.deployment_status.environment != 'Production' &&
        !contains(github.event.deployment_status.environment, 'Production'))
@@ -64,6 +72,9 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "url=${{ github.event.inputs.base_url }}" >> "$GITHUB_OUTPUT"
+          elif [ "${{ github.event_name }}" = "schedule" ]; then
+            # Scheduled synthetic monitor always targets public production.
+            echo "url=https://redip.vercel.app" >> "$GITHUB_OUTPUT"
           else
             # Vercel puts the live site URL in environment_url; target_url can be
             # the inspector link. Prefer environment_url, fall back to target_url.
