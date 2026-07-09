@@ -1,0 +1,120 @@
+name: E2E Smoke (preview)
+
+# Runs the Playwright smoke suite against each PR's Vercel preview deployment
+# BEFORE it can be promoted to production. Every assertion maps to a bug that
+# actually shipped to the operator in July 2026 (empty dashboard/Deals from the
+# pooler org-context race, NaN comp chips, missing Activity share panel, broken
+# XLSX export). This is the gate those regressions would have tripped.
+#
+# Trigger: Vercel posts a GitHub `deployment_status` when a preview finishes
+# building. We read the live URL from that event, so there's no polling and no
+# Vercel token needed — just the test-account secrets.
+#
+# ADVISORY (non-blocking) for now: this workflow is intentionally NOT added to
+# branch protection's required checks, so a red run surfaces a real signal
+# without blocking merges while we build confidence. Promote it to required once
+# it's proven stable across a few weeks of PRs.
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: 'URL to test (defaults to production)'
+        required: false
+        default: 'https://redip.vercel.app'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-smoke-${{ github.event.deployment_status.target_url || github.event.inputs.base_url }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    # Only for SUCCESSFUL non-production deployments (i.e. PR previews), or a
+    # manual dispatch. Skips the production deployment that follows each merge.
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.deployment_status.state == 'success' &&
+       github.event.deployment_status.environment != 'Production' &&
+       !contains(github.event.deployment_status.environment, 'Production'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: Install dependencies
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browser
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Resolve target URL
+        id: target
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "url=${{ github.event.inputs.base_url }}" >> "$GITHUB_OUTPUT"
+          else
+            # Vercel puts the live site URL in environment_url; target_url can be
+            # the inspector link. Prefer environment_url, fall back to target_url.
+            URL="${{ github.event.deployment_status.environment_url }}"
+            [ -z "$URL" ] && URL="${{ github.event.deployment_status.target_url }}"
+            echo "url=$URL" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Preflight — is the target reachable?
+        id: reachable
+        env:
+          BYPASS: ${{ secrets.E2E_BYPASS_SECRET }}
+        run: |
+          URL="${{ steps.target.outputs.url }}"
+          # With a bypass secret we can get through Vercel Deployment Protection,
+          # so always attempt the run and let it report a real pass/fail.
+          if [ -n "$BYPASS" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Bypass secret present — running with the Vercel protection-bypass header."
+            exit 0
+          fi
+          # No bypass secret: if the preview is behind Vercel Authentication it
+          # redirects to vercel.com/sso. That's a config gap, not an app bug —
+          # skip (green) with a loud, actionable warning rather than failing red.
+          LOC=$(curl -s -o /dev/null -w "%{redirect_url}" -I "$URL" || true)
+          if echo "$LOC" | grep -q "vercel.com/sso"; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "### ⚠️ E2E smoke SKIPPED — preview is protected" >> "$GITHUB_STEP_SUMMARY"
+            echo "\`$URL\` is behind Vercel Deployment Protection and no \`E2E_BYPASS_SECRET\` is set." >> "$GITHUB_STEP_SUMMARY"
+            echo "To enable preview testing: Vercel → project → Settings → Deployment Protection → enable **Protection Bypass for Automation**, then add the generated token as the repo secret **E2E_BYPASS_SECRET**." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=E2E smoke skipped::Preview is behind Vercel Deployment Protection and no E2E_BYPASS_SECRET is configured — see the job summary to enable it. (The suite still runs against production via workflow_dispatch.)"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run smoke suite
+        if: steps.reachable.outputs.run == 'true'
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: ${{ steps.target.outputs.url }}
+          E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
+          E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+          # Optional: only needed if preview URLs are behind Vercel Deployment
+          # Protection. Unset = ignored (production is public).
+          E2E_BYPASS_SECRET: ${{ secrets.E2E_BYPASS_SECRET }}
+        run: npx playwright test --reporter=github,list
+
+      - name: Upload Playwright report
+        if: always() && steps.reachable.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report
+          retention-days: 7

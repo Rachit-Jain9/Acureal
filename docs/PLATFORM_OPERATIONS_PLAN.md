@@ -41,21 +41,31 @@ deployment, not generic advice._
 | CI: unit tests + build + audit + migration lint + RLS audit + theme-token guard | logic regressions, bad migrations, RLS-less tables, raw palette classes | ✅ existed |
 | CI: **hover-state guard** (`hoverStateGuard.test.js`) | the no-op hover class regressing (fixed twice in #943/#945) | ✅ added (this PR) |
 | CI: **bundle budget** (`check-bundle-budget.cjs`) | heavyweight vendors creeping onto routes; chunk/total size creep | ✅ added (this PR) |
-| CI: **Playwright E2E smoke** against the PR's Vercel preview | blank pages, dead buttons, invisible controls, broken downloads — the entire class unit tests can't see | 🔜 Phase 2 (next work block) |
+| CI: **Playwright E2E smoke** against the PR's Vercel preview | blank pages, dead buttons, invisible controls, broken downloads — the entire class unit tests can't see | ✅ shipped (#952) — advisory; runs vs preview once operator enables Protection Bypass (§6.6) |
 | Prod: **Sentry error monitoring** (free tier, EU data residency) | runtime errors real users hit, with stack traces + alert email | ✅ wired frontend + backend (public DSN committed w/ env override; prod-only; privacy-first no-PII; 4xx not reported; browser-extension + chunk noise filtered) |
 | Prod: **Vercel Skew Protection** | stale-chunk errors after deploys (replaces the main.jsx reload hack as primary defense) | 🔜 operator toggle |
 | Cadence: **weekly automated health check** (scheduled cloud agent) | deploy failures, error spikes, Supabase advisor drift | 🔜 Phase 2 |
 | Cadence: **monthly multi-agent quality sweep** (like #943's) | slow accumulation of redundancy/perf/UX debt | operator-triggered |
 | Process: **feature check-in before building new surfaces** | build-then-remove waste | standing rule |
 
-### Phase 2 spec — E2E smoke (the single highest-value addition)
+### Phase 2 spec — E2E smoke (SHIPPED #952)
 - Dedicated **E2E test organization + user** seeded in prod DB (multi-tenant isolation confirmed
-  solid, so a test org is invisible to real orgs). Credentials in GitHub Actions secrets.
-- Playwright, ~8 flows, run against the PR preview URL (Vercel bot exposes it): login → dashboard
-  renders KPIs (not skeletons forever, not error states) → deals list renders cards → open deal →
-  each tab mounts without error → comps page chips are integers → export XLSX returns 200 + non-empty
-  blob → modal opens/scrolls/closes (close button visible via accessibility role + bounding box).
-- Budget: <3 min per PR. Non-blocking warn for the first two weeks, then required.
+  solid, so a test org is invisible to real orgs). Credentials in GitHub Actions secrets
+  (`E2E_EMAIL` / `E2E_PASSWORD` / `E2E_ORG_ID`). Owns 2 seeded deals so "renders with data" has data.
+- Playwright suite in `e2e/`, runs against a live deployment (PR preview in CI, production locally).
+  5 flows, each mapped to a July-2026 operator-facing bug: **dashboard renders WITH data** (the #951
+  org-context race guard) → deals list shows deals (not empty) → comps chips have no `NaN` → open deal
+  mounts tabs + Activity "Team & access" panel → XLSX export returns 200 + non-empty workbook.
+  `global-setup.js` logs in once (ticks Remember-me so the session → localStorage, since storageState
+  doesn't capture sessionStorage) + pre-sets the tourStore flags so first-run overlays don't block clicks.
+- CI `.github/workflows/e2e-smoke.yml` triggers on Vercel's `deployment_status` (no Vercel token).
+  **Advisory** (not a required check) until proven stable, then promote to required.
+- **Preview-protection dependency**: Vercel Deployment Protection is ON for previews (they 302 → Vercel
+  SSO), so the suite can't reach a preview until the operator enables **Protection Bypass for Automation**
+  and adds the token as repo secret `E2E_BYPASS_SECRET` (§6.6). Until then the CI run **skips green with a
+  loud warning** (never red) and the suite still runs against production via `workflow_dispatch`.
+- Verified: **5/5 vs production**; #951 race guard **4/4** zero flakes; also confirmed live on the
+  operator's own org (Pipeline Distribution now renders the stage mix, no "No deals" ghost).
 
 ## 3. Vercel Pro — use it fully
 
@@ -86,8 +96,8 @@ deployment, not generic advice._
 
 ## 5. Operating cadence
 
-- **Every PR**: CI gates (incl. new bundle + hover guards) → Vercel preview → merge → auto-deploy.
-  Phase 2 adds the E2E smoke on the preview.
+- **Every PR**: CI gates (incl. bundle + hover guards + the #952 E2E smoke on the preview) →
+  Vercel preview → merge → auto-deploy.
 - **Weekly (automated)**: health check — latest prod deploy READY, error scan, Supabase advisors,
   cron success — posted as a short report.
 - **Monthly**: multi-agent quality sweep (perf / redundancy / bugs / backend / UX) like #943's;
@@ -105,3 +115,8 @@ deployment, not generic advice._
 4. **Sentry** — create free account at https://sentry.io → new project (React) → send me the DSN
    string; I wire both frontend + backend and alerts to your email.
 5. **Supabase MFA** — https://supabase.com/dashboard/account/security → enable MFA.
+6. **Protection Bypass for Automation** (unlocks E2E smoke on previews) —
+   https://vercel.com/rachitjain348-4262s-projects/redip/settings/deployment-protection →
+   "Protection Bypass for Automation" → **Add Secret** → copy the generated value → send it to me →
+   I add it as the GitHub secret `E2E_BYPASS_SECRET`. Until then the smoke test skips (green, warned) on
+   previews and runs against production on demand.
