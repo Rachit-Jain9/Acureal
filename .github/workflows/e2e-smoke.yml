@@ -72,7 +72,35 @@ jobs:
             echo "url=$URL" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Preflight — is the target reachable?
+        id: reachable
+        env:
+          BYPASS: ${{ secrets.E2E_BYPASS_SECRET }}
+        run: |
+          URL="${{ steps.target.outputs.url }}"
+          # With a bypass secret we can get through Vercel Deployment Protection,
+          # so always attempt the run and let it report a real pass/fail.
+          if [ -n "$BYPASS" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Bypass secret present — running with the Vercel protection-bypass header."
+            exit 0
+          fi
+          # No bypass secret: if the preview is behind Vercel Authentication it
+          # redirects to vercel.com/sso. That's a config gap, not an app bug —
+          # skip (green) with a loud, actionable warning rather than failing red.
+          LOC=$(curl -s -o /dev/null -w "%{redirect_url}" -I "$URL" || true)
+          if echo "$LOC" | grep -q "vercel.com/sso"; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "### ⚠️ E2E smoke SKIPPED — preview is protected" >> "$GITHUB_STEP_SUMMARY"
+            echo "\`$URL\` is behind Vercel Deployment Protection and no \`E2E_BYPASS_SECRET\` is set." >> "$GITHUB_STEP_SUMMARY"
+            echo "To enable preview testing: Vercel → project → Settings → Deployment Protection → enable **Protection Bypass for Automation**, then add the generated token as the repo secret **E2E_BYPASS_SECRET**." >> "$GITHUB_STEP_SUMMARY"
+            echo "::warning title=E2E smoke skipped::Preview is behind Vercel Deployment Protection and no E2E_BYPASS_SECRET is configured — see the job summary to enable it. (The suite still runs against production via workflow_dispatch.)"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run smoke suite
+        if: steps.reachable.outputs.run == 'true'
         working-directory: e2e
         env:
           E2E_BASE_URL: ${{ steps.target.outputs.url }}
@@ -84,7 +112,7 @@ jobs:
         run: npx playwright test --reporter=github,list
 
       - name: Upload Playwright report
-        if: always()
+        if: always() && steps.reachable.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
