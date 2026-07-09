@@ -205,9 +205,12 @@ const narrateCard = async (card, ctx = {}) => {
             maxTokens: 600,
           });
         }
-        // Gemini path
+        // Gemini path. Unlike the OpenAI/Claude legs there is no separate
+        // system-prompt channel on this helper, so the schema instructions
+        // are prepended to the prompt — without them the model returns free
+        // prose that fails schema validation on every call.
         return providers.runGeminiInline({
-          prompt,
+          prompt: `${SCHEMA_SYSTEM_PROMPT}\n\n${prompt}`,
           model,
         });
       },

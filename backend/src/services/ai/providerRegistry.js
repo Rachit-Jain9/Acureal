@@ -105,15 +105,22 @@ const runGeminiInline = async ({
   const client = getGeminiClient();
   const geminiModel = client.getGenerativeModel({ model });
 
-  const result = await geminiModel.generateContent([
-    prompt,
-    {
+  // The inline-document part is only valid when a document is actually
+  // attached. Text-only callers (e.g. recommendation narration) used to get
+  // an unconditional `{ inlineData: { data: undefined, mimeType: undefined } }`
+  // part, which Google rejects with `400 Unsupported MIME type:` — a failure
+  // masked for months by the retired-model 404 that fired before body
+  // validation (fixed 2026-07-09).
+  const parts = [prompt];
+  if (base64Data) {
+    parts.push({
       inlineData: {
         data: base64Data,
         mimeType,
       },
-    },
-  ]);
+    });
+  }
+  const result = await geminiModel.generateContent(parts);
 
   return result.response.text().trim();
 };
