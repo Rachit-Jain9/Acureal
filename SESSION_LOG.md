@@ -4,6 +4,22 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-09 (Eradicated the empty-dashboard race at its root + Phase 2 E2E smoke net) (PRs #951, #952 — merged + deployed)
+
+Operator was (rightly) furious that the "empty dashboard / empty Deals" bug kept coming back despite earlier fixes — screenshot showed **"Pipeline Distribution: No deals" sitting next to "City Distribution: 6 deals."** Root-caused it to the foundation and killed it, then built the automated safety net that would have caught it (and the rest of this month's bugs) before they ever reached him.
+
+- **#951 — Killed the transaction-pooler tenant-context race (THE root cause).** We connect through Supabase's **transaction-mode** pooler (`:6543`), where a pooled backend is assigned **per transaction**, not per session. The app set the RLS tenant context (`app.current_organization_id`, read by `current_organization_id()`) with a **session-level `SET` as its own statement**, then ran the org-scoped query as a **separate** statement — under load the pooler could hand that follow-up query a **different backend that never saw the SET** → `current_organization_id()` returned NULL → `buildVisibleDealCondition` matched **zero rows** → a healthy `200` with `[]`. That's why it looked intermittent and why react-query retries never helped (a raced request succeeds, just empty). Fix in `backend/src/config/database.js`: set the context with **`set_config(..., true)` (SET LOCAL) inside the same `BEGIN…COMMIT` as the query** (`query()` + `transaction()`), pinning context + query to one backend; context is discarded at COMMIT so it can't leak across requests. Regression test `backend/tests/database.requestContext.test.js` pins the exact `BEGIN → set_config(...,true) → query → COMMIT` sequence + rollback-on-error. **Verified live on the operator's OWN org**: Pipeline Distribution now renders the real stage mix, no "No deals" ghost; all widgets populated.
+- **#952 — Phase 2: Playwright E2E smoke suite + preview CI gate.** New `e2e/` workspace: click-tests a **live deployment** (PR preview in CI, production locally) as an **isolated seeded test org** (2 deals; creds in GH secrets `E2E_EMAIL`/`E2E_PASSWORD`/`E2E_ORG_ID`; multi-tenant isolation keeps it invisible to real orgs). 5 assertions, **each mapped to a bug that reached the operator in July 2026**: dashboard-renders-WITH-data (the #951 race guard) · deals-list-not-empty · comps-no-`NaN`-chips · deal-opens+Activity "Team & access" panel · XLSX-export-returns-workbook. `global-setup.js` logs in once, ticks Remember-me (session → localStorage, since Playwright storageState skips sessionStorage) + pre-sets tourStore flags so first-run onboarding overlays don't intercept clicks. CI `.github/workflows/e2e-smoke.yml` triggers on Vercel `deployment_status` (no Vercel token). **Verified 5/5 vs production; #951 guard 4/4 across repeated runs, zero flakes.**
+  - **Preview-protection gotcha surfaced by the CI itself**: Vercel Deployment Protection is ON for previews (they `302` → Vercel SSO; production is public), so the first CI run failed at login. Hardened the workflow to **skip green with a loud, actionable warning** when a preview is protected and no `E2E_BYPASS_SECRET` is set (a smoke test that can't reach its target must not read as "app broken") — and to run for real when the bypass secret exists. Suite still runs vs production via `workflow_dispatch`.
+- Advisory (not a required check) until proven stable across a few weeks, then promote to required. Memory + `docs/PLATFORM_OPERATIONS_PLAN.md` updated (Phase 2 shipped; §6.6 = the operator's Protection-Bypass step).
+
+### Left for next
+- **Operator (1 min) to unlock preview-testing**: Vercel → project → Settings → Deployment Protection → enable **Protection Bypass for Automation** → send me the token → I add it as GH secret `E2E_BYPASS_SECRET`. Then the smoke suite runs against every PR's real preview before merge.
+- Still-pending operator toggles from the ops plan: Fluid Compute verify, Skew Protection, Vercel spend cap, Supabase MFA.
+- Phase 2 remaining: weekly automated health check (deploy status + Supabase advisors + cron success), monthly multi-agent quality sweep.
+
+---
+
 ## 2026-07-05 (Regulatory-coverage panel + Hoskote rulebook; airport-belt map/circle-rate scope) (PRs #935–#937 — merged)
 
 Continuation of the BIAAPA work. Three threads: a coverage panel (operator flagged the map "looked like it stopped at 2015"), the Hoskote ingestion, and scoping the airport-belt map + circle rates.
