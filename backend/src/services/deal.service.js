@@ -622,7 +622,8 @@ const getDealById = async (id) => {
       p.depth_mtrs,
       p.zone_id,
       p.zone_notes,
-      u.email as assigned_to_email
+      u.email as assigned_to_email,
+      (SELECT COUNT(*)::int FROM deal_shares ds2 WHERE ds2.deal_id = d.id) AS share_count
      FROM deals d
      LEFT JOIN properties p ON d.property_id = p.id
      LEFT JOIN users u ON d.assigned_to = u.id
@@ -649,6 +650,7 @@ const getDealById = async (id) => {
     required_approval_count: parseInt(result.rows[0].required_approval_count, 10) || 0,
     validated_approval_count: parseInt(result.rows[0].validated_approval_count, 10) || 0,
     open_high_risk_count: parseInt(result.rows[0].open_high_risk_count, 10) || 0,
+    share_count: parseInt(result.rows[0].share_count, 10) || 0,
     key_risks: Array.isArray(result.rows[0].key_risks) ? result.rows[0].key_risks : [],
   };
 

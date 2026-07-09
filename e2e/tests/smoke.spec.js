@@ -65,7 +65,7 @@ test.describe('REDIP production smoke', () => {
     expect(bodyText).not.toContain('NaN');
   });
 
-  test('opening a deal mounts its tabs and the Activity "Team & access" panel', async ({ page }) => {
+  test('opening a deal mounts its tabs and the header Share panel', async ({ page }) => {
     await page.goto('/dashboard/deals', { waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { name: SEEDED_DEAL }).click();
 
@@ -75,9 +75,15 @@ test.describe('REDIP production smoke', () => {
     ).first();
     await expect(activityTab).toBeVisible();
     await activityTab.click();
+    await expect(page.getByRole('button', { name: 'Add Activity' })).toBeVisible();
 
-    // People-sharing lives at the top of the Activity tab.
-    await expect(page.getByText('Team & access')).toBeVisible();
+    // People-sharing lives behind the header Share button (visible from every
+    // tab). Clicking it must open the Share Deal dialog with the invite flow.
+    // Name is a prefix match: with shares, the count chip joins the accessible
+    // name ("Share Shared with 2 people").
+    await page.getByRole('button', { name: /^Share(\s|$)/ }).click();
+    await expect(page.getByRole('heading', { name: 'Share Deal' })).toBeVisible();
+    await expect(page.getByText('People with access')).toBeVisible();
     await expectAuthenticatedShell(page);
   });
 

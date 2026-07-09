@@ -9,7 +9,7 @@ const PERMISSION_OPTIONS = [
   { value: 'editor', label: 'Can edit', icon: Edit3, description: 'Can view and edit deal data' },
 ];
 
-export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
+export default function ShareDealPanel({ dealId, dealName, isOwner, onClose, onSharesChange }) {
   const [shares, setShares] = useState([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState('');
@@ -24,14 +24,18 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose }) {
     setLoading(true);
     try {
       const response = await dealsAPI.listShares(dealId);
-      setShares(response.data?.data || []);
+      const list = response.data?.data || [];
+      setShares(list);
+      // Let the opener (deal header Share button) keep its live count in sync
+      // after a share/revoke — no page refetch needed.
+      onSharesChange?.(list.length);
     } catch {
       // Shares may not load if user is not owner
       setShares([]);
     } finally {
       setLoading(false);
     }
-  }, [dealId]);
+  }, [dealId, onSharesChange]);
 
   useEffect(() => {
     loadShares();
