@@ -174,9 +174,15 @@ export default function DealDetailPage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState(null);
   const [showSharePanel, setShowSharePanel] = useState(false);
+  // "Who's on this deal" count for the header Share button. Seeded by the
+  // workspace payload (deal.share_count) and kept live by ShareDealPanel's
+  // onSharesChange callback — no extra request, no stale count after a
+  // share/revoke inside the panel.
+  const [liveShareCount, setLiveShareCount] = useState(null);
 
   const isAdmin = roleSatisfies(user?.role, ['admin']);
   const canEdit = useCanEdit();
+  const shareCount = liveShareCount ?? deal?.share_count ?? 0;
 
   const setTab = (tabId) => setSearchParams({ tab: tabId });
   const updateField = (key, value) => setEditForm((f) => ({ ...f, [key]: value }));
@@ -315,8 +321,21 @@ export default function DealDetailPage() {
               variant="secondary"
               leftIcon={<Share2 size={14} />}
               onClick={() => setShowSharePanel(true)}
+              title={shareCount > 0
+                ? `Shared with ${shareCount} ${shareCount === 1 ? 'person' : 'people'}`
+                : 'Share this deal workspace'}
             >
               Share
+              {shareCount > 0 && (
+                <span
+                  className="ml-1.5 inline-flex items-center justify-center min-w-[18px] h-[18px]
+                    px-1 rounded-full bg-accent-soft text-accent text-[11px] font-semibold
+                    tabular-nums leading-none"
+                  aria-label={`Shared with ${shareCount} ${shareCount === 1 ? 'person' : 'people'}`}
+                >
+                  {shareCount}
+                </span>
+              )}
             </Button>
             {canEdit && (
               <Button variant="secondary" leftIcon={<Edit2 size={14} />} onClick={handleEditOpen}>
@@ -611,6 +630,7 @@ export default function DealDetailPage() {
             dealName={deal.name}
             isOwner={deal.created_by === user?.id}
             onClose={() => setShowSharePanel(false)}
+            onSharesChange={setLiveShareCount}
           />
         )}
       </div>
