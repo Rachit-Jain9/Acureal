@@ -39,6 +39,21 @@ const ensureActivityEditable = async (activityId, userId, userRole) => {
   return activity;
 };
 
+// Resolve an assignee id to a workspace member. The lookup runs through the
+// tenant-scoped query() (RLS context set per request), so a user outside the
+// caller's organization is simply invisible — the same isolation the deal-share
+// flow relies on. Returns { id, name } or throws 400.
+const resolveAssignee = async (assignedTo) => {
+  const result = await query(
+    'SELECT id, name FROM users WHERE id = $1 AND is_active = TRUE',
+    [assignedTo]
+  );
+  if (result.rows.length === 0) {
+    throw createError('Assignee must be an active member of your workspace.', 400);
+  }
+  return result.rows[0];
+};
+
 const logActivity = async (
   dealId,
   type,
@@ -48,7 +63,8 @@ const logActivity = async (
   nextFollowUp = null,
   isImportant = false,
   status = 'open',
-  priority = 'medium'
+  priority = 'medium',
+  assignedTo = null
 ) => {
   await ensureDealExists(dealId);
 
@@ -75,13 +91,14 @@ const logActivity = async (
 
   const completedAt = status === 'completed' ? new Date() : null;
   const completedBy = status === 'completed' ? userId : null;
+  const assignee = assignedTo ? await resolveAssignee(assignedTo) : null;
 
   const result = await query(
     `INSERT INTO activities (
       deal_id, activity_type, description, performed_by, activity_date, next_follow_up,
-      is_important, status, priority, completed_at, completed_by
+      is_important, status, priority, completed_at, completed_by, assigned_to
     )
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING *`,
     [
       dealId,
@@ -95,12 +112,14 @@ const logActivity = async (
       priority,
       completedAt,
       completedBy,
+      assignee ? assignee.id : null,
     ]
   );
 
   const activity = result.rows[0];
   const userResult = await query('SELECT name FROM users WHERE id = $1', [userId]);
   activity.performed_by_name = userResult.rows[0]?.name || 'Unknown';
+  activity.assigned_to_name = assignee ? assignee.name : null;
 
   await query('UPDATE deals SET updated_at = NOW() WHERE id = $1', [dealId]);
   return activity;
@@ -196,11 +215,13 @@ const listActivities = async (filters = {}, pagination = {}) => {
 
   const dataResult = await query(
     `SELECT a.*, u.name as performed_by_name, completer.name as completed_by_name,
+      assignee.name as assigned_to_name,
       deal.name as deal_name, prop.city as deal_city,
       COALESCE(NULLIF(prop.name, ''), NULLIF(prop.address, ''), CONCAT(COALESCE(prop.city, 'Unknown city'), ' property')) as property_name
      FROM activities a
      LEFT JOIN users u ON a.performed_by = u.id
      LEFT JOIN users completer ON a.completed_by = completer.id
+     LEFT JOIN users assignee ON a.assigned_to = assignee.id
      LEFT JOIN deals d ON a.deal_id = d.id
      LEFT JOIN deals deal ON a.deal_id = deal.id
      LEFT JOIN properties prop ON deal.property_id = prop.id
@@ -260,6 +281,12 @@ const updateActivity = async (activityId, data, userId, userRole) => {
   const completedAt = nextStatus === 'completed' ? activity.completed_at || new Date() : null;
   const completedBy = nextStatus === 'completed' ? activity.completed_by || userId : null;
 
+  // Assignment: undefined = untouched, ''/null = clear, uuid = validate + set.
+  let nextAssignedTo = activity.assigned_to;
+  if (data.assignedTo !== undefined) {
+    nextAssignedTo = data.assignedTo ? (await resolveAssignee(data.assignedTo)).id : null;
+  }
+
   const result = await query(
     `UPDATE activities
      SET activity_type = $1,
@@ -271,8 +298,9 @@ const updateActivity = async (activityId, data, userId, userRole) => {
          priority = $7,
          completed_at = $8,
          completed_by = $9,
+         assigned_to = $10,
          updated_at = NOW()
-     WHERE id = $10
+     WHERE id = $11
      RETURNING *`,
     [
       nextType,
@@ -284,6 +312,7 @@ const updateActivity = async (activityId, data, userId, userRole) => {
       nextPriority,
       completedAt,
       completedBy,
+      nextAssignedTo,
       activityId,
     ]
   );

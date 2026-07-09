@@ -19,6 +19,8 @@ const activityWriteValidators = [
   body('isImportant').optional().isBoolean(),
   body('status').optional().isIn(ACTIVITY_STATUSES),
   body('priority').optional().isIn(ACTIVITY_PRIORITIES),
+  // checkFalsy: '' clears/omits assignment rather than failing UUID validation.
+  body('assignedTo').optional({ nullable: true, checkFalsy: true }).isUUID(),
 ];
 
 // GET /activities
@@ -136,7 +138,8 @@ router.post(
         req.body.nextFollowUp,
         req.body.isImportant,
         req.body.status,
-        req.body.priority
+        req.body.priority,
+        req.body.assignedTo || null
       );
       res.status(201).json({ success: true, message: 'Activity logged.', data: activity });
     } catch (error) {
@@ -158,6 +161,7 @@ router.put(
     body('isImportant').optional().isBoolean(),
     body('status').optional().isIn(ACTIVITY_STATUSES),
     body('priority').optional().isIn(ACTIVITY_PRIORITIES),
+    body('assignedTo').optional({ nullable: true, checkFalsy: true }).isUUID(),
   ],
   handleValidation,
   async (req, res, next) => {

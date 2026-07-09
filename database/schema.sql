@@ -354,6 +354,7 @@ CREATE TABLE activities (
     activity_type activity_type NOT NULL,
     description TEXT NOT NULL,
     performed_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    assigned_to UUID REFERENCES users(id) ON DELETE SET NULL,
     activity_date TIMESTAMP WITH TIME ZONE NOT NULL,
     next_follow_up DATE,
     is_important BOOLEAN DEFAULT FALSE,
@@ -368,6 +369,7 @@ CREATE TABLE activities (
 CREATE INDEX idx_activities_deal_id ON activities(deal_id);
 CREATE INDEX idx_activities_organization_id ON activities(organization_id);
 CREATE INDEX idx_activities_performed_by ON activities(performed_by);
+CREATE INDEX idx_activities_assigned_to ON activities(assigned_to);
 CREATE INDEX idx_activities_activity_date ON activities(activity_date DESC);
 CREATE INDEX idx_activities_type ON activities(activity_type);
 CREATE INDEX idx_activities_status ON activities(status);

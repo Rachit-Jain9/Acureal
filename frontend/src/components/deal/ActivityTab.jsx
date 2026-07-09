@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import EmptyState from '../common/EmptyState';
+import { organizationAPI } from '../../services/api';
 import {
   Phone,
   MapPin,
@@ -56,6 +58,7 @@ const buildForm = () => ({
   priority: 'medium',
   status: 'open',
   nextFollowUp: '',
+  assignedTo: '',
 });
 
 function ActivityIcon({ type }) {
@@ -76,6 +79,17 @@ export default function ActivityTab() {
 
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(buildForm());
+
+  // Workspace roster for the "Assign to" dropdown — fetched only once the form
+  // opens, cached 5 min (the roster changes rarely).
+  const { data: membersData } = useQuery({
+    queryKey: ['organization-members'],
+    queryFn: () => organizationAPI.listMembers(),
+    enabled: showForm && canEdit,
+    staleTime: 5 * 60 * 1000,
+    select: (res) => res.data?.data?.members || [],
+  });
+  const members = membersData || [];
 
   // `activities` is now provided directly by useDealActivities (always
   // a flat array). Removed the redundant runtime array-coercion block.
@@ -98,6 +112,7 @@ export default function ActivityTab() {
           priority: form.priority,
           status: form.status,
           nextFollowUp: form.nextFollowUp || undefined,
+          assignedTo: form.assignedTo || undefined,
         },
       });
       setForm(buildForm());
@@ -206,7 +221,7 @@ export default function ActivityTab() {
               />
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <div>
                 <label className="block text-xs font-medium text-content-secondary mb-1">Priority</label>
                 <select
@@ -228,6 +243,21 @@ export default function ActivityTab() {
                 >
                   {Object.entries(ACTIVITY_STATUS_CONFIG).map(([v, cfg]) => (
                     <option key={v} value={v}>{cfg.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-content-secondary mb-1">
+                  Assign To <span className="text-content-muted">(optional)</span>
+                </label>
+                <select
+                  value={form.assignedTo}
+                  onChange={(e) => setForm((f) => ({ ...f, assignedTo: e.target.value }))}
+                  className="input text-sm"
+                >
+                  <option value="">Unassigned</option>
+                  {members.map((m) => (
+                    <option key={m.id} value={m.id}>{m.name || m.email}</option>
                   ))}
                 </select>
               </div>
@@ -318,6 +348,16 @@ export default function ActivityTab() {
                         {activity.performed_by_name && (
                           <span className="text-xs text-content-muted">
                             by {activity.performed_by_name}
+                          </span>
+                        )}
+                        {activity.assigned_to_name && (
+                          <span
+                            className={clsx(
+                              'text-xs font-medium',
+                              isCompleted ? 'text-content-muted' : 'text-accent'
+                            )}
+                          >
+                            Assigned to {activity.assigned_to_name}
                           </span>
                         )}
                         <span className="text-xs text-content-muted">
