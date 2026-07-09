@@ -41,7 +41,7 @@ deployment, not generic advice._
 | CI: unit tests + build + audit + migration lint + RLS audit + theme-token guard | logic regressions, bad migrations, RLS-less tables, raw palette classes | ✅ existed |
 | CI: **hover-state guard** (`hoverStateGuard.test.js`) | the no-op hover class regressing (fixed twice in #943/#945) | ✅ added (this PR) |
 | CI: **bundle budget** (`check-bundle-budget.cjs`) | heavyweight vendors creeping onto routes; chunk/total size creep | ✅ added (this PR) |
-| CI: **Playwright E2E smoke** against the PR's Vercel preview | blank pages, dead buttons, invisible controls, broken downloads — the entire class unit tests can't see | ✅ shipped (#952) — advisory; runs vs preview once operator enables Protection Bypass (§6.6) |
+| CI: **Playwright E2E smoke** against the PR's Vercel preview | blank pages, dead buttons, invisible controls, broken downloads — the entire class unit tests can't see | ✅ shipped (#952); preview bypass enabled 2026-07-09 (§6.6) — advisory until proven stable, then required |
 | Prod: **Sentry error monitoring** (free tier, EU data residency) | runtime errors real users hit, with stack traces + alert email | ✅ wired frontend + backend (public DSN committed w/ env override; prod-only; privacy-first no-PII; 4xx not reported; browser-extension + chunk noise filtered) |
 | Prod: **Vercel Skew Protection** | stale-chunk errors after deploys (replaces the main.jsx reload hack as primary defense) | 🔜 operator toggle |
 | Cadence: **scheduled synthetic monitor** — daily production smoke run (`e2e-smoke.yml` cron) | the "healthy 200 but empty" class Sentry can't see + post-deploy regressions between PRs | ✅ shipped (#954) |
@@ -61,10 +61,10 @@ deployment, not generic advice._
   doesn't capture sessionStorage) + pre-sets the tourStore flags so first-run overlays don't block clicks.
 - CI `.github/workflows/e2e-smoke.yml` triggers on Vercel's `deployment_status` (no Vercel token).
   **Advisory** (not a required check) until proven stable, then promote to required.
-- **Preview-protection dependency**: Vercel Deployment Protection is ON for previews (they 302 → Vercel
-  SSO), so the suite can't reach a preview until the operator enables **Protection Bypass for Automation**
-  and adds the token as repo secret `E2E_BYPASS_SECRET` (§6.6). Until then the CI run **skips green with a
-  loud warning** (never red) and the suite still runs against production via `workflow_dispatch`.
+- **Preview-protection**: Vercel Deployment Protection is ON for previews (they 302 → Vercel SSO).
+  Resolved 2026-07-09 — the `E2E_BYPASS_SECRET` repo secret (Vercel "Protection Bypass for Automation"
+  token) is forwarded as the `x-vercel-protection-bypass` header, so the suite reaches protected previews.
+  If that secret is ever removed the run **skips green with a loud warning** (never red).
 - Verified: **5/5 vs production**; #951 race guard **4/4** zero flakes; also confirmed live on the
   operator's own org (Pipeline Distribution now renders the stage mix, no "No deals" ghost).
 
@@ -116,8 +116,9 @@ deployment, not generic advice._
 4. **Sentry** — create free account at https://sentry.io → new project (React) → send me the DSN
    string; I wire both frontend + backend and alerts to your email.
 5. **Supabase MFA** — https://supabase.com/dashboard/account/security → enable MFA.
-6. **Protection Bypass for Automation** (unlocks E2E smoke on previews) —
-   https://vercel.com/rachitjain348-4262s-projects/redip/settings/deployment-protection →
-   "Protection Bypass for Automation" → **Add Secret** → copy the generated value → send it to me →
-   I add it as the GitHub secret `E2E_BYPASS_SECRET`. Until then the smoke test skips (green, warned) on
-   previews and runs against production on demand.
+6. ✅ **Protection Bypass for Automation** (unlocks E2E smoke on previews) — DONE 2026-07-09. Operator
+   added a Vercel "Protection Bypass for Automation" secret; it lives in the repo secret
+   `E2E_BYPASS_SECRET`, so the smoke suite now runs against protected PR previews (forwarded as the
+   `x-vercel-protection-bypass` header). To rotate: regenerate at
+   https://vercel.com/rachitjain348-4262s-projects/redip/settings/deployment-protection and update the
+   GitHub secret.

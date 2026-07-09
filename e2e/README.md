@@ -51,6 +51,8 @@ in GitHub Actions secrets: `E2E_EMAIL`, `E2E_PASSWORD` (and `E2E_ORG_ID`).
 - **On demand** (`workflow_dispatch`) — against any URL you pass (defaults to
   production).
 
-If preview URLs are ever put behind Vercel Deployment Protection, add an
-`E2E_BYPASS_SECRET` repo secret (the project's protection-bypass token); the
-config forwards it automatically. Production is public, so this is unset today.
+Preview URLs are behind Vercel Deployment Protection (they 302 → Vercel SSO),
+so the suite reaches them via the **`E2E_BYPASS_SECRET`** repo secret — the
+project's Vercel "Protection Bypass for Automation" token, forwarded as the
+`x-vercel-protection-bypass` header (configured 2026-07-09). If that secret is
+ever removed, the preview run skips green with a warning instead of failing.
