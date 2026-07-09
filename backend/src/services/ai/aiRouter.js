@@ -307,10 +307,33 @@ const resolveProviderForTask = (task) => {
 };
 
 const resolveDefaultModel = (provider) => {
-  if (provider === 'gemini') return process.env.GEMINI_MODEL || 'gemini-3-flash-preview';
+  // Gemini's default delegates to providerRegistry — the single place the
+  // "current Gemini model" decision lives. A duplicate literal here kept
+  // shipping 'gemini-3-flash-preview' long after the registry moved on
+  // (2026-05-15); Google retired that preview ~2026-07-01 and every routed
+  // Gemini call 404'd for a week (~1.5k error rows). Never duplicate model
+  // names outside the registry again.
+  if (provider === 'gemini') return process.env.GEMINI_MODEL || providerRegistry.DEFAULT_GEMINI_MODEL;
   if (provider === 'claude') return process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
+  // NOTE: providerRegistry's own OpenAI default is 'gpt-5.4'; the router
+  // deliberately stays on the prod-proven 'gpt-4o' for routed calls until
+  // the operator ratifies the newer model on the live path.
   if (provider === 'openai') return process.env.OPENAI_MODEL || 'gpt-4o';
   return 'unknown';
+};
+
+// The reasoning wrappers below can only execute the OpenAI or Claude SDK
+// paths. Constrain whatever the routing layer returned onto those two: an
+// explicit 'claude' routing is honoured; everything else — including the
+// global 'gemini' catch-all that unrouted tasks inherit — follows the
+// post-2026-05-11 reasoning default (OpenAI). A routed MODEL is forwarded
+// only when the provider it was configured for survives the constraint: a
+// Gemini model name must never reach the Anthropic/OpenAI SDKs (Anthropic
+// 404s with `model: gemini-…` — the July 2026 export-insights outage).
+const constrainReasoningRouting = (routed = {}, explicitModel = null) => {
+  const provider = routed.provider === 'claude' ? 'claude' : 'openai';
+  const model = explicitModel || (routed.provider === provider ? routed.model : null) || null;
+  return { provider, model };
 };
 
 /**
@@ -729,24 +752,30 @@ const runGeminiInline = async (args = {}) => {
  */
 const runClaudeReasoning = async (args = {}) => {
   const { task = 'reasoning', attach, metadata, retry, cache, ...passthrough } = args;
+  // Resolve routing UP FRONT and constrain it to the providers this wrapper
+  // actually implements. Before 2026-07-09, unrouted tasks (export_insights,
+  // ai_market_context, …) inherited the global 'gemini' default and this
+  // callback then handed the GEMINI model name to the Claude SDK — every
+  // such call 404'd at Anthropic while telemetry blamed provider=gemini.
+  const routed = await resolveTaskRouting(task);
+  const { provider, model } = constrainReasoningRouting(routed, passthrough.model);
   return runAIResult({
     task,
-    // No explicit provider — let routing config (runtime table → env →
-    // code default) pick. After 2026-05-11 the env default is 'openai'.
-    model: passthrough.model,
+    provider,
+    model,
     attach,
     metadata,
     retry,
     cache,
-    run: async ({ providers, provider, model }) => {
-      if (provider === 'openai') {
+    run: async ({ providers, provider: runProvider, model: runModel }) => {
+      if (runProvider === 'openai') {
         // OpenAI doesn't support Anthropic's ephemeral prompt cache.
         // Strip cachePrompt before forwarding — it's a no-op and the
         // OpenAI SDK would reject the unknown key in strict mode.
         const { cachePrompt: _drop, ...openaiArgs } = passthrough;
-        return providers.runOpenAIReasoning({ ...openaiArgs, model });
+        return providers.runOpenAIReasoning({ ...openaiArgs, model: runModel });
       }
-      return providers.runClaudeReasoning({ ...passthrough, model });
+      return providers.runClaudeReasoning({ ...passthrough, model: runModel });
     },
   });
 };
@@ -815,12 +844,13 @@ const runClaudeReasoningStream = async ({
   metadata = {},
 } = {}) => {
   // Routing-aware as of 2026-05-11 (operator directive: switch to OpenAI).
-  // Resolve the provider via the runtime routing table → env → code default.
-  // If the resolution is 'openai', stream via runOpenAIReasoningStream and
-  // drop the unused cachePrompt arg. Otherwise stream via Claude as before.
+  // Resolve the provider via the runtime routing table → env → code default,
+  // constrained to the two SDK paths this stream wrapper implements (see
+  // constrainReasoningRouting — a routed 'gemini' must not leak its model
+  // name into the Anthropic/OpenAI SDKs).
   const routing = await resolveTaskRouting(task);
-  const resolvedProvider = routing.provider;
-  const resolvedModel = model || routing.model || resolveDefaultModel(resolvedProvider);
+  const { provider: resolvedProvider, model: constrainedModel } = constrainReasoningRouting(routing, model);
+  const resolvedModel = constrainedModel || resolveDefaultModel(resolvedProvider);
   const start = Date.now();
 
   // Cost-cap pre-check. Same logic as runAI but inlined because the streaming
@@ -1115,5 +1145,6 @@ module.exports = {
   extractTokenUsage,
   resolveProviderForTask,
   resolveTaskRouting,
+  constrainReasoningRouting,
   resolveDefaultModel,
 };

@@ -464,6 +464,10 @@ const runOpenAIEmbedding = async ({
 module.exports = {
   getProviderAvailability,
   getRoutingConfig,
+  // Single source of truth for the current Gemini default. aiRouter's
+  // resolveDefaultModel delegates here — never duplicate model-name literals
+  // (a stale duplicate caused the July 2026 retired-model outage).
+  DEFAULT_GEMINI_MODEL,
   // Raw SDK client getters. runAI passes this whole module to a task's
   // run() callback as `providers`; exportNarrative.service.js and
   // aiMarketContext.service.js need raw client access for text-only

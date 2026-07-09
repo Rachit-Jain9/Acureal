@@ -173,5 +173,52 @@ describe('services/ai/aiRouter', () => {
       expect(resolveDefaultModel('openai')).toMatch(/gpt/);
       expect(resolveDefaultModel('unknown')).toBe('unknown');
     });
+
+    test('gemini default follows providerRegistry — the retired preview must never come back', () => {
+      // July 2026 outage regression guard: a duplicate literal here kept
+      // shipping gemini-3-flash-preview after Google retired it (1.5k error
+      // rows). The router must delegate to the registry's single source.
+      const prior = process.env.GEMINI_MODEL;
+      delete process.env.GEMINI_MODEL;
+      try {
+        const registry = require('../src/services/ai/providerRegistry');
+        expect(resolveDefaultModel('gemini')).toBe(registry.DEFAULT_GEMINI_MODEL);
+        expect(resolveDefaultModel('gemini')).not.toBe('gemini-3-flash-preview');
+      } finally {
+        if (prior !== undefined) process.env.GEMINI_MODEL = prior;
+      }
+    });
+  });
+
+  describe('constrainReasoningRouting', () => {
+    const { constrainReasoningRouting } = require('../src/services/ai/aiRouter');
+
+    test('honours explicit claude routing with its model', () => {
+      expect(constrainReasoningRouting({ provider: 'claude', model: 'claude-sonnet-4-6' }))
+        .toEqual({ provider: 'claude', model: 'claude-sonnet-4-6' });
+    });
+
+    test('honours openai routing with its model', () => {
+      expect(constrainReasoningRouting({ provider: 'openai', model: 'gpt-4o' }))
+        .toEqual({ provider: 'openai', model: 'gpt-4o' });
+    });
+
+    test('gemini-routed tasks constrain to openai and NEVER forward the gemini model', () => {
+      // The misroute behind the July 2026 export-insights failures: the
+      // reasoning wrapper handed a Gemini model name to the Claude SDK.
+      const out = constrainReasoningRouting({ provider: 'gemini', model: 'gemini-3.1-flash-lite' });
+      expect(out.provider).toBe('openai');
+      expect(out.model).toBeNull();
+    });
+
+    test('unrouted/unknown providers constrain to openai with no model', () => {
+      expect(constrainReasoningRouting({})).toEqual({ provider: 'openai', model: null });
+      expect(constrainReasoningRouting({ provider: 'bogus' })).toEqual({ provider: 'openai', model: null });
+    });
+
+    test('an explicit caller model always wins over routed models', () => {
+      expect(constrainReasoningRouting({ provider: 'gemini', model: 'gemini-x' }, 'gpt-4o-mini'))
+        .toEqual({ provider: 'openai', model: 'gpt-4o-mini' });
+    });
   });
 });
