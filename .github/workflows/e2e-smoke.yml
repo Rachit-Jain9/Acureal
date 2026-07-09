@@ -1,29 +1,34 @@
-name: E2E Smoke (preview)
+name: E2E Smoke (production)
 
-# Runs the Playwright smoke suite against each PR's Vercel preview deployment
-# BEFORE it can be promoted to production. Every assertion maps to a bug that
-# actually shipped to the operator in July 2026 (empty dashboard/Deals from the
-# pooler org-context race, NaN comp chips, missing Activity share panel, broken
-# XLSX export). This is the gate those regressions would have tripped.
+# Playwright smoke suite that click-tests the LIVE site. Every assertion maps to
+# a bug that actually shipped to the operator in July 2026 (empty dashboard/Deals
+# from the pooler org-context race, NaN comp chips, missing Activity share panel,
+# broken XLSX export). This is the net that catches those regressions.
 #
-# Trigger: Vercel posts a GitHub `deployment_status` when a preview finishes
-# building. We read the live URL from that event, so there's no polling and no
-# Vercel token needed — just the test-account secrets.
+# It runs against PRODUCTION, three ways:
+#   • after every production deploy (deployment_status) — validates each merge on
+#     the real environment within ~1 min, before the operator would notice;
+#   • daily (schedule) — a synthetic monitor for the "healthy 200 but empty" class
+#     Sentry can't see (no error is thrown) and any drift between deploys;
+#   • on demand (workflow_dispatch) — against any URL you pass.
 #
-# ADVISORY (non-blocking) for now: this workflow is intentionally NOT added to
-# branch protection's required checks, so a red run surfaces a real signal
-# without blocking merges while we build confidence. Promote it to required once
-# it's proven stable across a few weeks of PRs.
+# Why production and not PR previews: previews sit behind Vercel Deployment
+# Protection. The E2E_BYPASS_SECRET gets the browser past the SSO wall, but the
+# login round-trip behaves differently through the protected-preview edge, so a
+# preview run is flaky in a way that has nothing to do with the app. Production
+# is public and rock-solid, and testing every merge the moment it goes live is
+# robust coverage. Pre-merge preview testing can be revisited later (see the ops
+# plan); the bypass secret is kept for a manual workflow_dispatch against a
+# specific preview URL.
+#
+# ADVISORY (non-blocking): intentionally NOT a required check yet, so a red run
+# surfaces a real signal without blocking merges while confidence builds. Promote
+# to required once it's proven stable.
 
 on:
   deployment_status:
   schedule:
-    # Daily synthetic monitor against production (02:00 UTC ≈ 07:30 IST). Catches
-    # the "healthy 200 but empty" class Sentry can't see (no error is thrown) and
-    # any post-deploy regression that lands between PRs. Production is public, so
-    # no bypass secret is needed. GitHub emails the workflow's last committer if a
-    # scheduled run fails.
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * *' # daily 02:00 UTC ≈ 07:30 IST
   workflow_dispatch:
     inputs:
       base_url:
@@ -35,19 +40,19 @@ permissions:
   contents: read
 
 concurrency:
-  group: e2e-smoke-${{ github.event.deployment_status.target_url || github.event.inputs.base_url }}
+  group: e2e-smoke-${{ github.event.deployment_status.environment_url || github.event.inputs.base_url || 'prod' }}
   cancel-in-progress: true
 
 jobs:
   smoke:
-    # Only for SUCCESSFUL non-production deployments (i.e. PR previews), or a
-    # manual dispatch. Skips the production deployment that follows each merge.
+    # Run for a manual dispatch, the daily schedule, or a SUCCESSFUL PRODUCTION
+    # deployment. Preview deployments are skipped (see header) — they never reach
+    # this job, so they never false-red a PR.
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'schedule' ||
       (github.event.deployment_status.state == 'success' &&
-       github.event.deployment_status.environment != 'Production' &&
-       !contains(github.event.deployment_status.environment, 'Production'))
+       contains(github.event.deployment_status.environment, 'Production'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -72,15 +77,9 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             echo "url=${{ github.event.inputs.base_url }}" >> "$GITHUB_OUTPUT"
-          elif [ "${{ github.event_name }}" = "schedule" ]; then
-            # Scheduled synthetic monitor always targets public production.
-            echo "url=https://redip.vercel.app" >> "$GITHUB_OUTPUT"
           else
-            # Vercel puts the live site URL in environment_url; target_url can be
-            # the inspector link. Prefer environment_url, fall back to target_url.
-            URL="${{ github.event.deployment_status.environment_url }}"
-            [ -z "$URL" ] && URL="${{ github.event.deployment_status.target_url }}"
-            echo "url=$URL" >> "$GITHUB_OUTPUT"
+            # schedule + production deploy → the stable, public production alias.
+            echo "url=https://redip.vercel.app" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Preflight — is the target reachable?
@@ -89,23 +88,22 @@ jobs:
           BYPASS: ${{ secrets.E2E_BYPASS_SECRET }}
         run: |
           URL="${{ steps.target.outputs.url }}"
-          # With a bypass secret we can get through Vercel Deployment Protection,
-          # so always attempt the run and let it report a real pass/fail.
+          # A bypass secret lets us through Vercel Deployment Protection (only
+          # relevant for a manual dispatch against a protected preview URL).
           if [ -n "$BYPASS" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "Bypass secret present — running with the Vercel protection-bypass header."
             exit 0
           fi
-          # No bypass secret: if the preview is behind Vercel Authentication it
+          # No bypass secret: if the target is behind Vercel Authentication it
           # redirects to vercel.com/sso. That's a config gap, not an app bug —
-          # skip (green) with a loud, actionable warning rather than failing red.
+          # skip (green) with a warning rather than failing red. (Production is
+          # public, so this only trips for a dispatch against a protected URL.)
           LOC=$(curl -s -o /dev/null -w "%{redirect_url}" -I "$URL" || true)
           if echo "$LOC" | grep -q "vercel.com/sso"; then
             echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "### ⚠️ E2E smoke SKIPPED — preview is protected" >> "$GITHUB_STEP_SUMMARY"
+            echo "### ⚠️ E2E smoke SKIPPED — target is protected" >> "$GITHUB_STEP_SUMMARY"
             echo "\`$URL\` is behind Vercel Deployment Protection and no \`E2E_BYPASS_SECRET\` is set." >> "$GITHUB_STEP_SUMMARY"
-            echo "To enable preview testing: Vercel → project → Settings → Deployment Protection → enable **Protection Bypass for Automation**, then add the generated token as the repo secret **E2E_BYPASS_SECRET**." >> "$GITHUB_STEP_SUMMARY"
-            echo "::warning title=E2E smoke skipped::Preview is behind Vercel Deployment Protection and no E2E_BYPASS_SECRET is configured — see the job summary to enable it. (The suite still runs against production via workflow_dispatch.)"
+            echo "::warning title=E2E smoke skipped::Target is behind Vercel Deployment Protection and no E2E_BYPASS_SECRET is configured."
           else
             echo "run=true" >> "$GITHUB_OUTPUT"
           fi
@@ -117,8 +115,6 @@ jobs:
           E2E_BASE_URL: ${{ steps.target.outputs.url }}
           E2E_EMAIL: ${{ secrets.E2E_EMAIL }}
           E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
-          # Optional: only needed if preview URLs are behind Vercel Deployment
-          # Protection. Unset = ignored (production is public).
           E2E_BYPASS_SECRET: ${{ secrets.E2E_BYPASS_SECRET }}
         run: npx playwright test --reporter=github,list
 

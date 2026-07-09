@@ -40,19 +40,23 @@ in GitHub Actions secrets: `E2E_EMAIL`, `E2E_PASSWORD` (and `E2E_ORG_ID`).
 
 ## CI
 
-`.github/workflows/e2e-smoke.yml` runs this suite three ways:
+`.github/workflows/e2e-smoke.yml` runs this suite against **production**, three
+ways:
 
-- **On each PR preview** (`deployment_status`) — against the live preview URL.
+- **After every production deploy** (`deployment_status`, environment=Production)
+  — validates each merge on the real site within ~1 min of going live.
   **Advisory** (not a required check) until proven stable, then promote to
   required in branch protection.
-- **Daily against production** (`schedule`, 02:00 UTC) — a synthetic monitor for
-  the "healthy 200 but empty" class Sentry can't see, and any regression that
-  slips in between PRs. No secret needed (production is public).
+- **Daily** (`schedule`, 02:00 UTC) — a synthetic monitor for the "healthy 200
+  but empty" class Sentry can't see, and any drift between deploys.
 - **On demand** (`workflow_dispatch`) — against any URL you pass (defaults to
   production).
 
-Preview URLs are behind Vercel Deployment Protection (they 302 → Vercel SSO),
-so the suite reaches them via the **`E2E_BYPASS_SECRET`** repo secret — the
-project's Vercel "Protection Bypass for Automation" token, forwarded as the
-`x-vercel-protection-bypass` header (configured 2026-07-09). If that secret is
-ever removed, the preview run skips green with a warning instead of failing.
+**Why production, not PR previews:** previews sit behind Vercel Deployment
+Protection. `E2E_BYPASS_SECRET` (the Vercel "Protection Bypass for Automation"
+token, forwarded as `x-vercel-protection-bypass`) gets the browser past the SSO
+wall, but the login round-trip behaves differently through the protected-preview
+edge — flaky for reasons unrelated to the app. Production is public and stable,
+and testing every merge the moment it deploys is robust coverage. The bypass
+secret is kept so you can `workflow_dispatch` against a specific preview URL by
+hand; pre-merge preview testing can be revisited later (see the ops plan).
