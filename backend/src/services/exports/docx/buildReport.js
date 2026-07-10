@@ -609,12 +609,13 @@ const buildExecutiveSummary = (ctx) => {
       { italic: true, color: HEX('mutedHigh') },
     ));
   } else {
-    // PR-NX40 (2026-05-18): surface the WHY when both providers failed
-    // so the operator knows whether it's a key issue, rate-limit, or
-    // outage — instead of a silent "not available" with no diagnostic.
-    const reason = icDisplay.reason ? ` (cause: ${icDisplay.reason})` : '';
+    // The raw failure reason (provider names, HTTP statuses, env-var hints)
+    // is operator diagnostics — it lives in logs and the admin AI-usage
+    // dashboard, never in the customer document. The disclosure policy also
+    // bars AI mentions in body prose (the cover disclaimer is the report's
+    // single model-assistance mention), so the copy stays neutral.
     children.push(bodyPara(
-      `AI-generated investor-grade opinion is not available for this deal${reason}. Please rely on the structured KPIs and risk register below for decision support.`,
+      'A synthesized investment opinion is not available for this export run. Please rely on the structured KPIs and risk register below for decision support.',
       { italic: true, color: HEX('mutedHigh') },
     ));
   }
@@ -677,7 +678,9 @@ const buildSiteInformation = async (ctx) => {
         }));
         children.push(bodyPara('Source: Google Maps Static API.', { italic: true, color: HEX('mutedHigh') }));
       } else {
-        children.push(bodyPara('Site map unavailable — GOOGLE_MAPS_API_KEY not configured or coordinates unresolved.', { italic: true, color: HEX('mutedHigh') }));
+        // Env-var names are operator diagnostics — logs only, never the
+        // customer document.
+        children.push(bodyPara('Site map unavailable for this export run.', { italic: true, color: HEX('mutedHigh') }));
       }
     } catch {
       // never throw on map render failure
@@ -726,7 +729,9 @@ const buildSiteYield = (ctx) => {
   const e = c.envelope || {};
   const a = c.areaSchedule || {};
   const t = c.totals || {};
-  const intl = (n) => (Number.isFinite(Number(n)) ? Math.round(Number(n)).toLocaleString('en-IN') : '–');
+  // null/'' guarded FIRST — Number(null) === 0, so the naive isFinite check
+  // rendered a fabricated '0' instead of the em-dash.
+  const intl = (n) => (n == null || n === '' || !Number.isFinite(Number(n)) ? '–' : Math.round(Number(n)).toLocaleString('en-IN'));
 
   const children = [];
   children.push(sectionHeading('Site Yield & Massing', { pageBreakBefore: true }));
@@ -749,8 +754,12 @@ const buildSiteYield = (ctx) => {
   if (a.saleable_sqft != null) rows.push(labelValueRow('Saleable (SBA)', formatArea(a.saleable_sqft)));
   if (a.leasable_sqft != null) rows.push(labelValueRow('Leasable', formatArea(a.leasable_sqft)));
   if (a.net_saleable_sqft != null) rows.push(labelValueRow('Net saleable', formatArea(a.net_saleable_sqft)));
+  // Carpet pool + parking norm: keep the DOCX row set in lockstep with the
+  // PPTX slide and XLSX sheet so all three formats tell the same story.
+  if (a.carpet_sqft != null) rows.push(labelValueRow('Carpet pool', formatArea(a.carpet_sqft)));
   if (a.saleable_plot_area_sqft != null) rows.push(labelValueRow('Saleable plot area', formatArea(a.saleable_plot_area_sqft)));
   if (c.parking && c.parking.required_ecs != null) rows.push(labelValueRow('Parking (ECS)', intl(c.parking.required_ecs)));
+  if (c.parking && c.parking.norm) rows.push(labelValueRow('Parking norm', String(c.parking.norm)));
   if (rows.length) children.push(buildLabelValueTable(rows));
 
   if (Array.isArray(c.unitMix) && c.unitMix.length) {
@@ -1842,7 +1851,10 @@ const buildProvenance = (ctx) => {
       } else if (ex.extraction_status === 'pending') {
         extractionCell = 'Pending';
       } else if (ex.field_count > 0) {
-        extractionCell = `${ex.field_count} field${ex.field_count === 1 ? '' : 's'} · ${ex.provider || 'unknown'}`;
+        // AI-disclosure policy: customer exports never name providers — the
+        // single cover disclaimer covers model-assisted synthesis for the
+        // whole report. Field count + status is the useful part.
+        extractionCell = `${ex.field_count} field${ex.field_count === 1 ? '' : 's'} extracted`;
       } else {
         extractionCell = labelFromCode(ex.extraction_status);
       }
@@ -2047,12 +2059,11 @@ const buildDocumentInsights = (ctx) => {
         ));
         children.push(buildLabelValueTable(rows));
 
-        // Provider attribution
-        const providerLabel = ext.provider
-          ? `Extracted by ${ext.provider}${ext.extracted_at ? ` · ${formatDate(ext.extracted_at)}` : ''}`
-          : null;
-        if (providerLabel) {
-          children.push(bodyPara(providerLabel, { italic: true, color: HEX('mutedLow') }));
+        // Extraction date only — provider names never appear in customer
+        // exports (AI-disclosure policy; the cover disclaimer is the single
+        // model-assistance mention for the whole report).
+        if (ext.extracted_at) {
+          children.push(bodyPara(`Extracted ${formatDate(ext.extracted_at)}`, { italic: true, color: HEX('mutedLow') }));
         }
         children.push(blank());
       }
@@ -2549,7 +2560,7 @@ const buildDisclaimer = (ctx) => {
     '• REDIP does not warrant zoning, legal title, RERA registration, encumbrance status, approval status, or any other regulatory fact in this document. Where the data is missing or unverifiable, the report explicitly says so. Independent verification through Karnataka land-records (Bhoomi / Kaveri portal) and Karnataka RERA is required before any investment decision.',
   ));
   children.push(bodyPara(
-    '• Comparables are limited to those verified in REDIP. Market intelligence is current as of the generation date shown on the cover; confirm freshness against external sources.',
+    '• Comparables carry per-row source, verification status, and freshness. Only rows marked Verified have been confirmed in REDIP; treat all others as context. Market intelligence is current as of the generation date shown on the cover; confirm freshness against external sources.',
   ));
   children.push(bodyPara(
     '• This report is confidential and prepared for internal use only.',

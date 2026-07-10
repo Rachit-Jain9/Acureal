@@ -35,6 +35,7 @@
  */
 
 const crypto = require('crypto');
+const { sanitizeAiProse } = require('../../../../utils/aiLegalProseGuard');
 
 // Soft-import to avoid hard coupling — the workbook can build even if
 // AI services aren't available in the test environment.
@@ -666,11 +667,15 @@ const parseBriefingResponse = (rawText) => {
     if (typeof parsed.summary !== 'string') return null;
     if (!Array.isArray(parsed.bullets) || parsed.bullets.length < 3) return null;
     if (typeof parsed.riskNote !== 'string') return null;
+    // Deterministic legal-prose backstop (CLAUDE.md): the shared guard rewrites
+    // banned absolute stance verbs and strips statutory-verdict sentences
+    // (title / RERA / encumbrance / approvals) before the text reaches the
+    // customer workbook. Prompt is the primary guard; this is defense-in-depth.
     return {
       source: 'ai-assisted',
-      summary: parsed.summary.trim(),
-      bullets: parsed.bullets.slice(0, 4).map((b) => String(b).trim()),
-      riskNote: parsed.riskNote.trim(),
+      summary: sanitizeAiProse(parsed.summary.trim()).text,
+      bullets: parsed.bullets.slice(0, 4).map((b) => sanitizeAiProse(String(b).trim()).text),
+      riskNote: sanitizeAiProse(parsed.riskNote.trim()).text,
       generatedAt: new Date().toISOString(),
     };
   } catch {

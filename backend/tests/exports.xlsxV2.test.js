@@ -5092,9 +5092,12 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
     const sheet = wb.getWorksheet('Analysis Notes');
-    // Risk synthesis row 6 (the row immediately after the section band)
+    // Risk synthesis row 6 (the row immediately after the section band).
+    // The raw failure reason (provider names / statuses / env hints) must
+    // NEVER reach the customer workbook — neutral copy only.
     expect(String(sheet.getCell('A6').value)).toContain('Synthesis Unavailable');
-    expect(String(sheet.getCell('A6').value)).toContain('all providers failed');
+    expect(String(sheet.getCell('A6').value)).not.toContain('all providers failed');
+    expect(String(sheet.getCell('A6').value)).toContain('could not be generated for this export run');
     // Sensitivity unavailable row 13
     expect(String(sheet.getCell('A13').value)).toContain('Synthesis Unavailable');
     // Document insights unavailable row 21

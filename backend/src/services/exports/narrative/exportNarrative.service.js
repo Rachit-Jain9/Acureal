@@ -35,6 +35,7 @@
 const crypto = require('crypto');
 const { runAI } = require('../../ai/aiRouter');
 const { getProviderAvailability } = require('../../ai/providerRegistry');
+const { sanitizeAiProse } = require('../../../utils/aiLegalProseGuard');
 
 const SECTION_TIMEOUT_MS = 12000;
 
@@ -433,34 +434,41 @@ const generateSection = async ({
     fallbackReason,
   };
 
+  // Deterministic legal-prose backstop (CLAUDE.md): every customer-facing AI
+  // string runs through the shared guard — it rewrites banned absolute stance
+  // verbs and strips statutory-verdict sentences (title / RERA / encumbrance /
+  // approvals). The prompt is the primary guard; this is defense-in-depth
+  // before the text reaches the DOCX/PPTX builders.
+  const clean = (s) => (typeof s === 'string' ? sanitizeAiProse(s.trim()).text : '');
+
   if (section === 'whyThisArea') {
     const paragraphs = Array.isArray(parsed.paragraphs)
-      ? parsed.paragraphs.filter((p) => typeof p === 'string').slice(0, 3).map((s) => s.trim())
+      ? parsed.paragraphs.filter((p) => typeof p === 'string').slice(0, 3).map(clean)
       : [];
     return {
       ...base,
       paragraphs,
-      summary: typeof parsed.summary === 'string' ? parsed.summary.trim() : null,
+      summary: typeof parsed.summary === 'string' ? clean(parsed.summary) : null,
       text: paragraphs.join('\n\n'),
     };
   }
   if (section === 'prosCons') {
-    const trim = (s) => (typeof s === 'string' ? s.trim() : '');
-    const pros = Array.isArray(parsed.pros) ? parsed.pros.map(trim).filter(Boolean).slice(0, 5) : [];
-    const cons = Array.isArray(parsed.cons) ? parsed.cons.map(trim).filter(Boolean).slice(0, 5) : [];
+    const pros = Array.isArray(parsed.pros) ? parsed.pros.map(clean).filter(Boolean).slice(0, 5) : [];
+    const cons = Array.isArray(parsed.cons) ? parsed.cons.map(clean).filter(Boolean).slice(0, 5) : [];
     return { ...base, pros, cons, text: null };
   }
   if (section === 'cashflowLevers') {
     const levers = Array.isArray(parsed.levers)
-      ? parsed.levers.filter((s) => typeof s === 'string').map((s) => s.trim()).slice(0, 5)
+      ? parsed.levers.filter((s) => typeof s === 'string').map(clean).slice(0, 5)
       : [];
     return { ...base, levers, text: null };
   }
   if (section === 'demographicsSynthesis') {
+    const paragraph = typeof parsed.paragraph === 'string' ? clean(parsed.paragraph) : null;
     return {
       ...base,
-      paragraph: typeof parsed.paragraph === 'string' ? parsed.paragraph.trim() : null,
-      text: typeof parsed.paragraph === 'string' ? parsed.paragraph.trim() : null,
+      paragraph,
+      text: paragraph,
     };
   }
   return { ...base, raw: parsed };
