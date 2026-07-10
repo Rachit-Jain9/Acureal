@@ -180,6 +180,17 @@ export default function DealDetailPage() {
   // share/revoke inside the panel.
   const [liveShareCount, setLiveShareCount] = useState(null);
 
+  // This page stays mounted across ⌘K / in-app navigation between deals (only
+  // `id` changes), so per-deal transient UI state must reset on the way in —
+  // otherwise deal A's share count renders on deal B's header, and half-typed
+  // stage notes follow you to the wrong deal.
+  useEffect(() => {
+    setLiveShareCount(null);
+    setShowSharePanel(false);
+    setStageNotes('');
+    setStageExpanded(false);
+  }, [id]);
+
   const isAdmin = roleSatisfies(user?.role, ['admin']);
   const canEdit = useCanEdit();
   const shareCount = liveShareCount ?? deal?.share_count ?? 0;
@@ -429,7 +440,10 @@ export default function DealDetailPage() {
           {activeTab === 'overview' && <OverviewTab setTab={setTab} />}
           <Suspense fallback={<TabSuspenseFallback />}>
             {activeTab === 'parcel' && <ParcelTab canEdit={canEdit} />}
-            {activeTab === 'site' && <YieldStudioTab setTab={setTab} />}
+            {/* key={id}: Yield Studio holds substantial internal state (envelope,
+                assumptions, debounced autosave) — remount it per deal so nothing
+                bleeds across a ⌘K navigation from one deal to another. */}
+            {activeTab === 'site' && <YieldStudioTab key={id} setTab={setTab} />}
             {activeTab === 'zoning' && <ZoningTab setTab={setTab} />}
             {activeTab === 'documents' && <DocumentsTab />}
             {activeTab === 'activity' && <ActivityTab />}

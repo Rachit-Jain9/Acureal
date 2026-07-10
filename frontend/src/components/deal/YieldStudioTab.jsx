@@ -6,6 +6,7 @@ import {
 import Badge from '../common/Badge';
 import { toast } from '../common/Toast';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
+import { useCanEdit } from '../../hooks/useCanEdit';
 import { useProperty, useParcelIntelligence } from '../../hooks/useProperties';
 import { computeSiteYield, resolveFamily, DEFAULT_RESIDENTIAL_MIX } from '../../utils/siteYield';
 import { numOrUndef, buildEngineAssumptions } from '../../utils/yieldStudioInputs';
@@ -162,10 +163,23 @@ export default function YieldStudioTab({ setTab }) {
   // Server is the source of truth (cross-device / team); the localStorage cache
   // above gives an instant first paint. Once the server query settles we
   // hydrate from it (it wins) and then debounce-save edits back up.
-  const { data: serverStudy, isSuccess: studyLoaded } = useYieldStudy(dealId);
+  const { data: serverStudy, isSuccess: studyLoaded, isError: studyLoadError, refetch: refetchStudy } = useYieldStudy(dealId);
   const serverHydratedRef = useRef(false);
   const serverSaveTimer = useRef(null);
   const saveStudyMut = useSaveYieldStudy();
+  const canEdit = useCanEdit();
+  // Change-gating for the server autosave. `lastSyncedRef` holds the serialized
+  // study as of the post-hydrate baseline / last dispatched save; the persist
+  // effect only schedules a PUT when the serialized study DIFFERS. Without
+  // this, the hydrate's own setState re-ran the effect and every tab OPEN
+  // fired a phantom save — a row swap + a bogus `yield_study_saved` event in
+  // the immutable deal audit trail per visit (and a 403 toast for viewers).
+  const lastSyncedRef = useRef(null);
+  const latestStudyRef = useRef(null);
+  // 'idle' | 'pending' (debounce armed) | 'saving' | 'saved' | 'error' — drives
+  // the quiet sync chip in the header so the analyst always knows whether the
+  // study is on the server or only on this device.
+  const [syncState, setSyncState] = useState('idle');
 
   // Seed the envelope from the parcel once it hydrates (don't clobber edits).
   useEffect(() => {
@@ -201,24 +215,64 @@ export default function YieldStudioTab({ setTab }) {
   // of truth). Don't push to the server before the first hydrate, or the seed
   // would overwrite a just-loaded server row. The study is stored UI-shaped
   // (env + assumptions) for an exact cross-device editor restore.
+  //
+  // Server saves are CHANGE-GATED: the first post-hydrate run only records the
+  // baseline; a PUT is scheduled only when the serialized study differs from
+  // the last synced snapshot, and only for editors (viewers keep the local
+  // scratch but must never trigger a 403 write).
   useEffect(() => {
     if (dealId) saveYieldStudy(dealId, { env, assumptions });
-    if (!dealId || !serverHydratedRef.current) return undefined;
-    clearTimeout(serverSaveTimer.current);
-    serverSaveTimer.current = setTimeout(() => {
-      saveStudyMut.mutate({
+    if (!dealId || !serverHydratedRef.current || !canEdit) return undefined;
+    const serialized = JSON.stringify({ env, assumptions, assetClass });
+    latestStudyRef.current = {
+      serialized,
+      payload: {
         dealId,
         envelope: env,
         assumptions,
         asset_class: assetClass,
         selected_scenario: 'base',
         engine_version: 'siteYield@1',
+      },
+    };
+    if (lastSyncedRef.current === null) {
+      // First run after hydrate — this IS the server (or brand-new) state.
+      // Record it as the baseline; opening the tab is not an edit.
+      lastSyncedRef.current = serialized;
+      return undefined;
+    }
+    if (serialized === lastSyncedRef.current) return undefined;
+    clearTimeout(serverSaveTimer.current);
+    setSyncState('pending');
+    serverSaveTimer.current = setTimeout(() => {
+      serverSaveTimer.current = null;
+      lastSyncedRef.current = serialized;
+      setSyncState('saving');
+      saveStudyMut.mutate(latestStudyRef.current.payload, {
+        onSuccess: () => setSyncState('saved'),
+        onError: () => setSyncState('error'),
       });
     }, 700);
     return () => clearTimeout(serverSaveTimer.current);
     // saveStudyMut is stable from react-query; excluded to avoid resubscribing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dealId, env, assumptions, assetClass]);
+  }, [dealId, env, assumptions, assetClass, canEdit]);
+
+  // Flush a still-debouncing edit on unmount instead of dropping it — an edit
+  // made <700ms before navigating away must still reach the server. (The
+  // timeout id stays truthy after clearTimeout, so this works regardless of
+  // cleanup ordering across effects.)
+  useEffect(() => () => {
+    if (!serverSaveTimer.current || !latestStudyRef.current) return;
+    clearTimeout(serverSaveTimer.current);
+    const { serialized, payload } = latestStudyRef.current;
+    if (serialized !== lastSyncedRef.current) {
+      lastSyncedRef.current = serialized;
+      saveStudyMut.mutate(payload);
+    }
+    // saveStudyMut is stable; unmount-only cleanup.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const engineEnvelope = useMemo(() => ({
     landAreaSqft: numOrUndef(env.landAreaSqft),
@@ -347,6 +401,27 @@ export default function YieldStudioTab({ setTab }) {
         sub="Deterministic buildable-area, programme and parking from the regulatory envelope and editable assumptions. Numbers are screening estimates — not a surveyed or sanctioned plan."
         action={(
           <div className="flex items-center gap-2">
+            {/* Quiet sync status — the analyst should always know whether the
+                study lives on the server or only on this device. */}
+            {canEdit && syncState !== 'idle' && (
+              syncState === 'error' ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    lastSyncedRef.current = '';
+                    setEnv((e) => ({ ...e }));
+                  }}
+                  className="text-[11px] font-medium text-premium hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 rounded px-1"
+                  title="The last save didn't reach the server — edits are on this device only. Click to retry."
+                >
+                  Not synced — retry
+                </button>
+              ) : (
+                <span className="text-[11px] text-content-muted tabular-nums" role="status">
+                  {syncState === 'saved' ? 'Saved' : 'Saving…'}
+                </span>
+              )
+            )}
             <Button
               variant="ghost"
               leftIcon={<RotateCcw size={14} />}
@@ -367,6 +442,21 @@ export default function YieldStudioTab({ setTab }) {
           </div>
         )}
       />
+
+      {studyLoadError && (
+        <ErrorState
+          tone="warn"
+          title="Couldn't reach the server"
+          action={(
+            <Button variant="secondary" size="sm" onClick={() => refetchStudy()}>
+              Retry
+            </Button>
+          )}
+        >
+          Your edits are being kept on this device only until the connection recovers — a saved
+          study from another device may exist that isn't shown here.
+        </ErrorState>
+      )}
 
       {!assetClass && (
         <ErrorState tone="info" title="No asset class set">

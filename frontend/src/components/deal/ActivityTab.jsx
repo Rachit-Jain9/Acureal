@@ -1,7 +1,6 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import EmptyState from '../common/EmptyState';
-import { organizationAPI } from '../../services/api';
+import { useOrganizationMembers } from '../../hooks/useOrganization';
 import {
   Phone,
   MapPin,
@@ -81,14 +80,14 @@ export default function ActivityTab() {
   const [form, setForm] = useState(buildForm());
 
   // Workspace roster for the "Assign to" dropdown — fetched only once the form
-  // opens, cached 5 min (the roster changes rarely).
-  const { data: membersData } = useQuery({
-    queryKey: ['organization-members'],
-    queryFn: () => organizationAPI.listMembers(),
-    enabled: showForm && canEdit,
-    staleTime: 5 * 60 * 1000,
-    select: (res) => res.data?.data?.members || [],
-  });
+  // opens, tolerating a 5-min-stale roster (it changes rarely). Consumes the
+  // shared useOrganizationMembers hook so ONE queryFn shape owns the
+  // ['organization-members'] cache key (a second local writer here once made
+  // the cached shape depend on whether Team or this form loaded first).
+  const { data: membersData, isError: membersError } = useOrganizationMembers(
+    showForm && canEdit,
+    { staleTime: 5 * 60 * 1000 },
+  );
   const members = membersData || [];
 
   // `activities` is now provided directly by useDealActivities (always
@@ -260,6 +259,11 @@ export default function ActivityTab() {
                     <option key={m.id} value={m.id}>{m.name || m.email}</option>
                   ))}
                 </select>
+                {membersError && (
+                  <p className="mt-1 text-[11px] text-content-muted">
+                    Roster unavailable — you can still log the activity unassigned.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-xs font-medium text-content-secondary mb-1">

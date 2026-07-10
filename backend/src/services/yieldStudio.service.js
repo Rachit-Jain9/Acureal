@@ -13,6 +13,7 @@
 // and the RLS WITH CHECK passes. Mirrors risk.service.js exactly.
 
 const { query, transaction } = require('../config/database');
+const { createError } = require('../middleware/errorHandler');
 const dealAuditLog = require('./dealAuditLog.service');
 
 // Migration-tolerance: until 20260720_yield_studio_persistence is applied the
@@ -22,6 +23,26 @@ const isUndefinedTable = (err) =>
   !!err && (err.code === '42P01' || /relation .*yield_studies.* does not exist/i.test(err.message || ''));
 
 const asObject = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+
+// Key-order-independent serialization for change detection. Postgres jsonb
+// returns keys sorted; the incoming request body's key order is arbitrary —
+// a naive JSON.stringify would call identical studies "changed" forever.
+const stableStringify = (v) => {
+  if (Array.isArray(v)) return `[${v.map(stableStringify).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v).sort().map((k) => `${JSON.stringify(k)}:${stableStringify(v[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v);
+};
+
+const studyFingerprint = (row) => stableStringify({
+  envelope: asObject(row.envelope),
+  assumptions: asObject(row.assumptions),
+  asset_class: row.asset_class ?? null,
+  property_id: row.property_id ?? null,
+  selected_scenario: row.selected_scenario ?? null,
+  engine_version: row.engine_version ?? null,
+});
 
 async function getByDeal(dealId) {
   if (!dealId) return null;
@@ -43,45 +64,96 @@ async function getByDeal(dealId) {
   }
 }
 
-// Replace the deal's active study. The partial-unique index
-// (uniq_yield_studies_active) forbids two live rows, so soft-delete the prior
-// active row then insert the new one — inside one transaction so the GUC
-// org-context is shared and the swap is atomic.
-async function upsertForDeal(dealId, data = {}, userId = null) {
+// Save the deal's active study — idempotent and change-gated:
+//   • identical payload → return the existing row untouched, write NOTHING
+//     (the deal audit trail is immutable evidence; merely re-opening the tab
+//     must never mint `yield_study_saved` events);
+//   • real change → UPDATE the active row in place (stable row id, no
+//     delete+insert churn against uniq_yield_studies_active, no 23505 race
+//     between two quick saves) and write ONE audit event;
+//   • no active row → INSERT; if a concurrent first-save wins the unique
+//     index race (23505), retry once — the second pass finds the row and
+//     UPDATEs it.
+async function upsertForDeal(dealId, data = {}, userId = null, _retried = false) {
+  // Verify the deal exists in the caller's org BEFORE writing. The RLS-bypassing
+  // role makes this WHERE clause the only tenant boundary — without it a caller
+  // from another org could attach a study to (and plant deal_audit_log rows on)
+  // a foreign deal id.
+  const dealResult = await query(
+    'SELECT id FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
+    [dealId],
+  );
+  if (dealResult.rows.length === 0) {
+    throw createError('Deal not found.', 404);
+  }
+
   const envelope = asObject(data.envelope);
   const assumptions = asObject(data.assumptions);
   const assetClass = data.asset_class ?? null;
   const propertyId = data.property_id ?? null;
   const selectedScenario = data.selected_scenario ?? null;
   const engineVersion = data.engine_version ?? null;
+  const incoming = {
+    envelope, assumptions, asset_class: assetClass, property_id: propertyId,
+    selected_scenario: selectedScenario, engine_version: engineVersion,
+  };
 
-  const row = await transaction(async (client) => {
-    await client.query(
-      `UPDATE yield_studies
-          SET deleted_at = NOW(), deleted_by = $2, updated_at = NOW()
-        WHERE deal_id = $1
-          AND organization_id = current_organization_id()
-          AND deleted_at IS NULL`,
-      [dealId, userId || null],
-    );
-    const inserted = await client.query(
-      `INSERT INTO yield_studies
-         (deal_id, property_id, asset_class, envelope, assumptions, selected_scenario, engine_version, created_by, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
-       RETURNING *`,
-      [dealId, propertyId, assetClass, envelope, assumptions, selectedScenario, engineVersion, userId || null],
-    );
-    return inserted.rows[0];
-  });
+  let outcome;
+  try {
+    outcome = await transaction(async (client) => {
+      const existing = await client.query(
+        `SELECT * FROM yield_studies
+          WHERE deal_id = $1
+            AND organization_id = current_organization_id()
+            AND deleted_at IS NULL
+          LIMIT 1`,
+        [dealId],
+      );
+      const prior = existing.rows[0] || null;
+      if (prior && studyFingerprint(prior) === studyFingerprint(incoming)) {
+        return { row: prior, changed: false };
+      }
+      if (prior) {
+        const updated = await client.query(
+          `UPDATE yield_studies
+              SET property_id = $2, asset_class = $3, envelope = $4, assumptions = $5,
+                  selected_scenario = $6, engine_version = $7, updated_by = $8, updated_at = NOW()
+            WHERE id = $1
+              AND organization_id = current_organization_id()
+              AND deleted_at IS NULL
+            RETURNING *`,
+          [prior.id, propertyId, assetClass, envelope, assumptions, selectedScenario, engineVersion, userId || null],
+        );
+        return { row: updated.rows[0], changed: true };
+      }
+      const inserted = await client.query(
+        `INSERT INTO yield_studies
+           (deal_id, property_id, asset_class, envelope, assumptions, selected_scenario, engine_version, created_by, updated_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8)
+         RETURNING *`,
+        [dealId, propertyId, assetClass, envelope, assumptions, selectedScenario, engineVersion, userId || null],
+      );
+      return { row: inserted.rows[0], changed: true };
+    });
+  } catch (err) {
+    if (err && err.code === '23505' && !_retried) {
+      // Two first-saves raced the partial-unique index; the loser retries once
+      // and lands on the UPDATE path against the winner's row.
+      return upsertForDeal(dealId, data, userId, true);
+    }
+    throw err;
+  }
 
-  await dealAuditLog.recordAudit({
-    dealId,
-    eventType: 'yield_study_saved',
-    actorId: userId || null,
-    after: { asset_class: row.asset_class, selected_scenario: row.selected_scenario, engine_version: row.engine_version },
-    metadata: { yield_study_id: row.id },
-  });
-  return row;
+  if (outcome.changed) {
+    await dealAuditLog.recordAudit({
+      dealId,
+      eventType: 'yield_study_saved',
+      actorId: userId || null,
+      after: { asset_class: outcome.row.asset_class, selected_scenario: outcome.row.selected_scenario, engine_version: outcome.row.engine_version },
+      metadata: { yield_study_id: outcome.row.id },
+    });
+  }
+  return outcome.row;
 }
 
 async function deleteByDeal(dealId, actorId = null) {

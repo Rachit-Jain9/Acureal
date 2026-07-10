@@ -32,6 +32,12 @@ const fixtures = [
   { family: 'hospitality', a: { grossAreaPerKeySqft: 1000, parkingEcsPerKey: 0.5 } },
   { family: 'plotted', a: { saleableLandPct: 55, avgPlotSizeSqft: 1200, villaPlotCoveragePct: 50, villaFloors: 2 } },
   { family: 'residential', a: {} },
+  // Loading-factor clamp boundary: 100 is the ceiling; 101/130 must clamp to it
+  // (unclamped, the engine's ">1 = percent" heuristic re-divided 1.01 → 0.0101,
+  // a hard discontinuity right above 100%).
+  { family: 'residential', a: { loadingFactorPct: 100 } },
+  { family: 'residential', a: { loadingFactorPct: 101 } },
+  { family: 'residential', a: { loadingFactorPct: 130 } },
 ];
 
 describe('yieldStudioInputs parity (backend vs frontend)', () => {
@@ -42,5 +48,12 @@ describe('yieldStudioInputs parity (backend vs frontend)', () => {
   test('cleared residential loading factor omits loadingFactor (falls back to engine default)', () => {
     expect(backend.buildEngineAssumptions('residential', { loadingFactorPct: '' })).not.toHaveProperty('loadingFactor');
     expect(backend.buildEngineAssumptions('residential', { loadingFactorPct: 25 })).toEqual({ loadingFactor: 0.25 });
+  });
+
+  test('loading factor is continuous at the 100% boundary (101/130 clamp to 1.0, never re-divide)', () => {
+    expect(backend.buildEngineAssumptions('residential', { loadingFactorPct: 100 })).toEqual({ loadingFactor: 1.0 });
+    expect(backend.buildEngineAssumptions('residential', { loadingFactorPct: 101 })).toEqual({ loadingFactor: 1.0 });
+    expect(backend.buildEngineAssumptions('residential', { loadingFactorPct: 130 })).toEqual({ loadingFactor: 1.0 });
+    expect(backend.buildEngineAssumptions('residential', { loadingFactorPct: -5 })).toEqual({ loadingFactor: 0 });
   });
 });

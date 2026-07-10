@@ -218,7 +218,11 @@ export function TopDealsIrrWidget({ top_deals_by_irr = [] }) {
             <tbody>
               {top_deals_by_irr.map((deal, idx) => {
                 const stageConf = STAGE_CONFIG[deal.stage] || {};
-                const irrToneClass = Number(deal.irr_pct) >= 20 ? 'text-data-positive' : Number(deal.irr_pct) >= 15 ? 'text-premium' : 'text-accent';
+                // Negative IRR must read as a loss (red), never as neutral
+                // trust-blue — a -18% IRR rendered in accent undersells a
+                // genuinely money-losing model (data-honesty bar).
+                const irrNum = Number(deal.irr_pct);
+                const irrToneClass = irrNum < 0 ? 'text-data-negative' : irrNum >= 20 ? 'text-data-positive' : irrNum >= 15 ? 'text-premium' : 'text-accent';
                 return (
                   <tr key={deal.id || idx} className="border-b border-hairline-soft transition-colors hover:bg-surface">
                     <td className="py-2.5 pr-3">

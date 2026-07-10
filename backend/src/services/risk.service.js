@@ -1,6 +1,7 @@
 'use strict';
 
 const { query } = require('../config/database');
+const { createError } = require('../middleware/errorHandler');
 const { EVENTS, publish } = require('../lib/eventBus');
 const dealAuditLog = require('./dealAuditLog.service');
 
@@ -65,6 +66,18 @@ async function listByDeal(dealId) {
 }
 
 async function create(dealId, data, userId) {
+  // Verify the deal exists in the caller's org BEFORE writing. The app connects
+  // as the RLS-bypassing role, so this WHERE clause is the ONLY tenant boundary
+  // — without it a cross-org caller could attach flags to (and plant
+  // deal_audit_log rows on) a foreign deal id.
+  const dealResult = await query(
+    'SELECT id FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
+    [dealId],
+  );
+  if (dealResult.rows.length === 0) {
+    throw createError('Deal not found.', 404);
+  }
+
   const normalized = normalizeRiskPayload(data);
   const {
     category,

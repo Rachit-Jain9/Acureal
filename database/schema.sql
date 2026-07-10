@@ -1274,6 +1274,88 @@ CREATE POLICY jurisdiction_resolution_log_org ON regulatory_data.jurisdiction_re
   USING (org_id = current_organization_id())
   WITH CHECK (org_id = current_organization_id());
 
+-- ============================================================================
+-- YIELD STUDIO — uploaded/drawn parcel boundary + saved study per deal
+-- (mirrors database/migrations/20260720_yield_studio_persistence.sql)
+-- ============================================================================
+
+-- One active boundary per (org, property). GeoJSON-as-JSONB is deliberate for
+-- v1 — display + area + export need no spatial query; a PostGIS geom column
+-- can be layered on later without reshaping this table.
+CREATE TABLE parcel_boundaries (
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id   UUID NOT NULL DEFAULT current_organization_id()
+                       REFERENCES organizations(id) ON DELETE CASCADE,
+  property_id       UUID NOT NULL REFERENCES properties(id) ON DELETE CASCADE,
+  deal_id           UUID REFERENCES deals(id) ON DELETE SET NULL,
+  source            TEXT NOT NULL DEFAULT 'manual'
+                       CHECK (source IN ('geojson','kml','kmz','shapefile','dxf','drawn','kgis','manual')),
+  geometry_geojson  JSONB NOT NULL,
+  area_sqft         NUMERIC,
+  crs               TEXT DEFAULT 'EPSG:4326',
+  confidence_score  NUMERIC(4,3) CHECK (confidence_score IS NULL OR confidence_score BETWEEN 0 AND 1),
+  review_status     TEXT NOT NULL DEFAULT 'pending'
+                       CHECK (review_status IN ('pending','approved','rejected','needs_review')),
+  notes             TEXT,
+  created_by        UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at        TIMESTAMPTZ,
+  deleted_by        UUID REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- One active boundary per property per org (replacements soft-delete the prior).
+CREATE UNIQUE INDEX uniq_parcel_boundaries_active
+  ON parcel_boundaries (organization_id, property_id)
+  WHERE deleted_at IS NULL;
+CREATE INDEX idx_parcel_boundaries_property
+  ON parcel_boundaries (property_id) WHERE deleted_at IS NULL;
+CREATE INDEX idx_parcel_boundaries_deal
+  ON parcel_boundaries (deal_id) WHERE deleted_at IS NULL;
+
+-- One active study per (org, deal). Envelope + assumptions as JSONB in the
+-- exact engine shape computeSiteYield consumes, plus the selected scenario.
+CREATE TABLE yield_studies (
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  organization_id   UUID NOT NULL DEFAULT current_organization_id()
+                       REFERENCES organizations(id) ON DELETE CASCADE,
+  deal_id           UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+  property_id       UUID REFERENCES properties(id) ON DELETE SET NULL,
+  asset_class       TEXT,
+  envelope          JSONB NOT NULL DEFAULT '{}'::jsonb,   -- { landAreaSqft, effectiveFsi, groundCoveragePct, allowedHeightM }
+  assumptions       JSONB NOT NULL DEFAULT '{}'::jsonb,   -- editable screening assumptions
+  selected_scenario TEXT,                                 -- 'base' | 'cons' | 'opt'
+  engine_version    TEXT,
+  created_by        UUID REFERENCES users(id) ON DELETE SET NULL,
+  updated_by        UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at        TIMESTAMPTZ,
+  deleted_by        UUID REFERENCES users(id) ON DELETE SET NULL
+);
+
+-- One active study per deal per org (v1). Drop this + add a `name` column later
+-- to support multiple named studies per deal.
+CREATE UNIQUE INDEX uniq_yield_studies_active
+  ON yield_studies (organization_id, deal_id)
+  WHERE deleted_at IS NULL;
+CREATE INDEX idx_yield_studies_deal
+  ON yield_studies (deal_id) WHERE deleted_at IS NULL;
+
+-- Strict tenant isolation (ENABLE + FORCE): pure tenant data, no global rows.
+ALTER TABLE parcel_boundaries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE parcel_boundaries FORCE ROW LEVEL SECURITY;
+ALTER TABLE yield_studies     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE yield_studies     FORCE ROW LEVEL SECURITY;
+
+CREATE POLICY parcel_boundaries_org ON parcel_boundaries
+  USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
+CREATE POLICY yield_studies_org ON yield_studies
+  USING (organization_id = current_organization_id())
+  WITH CHECK (organization_id = current_organization_id());
+
 -- View: deal_summary
 CREATE VIEW deal_summary AS
 SELECT
