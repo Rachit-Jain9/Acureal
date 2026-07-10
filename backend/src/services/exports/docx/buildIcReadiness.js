@@ -382,8 +382,7 @@ const buildDisclaimerSection = (readiness) => [
     'IC-readiness items are operator-known typical expectations for an Indian real estate ' +
     'IC review. The score is composed deterministically from the deal\'s already-loaded ' +
     'workspace surfaces — kernel output, DD checklist, approvals, market intelligence, ' +
-    'promoter track record, Risk Radar, Deal Doctor, and documents. No AI synthesis on ' +
-    'this surface.',
+    'promoter track record, Risk Radar, Deal Doctor, and documents.',
     { size: 18, color: COLORS.ink_muted },
   ),
 ];

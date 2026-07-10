@@ -601,8 +601,10 @@ describe('services/exports/docx/buildReport', () => {
       };
       const buffer = await buildDealReportDocx(ctx);
       const text = await extractDocXmlText(buffer);
-      // "12 fields · gemini"
-      expect(text).toMatch(/12 fields .* gemini/);
+      // Field count shown, provider name NEVER (AI-disclosure policy: the
+      // cover disclaimer is the report's only model-assistance mention).
+      expect(text).toMatch(/12 fields extracted/);
+      expect(text).not.toMatch(/gemini/i);
     });
 
     test('document with no extraction shows em-dash, errored extraction shows "Failed"', async () => {

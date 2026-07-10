@@ -5356,12 +5356,13 @@ const buildAiSynthesisSheet = (workbook, ctx) => {
   };
 
   // ── Helper: render a "Synthesis Unavailable" placeholder block ──
-  const renderUnavailable = (rowNum, sectionName, reason) => {
+  // The raw `reason` is DELIBERATELY not rendered: it carries provider names,
+  // HTTP statuses, and env-var hints — operator diagnostics for logs and the
+  // admin dashboard, never a customer workbook (XLSX policy: zero AI mentions).
+  const renderUnavailable = (rowNum, sectionName, _reason) => {
     sheet.mergeCells(`A${rowNum}:H${rowNum}`);
     const cell = sheet.getCell(`A${rowNum}`);
-    cell.value = reason
-      ? `Synthesis Unavailable — ${sectionName} could not be generated. Reason: ${reason}. The structured data on the adjacent sheets remains authoritative.`
-      : `Synthesis Unavailable — ${sectionName} could not be generated for this deal. The structured data on the adjacent sheets remains authoritative.`;
+    cell.value = `Synthesis Unavailable — ${sectionName} could not be generated for this export run. The structured data on the adjacent sheets remains authoritative.`;
     cell.font = { name: FONT, size: 10.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
     cell.fill = FILL(palette.xlsx('paperSubtle'));
     cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };

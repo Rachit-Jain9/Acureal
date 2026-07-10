@@ -1128,10 +1128,11 @@ router.get(
       // workbook for a live/sourcing-stage deal that is still being filled
       // in. Per CLAUDE.md ("support incomplete live data — never block early
       // sourcing"), we retry once with validation relaxed so the export
-      // always succeeds; the missing/invalid inputs are then disclosed on the
-      // workbook's own "Export QA & Sources" sheet instead of aborting the
-      // download. Structural-integrity checks (validateXlsxBufferForDownload)
-      // still run unconditionally, so a genuinely corrupt buffer is refused.
+      // always succeeds; the missing/invalid inputs are then disclosed in the
+      // QA register on the workbook's Inputs & Assumptions sheet instead of
+      // aborting the download. Structural-integrity checks
+      // (validateXlsxBufferForDownload) still run unconditionally, so a
+      // genuinely corrupt buffer is refused.
       const buildOpts = {
         brandName: 'REDIP',
         userName: req.user?.name || 'REDIP',

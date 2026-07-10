@@ -2385,7 +2385,7 @@ const renderDisclaimer = (pptx, slide, context, pageNumber, totalSlides) => {
   });
   addBulletList(slide, [
     'REDIP does not warrant zoning, legal title, RERA registration, encumbrance status, or approval status. Independent verification through Karnataka land-records (Bhoomi / Kaveri portal) and Karnataka RERA is required before any investment decision.',
-    'Comparables are limited to those verified in REDIP at generation time. Confirm freshness and applicability against external sources before relying on the comp set.',
+    'Comparables carry per-row source and verification status; only rows marked Verified have been confirmed in REDIP — treat all others as context. Confirm freshness and applicability against external sources before relying on the comp set.',
     'This deck is confidential and prepared for internal review only.',
   ], {
     x: 0.85, y: 4.92, w: 11.7, h: 1.55,
@@ -2513,7 +2513,9 @@ const renderSiteYield = (pptx, slide, context, pageNumber, totalSlides) => {
   const e = c.envelope || {};
   const a = c.areaSchedule || {};
   const t = c.totals || {};
-  const intl = (n) => (Number.isFinite(Number(n)) ? Math.round(Number(n)).toLocaleString('en-IN') : 'N/A');
+  // Em-dash for missing (design bar: never 'N/A'), and null/'' guarded FIRST —
+  // Number(null) === 0, so the naive isFinite check rendered a fabricated '0'.
+  const intl = (n) => (n == null || n === '' || !Number.isFinite(Number(n)) ? '–' : Math.round(Number(n)).toLocaleString('en-IN'));
 
   if (sy.mode === 'screening_defaults') {
     slide.addText('Screening estimate from the parcel’s land area and FSI — no saved study yet.', {
@@ -2521,13 +2523,14 @@ const renderSiteYield = (pptx, slide, context, pageNumber, totalSlides) => {
     });
   }
 
-  // Headline KPI cards (4-up).
-  const kpis = [{ label: 'Realized GFA', value: e.realized_gfa_sqft != null ? `${intl(e.realized_gfa_sqft)} sqft` : 'N/A' }];
+  // Headline KPI cards (4-up). Missing values render the em-dash (design bar:
+  // never 'N/A' on customer surfaces).
+  const kpis = [{ label: 'Realized GFA', value: e.realized_gfa_sqft != null ? `${intl(e.realized_gfa_sqft)} sqft` : '–' }];
   if (t.units != null) kpis.push({ label: 'Units', value: intl(t.units) });
   else if (t.keys != null) kpis.push({ label: 'Keys', value: intl(t.keys) });
   else if (t.plots != null) kpis.push({ label: t.villas != null ? 'Villas' : 'Plots', value: intl(t.villas != null ? t.villas : t.plots) });
   else if (a.leasable_sqft != null) kpis.push({ label: 'Leasable', value: `${intl(a.leasable_sqft)} sqft` });
-  kpis.push({ label: 'Parking (ECS)', value: c.parking && c.parking.required_ecs != null ? intl(c.parking.required_ecs) : 'N/A' });
+  kpis.push({ label: 'Parking (ECS)', value: c.parking && c.parking.required_ecs != null ? intl(c.parking.required_ecs) : '–' });
   kpis.push({ label: 'Binding constraint', value: SITE_YIELD_BINDING_LABEL[c.bindingConstraint] || c.bindingConstraint || '—' });
 
   const cardW = 2.95;
@@ -2760,14 +2763,15 @@ const renderKeyAssumptions = (pptx, slide, context, pageNumber, totalSlides) => 
   buildTable(leftRows, 0.55);
   buildTable(rightRows, 6.78);
 
-  // Footer — explicit promise that no AI generated any value here
+  // Footer — provenance promise. Worded WITHOUT mentioning AI: the PPTX
+  // disclosure policy is zero AI mentions anywhere on customer slides, and a
+  // defensive "AI is not used…" sentence is itself an AI mention.
   addCard(pptx, slide, {
     x: 0.55, y: 6.50, w: 12.23, h: 0.45,
     bandColor: COLORS.plumSoft, fill: COLORS.mist,
   });
   slide.addText(
-    'Every value in this appendix is sourced from the deterministic platform — deal record, property record, underwriting inputs, or the financial kernel. ' +
-    'AI is not used to generate any number anywhere in this deck.',
+    'Every value in this appendix is sourced from the deterministic platform — deal record, property record, underwriting inputs, or the financial kernel.',
     {
       x: 0.78, y: 6.55, w: 11.7, h: 0.36,
       fontFace: FONT, fontSize: 9, italic: true, color: COLORS.charcoal, valign: 'top', fit: 'shrink',
@@ -2815,15 +2819,18 @@ const renderAttributionFooter = (slide, _narrative, generatedAt) => {
 };
 
 // Helper: render an "unavailable" panel when the narrative didn't fire.
-const renderUnavailablePanel = (slide, slideTitle, reason) => {
+// The raw `reason` is DELIBERATELY not rendered: it carries provider names,
+// HTTP statuses, and env-var hints (e.g. "Claude 429 …", "need
+// ANTHROPIC_API_KEY") — operator diagnostics that belong in logs and the
+// admin AI-usage dashboard, never on a customer slide (the PPTX policy is
+// zero AI/provider mentions anywhere).
+const renderUnavailablePanel = (slide, slideTitle, _reason) => {
   slide.addText('Synthesis Unavailable', {
     x: 0.5, y: 2.0, w: 12.33, h: 0.4,
     fontFace: FONT, fontSize: 18, bold: true, color: COLORS.muted, align: 'center',
   });
   slide.addText(
-    reason
-      ? `The ${slideTitle} could not be generated — reason: ${reason}. The structured tables on the adjacent slide remain authoritative.`
-      : `The ${slideTitle} could not be generated for this deal. The structured tables on the adjacent slide remain authoritative.`,
+    `The ${slideTitle} could not be generated for this export run. The structured tables on the adjacent slide remain authoritative.`,
     {
       x: 1.5, y: 2.6, w: 10.33, h: 1.0,
       fontFace: FONT, fontSize: 11, italic: true, color: COLORS.muted, align: 'center', valign: 'top',

@@ -448,9 +448,12 @@ const buildRiskNarrativePayload = ({ deal, riskCounts, items }) => ({
 
 const coerceRiskNarrativeEnvelope = (parsed, extras = {}) => ({
   available: true,
-  summary_paragraph: typeof parsed.summary_paragraph === 'string' ? parsed.summary_paragraph.trim() : null,
+  // Same deterministic legal-prose backstop as coerceInsightsEnvelope — this
+  // narrative is PROMPTED to name Legal/Title risks by title, which makes it
+  // the likeliest surface for a stray statutory-verdict sentence.
+  summary_paragraph: typeof parsed.summary_paragraph === 'string' ? sanitizeAiProse(parsed.summary_paragraph.trim()).text : null,
   critical_spotlight_paragraph: typeof parsed.critical_spotlight_paragraph === 'string'
-    ? parsed.critical_spotlight_paragraph.trim()
+    ? sanitizeAiProse(parsed.critical_spotlight_paragraph.trim()).text
     : null,
   confidence: ['high', 'medium', 'low'].includes(parsed.confidence)
     ? parsed.confidence
@@ -669,12 +672,17 @@ const buildSensitivityPayload = ({ deal, sensitivityMatrix, financials }) => {
 
 const coerceSensitivityEnvelope = (parsed, extras = {}) => ({
   available: true,
+  // Deterministic legal-prose backstop, same pattern as the other envelopes.
   driver_decomposition_paragraph: typeof parsed.driver_decomposition_paragraph === 'string'
-    ? parsed.driver_decomposition_paragraph.trim()
+    ? sanitizeAiProse(parsed.driver_decomposition_paragraph.trim()).text
     : null,
   stress_test_paragraph: typeof parsed.stress_test_paragraph === 'string'
-    ? parsed.stress_test_paragraph.trim()
+    ? sanitizeAiProse(parsed.stress_test_paragraph.trim()).text
     : null,
+  // dominant_driver is a short DATA LABEL ("Sell Rate", "Construction Cost")
+  // that must match the tornado chart's driver names — the prose guard's verb
+  // rewriting would mangle it ("Sell Rate" → "Recommend exiting Rate"), so it
+  // stays a plain trim. The two paragraphs above are the prose surfaces.
   dominant_driver: typeof parsed.dominant_driver === 'string' ? parsed.dominant_driver.trim() : null,
   confidence: ['high', 'medium', 'low'].includes(parsed.confidence)
     ? parsed.confidence
