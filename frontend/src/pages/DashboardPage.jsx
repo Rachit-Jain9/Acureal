@@ -8,7 +8,6 @@ import { useOrganizationMembers } from '../hooks/useOrganization';
 import useAuthStore from '../store/authStore';
 import useTourStore from '../store/tourStore';
 import { isPlatformAdmin } from '../utils/permissions';
-import { roleSatisfies } from '../utils/roles';
 import {
   buildSetupChecklist, isChecklistComplete, hasExploredIntel,
 } from '../utils/setupChecklist';
@@ -120,12 +119,13 @@ export default function DashboardPage() {
   const dismissOnboarding = useTourStore((s) => s.dismissGettingStarted);
 
   // Setup checklist — completion is derived live from real data (never persisted
-  // booleans). Only fetch the supporting deals/members when the panel could
-  // actually show (not dismissed, or force-shown from Settings); listing members
-  // is admin-scoped, so it's gated by role too.
+  // booleans). Only fetch the roster when the panel could actually show (not
+  // dismissed, or force-shown from Settings). The members read is open to any
+  // workspace member (roster transparency — organization.routes.js); which
+  // checklist steps a role sees is buildSetupChecklist's decision, so no role
+  // gate belongs here.
   const checklistActive = onboardingForceShown || !onboardingDismissed;
-  const isOrgAdmin = roleSatisfies(userRole, ['admin']);
-  const { data: orgMembers } = useOrganizationMembers(checklistActive && isOrgAdmin);
+  const { data: orgMembers } = useOrganizationMembers(checklistActive);
   // The parcel/document/model flags now ride on the dashboard stats payload
   // (computed server-side across all deals), so the checklist no longer fires
   // a separate heavy 100-deal fetch on every dashboard mount.

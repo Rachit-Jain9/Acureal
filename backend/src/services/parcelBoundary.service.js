@@ -11,6 +11,7 @@
 // `organization_id = current_organization_id()` as the real tenant boundary.
 
 const { query, transaction } = require('../config/database');
+const { createError } = require('../middleware/errorHandler');
 const dealAuditLog = require('./dealAuditLog.service');
 
 const isUndefinedTable = (err) =>
@@ -51,6 +52,28 @@ async function uploadBoundary(data = {}, userId = null) {
   if (!geometry || typeof geometry !== 'object') throw new Error('geometry_geojson (object) is required');
 
   const dealId = data.deal_id ?? null;
+
+  // Verify the property (and the optional deal link) exist in the caller's org
+  // BEFORE writing. The RLS-bypassing role makes these WHERE clauses the only
+  // tenant boundary; the deal check stops a request-body deal_id from planting
+  // deal_audit_log rows on a foreign deal.
+  const propertyResult = await query(
+    'SELECT id FROM properties WHERE id = $1 AND organization_id = current_organization_id()',
+    [propertyId],
+  );
+  if (propertyResult.rows.length === 0) {
+    throw createError('Property not found.', 404);
+  }
+  if (dealId) {
+    const dealResult = await query(
+      'SELECT id FROM deals WHERE id = $1 AND organization_id = current_organization_id()',
+      [dealId],
+    );
+    if (dealResult.rows.length === 0) {
+      throw createError('Deal not found.', 404);
+    }
+  }
+
   const source = data.source ?? 'manual';
   const areaSqft = num(data.area_sqft);
   const crs = data.crs ?? 'EPSG:4326';

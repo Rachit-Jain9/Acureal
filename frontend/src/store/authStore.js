@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { authAPI } from '../services/api';
+import { clearQueryCache } from '../lib/queryClient';
 
 const getRequestErrorMessage = (err, fallbackMessage) => {
   if (err.response?.data?.message) {
@@ -43,6 +44,12 @@ const saveSession = (user, rememberMe) => {
   clearSession();
   const storage = rememberMe ? localStorage : sessionStorage;
   storage.setItem(USER_KEY, JSON.stringify(user));
+  // Auth boundary: whoever signs in must start from an empty react-query
+  // cache — cached rows are tenant data, and a previous account's deals /
+  // financials must never be served as "fresh" to the next one. (All four
+  // sign-in paths — password, MFA completion, register, Google — funnel
+  // through here.)
+  clearQueryCache();
 };
 
 const persistUser = (user) => {
@@ -169,6 +176,9 @@ const useAuthStore = create((set) => ({
       // ignored
     }
     clearSession();
+    // Auth boundary: drop every cached row on the way out, so nothing survives
+    // in memory for whoever signs in next on this tab.
+    clearQueryCache();
     set({ user: null, isAuthenticated: false, sessionPersistence: 'session' });
   },
 

@@ -35,14 +35,26 @@ describe('risk.service — soft-delete + audit trail', () => {
   });
 
   test('create writes a risk_flag_created audit row', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 'd1' }] }); // org-scoped deal guard
     query.mockResolvedValueOnce({ rows: [liveRow()] });
     await riskService.create('d1', { category: 'legal', title: 'Title dispute', severity: 'high' }, 'u1');
+    // The guard runs first and is org-scoped.
+    expect(query.mock.calls[0][0]).toMatch(/SELECT id FROM deals WHERE id = \$1 AND organization_id = current_organization_id\(\)/);
     expect(dealAuditLog.recordAudit).toHaveBeenCalledTimes(1);
     const arg = dealAuditLog.recordAudit.mock.calls[0][0];
     expect(arg.eventType).toBe('risk_flag_created');
     expect(arg.dealId).toBe('d1');
     expect(arg.actorId).toBe('u1');
     expect(arg.after).toMatchObject({ severity: 'high', title: 'Title dispute', status: 'open' });
+  });
+
+  test('create on a deal outside the caller\'s org → 404, no flag written, no audit event', async () => {
+    query.mockResolvedValueOnce({ rows: [] }); // deal invisible to this org
+    await expect(
+      riskService.create('foreign-deal', { category: 'legal', title: 'x', severity: 'high' }, 'u1'),
+    ).rejects.toMatchObject({ message: 'Deal not found.', statusCode: 404 });
+    expect(query).toHaveBeenCalledTimes(1); // guard only — no INSERT attempted
+    expect(dealAuditLog.recordAudit).not.toHaveBeenCalled();
   });
 
   test('delete soft-deletes (UPDATE, never DELETE) and writes a risk_flag_deleted audit row', async () => {

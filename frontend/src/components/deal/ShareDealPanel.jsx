@@ -38,8 +38,15 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose, onS
   }, [dealId, onSharesChange]);
 
   useEffect(() => {
-    loadShares();
-  }, [loadShares]);
+    // Only the owner can list/manage shares (the API 403s everyone else).
+    // Non-owners get an honest static state below — fetching would just
+    // swallow a 403 and, worse, report a misleading count of 0 upward.
+    if (isOwner) {
+      loadShares();
+    } else {
+      setLoading(false);
+    }
+  }, [isOwner, loadShares]);
 
   const handleShare = async (e) => {
     e.preventDefault();
@@ -144,17 +151,23 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose, onS
           </form>
         )}
 
-        {/* Shared with list */}
+        {/* Shared with list (owner) / honest read-only note (everyone else) */}
         <div className="px-6 py-4">
           <div className="flex items-center gap-2 mb-3">
             <Shield size={14} className="text-content-muted" />
             <span className="text-sm font-medium text-content-secondary">
               People with access
             </span>
-            <span className="text-xs text-content-muted">({shares.length})</span>
+            {isOwner && <span className="text-xs text-content-muted">({shares.length})</span>}
           </div>
 
-          {loading ? (
+          {!isOwner ? (
+            <div className="py-6 text-center">
+              <p className="text-sm text-content-muted">
+                This deal was shared with you — access is managed by the deal owner.
+              </p>
+            </div>
+          ) : loading ? (
             <div className="flex items-center gap-2 py-6 justify-center text-sm text-content-muted">
               <Loader2 size={14} className="animate-spin" />
               Loading...

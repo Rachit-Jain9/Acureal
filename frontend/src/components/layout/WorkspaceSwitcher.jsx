@@ -54,11 +54,18 @@ export default function WorkspaceSwitcher({ collapsed = false }) {
       // and every subsequent request 403s.
       if (!refreshed) {
         setActiveOrganization(previousId);
-        await queryClient.invalidateQueries();
+        // removeQueries (not invalidate): any query that raced the brief org
+        // flip could hold the OTHER workspace's rows under this one's keys —
+        // drop them so nothing stale survives the rollback.
+        queryClient.removeQueries();
         toast.error('Could not switch workspace. Please try again.');
         return;
       }
-      await queryClient.invalidateQueries();
+      // removeQueries (not invalidate): invalidation keeps serving the OLD
+      // workspace's rows while refetching in the background — a cross-tenant
+      // flash. Removing them puts every mounted surface into its skeleton
+      // state and refetches under the new X-Organization-Id immediately.
+      queryClient.removeQueries();
       const name = refreshed?.organization?.name
         || orgs.find((o) => o.id === orgId)?.name
         || 'workspace';

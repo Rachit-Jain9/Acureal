@@ -13,14 +13,20 @@ const DOMAINS_KEY = ['organization-domains'];
 const errMessage = (err, fallback) => err?.response?.data?.message || fallback;
 
 // ── Members ──────────────────────────────────────────────────────────────────
-// `enabled` lets non-admin surfaces skip the call entirely — listing members is
-// an admin-scoped endpoint, and the setup checklist only needs the count for
-// roles that can actually invite.
-export function useOrganizationMembers(enabled = true) {
+// The roster read is open to ANY workspace member (roster transparency — see
+// organization.routes.js); only writes are admin-gated. `enabled` lets
+// surfaces defer the fetch until they actually need the roster (e.g. a form
+// opening), and `staleTime` lets them tolerate a slightly stale roster rather
+// than refetch on every mount. This hook is the ONLY owner of the
+// ['organization-members'] cache key — a second writer with a different
+// queryFn shape once coexisted in ActivityTab and made the cached value
+// shape-dependent on visit order.
+export function useOrganizationMembers(enabled = true, { staleTime } = {}) {
   return useQuery({
     queryKey: MEMBERS_KEY,
     queryFn: () => organizationAPI.listMembers().then((r) => r.data.data.members),
     enabled,
+    ...(staleTime != null ? { staleTime } : {}),
   });
 }
 

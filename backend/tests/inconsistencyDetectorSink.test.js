@@ -145,4 +145,28 @@ describe('inconsistencyDetector sink event handling', () => {
     await jest.advanceTimersByTimeAsync(sink.DEBOUNCE_MS + 50);
     expect(detector.detectAndPersist).not.toHaveBeenCalled();
   });
+
+  test('detector runs INSIDE a request context carrying the org (post-#951 tenant scoping)', async () => {
+    // The event fires outside any HTTP request, so the ALS store is empty.
+    // The sink must populate it — every tenant-scoped query() the detector
+    // makes reads the org from this context (a manual BEGIN/set_config would
+    // be a no-op since #951 runs each query in its own transaction).
+    const { getRequestContext } = require('../src/lib/requestContext');
+    let observed = null;
+    detector.detectAndPersist.mockImplementationOnce(async () => {
+      observed = getRequestContext();
+      return { flags: [] };
+    });
+    db.query.mockImplementation(async (sql) => {
+      if (typeof sql === 'string' && sql.startsWith('SELECT organization_id')) {
+        return { rows: [{ organization_id: 'org-77', name: 'Ctx Deal' }] };
+      }
+      return { rows: [] };
+    });
+    sink.register();
+    publish(EVENTS.DOCUMENT_EXTRACTED, { dealId: 'deal-ctx', status: 'completed', userId: 'u-9' });
+    await jest.advanceTimersByTimeAsync(sink.DEBOUNCE_MS + 50);
+    expect(detector.detectAndPersist).toHaveBeenCalledTimes(1);
+    expect(observed).toMatchObject({ organizationId: 'org-77', userId: 'u-9' });
+  });
 });

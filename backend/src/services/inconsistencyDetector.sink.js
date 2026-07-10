@@ -13,10 +13,12 @@
  * Three guardrails:
  *
  *   1. **Org context restore.** The event-bus fires async, outside the
- *      original HTTP request. The detector + risk_service rely on RLS via
+ *      original HTTP request, so the AsyncLocalStorage request context is
+ *      empty. The detector + risk_service rely on tenant scoping via
  *      `current_organization_id()` — so we look up the org from the deal
- *      row and `SET LOCAL app.current_organization_id` before running the
- *      detector. Without this the writes are RLS-rejected.
+ *      row and run the detector inside `runWithRequestContext`, which makes
+ *      every tenant-scoped `query()` SET LOCAL the org per-transaction
+ *      (see database.js). Without this the org-scoped writes match nothing.
  *
  *   2. **Debounce per (deal, 90s window).** When the operator uploads N docs
  *      in quick succession the detector would re-run N times on roughly the
@@ -32,6 +34,7 @@
 
 const { EVENTS, subscribe } = require('../lib/eventBus');
 const { query } = require('../config/database');
+const { runWithRequestContext } = require('../lib/requestContext');
 const log = require('../lib/logger').child({ module: 'inconsistencyDetector.sink' });
 
 // Lazy-required so a test that mocks the detector doesn't import it
@@ -63,15 +66,16 @@ const resolveOrg = async (dealId) => {
 const runDetectorScoped = async ({ dealId, userId, organizationId, dealName }) => {
   if (!dealId || !organizationId) return;
   try {
-    // Establish the org context the RLS-policy on risk_flags / ai_artifacts
-    // expects. SET LOCAL scopes the value to this transaction.
-    await query('BEGIN');
-    await query('SELECT set_config($1, $2, true)', ['app.current_organization_id', String(organizationId)]);
-    await getDetector().detectAndPersist(dealId, { userId, dealName, organizationId });
-    await query('COMMIT');
+    // Establish the org context the tenant-scoped queries in the detector +
+    // risk_service expect. Every query() SET LOCALs the ALS context inside its
+    // own transaction (post-#951), so a manual BEGIN/set_config/COMMIT here
+    // would be a no-op — the request context is the real carrier.
+    await runWithRequestContext(
+      { organizationId: String(organizationId), userId: userId || null },
+      () => getDetector().detectAndPersist(dealId, { userId, dealName, organizationId }),
+    );
     log.info('inconsistency_sink_run_completed', { deal_id: dealId });
   } catch (err) {
-    try { await query('ROLLBACK'); } catch { /* ignore — already rolled back */ }
     log.warn('inconsistency_sink_run_failed', { deal_id: dealId, error: err.message });
   }
 };

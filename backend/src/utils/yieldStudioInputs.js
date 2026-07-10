@@ -15,10 +15,16 @@ const numOrUndef = (v) => {
   return Number.isFinite(n) ? n : undefined;
 };
 
+// Clamp a percent-shaped input to [0, 100]. The engine's defensive ">1 means
+// percent" heuristic re-divides any fraction above 1.0, so an unclamped 101%
+// (fraction 1.01) collapsed to 0.0101 — a hard discontinuity right above 100.
+// Loading beyond 100% isn't a real screening input; clamp at the boundary.
+const clampPct = (n) => Math.min(100, Math.max(0, n));
+
 function buildEngineAssumptions(family, a = {}) {
   const out = {};
   if (family === 'residential') {
-    if (numOrUndef(a.loadingFactorPct) != null) out.loadingFactor = Number(a.loadingFactorPct) / 100;
+    if (numOrUndef(a.loadingFactorPct) != null) out.loadingFactor = clampPct(Number(a.loadingFactorPct)) / 100;
     if (numOrUndef(a.parkingEcsPerUnit) != null) out.parkingEcsPerUnit = Number(a.parkingEcsPerUnit);
     if (Array.isArray(a.mix)) out.unitMix = a.mix.map((m) => ({ ...m, share_pct: numOrUndef(m.share_pct) ?? 0 }));
   } else if (family === 'commercial' || family === 'industrial') {
