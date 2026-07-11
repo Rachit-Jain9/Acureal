@@ -14,7 +14,6 @@ import { useUpdateDeal } from '../../hooks/useDeals';
 import useFocusTrap from '../../hooks/useFocusTrap';
 import useScrollLock from '../../hooks/useScrollLock';
 import { toast } from '../common/Toast';
-import SiteWeatherCard from './SiteWeatherCard';
 import { SectionHeader, ErrorState } from '../../design-system';
 import ReadOnlyPropertyMap from '../maps/ReadOnlyPropertyMap';
 import AutoFillParcelContextCard from './AutoFillParcelContextCard';
@@ -488,11 +487,6 @@ export default function ParcelTab({ canEdit }) {
           </div>
         )}
       </div>
-
-      {/* Site weather (Open-Meteo) — only if geocoded */}
-      {hasLatLng && (
-        <SiteWeatherCard lat={deal.lat} lng={deal.lng} city={deal.city} />
-      )}
 
       {/* Additional Technical Details */}
       {(deal.rera_number || deal.target_launch_date || deal.expected_close_date) && (

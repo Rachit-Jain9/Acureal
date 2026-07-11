@@ -134,7 +134,7 @@ export default function SubprocessorsPage() {
             Account, deal, and document data is stored in India (Mumbai). AI processing
             is performed by US-based providers; only the specific text or document
             content required for a feature is transmitted, over an encrypted connection,
-            for that single request. Map-tile and weather providers receive geographic
+            for that single request. Map-tile providers receive geographic
             coordinates only — never personal or deal data. Enterprise customers
             requiring India-only AI processing should raise this during contracting.
           </p>
