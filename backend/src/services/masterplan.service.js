@@ -2336,6 +2336,11 @@ async function getReviewQueue() {
        s.plan_version
      FROM regulatory_data.evidence_facts f
      LEFT JOIN regulatory_data.evidence_sources s ON s.id = f.source_id
+     -- TENANT BOUNDARY: the app connects as an RLS-bypassing DB role, so this
+     -- explicit predicate — not the table's FORCE-RLS policy — is what keeps
+     -- one org's privately-uploaded regulatory facts out of another org's
+     -- review queue. NULL org_id = shared seed data (BBMP/RMP), visible to all.
+     WHERE (f.org_id IS NULL OR f.org_id = current_organization_id())
      ORDER BY
        CASE
          WHEN f.confidence_score IS NULL THEN 0
@@ -2431,6 +2436,9 @@ async function getSourceExplorer() {
        d.processing_mode
      FROM regulatory_data.evidence_sources s
      LEFT JOIN regulatory_data.master_plan_documents d ON d.id = s.document_id
+     -- TENANT BOUNDARY (see getReviewQueue): NULL = shared seed source; a
+     -- non-null org_id is a tenant's private upload and must stay scoped.
+     WHERE (s.org_id IS NULL OR s.org_id = current_organization_id())
      ORDER BY s.created_at DESC`,
   );
 
@@ -2447,6 +2455,9 @@ async function getSourceExplorer() {
        review_status,
        created_at
      FROM regulatory_data.evidence_facts
+     -- TENANT BOUNDARY (see getReviewQueue): scope facts to shared seed
+     -- (NULL org_id) + the caller's own org.
+     WHERE (org_id IS NULL OR org_id = current_organization_id())
      ORDER BY page_number NULLS LAST, fact_type, fact_key`,
   );
 

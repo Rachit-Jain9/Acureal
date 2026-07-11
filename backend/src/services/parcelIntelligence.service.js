@@ -63,6 +63,38 @@ const computeSignature = (inputs_hash, output_hash) => {
     .digest('hex');
 };
 
+// Deterministic, key-sorted JSON serialization for the OUTPUT signature hash.
+// The snapshot's output is stored in a Postgres `jsonb` column, which does NOT
+// preserve object key order (it re-sorts keys by length then bytes). So hashing
+// `JSON.stringify(row.output_json)` at verify time never reproduces the
+// insertion-ordered `JSON.stringify(output)` string hashed at save time — every
+// legitimately-signed snapshot then failed HMAC comparison and reported
+// `valid:false`. Hashing this canonical (recursively key-sorted) form on BOTH
+// sides makes the signature survive the jsonb round-trip. Arrays keep order;
+// primitives pass through. Fed a JSON-normalized object on both sides so the
+// key set matches exactly (undefined-valued keys are already dropped by jsonb).
+const canonicalJson = (value) => {
+  if (value === null || value === undefined) return 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((k) => `${JSON.stringify(k)}:${canonicalJson(value[k])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
+};
+
+// The output hash both saveSnapshot and verifySnapshotSignature must agree on.
+// `JSON.parse(JSON.stringify(output))` normalizes the save-side object to the
+// exact shape jsonb will hand back (drops undefined-valued keys), then
+// canonicalJson pins a stable key order independent of jsonb's storage order.
+const computeOutputHash = (output) =>
+  crypto
+    .createHash('sha256')
+    .update(canonicalJson(JSON.parse(JSON.stringify(output ?? {}))))
+    .digest('hex');
+
 const loadPropertyWithZone = async (propertyId) => {
   const result = await query(
     `SELECT
@@ -125,8 +157,14 @@ const loadFarRules = async ({ property, zone, statutoryPlanId = null }) => {
        )`;
   } else {
     // Legacy path (registry absent / plan unresolved): scope by city as before.
+    // TENANT BOUNDARY: the plan-scoped branch above guards org-authored rules
+    // explicitly; this branch must too, or another org's approved custom
+    // far_rules row for the same zone/city bleeds in — and the ORDER BY below
+    // (`fr.org_id IS NOT NULL DESC`) would actually PREFER the leaked rule over
+    // the global one. NULL org_id = shared seed rulebook, visible to all.
     params.push(property.city || 'Bengaluru');
-    scopeClause = `AND LOWER(COALESCE(fr.city, 'bengaluru')) = LOWER($3)`;
+    scopeClause = `AND LOWER(COALESCE(fr.city, 'bengaluru')) = LOWER($3)
+       AND (fr.org_id IS NULL OR fr.org_id = current_organization_id())`;
   }
 
   const result = await query(
@@ -494,9 +532,11 @@ const formatKgis = (cacheRow, liveResult = null) => {
 
 const saveSnapshot = async ({ propertyId, output, userId }) => {
   try {
-    const outputStr = JSON.stringify(output);
+    const outputStr = JSON.stringify(output); // still the jsonb insert value
     const inputs_hash = hashInputs(output.inputs || {});
-    const output_hash = crypto.createHash('sha256').update(outputStr).digest('hex');
+    // Sign over the canonical (key-sorted) output so the signature survives the
+    // jsonb round-trip at verify time — see computeOutputHash.
+    const output_hash = computeOutputHash(output);
     const signature = computeSignature(inputs_hash, output_hash);
 
     const result = await query(
@@ -1051,10 +1091,9 @@ const verifySnapshotSignature = async (snapshotId) => {
     return { valid: false, reason: 'secret_not_configured', snapshot_id: snapshotId, engine_version: row.engine_version };
   }
 
-  const output_hash = crypto
-    .createHash('sha256')
-    .update(JSON.stringify(row.output_json))
-    .digest('hex');
+  // Canonical hash of the stored jsonb — key order is not preserved by jsonb,
+  // so this MUST match the save-side canonicalization (see computeOutputHash).
+  const output_hash = computeOutputHash(row.output_json);
   const expected = computeSignature(row.inputs_hash, output_hash);
 
   const valid = crypto.timingSafeEqual(
@@ -1073,4 +1112,10 @@ module.exports = {
   verifySnapshotSignature,
   NEEDS_VERIFICATION_KEYS,
   VERIFICATION_LINKS,
+  // Pure signing internals — exported for the signature round-trip test that
+  // guards against the jsonb key-reordering regression.
+  canonicalJson,
+  computeOutputHash,
+  computeSignature,
+  hashInputs,
 };

@@ -511,3 +511,84 @@ describe('parcelRedFlags engine — parity vs legacy buildRedFlags', () => {
     }
   });
 });
+
+// ── Snapshot signature — jsonb key-order robustness (regression) ────────────
+// The output is stored in a jsonb column, which does NOT preserve object key
+// order. Before the canonical-hash fix, verify re-serialized the reordered
+// jsonb and every legitimately-signed snapshot reported valid:false. These
+// tests reorder keys exactly as Postgres would and assert the signature still
+// verifies — and that genuine tampering is still caught.
+describe('verifySnapshotSignature — survives jsonb key reordering', () => {
+  const OLD_SECRET = process.env.PARCEL_SIGNING_SECRET;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.PARCEL_SIGNING_SECRET = 'test-signing-secret';
+  });
+  afterAll(() => {
+    if (OLD_SECRET === undefined) delete process.env.PARCEL_SIGNING_SECRET;
+    else process.env.PARCEL_SIGNING_SECRET = OLD_SECRET;
+  });
+
+  const output = {
+    inputs: { far: 1.75, zone: 'residential_main' },
+    far_applied: 1.75,
+    zone_code: 'R',
+    nested: { gamma: 3, alpha: 1, beta: 2 },
+    citations: [{ id: 'c2' }, { id: 'c1' }],
+  };
+
+  // Deep key-reorder (reverse each object's key order); arrays keep order —
+  // exactly the invariant jsonb guarantees.
+  const reorder = (obj) => {
+    if (Array.isArray(obj)) return obj.map(reorder);
+    if (obj && typeof obj === 'object') {
+      const out = {};
+      for (const k of Object.keys(obj).reverse()) out[k] = reorder(obj[k]);
+      return out;
+    }
+    return obj;
+  };
+
+  const signRow = () => {
+    const inputs_hash = parcelIntelligenceService.hashInputs(output.inputs);
+    const output_hash = parcelIntelligenceService.computeOutputHash(output);
+    const signature = parcelIntelligenceService.computeSignature(inputs_hash, output_hash);
+    return { inputs_hash, signature };
+  };
+
+  test('canonicalJson is key-order independent', () => {
+    const a = parcelIntelligenceService.canonicalJson({ b: 1, a: 2, m: { y: 1, x: 2 } });
+    const b = parcelIntelligenceService.canonicalJson({ m: { x: 2, y: 1 }, a: 2, b: 1 });
+    expect(a).toBe(b);
+  });
+
+  test('a legitimately-signed snapshot verifies after jsonb reorders keys', async () => {
+    const { inputs_hash, signature } = signRow();
+    query.mockResolvedValueOnce({
+      rows: [{ signature, inputs_hash, output_json: reorder(output), engine_version: '1.0.0' }],
+    });
+    const result = await parcelIntelligenceService.verifySnapshotSignature('snap-1');
+    expect(result).toMatchObject({ valid: true, snapshot_id: 'snap-1' });
+  });
+
+  test('detects tampering — a changed stored value fails verification', async () => {
+    const { inputs_hash, signature } = signRow();
+    const tampered = reorder(output);
+    tampered.far_applied = 2.5;
+    query.mockResolvedValueOnce({
+      rows: [{ signature, inputs_hash, output_json: tampered, engine_version: '1.0.0' }],
+    });
+    const result = await parcelIntelligenceService.verifySnapshotSignature('snap-1');
+    expect(result.valid).toBe(false);
+  });
+
+  test('reports secret_not_configured when the signing secret is absent', async () => {
+    const { inputs_hash, signature } = signRow();
+    delete process.env.PARCEL_SIGNING_SECRET;
+    query.mockResolvedValueOnce({
+      rows: [{ signature, inputs_hash, output_json: output, engine_version: '1.0.0' }],
+    });
+    const result = await parcelIntelligenceService.verifySnapshotSignature('snap-1');
+    expect(result).toMatchObject({ valid: false, reason: 'secret_not_configured' });
+  });
+});

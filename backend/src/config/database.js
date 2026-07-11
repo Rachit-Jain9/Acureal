@@ -131,7 +131,9 @@ const transaction = async (callback) => {
     await client.query('COMMIT');
     return result;
   } catch (error) {
-    await client.query('ROLLBACK');
+    // Guard the rollback like query() does — if the callback failed because the
+    // connection broke, an unguarded ROLLBACK throws and masks the real cause.
+    try { await client.query('ROLLBACK'); } catch { /* connection already broken */ }
     throw error;
   } finally {
     client.release();
