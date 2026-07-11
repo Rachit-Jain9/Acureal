@@ -1476,6 +1476,17 @@ describe('masterplan.service district intelligence helpers', () => {
       expect(result.summary.linked_doc_count).toBe(1);
       expect(result.summary.fact_type_counts).toEqual({ rmp_table: 2, sdz: 1 });
       expect(result.disclaimer).toMatch(/IC memos/i);
+
+      // TENANT BOUNDARY (regression): both the sources query and the facts
+      // query must be org-scoped — the app role bypasses RLS. (Locate each by
+      // content; this describe doesn't reset mocks per test.)
+      const calls = query.mock.calls.map((c) => c[0]);
+      const sourcesSql = [...calls].reverse().find((s) => /FROM regulatory_data\.evidence_sources s/i.test(s));
+      const factsSql = [...calls].reverse().find((s) => /FROM regulatory_data\.evidence_facts\b/i.test(s) && !/evidence_sources/i.test(s));
+      expect(sourcesSql).toBeDefined();
+      expect(factsSql).toBeDefined();
+      expect(sourcesSql).toMatch(/s\.org_id\s+IS\s+NULL\s+OR\s+s\.org_id\s*=\s*current_organization_id\(\)/i);
+      expect(factsSql).toMatch(/\borg_id\s+IS\s+NULL\s+OR\s+org_id\s*=\s*current_organization_id\(\)/i);
     });
 
     test('handles facts with no page_number gracefully', async () => {
@@ -1864,6 +1875,17 @@ describe('masterplan.service district intelligence helpers', () => {
       expect(f5.confidence_score).toBeNull();
 
       expect(result.disclaimer).toMatch(/IC memos/i);
+
+      // TENANT BOUNDARY (regression): the app role bypasses RLS, so this
+      // explicit predicate is the only thing keeping one org's private facts
+      // out of another org's review queue. (This describe doesn't reset mocks
+      // per test, so locate the query by content rather than by index.)
+      const sql = [...query.mock.calls]
+        .reverse()
+        .map((c) => c[0])
+        .find((s) => /FROM regulatory_data\.evidence_facts f/i.test(s));
+      expect(sql).toBeDefined();
+      expect(sql).toMatch(/f\.org_id\s+IS\s+NULL\s+OR\s+f\.org_id\s*=\s*current_organization_id\(\)/i);
     });
 
     test('returns empty needs_review when every fact is high-confidence and approved', async () => {

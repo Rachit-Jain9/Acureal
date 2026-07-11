@@ -116,11 +116,19 @@ export default function ReportsPage() {
   const performanceData = useMemo(
     () =>
       [...deals]
-        .map((deal) => ({
-          ...deal,
-          _irr: Number(deal.irr_pct) || 0,
-        }))
-        .sort((a, b) => b._irr - a._irr),
+        .map((deal) => {
+          // Preserve a missing IRR as null. `Number(deal.irr_pct) || 0` turned
+          // every un-modeled (sourcing/screening) deal into a fabricated 0.0%
+          // that rendered as a real return AND out-ranked genuinely negative
+          // IRRs. Un-modeled deals now show an em-dash (via formatPct) and sort
+          // last — matching the Financial tab's null handling.
+          const raw = deal.irr_pct;
+          const _irr = raw == null || raw === '' || !Number.isFinite(Number(raw))
+            ? null
+            : Number(raw);
+          return { ...deal, _irr };
+        })
+        .sort((a, b) => (b._irr ?? -Infinity) - (a._irr ?? -Infinity)),
     [deals]
   );
 
@@ -286,7 +294,7 @@ export default function ReportsPage() {
       d.name,
       d.city || '',
       STAGE_CONFIG[d.stage]?.label || d.stage || '',
-      num(d._irr),
+      d._irr == null ? '' : num(d._irr),
       num(getFinancialValue(d, 'npv_cr')),
     ]);
     downloadCsv({ filename: `redip-performance-${today()}.csv`, headers, rows });

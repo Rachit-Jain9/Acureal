@@ -283,7 +283,15 @@ function BenchmarksTable({ rows }) {
               const growthLabel = yLow == null && yHigh == null ? '—'
                 : yLow === yHigh ? `${yLow > 0 ? '+' : ''}${yLow}%`
                 : `${yLow}–${yHigh}%`;
-              const priceLabel = `₹${(Number(row.avg_price_min_per_sqft) / 1000).toFixed(1)}k–${(Number(row.avg_price_max_per_sqft) / 1000).toFixed(1)}k`;
+              // Guard both bounds — Number(null)/1000 is 0, which printed a
+              // fabricated "₹0.0k" for a benchmark row missing a min or max
+              // price (every sibling column already null-guards). Missing → em-dash.
+              const pMin = row.avg_price_min_per_sqft != null ? Number(row.avg_price_min_per_sqft) : null;
+              const pMax = row.avg_price_max_per_sqft != null ? Number(row.avg_price_max_per_sqft) : null;
+              const kLabel = (v) => `₹${(v / 1000).toFixed(1)}k`;
+              const priceLabel = pMin == null && pMax == null ? '—'
+                : pMin != null && pMax != null ? `${kLabel(pMin)}–${kLabel(pMax)}`
+                : kLabel(pMin ?? pMax);
               const growthVal = yHigh ?? yLow ?? 0;
               const growthColor = growthVal >= 20 ? 'text-data-positive font-semibold'
                 : growthVal >= 10 ? 'text-data-positive font-medium'

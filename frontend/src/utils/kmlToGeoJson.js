@@ -12,9 +12,14 @@ function parseCoords(text) {
     .split(/\s+/)
     .map((tok) => {
       const parts = tok.split(',');
+      // Require BOTH lng and lat to be present and non-empty. Number('') === 0,
+      // so a truncated tuple ("77.60," → ['77.60','']) would otherwise survive
+      // the finite-filter as a fabricated [77.6, 0] equator vertex and silently
+      // corrupt the ring (and thus the computed parcel area).
+      if (parts.length < 2 || parts[0].trim() === '' || parts[1].trim() === '') return null;
       return [Number(parts[0]), Number(parts[1])];
     })
-    .filter((p) => Number.isFinite(p[0]) && Number.isFinite(p[1]));
+    .filter((p) => p && Number.isFinite(p[0]) && Number.isFinite(p[1]));
 }
 
 function ringsOfPolygon(polyEl) {
