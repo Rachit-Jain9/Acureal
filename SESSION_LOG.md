@@ -9898,3 +9898,26 @@ Operator said "do all three" (pipeline dashboard / document-storage hardening / 
 - **Audit remainder (deferred, low-risk):** XLSX graceful-path muted banner on Briefing/Dashboard sheets; audit phases 8–10 polish items; drawers→Modal primitive migration; org-id in react-query keys (mitigated by the #961 clear-on-switch, structural fix optional).
 - **Operator (from tonight):** confirm `GEMINI_MODEL` is NOT set in Vercel env (verified unnecessary — calls flipped to the new model, so it isn't set; nothing to do unless errors resume); decide the audit's needsOperator items (benchmark-provenance policy question, activity reassignment semantics).
 - Standing operator items: lawyer DPA/AUP, sending domain + Resend key, Supabase Tier-2, map-tile env vars.
+
+---
+
+## 2026-07-11 — Post-sprint bug-hunt: two cross-tenant leaks, snapshot-signature repair, fabricated-zero fixes (PR #964 — merged; master green)
+
+**What was worked on (plain English):** With the platform in strong shape, ran three parallel automated reviews over the parts of the 72-PR sprint (#888–#959) not covered by #960–#962: (1) new backend routes/services, (2) the deterministic geo/yield math incl. front-end↔back-end parity, (3) the newer front-end data flows. Every finding was re-verified against the live database and the actual code before fixing.
+
+**#964 — the confirmed fixes:**
+- **[HIGH] Two cross-workspace privacy leaks.** `masterplan.getReviewQueue` and `getSourceExplorer` read `regulatory_data.evidence_facts` / `evidence_sources` with NO org predicate, and both routes are `authenticate`-only. Live data: one org's 69 extracted facts + 9 source documents were visible to every other tenant. Root cause reconfirmed: the app connects via the pooler as role `postgres` (`rolbypassrls=true`) with no `SET ROLE`, so the tables' FORCE-RLS never engages — the explicit `(org_id IS NULL OR org_id = current_organization_id())` WHERE predicate is the only tenant wall. Added it (matching the pattern `getSourceDocumentById` already used). Verified live: with no org context the unscoped read returns 201 facts, the fixed read returns only the 132 shared-seed rows.
+- **[MED] FAR-rules cross-org bleed.** `parcelIntelligence.loadFarRules`'s legacy branch (registry unresolved) dropped the org predicate the plan-scoped branch has — and its `ORDER BY org_id IS NOT NULL DESC` would actually PREFER a leaked org-authored rule. Scoped it (4 org rows live).
+- **[MED] Snapshot signature always-invalid.** Every "signed snapshot" verified as `invalid` because save hashed `JSON.stringify(output)` (JS key order) but verify re-hashed the jsonb column, which Postgres returns with keys reordered. All 6 signed prod snapshots were affected. Fixed by hashing a canonical (recursively key-sorted) form on both sign + verify; 4 new regression tests reorder keys like jsonb does and confirm verify passes AND tampering is still caught. (The 6 pre-existing snapshots stay unverifiable until regenerated on next refresh — honest, not back-signed.)
+- **[MED] Three fabricated-zero fixes.** Reports→Performance showed a fake `0.0%` IRR for un-modeled deals (ranked above genuine negatives) → now em-dash, sorted last, CSV guarded. Intelligence benchmark table showed `₹0.0k` for a null price → em-dash. `kmlToGeoJson` fabricated a `[lng,0]` equator vertex from a truncated coordinate tuple (`Number('')===0`), corrupting parcel area → now drops the bad tuple.
+- **[LOW] `database.transaction()` rollback** now guarded like `query()` so a broken-connection failure can't mask the original error.
+- **Cleanup:** removed 148 lines of dead `buildQaSourcesSheet` XLSX code (nothing calls it; the structural validator forbids it as a standalone sheet).
+
+The deterministic-math review found **no** front-end/back-end numeric divergence and confirmed the land-area formula matches turf to 12 decimals — nothing to change.
+
+**Verified:** backend 3,576 tests (incl. the 4 new signature tests + tenant-scope assertions on both read-models), frontend 1,278 + theme-token + hover-state guards, production build clean; tenant fix re-confirmed against live data post-deploy.
+
+### What's left to do next
+- The 6 legacy parcel-intelligence snapshots will show "unverifiable" until each is regenerated (next parcel-intelligence refresh re-mints them under the fixed scheme). No action needed unless a user flags one.
+- Still-open low-risk items from the frontend hunt (documented tradeoffs, not shipped): Comps "Export CSV" ignores the client-only Source filter (labeled "download all"); Comps table/map cap at 200 rows while the header counts more. Both are known scaling limits — revisit if an org's comp library crosses 200.
+- Unchanged operator items: real-deal walkthrough + email sending domain (unblocks invites/assignment notifications) + map-tile env vars; lawyer DPA/AUP; Supabase Tier-2; weekly automated health check (would have caught the July AI outage in days not weeks).
