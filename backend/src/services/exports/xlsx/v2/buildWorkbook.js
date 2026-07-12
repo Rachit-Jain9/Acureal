@@ -1430,7 +1430,18 @@ const buildExportQa = (ctx, options = {}) => {
 
 class XlsxExportValidationError extends Error {
   constructor(qa) {
-    super(`XLSX export blocked: ${qa.blockers.length} required input${qa.blockers.length === 1 ? '' : 's'} missing or invalid.`);
+    // Two very different failure families share this error class: missing
+    // underwriting INPUTS (the deal's fault — fixable by the operator) and
+    // failed workbook INTEGRITY checks (our generation bug — not fixable by
+    // editing the deal). The 2026-07-12 incident showed the harm of blaming
+    // inputs for a structural failure: the operator was told an input was
+    // missing when the real issue was the sheet-count validator. Say which
+    // family it is.
+    const count = qa.blockers.length;
+    const structuralOnly = count > 0 && qa.blockers.every((issue) => issue.scope === 'xlsx package');
+    super(structuralOnly
+      ? `XLSX export failed ${count} workbook integrity check${count === 1 ? '' : 's'} — a file-generation issue, not missing deal inputs. Please retry once and report if it persists.`
+      : `XLSX export blocked: ${count} required input${count === 1 ? '' : 's'} missing or invalid.`);
     this.name = 'XlsxExportValidationError';
     this.statusCode = 422;
     this.errors = qa.blockers.map((issue) => ({
@@ -8924,14 +8935,34 @@ const validateXlsxBufferForDownload = async (xlsxBuffer, options = {}) => {
   } else {
     const workbookXml = await workbookXmlFile.async('string');
     const sheetCount = (workbookXml.match(/<sheet\b/g) || []).length;
-    // PR-NX7 (2026-05-15): raised the ceiling from 7 → 8 to accommodate
-    // the Executive Briefing sheet (first tab, IC-facing summary).
-    // PR-NX57 (2026-05-19): raised the ceiling from 8 → 9 to accommodate
-    // the new AI Synthesis sheet (second tab — cross-product parity with
-    // DOCX + PPTX). Hospitality deals reach exactly 9 (the extra USALI
-    // sheet); non-hospitality stays at 8. 9 is the new ceiling.
-    if (sheetCount > 9) {
-      add('xl/workbook.xml', `Workbook contains ${sheetCount} worksheets; maximum allowed is 9.`, 'Remove or merge non-essential worksheets before download.');
+    // History: a hand-bumped numeric ceiling here broke THREE times — set at 7,
+    // bumped to 8 for Executive Briefing (PR-NX7), bumped to 9 for AI Synthesis
+    // (PR-NX57), then #922 (Site Yield) + #924 (Market Comparables) shipped
+    // without a bump and every rich deal's download 422'd in production
+    // (2026-07-12 operator report). The allowance is now DERIVED from the
+    // SHEETS registry, and the actual corruption signals are inventory-based:
+    // every worksheet name must be a registered SHEETS value and unique.
+    // Registering a new sheet automatically extends the allowance — there is
+    // no second place left to forget.
+    const decodeXmlEntities = (value) => value
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&');
+    const sheetNames = [...workbookXml.matchAll(/<sheet\b[^>]*?\bname="([^"]*)"/g)]
+      .map((match) => decodeXmlEntities(match[1]));
+    const knownSheetNames = new Set(Object.values(SHEETS));
+    const unknownSheets = sheetNames.filter((name) => !knownSheetNames.has(name));
+    if (unknownSheets.length) {
+      add('xl/workbook.xml', `Workbook contains unregistered worksheet name(s): ${unknownSheets.join(', ')}.`, 'Register intentional new worksheets in the SHEETS inventory (buildWorkbook.js); anything else indicates a build bug.');
+    }
+    const duplicateSheets = [...new Set(sheetNames.filter((name, i) => sheetNames.indexOf(name) !== i))];
+    if (duplicateSheets.length) {
+      add('xl/workbook.xml', `Workbook contains duplicate worksheet name(s): ${duplicateSheets.join(', ')}.`, 'Regenerate the workbook; duplicate sheets indicate a build bug.');
+    }
+    if (sheetCount > knownSheetNames.size) {
+      add('xl/workbook.xml', `Workbook contains ${sheetCount} worksheets; the registered inventory allows at most ${knownSheetNames.size}.`, 'Regenerate the workbook; exceeding the registry size indicates duplication or corruption.');
     }
     if (workbookXml.includes('Export QA &amp; Sources') || workbookXml.includes('Export QA & Sources')) {
       add(SHEETS.qaSources, 'Export QA & Sources must be merged into Inputs & Assumptions.', 'Remove the standalone QA worksheet before download.');

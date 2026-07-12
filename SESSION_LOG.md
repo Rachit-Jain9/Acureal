@@ -4,6 +4,17 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-12 (XLSX "export blocked" — real cause was a hand-bumped sheet ceiling) (PR #967 — merged + deployed)
+
+Operator reported the Excel export still broken ("XLSX export blocked: 1 required input missing or invalid"). Reproduced with his live session: the BULK export and sparse deals were fine, but **rich deals (Commercial Retail, Jigani) 422'd** — and the real blocker had nothing to do with inputs: *"Workbook contains 10 worksheets; maximum allowed is 9."*
+
+- **Root cause**: `validateXlsxBufferForDownload` enforced a hard-coded sheet ceiling that had already been hand-bumped twice (7→8 Executive Briefing, 8→9 AI Synthesis). #922 (Site Yield) + #924 (Market Comparables) added two more legitimate sheets without a bump, so any deal rich enough to build both crossed 10 and every download was refused. The route's strict-then-graceful retry couldn't help — the structural check runs unconditionally on the rebuilt buffer too. The E2E smoke missed it because the seeded test deals are sparse (≤9 sheets) and the bulk endpoint doesn't use the v2 builder.
+- **Fix (kills the failure mode, not another bump)**: the allowance is now **derived from the SHEETS registry**, and the corruption signals are inventory-based — every worksheet name must be a registered SHEETS value and unique (unregistered/duplicate names still block, as true build-bug signals). Registering a new sheet automatically extends the allowance; there is no second place left to forget.
+- **Honest error message**: `XlsxExportValidationError` used to blame "required inputs" even when every blocker was structural (scope `xlsx package`). Structural failures now say "workbook integrity check — a file-generation issue, not missing deal inputs."
+- 3 new regression tests (registered >9 passes; unregistered name blocks with integrity message; duplicates block). Backend 3,579 green. Post-deploy verification = re-run the exact failing downloads (Commercial Retail + Jigani) with the operator's live session and confirm 200.
+
+---
+
 ## 2026-07-09 (Eradicated the empty-dashboard race at its root + Phase 2 E2E smoke net) (PRs #951–#955 — merged + deployed)
 
 Operator was (rightly) furious that the "empty dashboard / empty Deals" bug kept coming back despite earlier fixes — screenshot showed **"Pipeline Distribution: No deals" sitting next to "City Distribution: 6 deals."** Root-caused it to the foundation and killed it, then built the automated safety net that would have caught it (and the rest of this month's bugs) before they ever reached him.

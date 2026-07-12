@@ -5163,3 +5163,71 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     expect(overflowFound).toBe(true);
   });
 });
+
+describe('workbook structural validation — sheet inventory (2026-07-12 regression)', () => {
+  // The 2026-07-12 production incident: a hard-coded 9-sheet ceiling 422'd
+  // every rich deal's XLSX download after #922 (Site Yield) + #924 (Market
+  // Comparables) added legitimate sheets without bumping it — the THIRD such
+  // breakage. The allowance is now derived from the SHEETS registry and the
+  // corruption signals are inventory-based (unregistered / duplicate names).
+  // These tests pin that contract.
+
+  const mutateWorkbookXml = async (buffer, mutate) => {
+    const zip = await JSZip.loadAsync(buffer);
+    const xml = await zip.file('xl/workbook.xml').async('string');
+    zip.file('xl/workbook.xml', mutate(xml));
+    return zip.generateAsync({ type: 'nodebuffer' });
+  };
+
+  // Insert extra <sheet> entries just before </sheets>. workbook.xml-level
+  // checks don't require backing worksheet parts for the injected entries.
+  const injectSheets = (xml, names) => {
+    const extras = names
+      .map((name, i) => `<sheet name="${name}" sheetId="${90 + i}" r:id="rId9${i}"/>`)
+      .join('');
+    return xml.replace('</sheets>', `${extras}</sheets>`);
+  };
+
+  test('allows more than 9 sheets when every name is registered (no magic ceiling)', async () => {
+    const buffer = await buildDealWorkbookV2(minimalContext());
+    const zip = await JSZip.loadAsync(buffer);
+    const wbXml = await zip.file('xl/workbook.xml').async('string');
+    const present = [...wbXml.matchAll(/<sheet\b[^>]*?\bname="([^"]*)"/g)].map((m) => m[1]);
+    const spare = ['Site Yield', 'Market Comparables', 'Lease Roll', 'Unit Mix', 'USALI Pro Forma', 'Construction Drawdown']
+      .filter((n) => !present.includes(n));
+    const needed = Math.max(10 - present.length, 1); // guarantee total > 9
+    expect(spare.length).toBeGreaterThanOrEqual(needed);
+    const mutated = await mutateWorkbookXml(buffer, (xml) => injectSheets(xml, spare.slice(0, needed)));
+    await expect(__internal.validateXlsxBufferForDownload(mutated)).resolves.toBe(true);
+  });
+
+  test('blocks unregistered sheet names with an integrity (not missing-inputs) message', async () => {
+    const buffer = await buildDealWorkbookV2(minimalContext());
+    const mutated = await mutateWorkbookXml(buffer, (xml) => injectSheets(xml, ['Totally Rogue Sheet']));
+    await expect(__internal.validateXlsxBufferForDownload(mutated)).rejects.toMatchObject({
+      name: 'XlsxExportValidationError',
+      message: expect.stringMatching(/integrity check/),
+      errors: expect.arrayContaining([
+        expect.objectContaining({ message: expect.stringContaining('Totally Rogue Sheet') }),
+      ]),
+    });
+    // The misleading old message must never come back for structural failures.
+    await expect(__internal.validateXlsxBufferForDownload(mutated)).rejects.not.toMatchObject({
+      message: expect.stringMatching(/required input/),
+    });
+  });
+
+  test('blocks duplicate sheet names', async () => {
+    const buffer = await buildDealWorkbookV2(minimalContext());
+    const zip = await JSZip.loadAsync(buffer);
+    const wbXml = await zip.file('xl/workbook.xml').async('string');
+    const first = wbXml.match(/<sheet\b[^>]*?\bname="([^"]*)"/)[1];
+    const mutated = await mutateWorkbookXml(buffer, (xml) => injectSheets(xml, [first]));
+    await expect(__internal.validateXlsxBufferForDownload(mutated)).rejects.toMatchObject({
+      name: 'XlsxExportValidationError',
+      errors: expect.arrayContaining([
+        expect.objectContaining({ message: expect.stringContaining('duplicate') }),
+      ]),
+    });
+  });
+});
