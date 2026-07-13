@@ -5080,7 +5080,55 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
  *   Row 16 — blank
  *   Row 17 — Generation metadata (provider, timestamp)
  *   Row 18 — Full disclosure footnote
+ *   Rows 20+ — Deal Structure & Exit Playbook (tailored, deterministic)
  */
+
+// ── Deal Structure & Exit Playbook ──────────────────────────────────────
+// The workbook already tailors economics by ASSET CLASS and narrative by EXIT
+// (dealBriefing.service). It did NOT explain how the deal's STRUCTURE changes
+// the economics — a JDA revenue-share deal (land contributed, revenue split
+// with the owner) and an outright purchase (land bought, 100% to the developer)
+// read almost identically today, though they are financially very different.
+// This library gives each structure + exit its own short, accurate playbook,
+// keyed by the resolved enums — deterministic, no AI, no legal-lane assertions
+// (mechanics/risks/return-basis only, never title/RERA/approval conclusions).
+const DEAL_STRUCTURE_PLAYBOOK = {
+  outright_purchase: {
+    label: 'Outright purchase',
+    mechanics: 'Developer acquires 100% of the land and owns all saleable product; the full land consideration is a Day-1 outflow funded by equity and debt.',
+    watch: 'Marketable title, 13-year encumbrance certificate, land-use conversion and Khata status gate financing; stamp duty + registration (~5.6% + 1%) apply on the full consideration.',
+    returns: 'The entire project margin accrues to the developer; return is measured on the full equity base.',
+  },
+  jda_revenue_share: {
+    label: 'JDA — revenue share',
+    mechanics: 'Landowner contributes the land for an agreed share of gross sales revenue; the developer funds construction, approvals and marketing. Land is CONTRIBUTED, not purchased — the Day-1 land outflow is near zero.',
+    watch: 'Both parties register as co-promoters under K-RERA; the revenue-share % and payment waterfall must be unambiguous. Landowner default, a competing second JDA, and area-vs-revenue ambiguity are the classic disputes; GST and TDS (Sec 194-IA / 45(5A)) apply to the owner’s consideration.',
+    returns: 'Return is levered by the near-zero land cost but capped by the revenue share; the share is modeled as a top-line deduction, not a land cost.',
+  },
+  jda_area_share: {
+    label: 'JDA — area share',
+    mechanics: 'Landowner receives an agreed share of the built-up area; the developer sells the balance. The developer’s saleable area is the total less the owner’s share.',
+    watch: 'Tower/unit allocation and area demarcation in the supplementary agreement; K-RERA co-promoter registration; the owner’s retained units compete in the same micro-market.',
+    returns: 'The developer monetises only its share of area — confirm the model’s saleable area reflects the post-share balance, not the gross programme.',
+  },
+  development_management: {
+    label: 'Development management (DM)',
+    mechanics: 'Developer acts as a fee-based manager (a DM fee, typically 4–8% of revenue or cost) with limited or no equity and no land ownership.',
+    watch: 'Fee basis (revenue vs cost), cost-overrun liability, the principal’s balance-sheet strength, and any clawback or performance conditions.',
+    returns: 'Return is the DM fee plus any promote — not development margin; equity-multiple is not the right lens for a DM mandate.',
+  },
+};
+
+const EXIT_PLAYBOOK = {
+  outright_progressive: 'Value is realised through unit-by-unit retail sales across the construction and absorption window; sales velocity and price escalation are the primary return drivers — the standard for-sale residential / plotted path.',
+  bulk_exit_completion: 'Inventory is sold in bulk to a single buyer at or near completion at a block discount — trading price for certainty and a faster, cleaner exit.',
+  hold_post_completion: 'Completed units are held and leased before disposal; a stabilisation period and rental income are added, blending development margin with hold yield.',
+  strategic_sale: 'The stabilised asset is sold as a block to an institutional buyer (fund / REIT / family office); return is driven by the exit cap-rate and NOI at disposal — apply an institutional block discount.',
+  reit_exit: 'The asset is seeded into a REIT; SEBI REIT norms apply (≥80% in completed rent-generating assets, ≥200 unit-holders, quarterly DPU) and return is driven by cap-rate compression plus distribution yield.',
+  hold_to_perpetuity: 'A long-term hold financed via Lease Rental Discounting (LRD); return is the levered cash-on-cash plus terminal value, governed by DSCR and refinance risk.',
+  refinance_hold: 'The asset is refinanced (typically LRD) and held; return is the levered cash-on-cash plus terminal value, governed by DSCR and refinance risk.',
+};
+
 const buildExecutiveBriefingSheet = (workbook, ctx) => {
   const sheet = workbook.addWorksheet(SHEETS.executiveBriefing, {
     views: [{ showGridLines: false, state: 'normal' }],
@@ -5244,6 +5292,60 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   footnoteCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true, indent: 1 };
   footnoteCell.protection = { locked: true };
   sheet.getRow(18).height = 80;
+
+  // ── Deal Structure & Exit Playbook (tailored, deterministic) ──────────
+  // Additive block below the briefing (rows 20+). Adapts to THIS deal's
+  // resolved structure + exit so a JDA and an outright purchase no longer
+  // read the same.
+  const core = getCoreInputSnapshot(ctx);
+  const structure = DEAL_STRUCTURE_PLAYBOOK[core.dealStructureLabel] || DEAL_STRUCTURE_PLAYBOOK.outright_purchase;
+  const exitNote = EXIT_PLAYBOOK[core.exitStrategyType] || EXIT_PLAYBOOK.outright_progressive;
+  const humanizeExit = (key) => String(key || '').split('_')
+    .map((w) => (w === 'reit' ? 'REIT' : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+  const shareDec = Number(core.landownerSharePct) || 0;
+  const shareSuffix = (core.dealStructureLabel !== 'outright_purchase' && shareDec > 0)
+    ? ` — ${(shareDec * 100).toFixed(0)}% to landowner`
+    : '';
+
+  const pbTitleRow = 20;
+  sheet.mergeCells(`A${pbTitleRow}:H${pbTitleRow}`);
+  sheet.getCell(`A${pbTitleRow}`).value = 'Deal Structure & Exit Playbook';
+  styleSectionTitle(sheet.getCell(`A${pbTitleRow}`));
+  sheet.getRow(pbTitleRow).height = 22;
+
+  const playbookLines = [
+    { label: `Structure — ${structure.label}${shareSuffix}`, text: null, heading: true },
+    { label: 'How it works', text: structure.mechanics },
+    { label: 'What to watch', text: structure.watch },
+    { label: 'Return basis', text: structure.returns },
+    { label: `Exit — ${humanizeExit(core.exitStrategyType)}`, text: null, heading: true },
+    { label: 'Value realisation', text: exitNote },
+  ];
+  let pbRow = pbTitleRow + 1;
+  playbookLines.forEach(({ label, text, heading }) => {
+    sheet.mergeCells(`A${pbRow}:H${pbRow}`);
+    const cell = sheet.getCell(`A${pbRow}`);
+    if (heading) {
+      cell.value = label;
+      cell.font = { name: FONT, size: 10.5, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+      cell.fill = FILL(palette.xlsx('paper'));
+      cell.alignment = { horizontal: 'left', vertical: 'center' };
+      sheet.getRow(pbRow).height = 20;
+    } else {
+      // Rich cell: a bold lead-in run + the body text, one wrapped line.
+      cell.value = {
+        richText: [
+          { text: `${label}:  `, font: { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } } },
+          { text, font: { name: FONT, size: 9.5, color: { argb: palette.xlsx('inkDeep') } } },
+        ],
+      };
+      cell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true, indent: 1 };
+      sheet.getRow(pbRow).height = Math.max(30, Math.ceil(text.length / 95) * 15);
+    }
+    cell.protection = { locked: true };
+    pbRow += 1;
+  });
 
   return sheet;
 };

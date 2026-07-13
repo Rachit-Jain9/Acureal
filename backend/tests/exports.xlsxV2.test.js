@@ -5333,3 +5333,45 @@ describe('Structural switches are locked reference cells (2026-07-13)', () => {
     expect(area.protection.locked).toBe(false);
   });
 });
+
+describe('Deal Structure & Exit Playbook (per-deal tailoring, 2026-07-13)', () => {
+  const briefingText = async (ctx) => {
+    const buffer = await buildDealWorkbookV2(ctx);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const sh = wb.getWorksheet('Executive Briefing');
+    let text = '';
+    sh.eachRow((row) => {
+      const c = row.getCell(1).value;
+      text += (c && c.richText ? c.richText.map((r) => r.text).join('') : (c || '')) + '\n';
+    });
+    return text;
+  };
+
+  test('a JDA revenue-share deal reads differently from an outright purchase', async () => {
+    const jda = minimalContext();
+    jda.deal.deal_structure = 'jda_revenue_share';
+    jda.deal.model_params.inputs.landownerSharePct = 0.25;
+    const jdaText = await briefingText(jda);
+    expect(jdaText).toContain('Deal Structure & Exit Playbook');
+    expect(jdaText).toContain('JDA — revenue share');
+    expect(jdaText).toContain('25% to landowner');
+    expect(jdaText).toMatch(/contribut/i); // land contributed, not purchased
+    expect(jdaText).toContain('co-promoters under K-RERA');
+
+    const outright = minimalContext();
+    outright.deal.deal_structure = 'outright';
+    const outText = await briefingText(outright);
+    expect(outText).toContain('Outright purchase');
+    expect(outText).toContain('acquires 100% of the land');
+    expect(outText).not.toContain('to landowner');
+  });
+
+  test('exit playbook is specific to the resolved exit strategy', async () => {
+    const ctx = minimalContext();
+    ctx.deal.model_params.inputs.exitStrategyType = 'reit_exit';
+    const text = await briefingText(ctx);
+    expect(text).toContain('Exit — REIT Exit');
+    expect(text).toContain('SEBI REIT norms');
+  });
+});
