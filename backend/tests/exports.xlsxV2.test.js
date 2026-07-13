@@ -237,7 +237,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       const worksheetXml = await Promise.all(
         zip.file(/^xl\/worksheets\/sheet\d+\.xml$/).map((file) => file.async('string')),
       );
-      expect(worksheetXml.some((xml) => xml.includes('<sheetProtection'))).toBe(false);
+      // 2026-07-13: worksheet protection is now REQUIRED on every sheet
+      // (input cells stay unlocked; the validator blocks unprotected sheets).
+      expect(worksheetXml.every((xml) => xml.includes('<sheetProtection'))).toBe(true);
     });
 
     test('Inputs sheet carries filterable QA/source tables, hyperlinks, and input comments', async () => {
@@ -1972,14 +1974,18 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(joined).not.toMatch(/Profit Waterfall/);
     }, 30000);
 
-    test('all sheets are unprotected while Inputs value cells remain clearly editable', async () => {
+    // 2026-07-13: INVERTED — every sheet must now ship protected (no
+    // password) so locked output/formula cells can't be silently
+    // overwritten, while Inputs value cells remain unlocked and editable.
+    test('all sheets are protected while Inputs value cells remain clearly editable', async () => {
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
-      const visibleSheets = wb.worksheets.filter((ws) => ws.state !== 'hidden');
-      visibleSheets.forEach((ws) => {
+      wb.worksheets.forEach((ws) => {
         const isProtected = ws.sheetProtection && ws.sheetProtection.sheet === true;
-        expect(isProtected).not.toBe(true);
+        expect(isProtected).toBe(true);
+        // Selecting unlocked (input) cells must NOT be blocked.
+        expect(ws.sheetProtection.selectUnlockedCells).not.toBe(false);
       });
       const inputs = wb.getWorksheet('Inputs & Assumptions');
       let foundUnlockedInput = false;
@@ -4283,7 +4289,11 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
     // reads the state at a glance. Same palette as the Cash Flow DSCR
     // conditional formatting — consistency across the workbook.
     describe('Dashboard KPI conditional formatting', () => {
-      test('Development family — every KPI tile (B4 / D4 / F4 / B7 / D7 / F7) has CF rules (PR-NX11 full coverage)', async () => {
+      // 2026-07-13: the dev-family D7/F7 tiles are now Peak Debt Drawn and
+      // Total Equity Cash Flow (were Min DSCR / mislabeled Residual Land
+      // Value). Neither has a benchmark band, so they carry no CF rules —
+      // the old DSCR red-below-1.2 thresholds would misfire on a magnitude.
+      test('Development family — benchmarked KPI tiles (B4 / D4 / F4 / B7) have CF rules; D7/F7 magnitude tiles do not', async () => {
         const buffer = await buildDealWorkbookV2(minimalContext()); // dev family
         const wb = new ExcelJS.Workbook();
         await wb.xlsx.load(buffer);
@@ -4293,16 +4303,18 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         const cfList = dash.conditionalFormattings || [];
         const refsCovered = new Set();
         cfList.forEach((cf) => refsCovered.add(cf.ref));
-        // PR-NX11: full coverage — every dev-family KPI tile gets a CF rule
         expect(refsCovered.has('B4:B4')).toBe(true); // Total Revenue
         expect(refsCovered.has('D4:D4')).toBe(true); // Total Project Cost
         expect(refsCovered.has('F4:F4')).toBe(true); // Project Net CF
         expect(refsCovered.has('B7:B7')).toBe(true); // Gross Margin
-        expect(refsCovered.has('D7:D7')).toBe(true); // Min DSCR
-        expect(refsCovered.has('F7:F7')).toBe(true); // Residual Land Value
+        expect(refsCovered.has('D7:D7')).toBe(false); // Peak Debt Drawn — no bands
+        expect(refsCovered.has('F7:F7')).toBe(false); // Total Equity Cash Flow — no bands
+        // New tile labels render at C7 / E7.
+        expect(dash.getCell('C7').value).toBe('Peak Debt Drawn (INR Cr)');
+        expect(dash.getCell('E7').value).toBe('Total Equity Cash Flow (INR Cr)');
         const iconRules = cfList.flatMap((cf) => cf.rules || []).filter((rule) => rule.type === 'iconSet');
-        // At least 6 iconSet rules — one per KPI tile
-        expect(iconRules.length).toBeGreaterThanOrEqual(6);
+        // At least 4 iconSet rules — one per benchmarked KPI tile
+        expect(iconRules.length).toBeGreaterThanOrEqual(4);
         expect(dash.getCell('B9').value).toBeNull();
       });
 
@@ -4480,7 +4492,9 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           .flatMap((cf) => cf.rules)
           .filter((r) => r && r.type === 'iconSet')
           .filter((r) => r.iconSet === '3TrafficLights1');
-        expect(iconRules.length).toBeGreaterThanOrEqual(6);
+        // 2026-07-13: dev family now has 4 benchmarked tiles (D7/F7 became
+        // Peak Debt Drawn / Total Equity Cash Flow — magnitudes, no bands).
+        expect(iconRules.length).toBeGreaterThanOrEqual(4);
         iconRules.forEach((r) => {
           // showValue is either explicitly true OR undefined (default = true)
           expect(r.showValue).not.toBe(false);
@@ -5082,7 +5096,10 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     expect(flatten(sheet.getCell('A26').value)).toContain('Khata extract carpet area differs');
   });
 
-  test('falls back to "Synthesis Unavailable" panels when narratives are unavailable', async () => {
+  // 2026-07-13: unavailable sections are now OMITTED — no "Synthesis
+  // Unavailable" placeholder bands in a customer workbook. When ALL
+  // sections are unavailable, one quiet line renders at row 5.
+  test('omits unavailable sections and renders one quiet line when all narratives are unavailable', async () => {
     const ctx = minimalContext();
     ctx.risks = { narrative: { available: false, reason: 'all providers failed' } };
     ctx.sensitivityNarrative = { available: false };
@@ -5092,16 +5109,21 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
     const sheet = wb.getWorksheet('Analysis Notes');
-    // Risk synthesis row 6 (the row immediately after the section band).
-    // The raw failure reason (provider names / statuses / env hints) must
-    // NEVER reach the customer workbook — neutral copy only.
-    expect(String(sheet.getCell('A6').value)).toContain('Synthesis Unavailable');
-    expect(String(sheet.getCell('A6').value)).not.toContain('all providers failed');
-    expect(String(sheet.getCell('A6').value)).toContain('could not be generated for this export run');
-    // Sensitivity unavailable row 13
-    expect(String(sheet.getCell('A13').value)).toContain('Synthesis Unavailable');
-    // Document insights unavailable row 21
-    expect(String(sheet.getCell('A21').value)).toContain('Synthesis Unavailable');
+    expect(sheet).toBeDefined();
+    expect(String(sheet.getCell('A5').value)).toBe('No analysis notes were generated for this export.');
+    // No failure copy, no section bands, and the raw failure reason
+    // (provider names / statuses / env hints) must NEVER reach the
+    // customer workbook.
+    const allText = [];
+    sheet.eachRow((row) => row.eachCell((cell) => {
+      if (typeof cell.value === 'string') allText.push(cell.value);
+    }));
+    const joined = allText.join(' | ');
+    expect(joined).not.toContain('Synthesis Unavailable');
+    expect(joined).not.toContain('all providers failed');
+    expect(joined).not.toContain('RISK PROFILE SYNTHESIS');
+    expect(joined).not.toContain('SENSITIVITY ANALYSIS · NARRATIVE');
+    expect(joined).not.toContain('DOCUMENT-DERIVED INSIGHTS');
   });
 
   test('falls back gracefully when narrative payloads are entirely missing', async () => {
@@ -5110,10 +5132,9 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
     const sheet = wb.getWorksheet('Analysis Notes');
-    // Sheet must still exist and contain the section bands + unavailable copy.
+    // Sheet must still exist (sheet-count stability) with the quiet line.
     expect(sheet).toBeDefined();
-    expect(String(sheet.getCell('A5').value)).toBe('RISK PROFILE SYNTHESIS');
-    expect(String(sheet.getCell('A6').value)).toContain('Synthesis Unavailable');
+    expect(String(sheet.getCell('A5').value)).toBe('No analysis notes were generated for this export.');
   });
 
   test('shows positive-signal panel when findings array is empty', async () => {
@@ -5130,8 +5151,11 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
     const sheet = wb.getWorksheet('Analysis Notes');
-    expect(String(sheet.getCell('A22').value)).toContain('All extracted documents are mutually consistent');
-    expect(String(sheet.getCell('A23').value)).toContain('No inconsistencies detected');
+    // Only the documents section is available, so it renders FIRST at
+    // row 5 (band), 6 (eyebrow), 7 (summary), 8 (positive-signal line).
+    expect(String(sheet.getCell('A5').value)).toBe('DOCUMENT-DERIVED INSIGHTS');
+    expect(String(sheet.getCell('A7').value)).toContain('All extracted documents are mutually consistent');
+    expect(String(sheet.getCell('A8').value)).toContain('No inconsistencies detected');
   });
 
   test('caps findings at 6 and shows "+N more" overflow line', async () => {
@@ -5152,9 +5176,10 @@ describe('PR-NX57 — AI Synthesis sheet', () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buffer);
     const sheet = wb.getWorksheet('Analysis Notes');
-    // 6 findings × 2 rows = 12 rows after the eyebrow at row 23.
-    // Row 24-35 → findings, row 36 → "+N more" overflow line.
-    expect(String(sheet.getCell('A23').value)).toContain('INCONSISTENCY FINDINGS (9)');
+    // Only the documents section is available → band row 5, eyebrow 6,
+    // summary 7, findings eyebrow 8, then 6 findings × 2 rows (9-20)
+    // and the "+N more" overflow line at 21.
+    expect(String(sheet.getCell('A8').value)).toContain('INCONSISTENCY FINDINGS (9)');
     let overflowFound = false;
     sheet.eachRow((row) => {
       const v = String(row.getCell(1).value || '');

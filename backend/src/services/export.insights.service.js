@@ -411,6 +411,8 @@ STRICT RULES:
 - Be blunt about deal-killers. Risk synthesis that softens critical items is useless.
 - Indian real estate context: title risk, RERA compliance, BBMP/BDA approvals, JDA enforceability, conversion order absence are all material.
 - Both paragraphs are tight: max 80 words each.
+- NEVER quote financial figures — no IRR, NPV, rupee amounts (₹ / Cr / lakh), or percentages. Reference severity counts and risk titles only; the live financial model carries the numbers.
+- Both paragraphs must be mutually consistent with the risk_summary counts provided: if critical + high are zero, neither paragraph may claim a critical, high-severity, or deal-killer risk exists; if critical + high are nonzero, neither paragraph may claim there are no critical or high-severity risks.
 
 SCHEMA:
 {
@@ -446,22 +448,118 @@ const buildRiskNarrativePayload = ({ deal, riskCounts, items }) => ({
   })),
 });
 
-const coerceRiskNarrativeEnvelope = (parsed, extras = {}) => ({
-  available: true,
+// ── Deterministic consistency gate (post-model, pre-render) ─────────────
+//
+// The model is PROMPTED to stay consistent with the payload's severity
+// counts and to never quote financial figures, but prompts are not
+// guarantees. This gate enforces both deterministically, at SENTENCE level:
+// offending sentences are removed verbatim, never rewritten (no AI, no
+// paraphrase — removal only). If a paragraph loses every sentence, the whole
+// envelope flips to unavailable and the sheet omits the section.
+
+const splitSentences = (text) =>
+  String(text)
+    .split(/(?<=[.!?])\s+/)
+    .map((sent) => sent.trim())
+    .filter(Boolean);
+
+// Mentions of a critical/high/deal-killer risk (severity vocabulary, not the
+// bare word "high", which legitimately appears in phrases like "high legal
+// exposure" only when severity-suffixed).
+const CRITICAL_CLAIM_RE = /\bcritical\b|\bhigh[-\s]severity\b|\bdeal[-\s]?(?:killer|breaker)\b/i;
+// Negated claim — a negation word within ~40 chars BEFORE the severity term
+// ("no critical…", "not a deal-killer", "absence of high-severity…").
+// Proximity + ordering matter: a negation elsewhere in the sentence
+// ("…is the dealbreaker — without DC approval…") must NOT read as negated.
+const NEGATED_CLAIM_RE = /\b(?:no|not|none|nothing|neither|zero|without|absent|absence)\b[^.!?]{0,40}?(?:\bcritical\b|\bhigh[-\s]severity\b|\bdeal[-\s]?(?:killer|breaker)\b)/i;
+
+// Currency / percentage tokens: ₹ amounts, Cr / crore / lakh amounts, and
+// percentages. Captures the numeral so we can check the payload for it.
+const FIGURE_TOKEN_RE = /₹\s?\d[\d,]*(?:\.\d+)?|\d[\d,]*(?:\.\d+)?\s?(?:%|Cr\b|crore\b|lakhs?\b)/gi;
+
+const sentenceQuotesForeignFigure = (sentence, payloadText) => {
+  const matches = sentence.match(FIGURE_TOKEN_RE) || [];
+  return matches.some((token) => {
+    const numeral = token.replace(/[^\d.]/g, '');
+    if (!numeral) return false;
+    // Figure is only legitimate if the numeral itself appears somewhere in
+    // the payload (e.g. quoted from a risk description like "< ₹45L").
+    return !payloadText.includes(numeral);
+  });
+};
+
+const gateNarrativeParagraph = (text, { criticalHighCount, payloadText }) => {
+  if (typeof text !== 'string' || !text.trim()) return text || null;
+  const kept = splitSentences(text).filter((sentence) => {
+    // Figure gate: strip sentences quoting ₹ / Cr / lakh / % tokens that are
+    // not present in the payload the model was given.
+    if (sentenceQuotesForeignFigure(sentence, payloadText)) return false;
+    const claimsCriticalHigh = CRITICAL_CLAIM_RE.test(sentence);
+    if (!claimsCriticalHigh) return true;
+    const negated = NEGATED_CLAIM_RE.test(sentence);
+    if (criticalHighCount === 0) {
+      // Zero critical+high logged → drop sentences asserting such a risk
+      // exists (non-negated mentions). "No critical or high-severity risks
+      // are logged" is consistent and stays.
+      return negated;
+    }
+    // Nonzero critical+high logged → drop sentences claiming there are none.
+    return !negated;
+  });
+  const joined = kept.join(' ').trim();
+  return joined.length ? joined : null;
+};
+
+const coerceRiskNarrativeEnvelope = (parsed, payload, extras = {}) => {
+  const criticalHighCount =
+    (Number(payload?.risk_summary?.critical) || 0) + (Number(payload?.risk_summary?.high) || 0);
+  const payloadText = JSON.stringify(payload || {});
+  const gate = { criticalHighCount, payloadText };
+
   // Same deterministic legal-prose backstop as coerceInsightsEnvelope — this
   // narrative is PROMPTED to name Legal/Title risks by title, which makes it
   // the likeliest surface for a stray statutory-verdict sentence.
-  summary_paragraph: typeof parsed.summary_paragraph === 'string' ? sanitizeAiProse(parsed.summary_paragraph.trim()).text : null,
-  critical_spotlight_paragraph: typeof parsed.critical_spotlight_paragraph === 'string'
+  const rawSummary = typeof parsed.summary_paragraph === 'string'
+    ? sanitizeAiProse(parsed.summary_paragraph.trim()).text
+    : null;
+  const rawSpotlight = typeof parsed.critical_spotlight_paragraph === 'string'
     ? sanitizeAiProse(parsed.critical_spotlight_paragraph.trim()).text
-    : null,
-  confidence: ['high', 'medium', 'low'].includes(parsed.confidence)
-    ? parsed.confidence
-    : 'medium',
-  disclaimer:
-    'AI-assisted risk synthesis is informational only. Verify against the structured risk register below and the deal Risk tab.',
-  ...extras,
-});
+    : null;
+
+  const summary = gateNarrativeParagraph(rawSummary, gate);
+  const spotlight = gateNarrativeParagraph(rawSpotlight, gate);
+
+  // A paragraph the model DID produce that the gate emptied means the model
+  // contradicted the deterministic counts (or fabricated figures) wholesale
+  // — the whole narrative is untrustworthy. Flip to unavailable; the sheet
+  // omits unavailable sections rather than rendering residue.
+  const summaryEmptied = Boolean(rawSummary && rawSummary.trim()) && !summary;
+  const spotlightEmptied = Boolean(rawSpotlight && rawSpotlight.trim()) && !spotlight;
+  if (summaryEmptied || spotlightEmptied) {
+    return {
+      available: false,
+      reason: 'narrative failed deterministic consistency gate (contradicted risk counts or quoted figures not in payload)',
+      summary_paragraph: null,
+      critical_spotlight_paragraph: null,
+      confidence: null,
+      disclaimer:
+        'AI-assisted risk synthesis is informational only. Verify against the structured risk register.',
+      ...extras,
+    };
+  }
+
+  return {
+    available: true,
+    summary_paragraph: summary,
+    critical_spotlight_paragraph: spotlight,
+    confidence: ['high', 'medium', 'low'].includes(parsed.confidence)
+      ? parsed.confidence
+      : 'medium',
+    disclaimer:
+      'AI-assisted risk synthesis is informational only. Verify against the structured risk register below and the deal Risk tab.',
+    ...extras,
+  };
+};
 
 const callPrimaryRiskNarrativeClaude = async (payload, deal) => withTimeout(
   runClaudeReasoning({
@@ -545,7 +643,7 @@ const generateRiskNarrative = async ({ deal, riskCounts, items }) => {
       const raw = await callPrimaryRiskNarrativeClaude(payload, deal);
       const parsed = parseModelJson(raw);
       if (parsed && typeof parsed === 'object') {
-        return coerceRiskNarrativeEnvelope(parsed, {
+        return coerceRiskNarrativeEnvelope(parsed, payload, {
           provider: 'claude-sonnet-4-6',
           fallbackReason: null,
         });
@@ -563,7 +661,7 @@ const generateRiskNarrative = async ({ deal, riskCounts, items }) => {
       const raw = await callSecondaryRiskNarrativeOpenAI(payload, deal);
       const parsed = parseModelJson(raw);
       if (parsed && typeof parsed === 'object') {
-        return coerceRiskNarrativeEnvelope(parsed, {
+        return coerceRiskNarrativeEnvelope(parsed, payload, {
           provider: 'gpt-5.4',
           fallbackReason: fallbackReasons.length
             ? `${fallbackReasons.join('; ')} — auto-failover succeeded on openai`

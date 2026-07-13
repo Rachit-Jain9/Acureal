@@ -322,7 +322,10 @@ const ECONOMICS_BUILDERS = {
   residential_apartments: (s) => {
     const sellRate = s.sellingRatePerSqft ? `₹${intINR(s.sellingRatePerSqft)}/sqft launch price` : 'pricing pending';
     const collection = s.customerCollectionPct ? `${pct(s.customerCollectionPct, 0)} RERA collection` : '';
-    const margin = s.grossMarginPct != null ? `${pct(s.grossMarginPct, 0)} modeled gross margin` : 'margin pending';
+    // Gross-margin numeral removed here and in the builders below — margin
+    // is a kernel KPI with a live cell on the sheet; frozen prose copies
+    // diverge on model refresh.
+    const margin = s.grossMarginPct != null ? 'modeled gross margin per live model' : 'margin pending';
     const velocity = s.salesVelocityPct ? `${pct(s.salesVelocityPct, 0)}/quarter sales velocity` : '';
     const econParts = [sellRate];
     if (velocity) econParts.push(velocity);
@@ -332,7 +335,7 @@ const ECONOMICS_BUILDERS = {
   },
   villas: (s) => {
     const sellRate = s.sellingRatePerSqft ? `₹${intINR(s.sellingRatePerSqft)}/sqft luxury price` : 'pricing pending';
-    const margin = s.grossMarginPct != null ? `${pct(s.grossMarginPct, 0)} modeled gross margin (luxury premium)` : 'margin pending';
+    const margin = s.grossMarginPct != null ? 'modeled gross margin per live model (luxury premium)' : 'margin pending';
     const velocity = s.salesVelocityPct ? `${pct(s.salesVelocityPct, 0)}/quarter absorption` : '';
     const parts = [sellRate];
     if (velocity) parts.push(velocity);
@@ -342,7 +345,7 @@ const ECONOMICS_BUILDERS = {
   plotted_development: (s) => {
     const sellRate = s.sellingRatePerSqft ? `₹${intINR(s.sellingRatePerSqft)}/sqft plot price` : 'pricing pending';
     const devCost = s.plotDevCostPerSqft ? `₹${intINR(s.plotDevCostPerSqft)}/sqft layout cost` : 'dev cost pending';
-    const margin = s.grossMarginPct != null ? `${pct(s.grossMarginPct, 0)} land-economics margin` : 'margin pending';
+    const margin = s.grossMarginPct != null ? 'land-economics margin per live model' : 'margin pending';
     return `Plotted-development economics: ${sellRate} − ${devCost} → ${margin}.`;
   },
   mixed_use: (s) => {
@@ -353,7 +356,7 @@ const ECONOMICS_BUILDERS = {
     if (s.mixUseHospitalityShare) shareParts.push(`${pct(s.mixUseHospitalityShare, 0)} hospitality`);
     const components = shareParts.length ? shareParts.join(' / ') : 'component breakdown pending';
     const sellRate = s.sellingRatePerSqft ? `₹${intINR(s.sellingRatePerSqft)}/sqft blended sale rate` : '';
-    const margin = s.grossMarginPct != null ? `${pct(s.grossMarginPct, 0)} blended margin` : '';
+    const margin = s.grossMarginPct != null ? 'blended margin per live model' : '';
     const parts = [`${components} mix`];
     if (sellRate) parts.push(sellRate);
     if (margin) parts.push(margin);
@@ -364,7 +367,7 @@ const ECONOMICS_BUILDERS = {
       ? `${pct(s.landownerSharePct, 0)} landowner area-share`
       : 'landowner share pending';
     const sellRate = s.sellingRatePerSqft ? `₹${intINR(s.sellingRatePerSqft)}/sqft sale rate` : 'pricing pending';
-    const margin = s.grossMarginPct != null ? `${pct(s.grossMarginPct, 0)} developer-side margin` : 'margin pending';
+    const margin = s.grossMarginPct != null ? 'developer-side margin per live model' : 'margin pending';
     return `Redevelopment economics: ${landowner}; ${sellRate}; ${margin}.`;
   },
   raw_land: (s) => {
@@ -390,7 +393,9 @@ const buildEconomicsBullet = (s) => {
     const noiStr = s.noiCr ? `${cr(s.noiCr)} stabilised annual NOI` : 'NOI to be modeled';
     return `Operating economics: ${rentStr} → ${noiStr}.`;
   }
-  const margin = s.grossMarginPct != null ? `${pct(s.grossMarginPct, 0)} modeled margin` : 'margin pending';
+  // Margin numeral removed — gross margin has a live cell on the sheet;
+  // freezing it into prose would diverge on model refresh.
+  const margin = s.grossMarginPct != null ? 'modeled margin computed (see live model figures)' : 'margin pending';
   return `Development economics: ${margin}.`;
 };
 
@@ -468,8 +473,14 @@ const buildExitPhrase = (s) => {
   return s.exitLabel;
 };
 
-const buildCapitalExitBullet = (s) =>
-  `${buildCapitalStackPhrase(s)}. Exit: ${buildExitPhrase(s)}.`;
+// Capital-stack + exit figures (total cost, debt LTV, all-in rate, exit cap,
+// terminal value) are one-off assumptions without a single live cell beside
+// this prose — keep the numerals but stamp them as at-generation so the
+// reader never mistakes them for live model output.
+const buildCapitalExitBullet = (s) => {
+  const text = `${buildCapitalStackPhrase(s)}. Exit: ${buildExitPhrase(s)}`;
+  return /\d/.test(text) ? `${text} (figures at generation).` : `${text}.`;
+};
 
 // ──────────────────────────────────────────────────────────────────────
 // Bullet 4 — India-context (asset-class-specific GST + Khata + RERA)
@@ -561,15 +572,20 @@ const buildRiskNote = (s) => {
     return `Raw-land entitlement at "${s.rawLandStage.replace(/_/g, ' ')}" — exit value highly contingent on Karnataka land-conversion + layout approval.`;
   }
 
-  // Generic IRR / margin / spread checks
+  // Generic IRR / margin / spread checks. IRR / yield-on-cost / margin
+  // numerals are deliberately NOT interpolated — they live in cells on the
+  // sheet and a frozen copy here would diverge on model refresh. Threshold
+  // benchmarks (12% hurdle, 15% margin) are static and stay. The exit cap is
+  // a one-off assumption with no live cell, so it keeps its numeral stamped
+  // as at-generation.
   if (s.irr != null && s.irr < 0.12) {
-    return `Modeled IRR ${pct(s.irr, 1)} below typical 12% hurdle — stress-test inputs before IC.`;
+    return 'Modeled IRR is below the typical 12% hurdle (see live model figures) — stress-test inputs before IC.';
   }
   if (isIncome && s.exitCapRate && s.yieldOnCostPct && s.yieldOnCostPct < s.exitCapRate) {
-    return `Stabilised yield-on-cost ${pct(s.yieldOnCostPct, 2)} below exit cap ${pct(s.exitCapRate, 2)} — negative spread, exit value < cost.`;
+    return `Stabilised yield-on-cost is below the ${pct(s.exitCapRate, 2)} exit cap (at generation) — negative spread, exit value < cost.`;
   }
   if (!isIncome && s.grossMarginPct != null && s.grossMarginPct < 0.15) {
-    return `Modeled gross margin ${pct(s.grossMarginPct, 0)} below 15% threshold — sensitivity stress required.`;
+    return 'Modeled gross margin is below the 15% threshold (see live model figures) — sensitivity stress required.';
   }
 
   // Default risk note when no red flag triggers
@@ -579,14 +595,26 @@ const buildRiskNote = (s) => {
 // ──────────────────────────────────────────────────────────────────────
 // Returns summary line
 // ──────────────────────────────────────────────────────────────────────
+// No frozen numerals here: IRR / EM / NPV live in cells beside this summary
+// and stay current when the model refreshes — a numeral baked into prose at
+// generation time would silently diverge from them. The sentence therefore
+// characterizes returns qualitatively (deterministic thresholds, no AI) and
+// defers to the live cells for the figures.
 const buildReturnsSummary = (s) => {
-  const parts = [];
-  if (s.irr != null) parts.push(`Project IRR (kernel) ${pct(s.irr, 1)}`);
-  if (s.equityMultiple != null) parts.push(`EM ${s.equityMultiple.toFixed(2)}x`);
-  if (s.npvCr != null) parts.push(`NPV ${cr(s.npvCr)}`);
-  return parts.length
-    ? `Modeled returns: ${parts.join(' · ')}.`
-    : 'Returns pending kernel computation — fill in inputs and refresh the deal.';
+  const modeled = [];
+  if (s.irr != null) modeled.push('IRR');
+  if (s.equityMultiple != null) modeled.push('equity multiple');
+  if (s.npvCr != null) modeled.push('NPV');
+  if (!modeled.length) {
+    return 'Returns pending kernel computation — fill in inputs and refresh the deal.';
+  }
+  let quality = '';
+  if (s.irr != null) {
+    if (s.irr >= 0.18) quality = ' and sit above typical institutional hurdle rates';
+    else if (s.irr >= 0.12) quality = ' and sit within the typical institutional hurdle range';
+    else quality = ' and sit below typical institutional hurdle rates';
+  }
+  return `Modeled ${modeled.join(', ')} are computed by the deterministic kernel${quality} — refer to the live model figures beside this summary for current values.`;
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -635,10 +663,11 @@ STRICT RULES:
    - Outright purchase: total cost + debt LTV + rate.
    - JDA revenue/area share: developer-side cost (excluding land contribution); landowner share %.
    - Development management: fee-only, no developer equity at risk.
+9. NEVER quote IRR, NPV, or equity-multiple numerals in the summary, bullets, or riskNote — those figures render live in cells beside this briefing and a frozen copy would diverge when the model refreshes. Characterize returns qualitatively and defer to "the live model figures beside this summary" for current values.
 
 OUTPUT SCHEMA (return EXACTLY this, no other keys):
 {
-  "summary": "<one-line modeled-returns summary>",
+  "summary": "<one-line modeled-returns summary — qualitative, no IRR/NPV/EM numerals, deferring to the live model figures>",
   "bullets": [
     "<bullet 1: area or keys + asset class + location + structure + hold>",
     "<bullet 2: economics — asset-class-correct framing>",
