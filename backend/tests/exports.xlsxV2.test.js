@@ -5413,3 +5413,39 @@ describe('Structure-consistency validators (JDA land double-count, 2026-07-13)',
     expect(await sheetsContain(ctx, 'contributes land for a landowner share')).toBe(false);
   });
 });
+
+describe('Area-stack consistency validator (loading vs Site Yield, 2026-07-13)', () => {
+  const withSy = (sy, loadingAddon) => {
+    const ctx = minimalContext();
+    ctx.siteYield = sy;
+    ctx.deal.model_params.inputs.loadingFactor = loadingAddon;
+    return ctx;
+  };
+  const warns = async (ctx) => {
+    const buf = await buildDealWorkbookV2(ctx);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    let f = false;
+    wb.eachSheet((sh) => sh.eachRow((r) => r.eachCell((c) => {
+      const v = c.value; const t = v && v.richText ? v.richText.map((x) => x.text).join('') : (typeof v === 'string' ? v : '');
+      if (t.includes('disagrees with the saved Site Yield')) f = true;
+    })));
+    return f;
+  };
+
+  test('flags a saved study whose loading disagrees with Inputs by >10%', async () => {
+    const sy = { mode: 'saved', computed: { ok: true, areaSchedule: { saleable_sqft: 455000, carpet_sqft: 350000 } } }; // 1.30x
+    expect(await warns(withSy(sy, 0.0))).toBe(true); // Inputs 1.0x
+  });
+
+  test('does not flag when Inputs loading matches the study', async () => {
+    const sy = { mode: 'saved', computed: { ok: true, areaSchedule: { saleable_sqft: 402500, carpet_sqft: 350000 } } }; // 1.15x
+    expect(await warns(withSy(sy, 0.15))).toBe(false);
+  });
+
+  test('does not flag placeholder screening_defaults or a missing study', async () => {
+    const sd = { mode: 'screening_defaults', computed: { ok: true, areaSchedule: { saleable_sqft: 455000, carpet_sqft: 350000 } } };
+    expect(await warns(withSy(sd, 0.0))).toBe(false);
+    expect(await warns(withSy(null, 0.0))).toBe(false);
+  });
+});
