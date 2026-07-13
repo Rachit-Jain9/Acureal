@@ -4952,6 +4952,92 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
     });
   }
 
+  // ── Committed Kernel Schedule (authoritative) ─────────────────────────
+  // The deterministic financial kernel computes this deal's cash flow on a
+  // MONTHLY basis and persists the quarterly aggregation on the deal record —
+  // the exact figures shown on the Reports page and committed to at IC. The
+  // interactive engine ABOVE reconstructs cash flow live from the Inputs sheet
+  // so an analyst can flex assumptions; at rest it is a quarterly approximation
+  // of the monthly kernel, so small differences from the committed figures are
+  // expected, not a bug. This block embeds the kernel's own period series —
+  // previously absent from the workbook entirely — so the reader has the
+  // authoritative numbers alongside the interactive model. Static by design.
+  const kSeries = Array.isArray(ctx.exportContext?.cashFlows?.quarterly)
+    ? ctx.exportContext.cashFlows.quarterly
+    : [];
+  const kStart = datedReturnStartRow + 4;
+  sheet.mergeCells(kStart, 1, kStart, ctx.totalQuarters + 2);
+  sheet.getCell(kStart, 1).value = 'Committed Kernel Schedule — deterministic engine (governs at IC)';
+  styleSectionTitle(sheet.getCell(kStart, 1));
+  sheet.getRow(kStart).height = 22;
+
+  const kNoteRow = kStart + 1;
+  sheet.mergeCells(kNoteRow, 1, kNoteRow, ctx.totalQuarters + 2);
+  sheet.getCell(kNoteRow, 1).value = kSeries.length
+    ? 'Authoritative period cash flows from the deterministic kernel — the same figures as the Reports page. The interactive engine above is a quarterly sensitivity model of this monthly kernel: small at-rest differences are expected; a material gap means an Inputs cell was edited. Committed figures govern.'
+    : 'No committed kernel cash-flow schedule is stored for this deal yet. Run the Financial Engine on the deal to populate it.';
+  const kNoteCell = sheet.getCell(kNoteRow, 1);
+  kNoteCell.font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  kNoteCell.alignment = { wrapText: true, vertical: 'top' };
+  kNoteCell.protection = { locked: true };
+  sheet.getRow(kNoteRow).height = 30;
+
+  if (kSeries.length) {
+    const periodRow = kNoteRow + 1;
+    const netRow = periodRow + 1;
+    const cumRow = periodRow + 2;
+    [[periodRow, 'Period'], [netRow, 'Net cash flow (INR Cr)'], [cumRow, 'Cumulative (INR Cr)']].forEach(([r, label]) => {
+      sheet.getCell(r, 1).value = label;
+      styleLabelCell(sheet.getCell(r, 1));
+    });
+    kSeries.slice(0, 40).forEach((row, i) => {
+      const c = 2 + i;
+      const net = Number(row.net) || 0;
+      const pc = sheet.getCell(periodRow, c);
+      pc.value = row.label || `Q${i + 1}`;
+      pc.font = { name: FONT, size: 8.5, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+      pc.alignment = { horizontal: 'right' };
+      pc.protection = { locked: true };
+      const nc = sheet.getCell(netRow, c);
+      nc.value = net;
+      nc.numFmt = NUMBER_FORMATS.currency;
+      nc.font = { name: FONT, size: 9, color: { argb: palette.xlsx(net < 0 ? 'dataNegative' : 'inkDeep') } };
+      nc.alignment = { horizontal: 'right' };
+      nc.protection = { locked: true };
+      const cc = sheet.getCell(cumRow, c);
+      cc.value = Number(row.cumulative) || 0;
+      cc.numFmt = NUMBER_FORMATS.currency;
+      cc.font = { name: FONT, size: 9, color: { argb: palette.xlsx('mutedHigh') } };
+      cc.alignment = { horizontal: 'right' };
+      cc.protection = { locked: true };
+    });
+
+    // Committed KPI recap — the deterministic kernel headline the operator
+    // defends at IC (static; the Dashboard also shows these on the kernel row).
+    const k = ctx.kernelKpis || {};
+    const recapStart = cumRow + 2;
+    [
+      ['Committed IRR (kernel)', k.irr, NUMBER_FORMATS.percent],
+      ['Committed NPV (kernel, INR Cr)', k.npv, NUMBER_FORMATS.currency],
+      ['Committed Equity Multiple (kernel)', k.equityMultiple, NUMBER_FORMATS.multiple],
+    ].forEach(([label, val, fmt], i) => {
+      const r = recapStart + i;
+      sheet.getCell(r, 1).value = label;
+      styleLabelCell(sheet.getCell(r, 1));
+      const vc = sheet.getCell(r, 2);
+      if (val == null) {
+        vc.value = '–';
+        vc.numFmt = '@';
+        vc.alignment = { horizontal: 'right' };
+        vc.protection = { locked: true };
+      } else {
+        vc.value = fmt === NUMBER_FORMATS.percent ? toPctDecimal(val) : Number(val);
+        styleOutputCell(vc, fmt);
+        vc.numFmt = fmt;
+      }
+    });
+  }
+
   return sheet;
 };
 
@@ -5903,10 +5989,12 @@ const buildDashboardSheet = (workbook, ctx) => {
   // the LEVERED equity row (cfRow above) and is labelled accordingly —
   // divergence between the two is expected, not a reconciliation bug.
   const returnsCells = [
-    // Kernel row 20 — authoritative
-    { row: 20, col: 'A', label: 'Project IRR (kernel)',    kernel: k.irr,            formula: `=IFERROR((1+IRR(${cfRangeProper}))^4-1,"–")`,                                      format: NUMBER_FORMATS.percent },
-    { row: 20, col: 'C', label: 'NPV (kernel, INR Cr)',    kernel: k.npv,            formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`,                       format: NUMBER_FORMATS.currency },
-    { row: 20, col: 'E', label: 'Equity Multiple (kernel)', kernel: k.equityMultiple, formula: `=IFERROR((SUMIF(${cfRangeProper},">0"))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`,    format: NUMBER_FORMATS.multiple },
+    // Kernel row 20 — authoritative. `authoritative` guards the mislabel case:
+    // if the kernel never stored a value, show a dash — never the modeled
+    // formula dressed up under a "(kernel)" label.
+    { row: 20, col: 'A', label: 'Project IRR (kernel)',    kernel: k.irr,            formula: `=IFERROR((1+IRR(${cfRangeProper}))^4-1,"–")`,                                      format: NUMBER_FORMATS.percent, authoritative: true },
+    { row: 20, col: 'C', label: 'NPV (kernel, INR Cr)',    kernel: k.npv,            formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`,                       format: NUMBER_FORMATS.currency, authoritative: true },
+    { row: 20, col: 'E', label: 'Equity Multiple (kernel)', kernel: k.equityMultiple, formula: `=IFERROR((SUMIF(${cfRangeProper},">0"))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`,    format: NUMBER_FORMATS.multiple, authoritative: true },
     // Modeled row 21 — sensitivity run
     { row: 21, col: 'A', label: 'Equity IRR (levered, modeled)', kernel: null, formula: `=IFERROR((1+IRR(${cfRangeProper}))^4-1,"–")`,                                      format: NUMBER_FORMATS.percent, secondary: true },
     { row: 21, col: 'C', label: 'NPV (modeled, INR Cr)',    kernel: null, formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`,                       format: NUMBER_FORMATS.currency, secondary: true },
@@ -5922,7 +6010,7 @@ const buildDashboardSheet = (workbook, ctx) => {
     { row: 22, col: 'C', label: 'Effective CG Rate (applied)',                  kernel: null, formula: `=EffectiveCGRate`,                     format: NUMBER_FORMATS.percent, secondary: true },
     { row: 22, col: 'E', label: 'Hold Period (yrs, drives LT vs ST)',           kernel: null, formula: `=EffectiveHoldYears`,                  format: NUMBER_FORMATS.integer, secondary: true },
   ];
-  returnsCells.forEach(({ row, col, label, kernel, formula, format, secondary }) => {
+  returnsCells.forEach(({ row, col, label, kernel, formula, format, secondary, authoritative }) => {
     const labelCell = sheet.getCell(`${col}${row}`);
     labelCell.value = label;
     // Kernel row gets emphasis; modeled row gets muted styling so the
@@ -5940,6 +6028,9 @@ const buildDashboardSheet = (workbook, ctx) => {
     const valueCell = sheet.getCell(`${String.fromCharCode(col.charCodeAt(0) + 1)}${row}`);
     if (kernel != null) {
       valueCell.value = format === NUMBER_FORMATS.percent ? toPctDecimal(kernel) : kernel;
+    } else if (authoritative) {
+      // Kernel row with no stored value — a dash, not the modeled formula.
+      valueCell.value = '–';
     } else {
       valueCell.value = { formula };
     }

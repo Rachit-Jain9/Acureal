@@ -4,6 +4,17 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-13 (Workbook audit Batch 2 — the authoritative kernel series, embedded) (PR #969)
+
+A first-principles map (5-agent workflow) surfaced the decisive constraint the audit couldn't see: the deterministic kernel computes headline IRR/NPV on a **monthly** cash-flow series that is **never persisted** — only its quarterly aggregation survives on the deal record. So no amount of Excel-formula fixing can make the live engine bit-identical to the committed headline; chasing that is false precision. The honest, high-credibility move (and what a real IC model does): **show the committed numbers AND the sensitivity model, and reconcile them.**
+
+- **Committed Kernel Schedule block** appended to the Cash Flow Engine sheet: the kernel's authoritative period-by-period cash flow (net + cumulative) embedded verbatim as static cells — these figures existed **nowhere** in the workbook before — plus a committed IRR/NPV/equity-multiple recap and a plain note: *"Committed figures (deterministic kernel) govern at IC; the interactive engine above is a quarterly sensitivity approximation of the monthly kernel — small at-rest differences are expected; a material gap means an input was edited."* Purely additive (below all existing row anchors, sheet protection intact).
+- **Row-20 honesty fix**: the Dashboard "kernel" row no longer shows the modeled formula under a "(kernel)" label when the deal has no stored kernel value — it shows an em-dash.
+- Verified by building a real Jigani-shaped workbook: kernel net series lands verbatim `[-90.61, -18.2, …]`, committed IRR renders 13.58%, sheets protected, valid package. Backend 3,586/3,586 (2 new tests; 1 updated to the corrected behavior).
+- Deliberately **deferred**: the in-place quarterly-engine methodology rewrite (land front-load, S-curve, finance de-dup, capitalized IDC) — it changes every workbook's modeled numbers and **cannot be numerically verified** against the unpersisted monthly kernel, so it's queued to land alongside monthly-series exposure (the "fidelity endgame"), not shipped blind. The kernel anchor makes this lower-urgency: the reader now has the authoritative numbers regardless of engine approximation.
+
+---
+
 ## 2026-07-13 (Workbook audit remediation Batch 1 — single source of truth + money math) (PR #968)
 
 Operator supplied an external audit of two exported workbooks: four disagreeing headline sets (static Briefing text vs quarterly engine vs monthly engine vs AI narrative), a waterfall that never returns LP capital, unlevered+×4 IRR headline, a banner blind to negative NPV, retail `#NAME?` errors, `FFundefined` XML, no sheet protection, self-contradicting Analysis Notes. Ran a 5-agent mapping workflow over the 9.3k-line builder (exact line anchors + fix specs), then 2 implementation agents on disjoint files. **Batch 1 shipped**:
