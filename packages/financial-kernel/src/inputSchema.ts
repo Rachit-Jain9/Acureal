@@ -409,11 +409,23 @@ export function normalizeDealInput(args: NormalizeArgs): NormalizedDeal {
   }
 
   // Validate required fields.
+  //
+  // `landCostCr` is required + non-negative (>= 0), NOT strictly positive: a
+  // Joint Development Agreement contributes the land (zero cost), and owned-land
+  // / no-acquisition deals also have a zero land line. The only exception is
+  // `land_parcel`, where the land IS the deal — there it must be > 0. Every
+  // other required field stays strictly positive.
   const errors: Array<{ field: string; message: string }> = [];
+  const landMayBeZero = assetClass !== 'land_parcel';
   for (const req of REQUIRED_BY_CLASS[assetClass]) {
     const v = out[req];
-    if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0) {
-      errors.push({ field: req, message: 'is required, finite, and > 0' });
+    const allowZero = req === 'landCostCr' && landMayBeZero;
+    const ok = typeof v === 'number' && Number.isFinite(v) && (allowZero ? v >= 0 : v > 0);
+    if (!ok) {
+      errors.push({
+        field: req,
+        message: allowZero ? 'is required and finite (>= 0)' : 'is required, finite, and > 0',
+      });
     }
   }
   // Class-specific "any-of" requirements.

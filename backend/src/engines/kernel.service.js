@@ -49,6 +49,7 @@ const {
 } = kernel;
 
 const { FinancialGraph } = orchestration;
+const { applyJdaStructureAdjustment } = require('../utils/jdaStructure');
 
 // ── Rounding helpers (byte-compatible with financial.engine.js) ─────────────
 
@@ -644,9 +645,17 @@ function computeFullFinancials(input) {
   const { assetClass: _ac, ...raw } = input;
   void _ac;
 
+  // JDA / development-management structure adjustment (land contributed → 0,
+  // revenue net of the landowner share). Applied to the KERNEL input so EVERY
+  // derivation (result, legacy, capital stack, sensitivity, graph) is
+  // structure-correct. The UNTRANSFORMED operator inputs are echoed in `.inputs`
+  // below for the app form; `structureAdjustment` records what changed (null
+  // when the deal is not a JDA — the common case, zero overhead).
+  const { input: kraw, adjustment: structureAdjustment } = applyJdaStructureAdjustment(raw);
+
   let result;
   try {
-    result = computeDeal({ assetClass, raw });
+    result = computeDeal({ assetClass, raw: kraw });
   } catch (err) {
     if (err && err.name === 'DealInputError') {
       throw new Error(`Financial kernel input error: ${err.message}`);
@@ -659,20 +668,21 @@ function computeFullFinancials(input) {
   const flatRevenue = flattenRevenue(result.revenue);
   const flatKpis = flattenKpis(result.kpis);
 
-  const legacyShape = buildLegacyShape({ raw, result, assetClass });
-  const capitalStack = buildCapitalStack(assetClass, raw, result);
+  const legacyShape = buildLegacyShape({ raw: kraw, result, assetClass });
+  const capitalStack = buildCapitalStack(assetClass, kraw, result);
   const cashFlows = buildQuarterlyCashFlows(result);
   const proforma = input.skipProforma ? null : buildQuarterlyProforma(result);
   const sensitivityMatrix = input.skipSensitivity
     ? null
-    : buildSensitivityMatrix({ raw, assetClass });
+    : buildSensitivityMatrix({ raw: kraw, assetClass });
   const financialGraph = input.skipGraph
     ? null
-    : buildFinancialGraph(assetClass, raw, result, flatKpis, flatCosts, flatRevenue, capitalStack);
+    : buildFinancialGraph(assetClass, kraw, result, flatKpis, flatCosts, flatRevenue, capitalStack);
 
   return {
     assetClass,
     inputs: { ...raw, assetClass },
+    structureAdjustment,
     kpis: flatKpis,
     areas: flatAreas,
     costs: flatCosts,
@@ -708,8 +718,12 @@ function computeScenarios(input) {
   const { assetClass: _ac, ...raw } = input;
   void _ac;
 
+  // Same JDA structure adjustment as computeFullFinancials — scenarios must be
+  // shocked around the structure-correct base, not the full-land base.
+  const { input: kraw } = applyJdaStructureAdjustment(raw);
+
   const bundle = buildScenarios({
-    raw,
+    raw: kraw,
     assetClass,
     capitalStackFor: (perturbedRaw, result) =>
       buildCapitalStack(assetClass, perturbedRaw, result),
