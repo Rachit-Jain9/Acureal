@@ -2988,6 +2988,10 @@ const buildInputsSheet = (workbook, ctx) => {
       // self-documenting piece of underwriting knowledge.
       const indiaContext = INDIA_CONTEXT_NOTES[name];
       valueCell.note = [
+        // Discoverability: every engine formula that reads this input does so by
+        // this NAME — a live link to THIS cell (Formulas → Name Manager shows
+        // the full map). Editing this cell recalculates the whole workbook.
+        `Formula name: ${name} — engine formulas reference this cell by this name; edit here and every sheet recalculates.`,
         `Source: ${source.sourceName}`,
         `Confidence: ${source.confidence}`,
         `Freshness: ${source.freshness}`,
