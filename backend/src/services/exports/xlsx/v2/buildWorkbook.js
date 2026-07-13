@@ -138,6 +138,15 @@ const CATEGORICAL_OPTIONS = {
   ExitStrategyType: ['strategic_sale', 'reit_exit', 'hold_to_perpetuity', 'refinance_hold', 'outright_progressive', 'bulk_exit_completion', 'hold_post_completion'],
 };
 
+// Structural switches that were already resolved (in the app) before the
+// workbook was shaped — Asset Class picks which sections/sheets exist, Deal
+// Family drives income-vs-development math, Deal Type is metadata. Editing them
+// in Excel cannot re-shape a workbook that is already built, so a yellow
+// "editable" cell here is a lie: a user could set AssetClass="commercial" on a
+// residential workbook and nothing downstream would change. They render as
+// LOCKED, labelled reference cells instead (2026-07-13).
+const STRUCTURAL_INPUT_NAMES = new Set(['AssetClass', 'DealType', 'DealFamily']);
+
 const NUMBER_FORMATS = {
   currency: '#,##0.00;[Red](#,##0.00);–',
   percent: '0.0%;[Red](0.0%);–',
@@ -2912,7 +2921,11 @@ const buildInputsSheet = (workbook, ctx) => {
       // =SaleableAreaSqft/LoadingFactor. The named range still resolves so
       // downstream sheets can reference the derived value.
       const isDerivedFormula = value && typeof value === 'object' && typeof value.formula === 'string';
-      if (isDerivedFormula) {
+      // Structural switches are locked reference cells, not editable inputs —
+      // the workbook is already shaped for this deal's asset class / family, so
+      // editing them in Excel would silently desync the file from its own math.
+      const isStructural = STRUCTURAL_INPUT_NAMES.has(name);
+      if (isDerivedFormula || isStructural) {
         styleOutputCell(valueCell, format);
       } else {
         styleInputCell(valueCell);
@@ -2932,6 +2945,7 @@ const buildInputsSheet = (workbook, ctx) => {
         `Provenance: ${source.provenance}`,
         source.notes,
         indiaContext ? `\n── India context ──\n${indiaContext}` : null,
+        isStructural ? '\n── Structural — set in the app. Editing here does not reshape the model; change it on the deal and re-export.' : null,
       ].filter(Boolean).join('\n');
       // Categorical dropdown (PR-DD) — when the named range is one of the
       // entries in CATEGORICAL_OPTIONS, apply Excel's list-validation

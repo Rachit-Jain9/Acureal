@@ -5311,3 +5311,25 @@ describe('Committed Kernel Schedule block (2026-07-13 Batch 2)', () => {
     expect(findRowByLabel(cash, 'Net cash flow (INR Cr)')).toBeNull();
   });
 });
+
+describe('Structural switches are locked reference cells (2026-07-13)', () => {
+  test('Asset Class / Deal Type / Deal Family are NOT editable; numeric inputs stay editable', async () => {
+    const buffer = await buildDealWorkbookV2(minimalContext());
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const inp = wb.getWorksheet('Inputs & Assumptions');
+    const byLabel = {};
+    inp.eachRow((row) => { byLabel[String(row.getCell(1).value || '').trim()] = row.getCell(2); });
+
+    // Structural switches must not carry the explicit unlocked flag that
+    // editable inputs get — under sheet protection they are read-only.
+    for (const label of ['Asset Class', 'Deal Type', 'Deal Family']) {
+      const cell = byLabel[label];
+      expect(cell).toBeTruthy();
+      expect(cell.protection && cell.protection.locked).not.toBe(false);
+    }
+    // A real numeric input must remain explicitly unlocked (editable).
+    const area = byLabel['Saleable / Leasable Area (Super Built-up)'];
+    expect(area.protection.locked).toBe(false);
+  });
+});
