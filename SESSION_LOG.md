@@ -4,6 +4,19 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-13 (JDA structure-aware KERNEL math — REDIP now models Bengaluru's most common deal correctly) (PR #974)
+
+The single biggest structural accuracy fix in the model, built and verified end-to-end. Every generic tool — and, until now, REDIP's deterministic kernel — charges the developer the **full land cost** for every deal, even a Joint Development Agreement. But a JDA doesn't buy the land: the landowner **contributes** it for a share of revenue. So a JDA was modeled as value-destroying when it's often the opposite.
+
+- **The transform** (`backend/src/utils/jdaStructure.js`, pure + unit-tested): land = 0 (contributed → stamp duty auto-zeros), developer keeps (1 − share) of revenue. Revenue-share and area-share are economically identical for the developer, so a single revenue factor captures both — no per-deal basis needed for the math (operator decision honoured). Triggered by the presence of a valid landowner share (0<share<1) — an outright deal never carries one — so it lives at ONE boundary and covers every compute path without threading `deal_structure` everywhere.
+- **Applied in `computeFullFinancials` + `computeScenarios`** (kernel.service.js): every derivation (result, legacy shape, capital stack, sensitivity, graph, scenarios) runs on the structure-correct input; the echoed `.inputs` stay RAW so the app form shows what the operator typed; an auditable `structureAdjustment` records the change (null for non-JDA — zero overhead).
+- **Kernel schema relaxed** (`inputSchema.ts`): `landCostCr` is now required + non-negative (>= 0) for all classes except `land_parcel` (where the land IS the deal). Land = 0 is legitimately valid (JDA / contributed / owned-land); the engines already handled it downstream. Kernel rebuilt (`tsc`); CI + Vercel rebuild `dist` from source (gitignored, not committed).
+- **VERIFIED** on a real residential deal: land 90→0, stamp 4.5→0, revenue exactly ×0.75, cost 352→217 Cr, **NPV −53 → +9.8 Cr, IRR −1.5% → +20.5%** — a land-heavy deal flips from value-destroying to viable, correctly. Echoed inputs raw; no throw. Backend 3,601 + kernel 413 + 10 new JDA tests all green.
+- This corrects the AUTHORITATIVE numbers on every surface that reads the stored kernel output: Reports page, dashboard, PPTX, DOCX, and the workbook's committed kernel anchor.
+- **Immediate follow-on**: mirror the transform in the workbook's INTERACTIVE engine (so its live formulas match the now-correct anchor), handling the one subtlety — the comp-benchmark validator must compare the GROSS sell rate, not the net.
+
+---
+
 ## 2026-07-13 (Area-stack consistency validator + JDA math scoped for next session) (PR #973)
 
 Extended the proven WARN-validator pattern to the audit's other concrete accuracy finding — the loading-factor / carpet mismatch — and locked the JDA-math product decisions.
