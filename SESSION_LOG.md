@@ -4,6 +4,16 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-13 (Workbook per-deal tailoring — Deal Structure & Exit Playbook) (PRs #970, #971)
+
+Started the operator's headline ask ("catered and relevant to each deal type, structure, exit, asset type") on the now-corrected foundations. Diagnosis first: the workbook already tailors economics by **asset class** (dealBriefing economics builders) and narrative by **exit** (exit-phrase builders), and the enum-dropdown machinery is already mature — but **deal structure** (JDA revenue-share vs area-share vs DM vs outright) was only a label, though it changes the economics more than anything for a Bengaluru deal. Filled that gap.
+
+- **#970 — structural switches locked** (Asset Class / Deal Type / Deal Family): editable→locked reference cells (editing them in Excel can't reshape a built workbook), numeric inputs stay editable. Zero numeric impact.
+- **#971 — Deal Structure & Exit Playbook** on the Executive Briefing: a deterministic, closed-template block (no AI, no legal-lane assertions) that adapts to the resolved `{dealStructureLabel, exitStrategyType, landownerSharePct}`. Each structure gets its own *How it works / What to watch / Return basis* (JDA revenue-share: land contributed not purchased, co-promoter K-RERA, share as top-line deduction; area-share; DM fee mandate; outright), and each exit its own value-realisation note (progressive / bulk / hold / strategic-sale / **REIT (SEBI norms)** / LRD-refinance). Verified across JDA / outright / commercial-REIT builds — each reads distinctly. Additive to an existing sheet (no sheet-count change), protected, 2 new tests; backend 3,589 green.
+- Remaining per-deal tailoring (queued, on corrected foundations): structure-AWARE cash-flow math (JDA should zero land + apply share — a kernel concern), exit-specific sheet emphasis, asset-specific DD priority lists. The playbook makes the structure/exit intent explicit first, which de-risks those follow-ons.
+
+---
+
 ## 2026-07-13 (Workbook audit Batch 2 — the authoritative kernel series, embedded) (PR #969)
 
 A first-principles map (5-agent workflow) surfaced the decisive constraint the audit couldn't see: the deterministic kernel computes headline IRR/NPV on a **monthly** cash-flow series that is **never persisted** — only its quarterly aggregation survives on the deal record. So no amount of Excel-formula fixing can make the live engine bit-identical to the committed headline; chasing that is false precision. The honest, high-credibility move (and what a real IC model does): **show the committed numbers AND the sensitivity model, and reconcile them.**
