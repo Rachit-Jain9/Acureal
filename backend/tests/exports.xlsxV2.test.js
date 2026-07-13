@@ -1155,11 +1155,17 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       await wb.xlsx.load(buffer);
       const dash = wb.getWorksheet('Dashboard');
 
-      // Every KPI tile should be a formula (no kernel literals)
-      for (const ref of ['B4', 'D4', 'F4', 'B7', 'F7', 'B20', 'D20', 'F20']) {
+      // The MODELED tiles fall back to a live formula (no kernel literals).
+      for (const ref of ['B4', 'D4', 'F4', 'B7', 'F7']) {
         const v = dash.getCell(ref).value;
         expect(typeof v).toBe('object');
         expect(v.formula).toBeTruthy();
+      }
+      // The AUTHORITATIVE kernel row (20) must NOT masquerade the modeled
+      // formula under a "(kernel)" label when the kernel stored nothing — it
+      // shows an em-dash instead (honesty fix, 2026-07-13).
+      for (const ref of ['B20', 'D20', 'F20']) {
+        expect(dash.getCell(ref).value).toBe('–');
       }
     });
 
@@ -5254,5 +5260,54 @@ describe('workbook structural validation — sheet inventory (2026-07-12 regress
         expect.objectContaining({ message: expect.stringContaining('duplicate') }),
       ]),
     });
+  });
+});
+
+describe('Committed Kernel Schedule block (2026-07-13 Batch 2)', () => {
+  const findRowByLabel = (sheet, label) => {
+    let found = null;
+    sheet.eachRow((row, n) => {
+      if (!found && String(row.getCell(1).value || '').trim() === label) found = n;
+    });
+    return found;
+  };
+
+  test('embeds the kernel quarterly cash-flow series verbatim when present', async () => {
+    const ctx = minimalContext();
+    ctx.cashFlows = {
+      quarterly: [
+        { label: 'Q1', net: -90.61, cumulative: -90.61 },
+        { label: 'Q2', net: -12.34, cumulative: -102.95 },
+        { label: 'Q3', net: 45.5, cumulative: -57.45 },
+        { label: 'Q4', net: 160.2, cumulative: 102.75 },
+      ],
+    };
+    const buffer = await buildDealWorkbookV2(ctx);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const cash = wb.getWorksheet('Cash Flow Engine');
+
+    const titleRow = findRowByLabel(cash, 'Committed Kernel Schedule — deterministic engine (governs at IC)');
+    expect(titleRow).toBeTruthy();
+    const netRow = findRowByLabel(cash, 'Net cash flow (INR Cr)');
+    expect(netRow).toBeTruthy();
+    // The four kernel net figures land verbatim as STATIC numbers (B..E).
+    expect(cash.getCell(`B${netRow}`).value).toBeCloseTo(-90.61, 2);
+    expect(cash.getCell(`E${netRow}`).value).toBeCloseTo(160.2, 2);
+    // ...and they are plain numbers, never formulas (authoritative = static).
+    expect(typeof cash.getCell(`B${netRow}`).value).toBe('number');
+    // Committed KPI recap present.
+    expect(findRowByLabel(cash, 'Committed IRR (kernel)')).toBeTruthy();
+  });
+
+  test('renders a graceful note (no crash) when no kernel schedule is stored', async () => {
+    const buffer = await buildDealWorkbookV2(minimalContext()); // no cashFlows
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    const cash = wb.getWorksheet('Cash Flow Engine');
+    const titleRow = findRowByLabel(cash, 'Committed Kernel Schedule — deterministic engine (governs at IC)');
+    expect(titleRow).toBeTruthy();
+    // The "Net cash flow" data row must be ABSENT (no series to embed).
+    expect(findRowByLabel(cash, 'Net cash flow (INR Cr)')).toBeNull();
   });
 });
