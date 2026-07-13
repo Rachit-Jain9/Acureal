@@ -4,6 +4,25 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-13 (Workbook audit remediation Batch 1 — single source of truth + money math) (PR #968)
+
+Operator supplied an external audit of two exported workbooks: four disagreeing headline sets (static Briefing text vs quarterly engine vs monthly engine vs AI narrative), a waterfall that never returns LP capital, unlevered+×4 IRR headline, a banner blind to negative NPV, retail `#NAME?` errors, `FFundefined` XML, no sheet protection, self-contradicting Analysis Notes. Ran a 5-agent mapping workflow over the 9.3k-line builder (exact line anchors + fix specs), then 2 implementation agents on disjoint files. **Batch 1 shipped**:
+
+- **Live headline numbers**: Executive Briefing row 7 = formula strip referencing `Dashboard!B21/F21/D21` (always-formula modeled row); IRR/EM/NPV/margin numerals stripped from briefing prose (live cells own them; one-off assumptions stamped "(at generation)"); AI prompts barred from quoting financial figures.
+- **Waterfall Tier-0**: LP capital basis = actually-drawn equity accumulated from negative CF quarters (was a static stack estimate seeded at Q1 — pref accrued on undrawn capital, contributed capital never returned before promote); multiple denominators fixed; dead duplicate waterfall builder deleted.
+- **Honest returns**: headline = levered Equity IRR for both families; `IRR×4` → `(1+IRR)^4−1`; XIRR row matched; kernel row relabeled "Project IRR (kernel)" (kernel IRR is project-basis — verified in financial.service).
+- **Banner economics**: now flags negative modeled NPV, IRR below Hurdle 1, and (income) yield-on-cost below exit cap — a money-losing deal can no longer show a green banner.
+- **Cash-flow honesty**: RERA escrow released at completion (was trapped forever); possession dues (1−CollectionPct) collected at handover (was leaked) — both engines.
+- **Ship-blockers**: retail `#NAME?` (Calculations Revenue Build now family-conditional), `FFundefined` (palette resolve() guard class-wide + 2 bad tokens), dev-family Min-DSCR/RLV tiles replaced with Peak Debt Drawn / Total Equity Cash Flow, **sheet protection ON everywhere** (inputs stay editable) with the pre-download validator inverted to REQUIRE protection, Analysis Notes omits unavailable sections (never ships "Synthesis Unavailable") + deterministic gate strips risk-count contradictions and foreign figures.
+- Suites: backend 3,584/3,584 (5 new gate tests; 8 assertions updated that pinned the old buggy behavior). Canonical program state + Batch 2/3 backlog in memory `project_xlsx_workbook_program.md`.
+
+### Left for next (sequenced)
+- **Batch 2**: consolidate quarterly engine to monthly methodology in place (land Q1 front-load, S-curve, capitalized IDC, single finance cost) + hidden Q-vs-M tie-out rows; row-20 kernel-null fallback label fix.
+- **Batch 3**: GST works-contract/buyer split, Site Yield → Inputs seeding, dropdowns for every enum, comps engine rebuild (geo-filter/dedup/trim/≥3 verified), **per-deal-type/structure/exit tailored workbooks** (operator ask).
+- Data: "Commercial Retail" deal stored as residential_apartments with ₹0 ask — operator to correct the record or confirm intent.
+
+---
+
 ## 2026-07-12 (XLSX "export blocked" — real cause was a hand-bumped sheet ceiling) (PR #967 — merged + deployed)
 
 Operator reported the Excel export still broken ("XLSX export blocked: 1 required input missing or invalid"). Reproduced with his live session: the BULK export and sparse deals were fine, but **rich deals (Commercial Retail, Jigani) 422'd** — and the real blocker had nothing to do with inputs: *"Workbook contains 10 worksheets; maximum allowed is 9."*

@@ -47,10 +47,23 @@ const RAW = Object.freeze({
   formulaText:    '008000', // standard finance formula-green text
 });
 
-const css  = (token) => `#${RAW[token]}`;
-const pptx = (token) => RAW[token];
-const docx = (token) => RAW[token];
-const xlsx = (token) => `FF${RAW[token]}`;
+// Unknown-token guard: a typo'd token would otherwise interpolate `undefined`
+// into colour strings ('#undefined' / 'FFundefined'), which ExcelJS/pptxgenjs
+// silently accept and then produce corrupt or black artifacts. Fail soft to
+// the neutral label colour and log loudly so the typo is caught in review.
+const resolve = (token) => {
+  const hex = RAW[token];
+  if (!hex) {
+    console.warn(`[palette] unknown token "${token}" — falling back to mutedHigh`);
+    return RAW.mutedHigh;
+  }
+  return hex;
+};
+
+const css  = (token) => `#${resolve(token)}`;
+const pptx = (token) => resolve(token);
+const docx = (token) => resolve(token);
+const xlsx = (token) => `FF${resolve(token)}`;
 
 // Severity → semantic-data-token map. Consumers (risk renderers, DSCR cells,
 // IRR deltas) call `severityColor('critical', 'pptx')` etc.

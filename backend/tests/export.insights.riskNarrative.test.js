@@ -152,6 +152,79 @@ describe('PR-NX43 — generateRiskNarrative', () => {
     });
   });
 
+  describe('deterministic consistency gate (post-model, sentence-level removal)', () => {
+    test('zero critical+high: sentence claiming a critical risk exists is stripped; consistent sentences survive', async () => {
+      getProviderAvailability.mockReturnValue({ claude: true, gpt_compatible: false });
+      runClaudeReasoning.mockResolvedValueOnce(JSON.stringify({
+        summary_paragraph: 'The register is dominated by medium-severity approval items. A critical exposure threatens the deal.',
+        critical_spotlight_paragraph: 'No critical or high-severity risks are currently logged.',
+        confidence: 'medium',
+      }));
+      const out = await generateRiskNarrative(fixture({
+        items: [{ title: 'BBMP plan sanction pending', severity: 'medium', category: 'approvals', status: 'open', description: 'Filed recently.', mitigation: null }],
+        overrides: { riskCounts: { critical: 0, high: 0, medium: 1, low: 0 } },
+      }));
+      expect(out.available).toBe(true);
+      expect(out.summary_paragraph).toBe('The register is dominated by medium-severity approval items.');
+      // The negated ("no critical...") sentence is CONSISTENT with zero counts — it stays.
+      expect(out.critical_spotlight_paragraph).toMatch(/No critical or high-severity risks/);
+    });
+
+    test('nonzero critical+high: sentence claiming "no critical or high-severity risks" is stripped', async () => {
+      getProviderAvailability.mockReturnValue({ claude: true, gpt_compatible: false });
+      runClaudeReasoning.mockResolvedValueOnce(JSON.stringify({
+        summary_paragraph: 'Legal exposure concentrates in the conversion workstream. There are no critical or high-severity risks on this deal.',
+        critical_spotlight_paragraph: 'Conversion order pending and survey number discrepancy anchor the critical cluster.',
+        confidence: 'high',
+      }));
+      const out = await generateRiskNarrative(fixture({ items: sampleRisks }));
+      expect(out.available).toBe(true);
+      expect(out.summary_paragraph).toBe('Legal exposure concentrates in the conversion workstream.');
+      expect(out.critical_spotlight_paragraph).toMatch(/critical cluster/);
+    });
+
+    test('paragraph that fully contradicts the counts empties → envelope flips unavailable', async () => {
+      getProviderAvailability.mockReturnValue({ claude: true, gpt_compatible: false });
+      runClaudeReasoning.mockResolvedValueOnce(JSON.stringify({
+        summary_paragraph: 'No critical or high-severity risks exist on this deal.',
+        critical_spotlight_paragraph: 'Nothing rises to a deal-killer.',
+        confidence: 'high',
+      }));
+      const out = await generateRiskNarrative(fixture({ items: sampleRisks }));
+      expect(out.available).toBe(false);
+      expect(out.reason).toMatch(/consistency gate/);
+      expect(out.summary_paragraph).toBeNull();
+      expect(out.critical_spotlight_paragraph).toBeNull();
+    });
+
+    test('strips sentences quoting ₹ / % figures not present in the payload', async () => {
+      getProviderAvailability.mockReturnValue({ claude: true, gpt_compatible: false });
+      runClaudeReasoning.mockResolvedValueOnce(JSON.stringify({
+        summary_paragraph: 'Legal exposure dominates the register. The deal carries a projected IRR of 22% against ₹85 Cr of equity.',
+        critical_spotlight_paragraph: 'Conversion order pending remains the dominant open item.',
+        confidence: 'medium',
+      }));
+      const out = await generateRiskNarrative(fixture({ items: sampleRisks }));
+      expect(out.available).toBe(true);
+      expect(out.summary_paragraph).toBe('Legal exposure dominates the register.');
+      expect(out.summary_paragraph).not.toMatch(/22%|₹85/);
+      expect(out.critical_spotlight_paragraph).toMatch(/Conversion order pending/);
+    });
+
+    test('figure quoted FROM the payload survives the figure gate', async () => {
+      getProviderAvailability.mockReturnValue({ claude: true, gpt_compatible: false });
+      // sampleRisks description contains "2%" ("escalates 2% per delay quarter")
+      runClaudeReasoning.mockResolvedValueOnce(JSON.stringify({
+        summary_paragraph: 'The JDA escalation clause compounds at 2% per delay quarter, concentrating execution pressure.',
+        critical_spotlight_paragraph: 'Conversion order pending anchors the critical cluster.',
+        confidence: 'medium',
+      }));
+      const out = await generateRiskNarrative(fixture({ items: sampleRisks }));
+      expect(out.available).toBe(true);
+      expect(out.summary_paragraph).toMatch(/2% per delay quarter/);
+    });
+  });
+
   describe('envelope shape coercion', () => {
     test('valid JSON missing summary_paragraph → coerced to null (no crash)', async () => {
       getProviderAvailability.mockReturnValue({ claude: true, gpt_compatible: false });

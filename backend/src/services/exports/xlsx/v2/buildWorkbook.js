@@ -3708,9 +3708,13 @@ const buildMonthlyCashFlowSheet = (workbook, ctx) => {
     { label: 'Total development uses', row: 10, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}6+${col}7+${col}8+${col}9`, bold: true },
     { label: 'Monthly sales absorption', row: 11, format: NUMBER_FORMATS.percent, formula: (m, col, prevCol) => m === 1 ? '=IF(1<=SalesLagQ*3,0,MIN(SalesVelocityPct/3,1))' : `=IF(${m}<=SalesLagQ*3,0,MAX(0,MIN(SalesVelocityPct/3,1-SUM($B$11:${prevCol}$11))))`, total: 'final' },
     { label: 'Gross sales booked', row: 12, format: NUMBER_FORMATS.currency, formula: (m, col) => `=SaleableAreaSqft*SellRatePerSqft*${col}11*(1+EscalationPct)^(${m}/12)/10000000` },
-    { label: 'Customer collection', row: 13, format: NUMBER_FORMATS.currency, formula: (m, col) => `=IFERROR(SUM($B$12:$${lastMonthCol}$12)*CollectionPct*${col}7/SUM($B$7:$${lastMonthCol}$7),0)` },
+    // Final month carries the possession-dues true-up: the residual
+    // (1 - CollectionPct) of total booked sales is collected at handover.
+    { label: 'Customer collection', row: 13, format: NUMBER_FORMATS.currency, formula: (m, col) => m === months ? `=IFERROR(SUM($B$12:$${lastMonthCol}$12)*CollectionPct*${col}7/SUM($B$7:$${lastMonthCol}$7),0)+SUM($B$12:$${lastMonthCol}$12)*(1-CollectionPct)` : `=IFERROR(SUM($B$12:$${lastMonthCol}$12)*CollectionPct*${col}7/SUM($B$7:$${lastMonthCol}$7),0)` },
     { label: 'To RERA escrow', row: 14, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}13*RERAEscrowPct` },
-    { label: 'Escrow drawdown', row: 15, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=MIN(${col}14,${col}7)` : `=MIN(${prevCol}16+${col}14,${col}7)` },
+    // Final month: completion — release the entire entering escrow balance
+    // plus final additions (no MIN cap), so no cash stays trapped in escrow.
+    { label: 'Escrow drawdown', row: 15, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === months ? (m === 1 ? `=${col}14` : `=${prevCol}16+${col}14`) : (m === 1 ? `=MIN(${col}14,${col}7)` : `=MIN(${prevCol}16+${col}14,${col}7)`) },
     { label: 'Escrow balance', row: 16, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}14-${col}15` : `=${prevCol}16+${col}14-${col}15`, total: 'final' },
     { label: 'Net developer cash receipts', row: 17, format: NUMBER_FORMATS.currency, formula: (m, col) => `=(${col}13*(1-RERAEscrowPct)+${col}15)*(1-LandownerSharePct)`, bold: true },
     { label: 'Debt draw', row: 18, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=IF(${col}10>${col}17,MAX(0,MIN((${col}10-${col}17)*DebtLTV,TotalProjectCostCr*DebtLTV-${m === 1 ? '0' : `SUM($B$18:${prevCol}$18)`})),0)` },
@@ -4348,7 +4352,13 @@ const buildPhasingSheet = (workbook, ctx) => {
         const thisConstruction = `${thisCol}6`;
         // Guard against div-by-zero before construction starts
         // (totalConstruction is constant; only zero in degenerate cases).
-        return `=IFERROR(${totalSales}*CollectionPct*${thisConstruction}/${totalConstruction},0)`;
+        const base = `IFERROR(${totalSales}*CollectionPct*${thisConstruction}/${totalConstruction},0)`;
+        // Final quarter: possession-dues true-up — the residual
+        // (1 - CollectionPct) of total contracted sales is collected at
+        // handover, so lifetime collections foot to total sales rather
+        // than silently dropping the possession tranche.
+        if (q === ctx.totalQuarters) return `=${base}+${totalSales}*(1-CollectionPct)`;
+        return `=${base}`;
       },
       format: NUMBER_FORMATS.currency,
     },
@@ -4383,8 +4393,16 @@ const buildPhasingSheet = (workbook, ctx) => {
       // Drawdown is MIN of (balance entering quarter + escrow additions
       // this quarter, construction cost this quarter). For Q1 there's no
       // prior balance, so drawdown is MIN of (additions, construction).
+      // Final quarter: project completion — RERA releases the ENTIRE
+      // remaining escrow balance (entering balance + final additions),
+      // not just the construction-matched MIN, so no cash stays trapped.
       formula: (q) => {
         const thisCol = colLetter(q + 1);
+        if (q === ctx.totalQuarters) {
+          if (q === 1) return `=${thisCol}11`;
+          const prevCol = colLetter(q);
+          return `=${prevCol}14+${thisCol}11`;
+        }
         if (q === 1) return `=MIN(${thisCol}11,${thisCol}6)`;
         const prevCol = colLetter(q);
         return `=MIN(${prevCol}14+${thisCol}11,${thisCol}6)`;
@@ -4863,13 +4881,15 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
   const datedReturnStartRow = datedReturnTitleRow + 1;
   const dateStartCol = colLetter(2);
   const dateEndCol = colLetter(ctx.totalQuarters + 1);
-  // Legacy-row positions for the modeled-returns cash-flow row. Income
-  // family: row 12 = "Total Cash Flow Including Reversion (FCFE basis)"
-  // (PR-NX2 fix — was 11 = Reversion-only row, which made IRR/XIRR fail
-  // because the row was all-zeros except the final period). Development
-  // family: row 8 = "Project net cash flow" (Q1 already negative via
-  // construction outflows; IRR works).
-  const returnCfLegacyRow = ctx.dealFamily === 'income' ? 12 : 8;
+  // Legacy-row positions for the modeled-returns cash-flow row. Both
+  // families now use the LEVERED equity row 12 so XIRR here matches the
+  // Dashboard's modeled Equity IRR. Income family: row 12 = "Total Cash
+  // Flow Including Reversion (FCFE basis)" (PR-NX2 fix — was 11 =
+  // Reversion-only row, which made IRR/XIRR fail because the row was
+  // all-zeros except the final period). Development family: row 12 =
+  // "Equity cash flow" (was row 8 = unlevered project net cash flow,
+  // which diverged from the levered Dashboard headline).
+  const returnCfLegacyRow = 12;
   const datedCashFlowRow = cf(returnCfLegacyRow);
   const datedCashFlowRange = `$${dateStartCol}$${datedCashFlowRow}:$${dateEndCol}$${datedCashFlowRow}`;
   const datedDateRange = `$${dateStartCol}$3:$${dateEndCol}$3`;
@@ -4882,7 +4902,7 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
   [
     ['XIRR (modeled, dated)', `=IFERROR(XIRR(${datedCashFlowRange},${datedDateRange}),"–")`, NUMBER_FORMATS.percent, 'Annual return using quarter-end dates from row 3.'],
     ['XNPV (modeled, INR Cr)', `=IFERROR(XNPV(DiscountRatePct,${datedCashFlowRange},${datedDateRange}),0)`, NUMBER_FORMATS.currency, 'Date-aware present value using DiscountRatePct.'],
-    ['Cash-flow row used', `="Row ${datedCashFlowRow} | ${ctx.dealFamily === 'income' ? 'Total cash flow including reversion' : 'Project net cash flow'}"`, null, 'Matches the modeled return row used on the Dashboard.'],
+    ['Cash-flow row used', `="Row ${datedCashFlowRow} | ${ctx.dealFamily === 'income' ? 'Total cash flow including reversion' : 'Equity cash flow'}"`, null, 'Matches the modeled return row used on the Dashboard.'],
   ].forEach(([label, formula, format, note], idx) => {
     const r = datedReturnStartRow + idx;
     sheet.getCell(r, 1).value = label;
@@ -4950,7 +4970,8 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
  *   Row 4  — blank
  *   Row 5  — Section: "Summary"
  *   Row 6  — Summary text (single sentence, wrapped)
- *   Row 7  — blank
+ *   Row 7  — Live model figures (IRR / Equity Multiple / NPV formulas
+ *            linked to Dashboard row 21 — recalculate with Inputs edits)
  *   Row 8  — Section: "Key Points"
  *   Rows 9-12 — 4 bullet points (one per row)
  *   Row 13 — blank
@@ -5023,8 +5044,35 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   summaryCell.protection = { locked: true };
   sheet.getRow(6).height = 36;
 
-  // Row 7 blank spacer
-  sheet.getRow(7).height = 8;
+  // Row 7 — live model figures strip (repurposed spacer). The summary
+  // prose above is written at generation time; these three cells are
+  // FORMULAS into the Dashboard's modeled-returns row 21 (the always-
+  // formula sensitivity row — NOT row 20, which carries kernel literals),
+  // so the briefing headline recalculates when the operator edits Inputs.
+  sheet.mergeCells('A7:B7');
+  const liveNoteCell = sheet.getCell('A7');
+  liveNoteCell.value = 'Figures recalculate with the Inputs sheet; narrative below was written at generation time.';
+  liveNoteCell.font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedLow') } };
+  liveNoteCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
+  liveNoteCell.protection = { locked: true };
+  [
+    ['C7', 'Equity IRR (levered)', 'D7', `='${SHEETS.dashboard}'!B21`, NUMBER_FORMATS.percent],
+    ['E7', 'Equity Multiple', 'F7', `='${SHEETS.dashboard}'!F21`, NUMBER_FORMATS.multiple],
+    ['G7', 'NPV (INR Cr)',    'H7', `='${SHEETS.dashboard}'!D21`, NUMBER_FORMATS.currency],
+  ].forEach(([labelRef, label, valueRef, formula, format]) => {
+    const labelCell = sheet.getCell(labelRef);
+    labelCell.value = label;
+    labelCell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
+    labelCell.alignment = { horizontal: 'right', vertical: 'middle' };
+    labelCell.protection = { locked: true };
+    const valueCell = sheet.getCell(valueRef);
+    valueCell.value = formulaValue(formula, null);
+    valueCell.numFmt = format;
+    valueCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    valueCell.alignment = { horizontal: 'right', vertical: 'middle' };
+    valueCell.protection = { locked: true };
+  });
+  sheet.getRow(7).height = 18;
 
   // Row 8 — "Key Points" section title
   sheet.mergeCells('A8:H8');
@@ -5116,9 +5164,9 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
 // All three already populate `ctx.exportContext.risks.narrative`,
 // `ctx.exportContext.sensitivityNarrative`, and `ctx.exportContext.documents.insights`
 // via dealExport.service. The renderer reads them directly — no new service
-// calls — and falls back to a polite "Synthesis Unavailable" sub-section
-// when an envelope is `available: false`, so the workbook never breaks
-// regardless of AI provider state.
+// calls — and OMITS a section when its envelope is `available: false`
+// (one quiet line when nothing was generated), so the workbook never
+// breaks regardless of AI provider state.
 //
 // Sheet layout (8 columns wide, matching Executive Briefing's chrome):
 //
@@ -5127,9 +5175,12 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
 //   Row 3   — AI-Assisted disclosure banner (amber)
 //   Row 4   — spacer
 //
-//   ── Risk Profile Synthesis (rows 5–17) ──
-//   ── Sensitivity Narrative (rows 19–31) ──
-//   ── Document-Derived Insights (rows 33–N) ──
+//   Rows 5+ — the three sections render sequentially via a row cursor.
+//   Unavailable/failed sections are OMITTED (no placeholder band); when
+//   all three are unavailable a single quiet line renders at row 5.
+//   ── Risk Profile Synthesis ──
+//   ── Sensitivity Narrative ──
+//   ── Document-Derived Insights ──
 const buildAiSynthesisSheet = (workbook, ctx) => {
   const sheet = workbook.addWorksheet(SHEETS.aiSynthesis, {
     views: [{ showGridLines: false, state: 'normal' }],
@@ -5221,66 +5272,57 @@ const buildAiSynthesisSheet = (workbook, ctx) => {
     sheet.getRow(rowNum).height = 16;
   };
 
-  // ── Helper: render a "Synthesis Unavailable" placeholder block ──
-  // The raw `reason` is DELIBERATELY not rendered: it carries provider names,
-  // HTTP statuses, and env-var hints — operator diagnostics for logs and the
-  // admin dashboard, never a customer workbook (XLSX policy: zero AI mentions).
-  const renderUnavailable = (rowNum, sectionName, _reason) => {
-    sheet.mergeCells(`A${rowNum}:H${rowNum}`);
-    const cell = sheet.getCell(`A${rowNum}`);
-    cell.value = `Synthesis Unavailable — ${sectionName} could not be generated for this export run. The structured data on the adjacent sheets remains authoritative.`;
-    cell.font = { name: FONT, size: 10.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-    cell.fill = FILL(palette.xlsx('paperSubtle'));
-    cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
-    cell.protection = { locked: true };
-    sheet.getRow(rowNum).height = 48;
-  };
+  // Unavailable/failed sections are OMITTED entirely (2026-07-13). The old
+  // "Synthesis Unavailable — …" placeholder band advertised a failure in a
+  // customer-facing workbook; a section that couldn't be generated now
+  // simply doesn't render. A single quiet line covers the all-unavailable
+  // case so the sheet is never blank (sheet count stays stable). The raw
+  // `reason` is still never rendered: it carries provider names, HTTP
+  // statuses, and env-var hints — operator diagnostics only.
+  let cursor = 5;
+  let sectionsRendered = 0;
 
   // ── SECTION 1: Risk Profile Synthesis ──────────────────────────────
-  renderSectionBand(5, 'RISK PROFILE SYNTHESIS', palette.xlsx('dataNegative'));
   const riskNarrative = ctx.exportContext?.risks?.narrative || null;
-
   if (riskNarrative?.available && (riskNarrative.summary_paragraph || riskNarrative.critical_spotlight_paragraph)) {
-    renderEyebrow(6, 'SUMMARY');
-    renderBodyText(7, riskNarrative.summary_paragraph || '—', 56);
-    renderEyebrow(8, 'CRITICAL / HIGH-SEVERITY SPOTLIGHT');
-    renderBodyText(9, riskNarrative.critical_spotlight_paragraph || 'No critical or high-severity risks logged.', 56);
-    renderAttribution(10, riskNarrative);
-  } else {
-    renderUnavailable(6, 'risk profile synthesis', riskNarrative?.reason);
+    sectionsRendered += 1;
+    renderSectionBand(cursor, 'RISK PROFILE SYNTHESIS', palette.xlsx('dataNegative'));
+    renderEyebrow(cursor + 1, 'SUMMARY');
+    renderBodyText(cursor + 2, riskNarrative.summary_paragraph || '—', 56);
+    renderEyebrow(cursor + 3, 'CRITICAL / HIGH-SEVERITY SPOTLIGHT');
+    renderBodyText(cursor + 4, riskNarrative.critical_spotlight_paragraph || 'No critical or high-severity risks logged.', 56);
+    renderAttribution(cursor + 5, riskNarrative);
+    sheet.getRow(cursor + 6).height = 12; // spacer
+    cursor += 7;
   }
-
-  sheet.getRow(11).height = 12; // spacer
 
   // ── SECTION 2: Sensitivity Analysis Narrative ──────────────────────
-  renderSectionBand(12, 'SENSITIVITY ANALYSIS · NARRATIVE', palette.xlsx('accent'));
   const sensitivityNarrative = ctx.exportContext?.sensitivityNarrative || null;
-
   if (sensitivityNarrative?.available
       && (sensitivityNarrative.driver_decomposition_paragraph || sensitivityNarrative.stress_test_paragraph)) {
+    sectionsRendered += 1;
+    renderSectionBand(cursor, 'SENSITIVITY ANALYSIS · NARRATIVE', palette.xlsx('accent'));
     if (sensitivityNarrative.dominant_driver) {
-      renderEyebrow(13, `DOMINANT DRIVER: ${String(sensitivityNarrative.dominant_driver).toUpperCase()}`);
+      renderEyebrow(cursor + 1, `DOMINANT DRIVER: ${String(sensitivityNarrative.dominant_driver).toUpperCase()}`);
     } else {
-      renderEyebrow(13, 'DOMINANT DRIVER: NOT IDENTIFIED');
+      renderEyebrow(cursor + 1, 'DOMINANT DRIVER: NOT IDENTIFIED');
     }
-    renderEyebrow(14, 'DRIVER DECOMPOSITION');
-    renderBodyText(15, sensitivityNarrative.driver_decomposition_paragraph || '—', 56);
-    renderEyebrow(16, 'RECOMMENDED STRESS TESTS');
-    renderBodyText(17, sensitivityNarrative.stress_test_paragraph || '—', 56);
-    renderAttribution(18, sensitivityNarrative);
-  } else {
-    renderUnavailable(13, 'sensitivity narrative', sensitivityNarrative?.reason);
+    renderEyebrow(cursor + 2, 'DRIVER DECOMPOSITION');
+    renderBodyText(cursor + 3, sensitivityNarrative.driver_decomposition_paragraph || '—', 56);
+    renderEyebrow(cursor + 4, 'RECOMMENDED STRESS TESTS');
+    renderBodyText(cursor + 5, sensitivityNarrative.stress_test_paragraph || '—', 56);
+    renderAttribution(cursor + 6, sensitivityNarrative);
+    sheet.getRow(cursor + 7).height = 12; // spacer
+    cursor += 8;
   }
 
-  sheet.getRow(19).height = 12; // spacer
-
   // ── SECTION 3: Document-Derived Insights ───────────────────────────
-  renderSectionBand(20, 'DOCUMENT-DERIVED INSIGHTS', palette.xlsx('inkDeep'));
   const docInsights = ctx.exportContext?.documents?.insights || null;
-
   if (docInsights?.available && (docInsights.summary_paragraph || (Array.isArray(docInsights.findings) && docInsights.findings.length > 0))) {
-    renderEyebrow(21, 'CROSS-DOCUMENT SUMMARY');
-    renderBodyText(22, docInsights.summary_paragraph || '—', 56);
+    sectionsRendered += 1;
+    renderSectionBand(cursor, 'DOCUMENT-DERIVED INSIGHTS', palette.xlsx('inkDeep'));
+    renderEyebrow(cursor + 1, 'CROSS-DOCUMENT SUMMARY');
+    renderBodyText(cursor + 2, docInsights.summary_paragraph || '—', 56);
 
     const findings = Array.isArray(docInsights.findings) ? docInsights.findings : [];
     const sortedFindings = [...findings].sort((a, b) => {
@@ -5290,21 +5332,22 @@ const buildAiSynthesisSheet = (workbook, ctx) => {
 
     if (sortedFindings.length === 0) {
       // Positive-signal panel — quiet green band, one line.
-      sheet.mergeCells('A23:H23');
-      const goodCell = sheet.getCell('A23');
+      const goodRow = cursor + 3;
+      sheet.mergeCells(`A${goodRow}:H${goodRow}`);
+      const goodCell = sheet.getCell(`A${goodRow}`);
       goodCell.value = '✓  No inconsistencies detected across the extracted document set — a positive signal.';
       goodCell.font = { name: FONT, size: 10.5, italic: true, color: { argb: palette.xlsx('dataPositive') } };
       goodCell.fill = FILL('ECFDF5');
       goodCell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: true, indent: 1 };
       goodCell.protection = { locked: true };
-      sheet.getRow(23).height = 22;
-      renderAttribution(24, docInsights);
+      sheet.getRow(goodRow).height = 22;
+      renderAttribution(goodRow + 1, docInsights);
     } else {
-      renderEyebrow(23, `INCONSISTENCY FINDINGS (${sortedFindings.length})`);
+      renderEyebrow(cursor + 3, `INCONSISTENCY FINDINGS (${sortedFindings.length})`);
       // Each finding gets 2 rows: a severity-tagged title + a body row.
       // Cap at 6 findings so the workbook doesn't grow unbounded.
       const visible = sortedFindings.slice(0, 6);
-      let rowCursor = 24;
+      let rowCursor = cursor + 4;
       visible.forEach((finding) => {
         const sev = String(finding.severity || 'medium').toUpperCase();
         const sevArgb =
@@ -5351,8 +5394,18 @@ const buildAiSynthesisSheet = (workbook, ctx) => {
       }
       renderAttribution(rowCursor, docInsights);
     }
-  } else {
-    renderUnavailable(21, 'document-derived insights', docInsights?.reason);
+  }
+
+  // All three sections unavailable — one quiet line so the sheet is never
+  // blank (keeps the workbook's sheet count and tab order stable).
+  if (sectionsRendered === 0) {
+    sheet.mergeCells('A5:H5');
+    const noneCell = sheet.getCell('A5');
+    noneCell.value = 'No analysis notes were generated for this export.';
+    noneCell.font = { name: FONT, size: 10.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    noneCell.alignment = { horizontal: 'left', vertical: 'middle', indent: 1 };
+    noneCell.protection = { locked: true };
+    sheet.getRow(5).height = 22;
   }
 
   return sheet;
@@ -5400,9 +5453,13 @@ const buildDashboardSheet = (workbook, ctx) => {
   // Gross Margin B7 + Min DSCR D7. Income family uses NOI B4 + Modeled Cap
   // Rate D4 + Min DSCR B7.
   sheet.mergeCells('A3:N3');
+  // Extended (2026-07-13) with modeled-economics checks against the
+  // Returns block (B21 = modeled IRR, D21 = modeled NPV) and the
+  // Hurdle1IRR named input, so a deal that "has numbers" but fails its
+  // own hurdle economics no longer reads "✓ healthy".
   const sanityCheckFormula = ctx.dealFamily === 'income'
-    ? '=IF(IFERROR(B4,0)=0,"⚠ Set SaleableAreaSqft + BaseRentPerSqftMonth on the Inputs sheet to populate the Dashboard.",IF(IFERROR(B7,99)<1.2,"⚠ Min DSCR below 1.20 — review debt sizing inputs (PermMaxLTV / PermMinDCR / DebtRatePct).","✓ Deal status: Modeled operating returns look healthy. Edit Inputs sheet to run sensitivities."))'
-    : '=IF(IFERROR(B4,0)=0,"⚠ Set SaleableAreaSqft + SellRatePerSqft on the Inputs sheet to populate the Dashboard.",IF(IFERROR(D4,0)=0,"⚠ Set LandCostCr + ConstructionCostPerSqft on the Inputs sheet to populate cost.",IF(IFERROR(B7,0)<0,"⚠ Negative gross margin — review revenue or cost inputs.",IF(IFERROR(B7,0)<0.10,"⚠ Gross margin below 10% — stress-test SellRatePerSqft / construction cost.","✓ Deal status: Modeled returns look healthy. Edit Inputs sheet to run sensitivities."))))';
+    ? '=IF(IFERROR(B4,0)=0,"⚠ Set SaleableAreaSqft + BaseRentPerSqftMonth on the Inputs sheet to populate the Dashboard.",IF(IFERROR(B7,99)<1.2,"⚠ Min DSCR below 1.20 — review debt sizing inputs (PermMaxLTV / PermMinDCR / DebtRatePct).",IF(IFERROR(D21,1)<0,"⚠ Modeled NPV negative at the discount rate — cash flows do not clear the hurdle.",IF(AND(ISNUMBER(B21),B21<Hurdle1IRR),"⚠ Modeled IRR below Hurdle 1 — review rent, exit cap, or debt assumptions.",IF(IFERROR(D4,99)<IFERROR(F4,0),"⚠ Yield-on-cost below exit cap — negative development spread.","✓ Deal status: Modeled operating returns look healthy. Edit Inputs sheet to run sensitivities.")))))'
+    : '=IF(IFERROR(B4,0)=0,"⚠ Set SaleableAreaSqft + SellRatePerSqft on the Inputs sheet to populate the Dashboard.",IF(IFERROR(D4,0)=0,"⚠ Set LandCostCr + ConstructionCostPerSqft on the Inputs sheet to populate cost.",IF(IFERROR(B7,0)<0,"⚠ Negative gross margin — review revenue or cost inputs.",IF(IFERROR(B7,0)<0.10,"⚠ Gross margin below 10% — stress-test SellRatePerSqft / construction cost.",IF(IFERROR(D21,1)<0,"⚠ Modeled NPV negative at the discount rate.",IF(AND(ISNUMBER(B21),B21<Hurdle1IRR),"⚠ Modeled equity IRR below Hurdle 1.","✓ Deal status: Modeled returns look healthy. Edit Inputs sheet to run sensitivities."))))))';
   sheet.getCell('A3').value = { formula: sanityCheckFormula };
   sheet.getCell('A3').font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
   sheet.getCell('A3').alignment = { horizontal: 'left', vertical: 'middle' };
@@ -5514,8 +5571,14 @@ const buildDashboardSheet = (workbook, ctx) => {
         { row: 4, col: 'C', label: 'Total Project Cost (INR Cr)',     kernel: k.totalCost,          formula: `=${totalProjectCostRef}`,                                          format: NUMBER_FORMATS.currency, cached: cachedCosts.totalProjectCostCr },
         { row: 4, col: 'E', label: 'Project Net Cash Flow (INR Cr)', kernel: (k.totalRevenue != null && k.totalCost != null) ? (k.totalRevenue - k.totalCost) : null, formula: `=${cashflow}!${totalCol}${cfShift(8)}`,                                                                        format: NUMBER_FORMATS.currency, cached: (k.totalRevenue != null && k.totalCost != null) ? (k.totalRevenue - k.totalCost) : null },
         { row: 7, col: 'A', label: 'Gross Margin',                    kernel: k.grossMargin,        formula: `=IFERROR(${cashflow}!${totalCol}${cfShift(8)}/${phasing}!${totalCol}9,0)`,                                    format: NUMBER_FORMATS.percent, cached: k.grossMargin },
-        { row: 7, col: 'C', label: 'Min DSCR',                        kernel: null,                  formula: `=${cashflow}!${totalCol}${cfShift(13)}`,                                                                      format: NUMBER_FORMATS.multiple },
-        { row: 7, col: 'E', label: 'Residual Land Value (INR Cr)',    kernel: k.residualLandValue,  formula: `=${cashflow}!${totalCol}${cfShift(12)}`,                                                                      format: NUMBER_FORMATS.currency, cached: k.residualLandValue },
+        // Peak Debt Drawn: the debt-drawn row (cfShift(9)) holds per-quarter
+        // draws (all ≥ 0), so cumulative drawn is monotonic and its peak
+        // equals the row's Total-column SUM.
+        { row: 7, col: 'C', label: 'Peak Debt Drawn (INR Cr)',        kernel: null,                  formula: `=${cashflow}!${totalCol}${cfShift(9)}`,                                                                      format: NUMBER_FORMATS.currency },
+        // Total Equity Cash Flow: SUM of the equity-cash-flow row
+        // (cfShift(12)). Was mislabeled "Residual Land Value" — the formula
+        // never computed an RLV, so the kernel-cached RLV is dropped too.
+        { row: 7, col: 'E', label: 'Total Equity Cash Flow (INR Cr)', kernel: null,                 formula: `=${cashflow}!${totalCol}${cfShift(12)}`,                                                                      format: NUMBER_FORMATS.currency, cached: null },
       ];
   kpiCells.forEach(({ row, col, label, kernel, formula, format, cached }) => {
     const labelCell = sheet.getCell(`${col}${row}`);
@@ -5608,15 +5671,9 @@ const buildDashboardSheet = (workbook, ctx) => {
         { type: 'cellIs', operator: 'greaterThanOrEqual', formulae: [0], style: cfStyle('dataPositive'), priority: 2 },
       ],
     });
-    // Min DSCR (D7) — same red/amber/green thresholds as Cash Flow.
-    sheet.addConditionalFormatting({
-      ref: 'D7:D7',
-      rules: [
-        { type: 'cellIs', operator: 'lessThan',     formulae: [1.2],     style: cfStyle('dataNegative'), priority: 1 },
-        { type: 'cellIs', operator: 'between',      formulae: [1.2, 1.5], style: cfStyle('dataWarning'),  priority: 2 },
-        { type: 'cellIs', operator: 'greaterThan',  formulae: [1.5],     style: cfStyle('dataPositive'), priority: 3 },
-      ],
-    });
+    // D7 is now Peak Debt Drawn (a magnitude, not a ratio) — the old
+    // red-below-1.2 DSCR thresholds would misfire on it, so D7 carries
+    // no red/amber/green conditional formatting.
   }
 
   // ── KPI icon-set conditional formatting (PR-NX11 — 2026-05-15) ──────
@@ -5653,9 +5710,11 @@ const buildDashboardSheet = (workbook, ctx) => {
         { ref: 'B4', kpi: 'revenue',         label: 'Total Revenue' },
         { ref: 'D4', kpi: 'cost',            label: 'Total Project Cost' },
         { ref: 'F4', kpi: 'netCashFlow',     label: 'Project Net Cash Flow' },
-        { ref: 'B7', kpi: 'grossMargin',     label: 'Gross Margin' },
-        { ref: 'D7', kpi: 'minDscr',         label: 'Min DSCR' },
-        { ref: 'F7', kpi: 'residualLand',    label: 'Residual Land Value' },
+        { ref: 'B7', kpi: 'grossMargin',         label: 'Gross Margin' },
+        // No benchmark bands exist for these two keys — benchmarkFor()
+        // returns null and the icon-set/comment block safely skips them.
+        { ref: 'D7', kpi: 'peakDebtDrawn',       label: 'Peak Debt Drawn' },
+        { ref: 'F7', kpi: 'totalEquityCashFlow', label: 'Total Equity Cash Flow' },
       ];
 
   kpiTileMap.forEach(({ ref, kpi, label }, idx) => {
@@ -5804,17 +5863,21 @@ const buildDashboardSheet = (workbook, ctx) => {
   // exact cell ranges + chart specs each chart targets.
 
   // ── Returns block — IRR / NPV via native Excel functions ─────────────
-  // Cash flow row used for IRR / NPV is asset-class-aware:
+  // Cash flow row used for the modeled IRR / NPV is the LEVERED equity
+  // row in both families (legacy row 12):
   //   - Income deals: row 12 = "Total Cash Flow Including Reversion (FCFE
   //                            basis)" — Q1 has initial-equity outflow
   //                            injected so IRR can converge (PR-NX2).
-  //   - Development:  row 8  = "Project net cash flow" (Q1 negative via
-  //                            construction outflow — IRR already works).
-  // Excel's IRR() expects a contiguous range; NPV() takes a quarterly rate
-  // because the cash flows are quarterly.
+  //   - Development:  row 12 = "Equity cash flow" (post-debt-draw /
+  //                            interest / principal). Pre-fix this used
+  //                            row 8 = UNLEVERED project net cash flow,
+  //                            so the dev headline mixed an unlevered
+  //                            modeled IRR against levered expectations.
+  // Excel's IRR() expects a contiguous range; the quarterly IRR is
+  // annualized GEOMETRICALLY ((1+q)^4-1), not ×4.
   //
-  // Post-restructure: shift by cfOffset (income: 12→32, dev: 8→34).
-  const cfRow = cfShift(ctx.dealFamily === 'income' ? 12 : 8);
+  // Post-restructure: shift by cfOffset (income: 12→32, dev: 12→38).
+  const cfRow = cfShift(12);
   const cfRangeProper = `${cashflow}!$${colLetter(2)}$${cfRow}:$${colLetter(totalQ + 1)}$${cfRow}`;
 
   sheet.mergeCells('A19:F19');
@@ -5834,13 +5897,18 @@ const buildDashboardSheet = (workbook, ctx) => {
   // This pair makes the two views explicit + honest. Without it the
   // operator sees a single "Project IRR (modeled)" tile that doesn't
   // match the Reports page, and credibility collapses.
+  // Label honesty: the kernel's stored `irr` (deal.irr_pct) is the
+  // PROJECT/unlevered IRR (the kernel tracks leveredIrr separately), so
+  // row 20 keeps the "Project IRR (kernel)" label. Row 21 recomputes off
+  // the LEVERED equity row (cfRow above) and is labelled accordingly —
+  // divergence between the two is expected, not a reconciliation bug.
   const returnsCells = [
     // Kernel row 20 — authoritative
-    { row: 20, col: 'A', label: 'Project IRR (kernel)',    kernel: k.irr,            formula: `=IFERROR(IRR(${cfRangeProper})*4,"–")`,                                            format: NUMBER_FORMATS.percent },
+    { row: 20, col: 'A', label: 'Project IRR (kernel)',    kernel: k.irr,            formula: `=IFERROR((1+IRR(${cfRangeProper}))^4-1,"–")`,                                      format: NUMBER_FORMATS.percent },
     { row: 20, col: 'C', label: 'NPV (kernel, INR Cr)',    kernel: k.npv,            formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`,                       format: NUMBER_FORMATS.currency },
     { row: 20, col: 'E', label: 'Equity Multiple (kernel)', kernel: k.equityMultiple, formula: `=IFERROR((SUMIF(${cfRangeProper},">0"))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`,    format: NUMBER_FORMATS.multiple },
     // Modeled row 21 — sensitivity run
-    { row: 21, col: 'A', label: 'Project IRR (modeled)',    kernel: null, formula: `=IFERROR(IRR(${cfRangeProper})*4,"–")`,                                            format: NUMBER_FORMATS.percent, secondary: true },
+    { row: 21, col: 'A', label: 'Equity IRR (levered, modeled)', kernel: null, formula: `=IFERROR((1+IRR(${cfRangeProper}))^4-1,"–")`,                                      format: NUMBER_FORMATS.percent, secondary: true },
     { row: 21, col: 'C', label: 'NPV (modeled, INR Cr)',    kernel: null, formula: `=IFERROR(NPV((1+DiscountRatePct)^(1/4)-1,${cfRangeProper}),0)`,                       format: NUMBER_FORMATS.currency, secondary: true },
     { row: 21, col: 'E', label: 'Equity Multiple (modeled)', kernel: null, formula: `=IFERROR((SUMIF(${cfRangeProper},">0"))/ABS(SUMIF(${cfRangeProper},"<0")),"–")`,    format: NUMBER_FORMATS.multiple, secondary: true },
     // Post-Tax IRR row 22 — India LTCG/STCG-adjusted IRR. Multiplies the
@@ -6405,7 +6473,7 @@ const buildDashboardSheet = (workbook, ctx) => {
     {
       label: 'Landowner Contribution (JDA)',
       cr: isJv ? `=LandCostCr` : `=0`,
-      color: 'plum',
+      color: 'accentSoft',
     },
   ];
   capStackRows.forEach(({ label, cr, color }, idx) => {
@@ -6723,7 +6791,7 @@ const buildDashboardSheet = (workbook, ctx) => {
   const rangeCell = sheet.getCell(`G${rangeRow}`);
   rangeCell.value = { formula: `=G${scenarioHeaderRow + 1}-G${scenarioHeaderRow + weightedScenarios.length}` };
   rangeCell.numFmt = NUMBER_FORMATS.percent;
-  rangeCell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('inkSoft') } };
+  rangeCell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('mutedHigh') } };
   rangeCell.fill = FILL(palette.xlsx('paperSubtle'));
   rangeCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
@@ -7564,7 +7632,17 @@ const appendWaterfallToDebtSheet = (workbook, ctx) => {
       sheet.getCell(`A${r}`).value = `Q${q}`;
       sheet.getCell(`B${r}`).value = { formula: `='${SHEETS.cashFlowEngine}'!${cashFlowCol}$3` };
       sheet.getCell(`C${r}`).value = { formula: `=MAX(0,'${SHEETS.cashFlowEngine}'!${cashFlowCol}$${distributionCashFlowRow})` };
-      sheet.getCell(`D${r}`).value = { formula: q === 1 ? '=$B$137' : `=L${r - 1}` };
+      // Beg LP Capital accrues from ACTUALLY-DRAWN equity: the LP share of
+      // each quarter's negative equity cash flow on the Cash Flow Engine
+      // (same distribution row column C reads). Pre-fix Q1 seeded the whole
+      // capital-stack estimate ($B$137) up-front, overstating pref accrual
+      // and the capital-return tier for phased-drawdown deals.
+      const cfRef = `'${SHEETS.cashFlowEngine}'!${cashFlowCol}$${distributionCashFlowRow}`;
+      sheet.getCell(`D${r}`).value = {
+        formula: q === 1
+          ? `=MAX(0,-${cfRef})*LPEquityPct`
+          : `=L${r - 1}+MAX(0,-${cfRef})*LPEquityPct`,
+      };
       sheet.getCell(`E${r}`).value = { formula: q === 1 ? '=0' : `=M${r - 1}` };
       sheet.getCell(`F${r}`).value = { formula: `=D${r}*((1+PrefReturnRate)^(1/4)-1)` };
       sheet.getCell(`G${r}`).value = { formula: `=MIN(C${r},E${r}+F${r})` };
@@ -7592,16 +7670,22 @@ const appendWaterfallToDebtSheet = (workbook, ctx) => {
 
     const lastDataRow = firstDataRow + ctx.totalQuarters - 1;
     const summaryStartRow = lastDataRow + 3;
+    // Accumulated DRAWN equity (negative quarters of the distribution row
+    // on the Cash Flow Engine) — the honest multiple denominator. B137/B138
+    // (capital-stack LP/GP estimates) overstate contributed capital when
+    // equity is drawn progressively; the delta row below quantifies the gap.
+    const drawnEquityRange = `'${SHEETS.cashFlowEngine}'!$B$${distributionCashFlowRow}:$${lastCashFlowCol}$${distributionCashFlowRow}`;
     sheet.mergeCells(`A${summaryStartRow}:D${summaryStartRow}`);
     sheet.getCell(`A${summaryStartRow}`).value = 'Waterfall Summary';
     styleSectionTitle(sheet.getCell(`A${summaryStartRow}`));
     [
       ['Total LP Distributions (INR Cr)', `=SUM(N${firstDataRow}:N${lastDataRow})`, NUMBER_FORMATS.currency],
       ['Total GP Distributions (INR Cr)', `=SUM(O${firstDataRow}:O${lastDataRow})`, NUMBER_FORMATS.currency],
-      ['LP Equity Multiple', `=IFERROR(B${summaryStartRow + 1}/B137,0)`, NUMBER_FORMATS.multiple],
-      ['GP Equity Multiple', `=IFERROR(B${summaryStartRow + 2}/B138,0)`, NUMBER_FORMATS.multiple],
+      ['LP Equity Multiple', `=IFERROR(B${summaryStartRow + 1}/MAX(0.0001,-SUMIF(${drawnEquityRange},"<0")*LPEquityPct),0)`, NUMBER_FORMATS.multiple],
+      ['GP Equity Multiple', `=IFERROR(B${summaryStartRow + 2}/MAX(0.0001,-SUMIF(${drawnEquityRange},"<0")*GPEquityPct),0)`, NUMBER_FORMATS.multiple],
       ['GP Catch-Up Paid (INR Cr)', `=SUM(I${firstDataRow}:I${lastDataRow})`, NUMBER_FORMATS.currency],
       ['Residual Unallocated (INR Cr)', `=SUM(P${firstDataRow}:P${lastDataRow})`, NUMBER_FORMATS.currency],
+      ['Contributed vs capital-stack equity delta (INR Cr)', `=-SUMIF(${drawnEquityRange},"<0")-B${startRow + 6}`, NUMBER_FORMATS.currency],
       ['Selected Promote Tier', '=$G$135', null],
       ['Cash Flow Row Used', `="'${SHEETS.cashFlowEngine}' row ${distributionCashFlowRow} through ${lastCashFlowCol}${distributionCashFlowRow}"`, null],
     ].forEach(([label, formula, fmt], idx) => {
@@ -7733,217 +7817,12 @@ const appendWaterfallToDebtSheet = (workbook, ctx) => {
   return sheet;
 };
 
-/**
- * Sponsor / LP Waterfall sheet (PR-D) — multi-tier pour-over of project
- * equity proceeds between Sponsor (GP) and Limited Partners (LP),
- * matching the reference pro formas (NAIOP "Waterfall - IRR Hurdles"
- * sheet, RE-540 "Waterfall" sheet).
- *
- * Standard structure modelled here (v1 — simplified 3-tier):
- *   Tier 1: LP Preferred Return on outstanding equity (8% / year compounded)
- *   Tier 2: Return of LP Capital (LP gets capital back in full)
- *   Tier 3: Promote split — residual cash above pref+RoC split per the
- *           PromoteLPPct / PromoteGPPct named ranges (default 80/20)
- *
- * Deferred (separate PR): Sponsor catch-up tier (between RoC and promote)
- * and hurdle-laddered promote splits (e.g., 70/30 above 12% IRR, 60/40
- * above 15% IRR). Those require dynamic IRR-tier pour-through logic that's
- * expensive in Excel formulas — most early-stage operators don't model
- * past the simple promote anyway.
- *
- * Calculation method:
- *   Project Life N = LoanTermYears (proxy for hold period)
- *   Total Equity = Total Project Cost − Lender-Approved Loan (Debt Sizing!B28)
- *   LP Equity = Total Equity × LPEquityPct
- *   GP Equity = Total Equity × GPEquityPct
- *   LP Pref Cumulative = LP Equity × ((1 + PrefRate)^N − 1)
- *   Total Equity Proceeds = MAX(0, Total Revenue − Total Cost + Net Debt)
- *
- *   Distribution:
- *     Step 1: LP receives MIN(Proceeds, LP Equity + LP Pref Accrued)
- *             [pref + return of capital]
- *     Step 2: After Step 1, residual = Proceeds − Step 1 payout
- *             Promote split: LP × PromoteLPPct, GP × PromoteGPPct
- *     Step 3: GP also gets back GP Equity (return of GP capital) from
- *             their share of the promote split.
- *
- * Result rows: LP total return, GP total return, LP IRR (approx),
- * GP IRR (approx), LP equity multiple, GP equity multiple. The IRRs
- * are computed as ((1+gain)^(1/N))-1 single-period approximations.
- */
-const buildWaterfallSheet = (workbook, ctx) => {
-  const sheet = workbook.addWorksheet(SHEETS.waterfall, {
-    views: [{ showGridLines: false }],
-  });
-  sheet.columns = [
-    { width: 32 }, // A: Label
-    { width: 22 }, // B: Value
-    { width: 38 }, // C: Note
-  ];
-
-  // Title
-  sheet.mergeCells('A1:C1');
-  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Sponsor / LP Waterfall`;
-  styleSectionTitle(sheet.getCell('A1'));
-  sheet.getRow(1).height = 26;
-
-  sheet.mergeCells('A2:C2');
-  sheet.getCell('A2').value =
-    'Multi-tier pour-over of project equity proceeds. Tier 1: LP preferred return + return of capital. '
-    + 'Tier 2: Promote split (default 80% LP / 20% GP) on residual cash. Single-exit approximation; '
-    + 'institutional models use quarter-by-quarter pour-through.';
-  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
-  sheet.getRow(2).height = 32;
-
-  // ── Step 1 — Capital Stack (rows 4-9) ───────────────────────────────
-  // Total equity = Total Cost − Loan. LP/GP shares from named ranges.
-  sheet.mergeCells('A4:C4');
-  sheet.getCell('A4').value = 'Capital Stack';
-  styleSectionTitle(sheet.getCell('A4'));
-  sheet.getRow(4).height = 22;
-
-  // PR-I9: PremiumFSICostCr added to hardCost so it flows through the
-  // entire Total Project Cost roll-up (Calc Cost Build, Debt Sizing,
-  // Waterfall). When the named range is 0 (default), the math is
-  // unchanged from pre-PR-I9.
-  const hardCost = '(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000+ApprovalCostCr+PremiumFSICostCr)';
-  const softCost = `${hardCost}*(ArchitectFeePct+LegalFeePct+AppraisalFeePct+InsuranceConstPct+DeveloperOverheadPct)+LandCostCr*PropTaxConstPct`;
-  // India Statutory Levies (PR-I1): Stamp+Reg on land at acquisition,
-  // plus net-of-ITC GST on construction value. Asset-class-aware via the
-  // GstPct + StampRegPct named ranges seeded on the Inputs sheet.
-  const indiaLevies = `LandCostCr*StampRegPct+(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*GstPct`;
-  const totalCost = ctx.assetClass === 'hospitality'
-    ? 'TotalProjectCostCr'
-    : `${hardCost}+${softCost}+${indiaLevies}`;
-  const totalCostNote = ctx.assetClass === 'hospitality'
-    ? 'Hotel development budget from USALI Pro Forma'
-    : 'Hard + Soft + India Statutory Levies (matches Calculations!B28)';
-
-  const capitalRows = [
-    ['Total Project Cost (INR Cr)',     `=${totalCost}`,                              totalCostNote],
-    ['Lender-Approved Loan (INR Cr)',   `='${SHEETS.debtAndAmort}'!B28`,              'MIN of LTC/LTV/DCR/DY from Debt Sizing section'],
-    ['Total Equity (INR Cr)',           '=B5-B6',                                    'Project cost − loan'],
-    ['LP Equity (INR Cr)',              '=B7*LPEquityPct',                           'LP share × total equity'],
-    ['GP / Sponsor Equity (INR Cr)',    '=B7*GPEquityPct',                           'GP share × total equity'],
-  ];
-  capitalRows.forEach(([label, formula, note], idx) => {
-    const r = 5 + idx;
-    sheet.getCell(`A${r}`).value = label;
-    styleLabelCell(sheet.getCell(`A${r}`));
-    const cell = sheet.getCell(`B${r}`);
-    cell.value = { formula };
-    styleOutputCell(cell, NUMBER_FORMATS.currency);
-    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
-    sheet.getCell(`C${r}`).value = note;
-    sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-    sheet.getCell(`C${r}`).protection = { locked: true };
-  });
-
-  // ── Step 2 — Proceeds + Pref Accrual (rows 11-16) ───────────────────
-  // Total proceeds = project net cash flow. Pref accrues for N years.
-  sheet.mergeCells('A11:C11');
-  sheet.getCell('A11').value = 'Proceeds & Pref Return Accrual';
-  styleSectionTitle(sheet.getCell('A11'));
-  sheet.getRow(11).height = 22;
-
-  // Project life used for pref compounding — LoanTermYears as a proxy.
-  // For development deals this is typically ProjectMonths/12; for
-  // income deals it's hold-period. Operator can edit on the Inputs sheet.
-  const proceedsRows = [
-    ['Project Hold Period (years)',      '=LoanTermYears',                                          'Pref compounding period'],
-    ['Total Cash Available to Equity',   ctx.dealFamily === 'income'
-      ? `=MAX(0,${totalCost}+'${SHEETS.cashFlowEngine}'!N18*4*LoanTermYears-B6)`  // income: NOI × yrs − loan
-      : `=MAX(0,(SaleableAreaSqft*SellRatePerSqft/10000000)-${totalCost})+B6`, // dev: revenue − cost + loan amount returned
-      'After debt service across hold period'],
-    ['LP Pref Accrual (compounded)',     '=B8*((1+PrefReturnRate)^B12-1)',                          'LP Equity × ((1+pref)^N − 1)'],
-    ['Tier 1 LP Distribution',           '=MIN(B13,B8+B14)',                                        'LP gets capital + pref (capped at proceeds)'],
-    ['Residual after Tier 1 (INR Cr)',   '=MAX(0,B13-B15)',                                         'Cash available for promote split'],
-  ];
-  proceedsRows.forEach(([label, formula, note], idx) => {
-    const r = 12 + idx;
-    sheet.getCell(`A${r}`).value = label;
-    styleLabelCell(sheet.getCell(`A${r}`));
-    const cell = sheet.getCell(`B${r}`);
-    cell.value = { formula };
-    if (label.includes('years')) {
-      styleOutputCell(cell, NUMBER_FORMATS.integer);
-    } else {
-      styleOutputCell(cell, NUMBER_FORMATS.currency);
-    }
-    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
-    sheet.getCell(`C${r}`).value = note;
-    sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  });
-
-  // ── Step 3 — Promote Split (rows 18-22) ─────────────────────────────
-  // Above pref+RoC, residual splits per the promote ladder (default 80/20).
-  sheet.mergeCells('A18:C18');
-  sheet.getCell('A18').value = 'Tier 2 — Promote Split (above Pref + Return of Capital)';
-  styleSectionTitle(sheet.getCell('A18'));
-  sheet.getRow(18).height = 22;
-
-  const promoteRows = [
-    ['Promote — LP Allocation',     '=B16*PromoteLPPct',                                       'Residual × PromoteLPPct (default 80%)'],
-    ['Promote — GP Allocation',     '=B16*PromoteGPPct',                                       'Residual × PromoteGPPct (default 20%)'],
-    ['GP Return of Capital',         '=MIN(B9,B20)',                                          'GP also recovers their initial equity'],
-    ['GP Net Promote (after RoC)',  '=B20-B21',                                              'GP carry above capital recovery'],
-  ];
-  promoteRows.forEach(([label, formula, note], idx) => {
-    const r = 19 + idx;
-    sheet.getCell(`A${r}`).value = label;
-    styleLabelCell(sheet.getCell(`A${r}`));
-    const cell = sheet.getCell(`B${r}`);
-    cell.value = { formula };
-    styleOutputCell(cell, NUMBER_FORMATS.currency);
-    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
-    sheet.getCell(`C${r}`).value = note;
-    sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  });
-
-  // ── Step 4 — Final Returns (rows 24-30) ─────────────────────────────
-  sheet.mergeCells('A24:C24');
-  sheet.getCell('A24').value = 'Final Investor Returns';
-  styleSectionTitle(sheet.getCell('A24'));
-  sheet.getRow(24).height = 22;
-
-  // LP total = Tier 1 distribution (capital + pref) + LP promote share
-  // GP total = GP RoC + GP net promote
-  const returnsRows = [
-    ['LP Total Distribution (INR Cr)',  '=B15+B19',                                              'Tier 1 (pref + capital) + Tier 2 LP share'],
-    ['GP Total Distribution (INR Cr)',  '=B20',                                                  'Tier 2 GP share (includes capital + promote)'],
-    ['LP Equity Multiple',               '=IFERROR(B25/B8,0)',                                    'Total LP cash returned / LP capital invested'],
-    ['GP Equity Multiple',               '=IFERROR(B26/B9,0)',                                    'Total GP cash returned / GP capital invested'],
-    ['LP IRR (annualised, approx)',     '=IFERROR((B27)^(1/B12)-1,0)',                            'Single-exit approximation: (EM)^(1/years)−1'],
-    ['GP IRR (annualised, approx)',     '=IFERROR((B28)^(1/B12)-1,0)',                            'Single-exit approximation: (EM)^(1/years)−1'],
-  ];
-  returnsRows.forEach(([label, formula, note], idx) => {
-    const r = 25 + idx;
-    sheet.getCell(`A${r}`).value = label;
-    styleLabelCell(sheet.getCell(`A${r}`));
-    const cell = sheet.getCell(`B${r}`);
-    cell.value = { formula };
-    const fmt = label.includes('Multiple') ? NUMBER_FORMATS.multiple
-      : label.includes('IRR') ? NUMBER_FORMATS.percent
-      : NUMBER_FORMATS.currency;
-    styleOutputCell(cell, fmt);
-    cell.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx(label.includes('IRR') || label.includes('Multiple') ? 'dataPositive' : 'inkDeep') } };
-    sheet.getCell(`C${r}`).value = note;
-    sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  });
-
-  // Footer disclosure
-  sheet.mergeCells('A32:C32');
-  sheet.getCell('A32').value =
-    'Single-exit approximation: all cash assumed to arrive at end of hold period. Institutional templates '
-    + '(NAIOP, RE-540) use quarter-by-quarter pour-through with hurdle laddering (e.g., 70/30 above 12% IRR, '
-    + '60/40 above 15% IRR). The consolidated Debt Sizing & Amortization tab now carries the quarterly catch-up and hurdle ladder.';
-  sheet.getCell('A32').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell('A32').alignment = { vertical: 'top', wrapText: true };
-  sheet.getRow(32).height = 36;
-
-  return sheet;
-};
+// (2026-07-13) The standalone buildWaterfallSheet function (PR-D v1 —
+// single-exit 3-tier approximation on its own 'Sponsor LP Waterfall'
+// worksheet) was DELETED as dead code: nothing called it since the
+// 7-sheet consolidation folded the waterfall into the Debt Sizing &
+// Amortization sheet (appendWaterfallToDebtSheet above), and the test
+// suite asserts the standalone sheet must NOT exist.
 
 /**
  * Unit Mix sheet (PR-E) — asset-class-aware unit-by-unit breakdown
@@ -8478,13 +8357,26 @@ const buildCalculationsSheet = (workbook, ctx) => {
     ? `'${SHEETS.cashFlowEngine}'!${totalColLetter}11`
     : `'${SHEETS.cashFlowEngine}'!${totalColLetter}10`;
 
-  writeBlock('Revenue Build', [
-    ['Saleable area (sqft)',         '=SaleableAreaSqft',                               'From Inputs & Assumptions'],
-    ['Sell rate (INR / sqft)',       '=SellRatePerSqft',                                'From Inputs & Assumptions'],
-    ['Average escalation factor',    '=(1+EscalationPct)^(TotalQuarters/4/2)',          'Mid-period uplift (context only)'],
-    ['Total revenue (INR Cr)',       `=${revenueRef}`,                                  'Sum of phased quarter sales — matches Dashboard'],
-    ['Customer collected (INR Cr)',  `=${collectedRef}`,                                 'Sum of phased customer collection'],
-  ]);
+  // Family-conditional Revenue Build. The income family does NOT seed the
+  // SellRatePerSqft / EscalationPct named ranges (dev-family inputs), so
+  // referencing them here produced #NAME? on every income workbook. Both
+  // branches are EXACTLY 5 rows — downstream Cost Build refs (B8 revenue,
+  // B22/B23 marketing + finance) are position-dependent.
+  writeBlock('Revenue Build', ctx.dealFamily === 'income'
+    ? [
+        ['Leasable area (sqft)',         '=SaleableAreaSqft',                                'From Inputs & Assumptions'],
+        ['Base rent (INR / sqft / mo)',  '=BaseRentPerSqftMonth',                            'From Inputs & Assumptions'],
+        ['Average escalation factor',    '=(1+RentEscalationPct)^(TotalQuarters/4/2)',       'Mid-period uplift (context only)'],
+        ['Total revenue (INR Cr)',       `=${revenueRef}`,                                   'Sum of phased effective gross revenue — matches Dashboard'],
+        ['Customer collected (INR Cr)',  `=${collectedRef}`,                                  'Effective gross revenue collected'],
+      ]
+    : [
+        ['Saleable area (sqft)',         '=SaleableAreaSqft',                               'From Inputs & Assumptions'],
+        ['Sell rate (INR / sqft)',       '=SellRatePerSqft',                                'From Inputs & Assumptions'],
+        ['Average escalation factor',    '=(1+EscalationPct)^(TotalQuarters/4/2)',          'Mid-period uplift (context only)'],
+        ['Total revenue (INR Cr)',       `=${revenueRef}`,                                  'Sum of phased quarter sales — matches Dashboard'],
+        ['Customer collected (INR Cr)',  `=${collectedRef}`,                                 'Sum of phased customer collection'],
+      ]);
 
   // Cost Build (rows 12–28) — full institutional-grade breakdown.
   // Hard cost block (rows 12-15):
@@ -9005,8 +8897,17 @@ const validateXlsxBufferForDownload = async (xlsxBuffer, options = {}) => {
     if (tablePartsIndex !== -1 && legacyDrawingIndex !== -1 && legacyDrawingIndex > tablePartsIndex) {
       add(fieldLabel, 'Worksheet comments are serialized after table parts, which causes Excel to repair the sheet.', 'Normalize worksheet XML element order before download.');
     }
-    if (xml.includes('<sheetProtection')) {
-      add(fieldLabel, 'Worksheet protection is enabled.', 'Export workbooks must be editable without an unprotect prompt.');
+    // (2026-07-13) INVERTED: protection is now REQUIRED on every sheet
+    // (buildDealWorkbookV2 protects each worksheet with no password before
+    // writeBuffer). A sheet WITHOUT protection means locked output cells
+    // are freely editable — block the download. Also reject a protection
+    // config that blocks selecting unlocked cells (serialized as
+    // selectUnlockedCells="1" in OOXML) — that would stop the operator
+    // from editing the Inputs sheet.
+    if (!xml.includes('<sheetProtection')) {
+      add(fieldLabel, 'Worksheet protection is not enabled.', 'Every exported sheet must ship protected (input cells unlocked) so formula cells cannot be silently overwritten.');
+    } else if (/<sheetProtection[^>]*selectUnlockedCells="(1|true)"/.test(xml)) {
+      add(fieldLabel, 'Worksheet protection blocks selecting unlocked cells.', 'Input cells must remain selectable/editable — protect with selectUnlockedCells allowed.');
     }
 
     // PR-NX16: strict XML well-formedness check via xml-js parser
@@ -9099,6 +9000,25 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
     ctx.briefing = null;
   }
   const workbook = buildDealWorkbookV2Workbook(exportContext, { ...options, __preparedContext: ctx });
+  // ── Worksheet protection (2026-07-13) ─────────────────────────────────
+  // Every sheet ships protected (no password) so formula/output cells
+  // can't be silently overwritten — the sensitivity model stays trustable.
+  // Input cells stay editable: styleInputCell() unlocks them, and
+  // selectUnlockedCells/selectLockedCells both remain allowed. Formatting,
+  // sorting, and autofilter are allowed; structural edits (insert/delete
+  // rows) are not. The download validator REQUIRES this protection — the
+  // two must change together.
+  await Promise.all(workbook.worksheets.map((ws) => ws.protect('', {
+    selectLockedCells: true,
+    selectUnlockedCells: true,
+    formatCells: false,
+    formatColumns: true,
+    formatRows: true,
+    insertRows: false,
+    deleteRows: false,
+    sort: true,
+    autoFilter: true,
+  })));
   const raw = await workbook.xlsx.writeBuffer();
   const xlsxBuffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
 
