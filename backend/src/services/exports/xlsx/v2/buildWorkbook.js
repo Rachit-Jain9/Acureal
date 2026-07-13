@@ -9265,6 +9265,58 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
     ctx.briefing = null;
   }
   const workbook = buildDealWorkbookV2Workbook(exportContext, { ...options, __preparedContext: ctx });
+  // ── Inline cell references (2026-07-13, operator directive) ───────────
+  // Rewrite every formula so named-range tokens become the EXPLICIT cell
+  // address they point to: `SellRatePerSqft` → `'Inputs & Assumptions'!$B$18`.
+  // Functionally identical (names were already live links), but the operator
+  // wants the raw cell linkage visible in the formula bar. Names stay defined
+  // (Name Manager still documents the map). Skipped only in unit tests, which
+  // pin the readable-name form (same env pattern as strictValidation).
+  const inlineRefs = options.inlineCellRefs === true
+    || (options.inlineCellRefs !== false && process.env.NODE_ENV !== 'test');
+  if (inlineRefs) {
+    const nameMap = new Map();
+    const dnModel = (workbook.definedNames && workbook.definedNames.model) || [];
+    for (const entry of dnModel) {
+      if (entry && entry.name && Array.isArray(entry.ranges) && entry.ranges.length >= 1) {
+        // A name registered more than once (e.g. also on a secondary sheet)
+        // resolves to its Inputs-sheet cell — the canonical editable home.
+        const preferred = entry.ranges.find((r) => String(r).includes('Inputs')) || entry.ranges[0];
+        nameMap.set(entry.name, preferred);
+      }
+    }
+    if (nameMap.size) {
+      const names = [...nameMap.keys()].sort((a, b) => b.length - a.length);
+      const tokenPattern = new RegExp(`(?<![A-Za-z0-9_.])(${names.join('|')})(?![A-Za-z0-9_.])`, 'g');
+      const rewrite = (formula) => {
+        // Never rewrite inside string literals — split on quotes, transform
+        // only the even (outside-string) segments.
+        const parts = String(formula).split('"');
+        for (let i = 0; i < parts.length; i += 2) {
+          parts[i] = parts[i].replace(tokenPattern, (m) => nameMap.get(m) || m);
+        }
+        return parts.join('"');
+      };
+      workbook.worksheets.forEach((ws) => {
+        ws.eachRow({ includeEmpty: false }, (row) => {
+          row.eachCell({ includeEmpty: false }, (cell) => {
+            const v = cell.value;
+            if (v && typeof v === 'object' && typeof v.formula === 'string') {
+              const nf = rewrite(v.formula);
+              if (nf !== v.formula) cell.value = { ...v, formula: nf };
+            }
+          });
+        });
+        // Conditional-formatting rules carry formulas too (icon sets, custom
+        // expressions) — rewrite those as well so no name token survives.
+        (ws.conditionalFormattings || []).forEach((cf) => (cf.rules || []).forEach((rule) => {
+          if (Array.isArray(rule.formulae)) {
+            rule.formulae = rule.formulae.map((f) => (typeof f === 'string' ? rewrite(f) : f));
+          }
+        }));
+      });
+    }
+  }
   // ── Worksheet protection (2026-07-13) ─────────────────────────────────
   // Every sheet ships protected (no password) so formula/output cells
   // can't be silently overwritten — the sensitivity model stays trustable.
