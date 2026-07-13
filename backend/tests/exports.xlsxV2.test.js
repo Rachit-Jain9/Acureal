@@ -5449,3 +5449,27 @@ describe('Area-stack consistency validator (loading vs Site Yield, 2026-07-13)',
     expect(await warns(withSy(null, 0.0))).toBe(false);
   });
 });
+
+describe('No circular references in any generated formula (2026-07-13)', () => {
+  test('no formula references its own cell (the Q1 debt-drawn/principal bug class)', async () => {
+    const buffer = await buildDealWorkbookV2(minimalContext());
+    const zip = await JSZip.loadAsync(buffer);
+    const offenders = [];
+    for (const f of zip.file(/xl\/worksheets\/sheet\d+\.xml/)) {
+      const xml = await f.async('string');
+      for (const cm of xml.matchAll(/<c r="([A-Z]+\d+)"[^>]*>(?:<f[^>]*>([^<]*)<\/f>)?/g)) {
+        const addr = cm[1]; const formula = cm[2];
+        if (!formula) continue;
+        // Strip strings + cross-sheet refs, drop $ anchors, then token-match.
+        const clean = formula
+          .replace(/"[^"]*"/g, '')
+          .replace(/'[^']*'![A-Z$]+\d+(:[A-Z$]+\d+)?/g, '')
+          .replace(/\$/g, '');
+        if (clean.split(/[^A-Z0-9]+/).includes(addr)) {
+          offenders.push(`${f.name}!${addr} = ${formula.slice(0, 80)}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
