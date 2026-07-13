@@ -5375,3 +5375,41 @@ describe('Deal Structure & Exit Playbook (per-deal tailoring, 2026-07-13)', () =
     expect(text).toContain('SEBI REIT norms');
   });
 });
+
+describe('Structure-consistency validators (JDA land double-count, 2026-07-13)', () => {
+  const sheetsContain = async (ctx, needle) => {
+    const buf = await buildDealWorkbookV2(ctx);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buf);
+    let found = false;
+    wb.eachSheet((sh) => sh.eachRow((row) => row.eachCell((c) => {
+      const v = c.value;
+      const t = v && v.richText ? v.richText.map((r) => r.text).join('') : (typeof v === 'string' ? v : '');
+      if (t.includes(needle)) found = true;
+    })));
+    return found;
+  };
+
+  test('flags a JDA carrying a full land value (contributed land double-counted)', async () => {
+    const ctx = minimalContext();
+    ctx.deal.deal_structure = 'jda_revenue_share';
+    ctx.deal.model_params.inputs.landownerSharePct = 0.25;
+    ctx.deal.model_params.inputs.landCostCr = 90; // full value, not a deposit
+    expect(await sheetsContain(ctx, 'contributes land for a landowner share')).toBe(true);
+  });
+
+  test('does NOT flag a JDA with only a small refundable deposit', async () => {
+    const ctx = minimalContext();
+    ctx.deal.deal_structure = 'jda_revenue_share';
+    ctx.deal.model_params.inputs.landownerSharePct = 0.25;
+    ctx.deal.model_params.inputs.landCostCr = 1;
+    expect(await sheetsContain(ctx, 'contributes land for a landowner share')).toBe(false);
+  });
+
+  test('does NOT flag a normal outright purchase with a real land cost', async () => {
+    const ctx = minimalContext();
+    ctx.deal.deal_structure = 'outright';
+    ctx.deal.model_params.inputs.landCostCr = 90;
+    expect(await sheetsContain(ctx, 'contributes land for a landowner share')).toBe(false);
+  });
+});
