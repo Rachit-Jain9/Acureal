@@ -4884,8 +4884,11 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
     },
     {
       label: 'Debt drawn (INR Cr)',
+      // Q1 has NO prior draws — the "drawn so far" term must be 0, not
+      // SUM($B:B) of its own cell (that self-reference was a live circular
+      // reference Excel flagged in every exported workbook, 2026-07-13).
       formula: (q) =>
-        `=IF(${colLetters[q - 1]}${cf(8)}<0,MIN(-${colLetters[q - 1]}${cf(8)}*DebtLTV,(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000)*DebtLTV-IFERROR(SUM($B$${cf(9)}:${colLetters[q - 2] || colLetters[0]}${cf(9)}),0)),0)`,
+        `=IF(${colLetters[q - 1]}${cf(8)}<0,MIN(-${colLetters[q - 1]}${cf(8)}*DebtLTV,(LandCostCr+ConstructionCostPerSqft*SaleableAreaSqft/10000000)*DebtLTV-${q === 1 ? '0' : `IFERROR(SUM($B$${cf(9)}:${colLetters[q - 2]}${cf(9)}),0)`}),0)`,
       format: NUMBER_FORMATS.currency,
     },
     {
@@ -4898,8 +4901,10 @@ const buildCashFlowSheet = (workbook, ctx, opts = {}) => {
     },
     {
       label: 'Principal repayment (INR Cr)',
+      // Same Q1 rule: no prior repayments exist, so the "repaid so far" term
+      // is 0 in the first quarter (was a self-referencing circular).
       formula: (q) =>
-        `=IF(${colLetters[q - 1]}${cf(8)}>0,MIN(${colLetters[q - 1]}${cf(8)},IFERROR(SUM($B$${cf(9)}:${colLetters[q - 1]}${cf(9)}),0)-IFERROR(SUM($B$${cf(11)}:${colLetters[q - 2] || colLetters[0]}${cf(11)}),0)),0)`,
+        `=IF(${colLetters[q - 1]}${cf(8)}>0,MIN(${colLetters[q - 1]}${cf(8)},IFERROR(SUM($B$${cf(9)}:${colLetters[q - 1]}${cf(9)}),0)-${q === 1 ? '0' : `IFERROR(SUM($B$${cf(11)}:${colLetters[q - 2]}${cf(11)}),0)`}),0)`,
       format: NUMBER_FORMATS.currency,
     },
     {
