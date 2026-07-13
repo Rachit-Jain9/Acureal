@@ -4,6 +4,16 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-13 (Structure-consistency validator — surface the JDA land double-count) (PR #972)
+
+First-principles finding: the deterministic KERNEL has **zero** deal-structure handling — every asset engine (`packages/financial-kernel/src/assets/*`) charges full `landCostCr` regardless of whether the deal is an outright purchase or a JDA. So a JDA revenue-share deal is modeled as if the developer *bought* the land, when in a JDA the land is *contributed* for a revenue/area share — a real misstatement (overstated uses, understated developer return) for a very common Bengaluru structure. Making the *math* structure-aware is a large, multi-layer authoritative-engine change (inputSchema has no structure/landowner fields → orchestrator → 7 asset engines) that moves the Reports/IC numbers and must be verification-gated — a wrong JDA implementation is worse than the honest-but-crude current one.
+
+- **Shipped the safe, high-value precursor**: a deterministic **structure-consistency validator** in the workbook QA layer (same WARN-never-block pattern as `runMarketBenchmarkValidators`). It flags a JDA/DM carrying a *material* land cost (yardstick: > ₹5 Cr and > 10% of the construction base → almost certainly the full land value, not a deposit) as a double-count, and the converse (an outright purchase carrying a landowner share). No false-positives on legitimate deposits or clean outright deals (verified across 4 cases). This turns the silent misstatement into a visible, actionable flag on the QA register, and precisely scopes the eventual kernel fix (zero the land line + model the share).
+- Backend 3,592/3,592 (3 new tests). WARN-only — never blocks an export.
+- **Queued (verification-gated)**: the kernel JDA math itself — the single biggest remaining accuracy win, but a deliberate follow-on with hand-computed expected values, not a blind rush.
+
+---
+
 ## 2026-07-13 (Workbook per-deal tailoring — Deal Structure & Exit Playbook) (PRs #970, #971)
 
 Started the operator's headline ask ("catered and relevant to each deal type, structure, exit, asset type") on the now-corrected foundations. Diagnosis first: the workbook already tailors economics by **asset class** (dealBriefing economics builders) and narrative by **exit** (exit-phrase builders), and the enum-dropdown machinery is already mature — but **deal structure** (JDA revenue-share vs area-share vs DM vs outright) was only a label, though it changes the economics more than anything for a Bengaluru deal. Filled that gap.

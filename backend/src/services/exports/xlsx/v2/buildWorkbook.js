@@ -1410,6 +1410,35 @@ const buildExportQa = (ctx, options = {}) => {
     if (core.exitStrategyType === 'bulk_exit_completion') {
       pctRange('BulkExitDiscountPct', core.bulkExitDiscountPct, 'Bulk exit discount', 0, 0.9, 'Set a bulk-exit discount below 90%.');
     }
+
+    // Structure consistency — a JDA / DM contributes the land for a share, so a
+    // MATERIAL land cost double-counts it (land treated as both contributed AND
+    // purchased): it overstates project uses and understates the developer's
+    // return. WARN, not block — a small refundable deposit is legitimate. Yard-
+    // stick: a full land value typically rivals construction, so land above ~10%
+    // of the construction base (or > ₹5 Cr with no base to compare) is almost
+    // certainly the full value rather than a deposit. This is the surfaceable
+    // form of the JDA accuracy gap; the deterministic-kernel fix (zero the land
+    // line + model the share) is the follow-on this validator scopes.
+    const jdaConstructionBaseCr = (asFiniteNumber(core.constructionCostPerSqft) > 0 && asFiniteNumber(core.saleableAreaSqft) > 0)
+      ? (core.constructionCostPerSqft * core.saleableAreaSqft) / 1e7
+      : 0;
+    const jdaLandCr = asFiniteNumber(core.landCostCr) || 0;
+    if (core.dealStructureLabel !== 'outright_purchase'
+      && jdaLandCr > 5
+      && (jdaConstructionBaseCr <= 0 || jdaLandCr > 0.10 * jdaConstructionBaseCr)) {
+      addIssue('warn', 'Structure consistency', 'LandCostCr',
+        `This ${core.dealStructureLabel.replace(/_/g, ' ')} deal contributes land for a landowner share, yet carries a land cost of INR ${jdaLandCr.toFixed(2)} Cr — likely the full land value, not a refundable deposit. In a JDA the developer contributes land (no purchase), so a material land cost double-counts it: it overstates project uses and understates the developer's return.`,
+        'Set LandCostCr to the actual deposit (often ~0) and rely on the landowner share, or reclassify the deal as an outright purchase if the land was genuinely bought.',
+        core.dealStructureLabel);
+    }
+    // Converse — an outright purchase should not also carry a landowner share.
+    if (core.dealStructureLabel === 'outright_purchase' && asFiniteNumber(core.landownerSharePct) > 0) {
+      addIssue('warn', 'Structure consistency', 'LandownerSharePct',
+        `This outright-purchase deal also carries a ${(core.landownerSharePct * 100).toFixed(0)}% landowner share — the two are contradictory (an outright buyer owns 100% of the product).`,
+        'Remove the landowner share for an outright purchase, or change the structure to a JDA if a share genuinely applies.',
+        'outright_purchase');
+    }
   }
 
   if (!Array.isArray(ctx.exportContext?.documents?.items) || ctx.exportContext.documents.items.length === 0) {
