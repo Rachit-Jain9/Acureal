@@ -1448,6 +1448,26 @@ const buildExportQa = (ctx, options = {}) => {
     addIssue('warn', 'Market coverage', 'MarketComps', 'No verified comparable feed is present.', 'Attach verified comps or show the workbook as an internal sensitivity file only.', 'market data');
   }
 
+  // Area-stack consistency — the audit found the Inputs loading factor
+  // (super-built-up ÷ carpet) can disagree with a saved Site Yield study,
+  // silently over- or understating carpet area and every per-sqft metric
+  // derived from it. Surface it; do NOT silently change the area math — a
+  // loading of 1.0 (carpet = SBA) is legitimately correct for plotted land,
+  // so a blanket fix would break that class. WARN only, real studies only.
+  const syStudy = ctx.exportContext && ctx.exportContext.siteYield;
+  const syArea = syStudy && syStudy.computed && syStudy.computed.ok ? (syStudy.computed.areaSchedule || {}) : null;
+  if (syArea && syStudy.mode !== 'screening_defaults'
+    && asFiniteNumber(syArea.saleable_sqft) > 0 && asFiniteNumber(syArea.carpet_sqft) > 0) {
+    const studyLoading = syArea.saleable_sqft / syArea.carpet_sqft;
+    const inputsLoading = asFiniteNumber(core.loadingFactor) || 0;
+    if (inputsLoading > 0 && studyLoading > 0 && Math.abs(inputsLoading - studyLoading) / studyLoading > 0.10) {
+      addIssue('warn', 'Area-stack consistency', 'LoadingFactor',
+        `The Inputs loading factor (${inputsLoading.toFixed(2)}x) disagrees with the saved Site Yield study (${studyLoading.toFixed(2)}x = super built-up / carpet) by more than 10%. Carpet area — and every per-sqft metric derived from it — may be mis-stated.`,
+        'Reconcile the Inputs loading factor with the Site Yield programme, or re-run the Yield Studio and re-seed the area stack.',
+        'area stack');
+    }
+  }
+
   // PR-NX28 (2026-05-17) — comp-derived market-benchmark validators.
   // Adds WARN-level issues like "SellRatePerSqft is above the 95th
   // percentile of N verified nearby comps" with citation back to the

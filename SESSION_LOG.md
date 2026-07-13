@@ -4,6 +4,15 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-13 (Area-stack consistency validator + JDA math scoped for next session) (PR #973)
+
+Extended the proven WARN-validator pattern to the audit's other concrete accuracy finding — the loading-factor / carpet mismatch — and locked the JDA-math product decisions.
+
+- **#973 — Area-stack consistency validator**: flags when the Inputs loading factor disagrees with a saved Site Yield study's implied loading (super-built-up ÷ carpet) by >10%, surfacing the audit's "carpet overstated ~43%" case (Inputs 1.0× vs study 1.30×). WARN-only, real saved studies only (skips placeholder `screening_defaults`), no false-positives on matches or missing studies (verified 4 cases). Deliberately does NOT auto-fix the area math — loading = 1.0 is legitimately correct for plotted land, so a blanket fix would break that class. Backend 3,595 (3 new tests).
+- **JDA structure-aware KERNEL MATH — decisions LOCKED, scoped as the next focused build.** Investigated the authoritative engine from source: it's a COMPILED TS package (`packages/financial-kernel/dist`), every asset engine charges full `landCostCr`, and `computeFullFinancials` has 5 call-sites. Established the correct transform is simple and does NOT need a kernel `.ts` rebuild: **land = 0 (contributed) + `sellingRatePerSqft × (1 − share)`** — economically identical for revenue-share AND area-share (developer nets (1−share) of revenue on full-area construction either way), and the kernel already safely handles `landCostCr = 0`. Operator decisions locked (land = zero; basis varies per deal but doesn't change the math). Not shipped this session — it rewrites stored authoritative numbers (Jigani is a JV) across 5 call-sites + the workbook mirror + recompute-verify, which is a complete unit for a fresh session, not a tail-end rush. Full spec in memory `project_xlsx_workbook_program.md`.
+
+---
+
 ## 2026-07-13 (Structure-consistency validator — surface the JDA land double-count) (PR #972)
 
 First-principles finding: the deterministic KERNEL has **zero** deal-structure handling — every asset engine (`packages/financial-kernel/src/assets/*`) charges full `landCostCr` regardless of whether the deal is an outright purchase or a JDA. So a JDA revenue-share deal is modeled as if the developer *bought* the land, when in a JDA the land is *contributed* for a revenue/area share — a real misstatement (overstated uses, understated developer return) for a very common Bengaluru structure. Making the *math* structure-aware is a large, multi-layer authoritative-engine change (inputSchema has no structure/landowner fields → orchestrator → 7 asset engines) that moves the Reports/IC numbers and must be verification-gated — a wrong JDA implementation is worse than the honest-but-crude current one.
