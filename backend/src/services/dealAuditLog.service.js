@@ -59,6 +59,12 @@ const SUPPORTED_EVENT_TYPES = new Set([
   // delete / upload so the Audit tab shows the lifecycle of a deal's site study).
   'yield_study_saved', 'yield_study_deleted',
   'parcel_boundary_uploaded', 'parcel_boundary_deleted',
+  // Deal Registers (rent roll / sales & collections / hotel / occupants) —
+  // register settings, per-record lifecycle, one-row bulk imports, and
+  // immutable snapshot creation.
+  'register_settings_updated',
+  'register_record_created', 'register_record_updated', 'register_record_deleted',
+  'register_bulk_imported', 'register_snapshot_created',
 ]);
 
 // Postgres error codes we treat as "feature gracefully unavailable"

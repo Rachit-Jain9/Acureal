@@ -42,6 +42,12 @@ const VERSIONED_DEAL_TABLES = Object.freeze([
   'document_extractions',
   'deal_promoter_profiles',
   'deal_recommendation_verdicts',
+  // Deal Registers parent only — every record mutation recomputes the parent
+  // summary in the same transaction, bumping deal_registers.updated_at, so
+  // the parent row alone fingerprints all six record tables. (Until the
+  // 20260726 migration is applied, the missing table makes computeVersionKey
+  // return null → cache bypassed, workspace still correct.)
+  'deal_registers',
 ]);
 
 const DEFAULT_TTL_MS = 120_000; // 2 minutes
