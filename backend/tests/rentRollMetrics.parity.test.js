@@ -54,6 +54,18 @@ const FIXTURE = [
 ];
 
 describe('rentRollMetrics backend ↔ frontend parity', () => {
+  test('the frontend mirror is pure ESM (no CommonJS artifact that would crash the browser)', () => {
+    // A stray `module.exports` / `require` / bare `module` survives bundling
+    // (valid syntax) but throws "module is not defined" when the browser
+    // evaluates the ES module. Reject it at the source-text level; the live
+    // import in frontend/src/utils/__tests__/rentRollMetrics.test.js is the
+    // second line of defence.
+    expect(frontendSrc).not.toMatch(/\bmodule\.exports\b/);
+    expect(frontendSrc).not.toMatch(/\brequire\s*\(/);
+    expect(frontendSrc).not.toMatch(/^\s*module\b/m);
+    expect(frontendSrc).not.toMatch(/\b(process|__dirname|__filename)\b/);
+  });
+
   test('both sides export the same API surface', () => {
     expect(Object.keys(frontend).sort()).toEqual(Object.keys(backend).sort());
   });
