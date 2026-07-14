@@ -648,28 +648,3 @@ export const toLeaseExtract = (records, opts = {}) => {
       };
     });
 };
-
-module.exports = {
-  METRICS_VERSION,
-  SQFT_PER_ACRE,
-  PHYSICAL_STATUSES,
-  CONTRACTED_STATUSES,
-  isPresent,
-  num,
-  parseDate,
-  addMonthsUtc,
-  monthsBetween,
-  fyLabel,
-  monthlyBaseRentPaise,
-  monthlyMarketRentPaise,
-  annualGrossPaise,
-  securityDeposit,
-  nextEscalation,
-  effectiveRentRate,
-  renewalBand,
-  creditBand,
-  waleBand,
-  computeLeaseMetrics,
-  validateLeaseRoll,
-  toLeaseExtract,
-};
