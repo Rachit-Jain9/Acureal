@@ -1,5 +1,6 @@
 const { query } = require('../config/database');
 const { buildSiteYieldSlice } = require('./exports/yieldProgramme.service');
+const rentRollService = require('./rentRoll.service');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { inferAssetClass } = require('../utils/assetClass');
 const { percentile } = require('../utils/percentile');
@@ -1019,9 +1020,18 @@ const getDealExportContext = async (dealId, options = {}) => {
   // computable. Best-effort — never fails the export.
   const siteYield = await buildSiteYieldSlice({ deal }).catch(() => null);
 
+  // Deal Register slice — live records + metrics RECOMPUTED from live rows at
+  // export time (never the summary cache) + WARN-only consistency findings
+  // against the saved model inputs. Null when no register exists (or before
+  // the 20260726 migration). Best-effort — never fails the export.
+  const rentRoll = await rentRollService
+    .getExportSlice(dealId, modelParams?.inputs || null)
+    .catch(() => null);
+
   return {
     deal,
     siteYield,
+    rentRoll,
     recommendations: recommendationsSlice,
     deal_doctor: dealDoctorSlice,
     hasFinancialModel,

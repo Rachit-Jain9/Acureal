@@ -37,6 +37,7 @@ const bestUseSimulator = require('./bestUseSimulator.service');
 const dealStructureRecommender = require('./dealStructureRecommender.service');
 const capitalStackOptimizer = require('./capitalStackOptimizer.service');
 const karnatakaReraReadiness = require('./karnatakaReraReadiness.service');
+const rentRollService = require('./rentRoll.service');
 const { buildReraContext } = require('./rera/complianceContext');
 const reraConsistency = require('./rera/consistency');
 const complianceCalendar = require('./rera/complianceCalendar');
@@ -577,6 +578,11 @@ async function getDealWorkspace(dealId, options = {}) {
     capital_stack_optimizer: capitalStackSlice,
     karnataka_rera_readiness: reraReadinessSlice || { applicable: false, applicability: null, reason_if_not: 'unavailable', overall: null, buckets: [], gaps: [], fee_estimate: null, milestone: null, conditional_notes: [], consistency: null, compliance_calendar: null },
     ic_readiness: icReadinessSlice || { applicable: true, overall: null, buckets: [], gaps: [] },
+    // Deal Register (rent roll / sales & collections / hotel / occupants) —
+    // summary + settings only; the tab fetches full rows on demand via
+    // GET /deals/:id/rent-roll. Null until the register exists (or before the
+    // 20260726 migration is applied) — a valid empty state.
+    rent_roll: await rentRollService.getWorkspaceSlice(dealId).catch(() => null),
     generatedAt: new Date().toISOString(),
   };
 
