@@ -306,6 +306,22 @@ export const yieldStudioAPI = {
   deleteBoundary: (propertyId) => api.delete(`/properties/${propertyId}/boundary`),
 };
 
+// Deal Register — per-deal rent roll / sales & collections / hotel operating /
+// occupant registers. Record mutations carry the kind in the path (record ids
+// are per-table and can collide across kinds).
+export const rentRollAPI = {
+  get: (dealId) => api.get(`/deals/${dealId}/rent-roll`),
+  saveSettings: (dealId, body) => api.put(`/deals/${dealId}/rent-roll`, body),
+  createRecord: (dealId, body) => api.post(`/deals/${dealId}/rent-roll/records`, body),
+  updateRecord: (dealId, kind, recordId, body) =>
+    api.patch(`/deals/${dealId}/rent-roll/records/${kind}/${recordId}`, body),
+  deleteRecord: (dealId, kind, recordId) =>
+    api.delete(`/deals/${dealId}/rent-roll/records/${kind}/${recordId}`),
+  bulkInsert: (dealId, body) => api.post(`/deals/${dealId}/rent-roll/records/bulk`, body),
+  createSnapshot: (dealId, body) => api.post(`/deals/${dealId}/rent-roll/snapshots`, body),
+  listSnapshots: (dealId) => api.get(`/deals/${dealId}/rent-roll/snapshots`),
+};
+
 // Properties
 export const propertiesAPI = {
   list: (params) => api.get('/properties', { params }),
