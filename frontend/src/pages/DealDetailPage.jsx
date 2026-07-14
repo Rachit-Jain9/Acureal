@@ -30,6 +30,7 @@ import {
 // DealsPage renders, so a deal edited here can never carry a structure or
 // asset-class label that mismatches what was offered at creation.
 import { ASSET_CLASS_LABELS } from '../utils/assetClasses';
+import { REGISTER_TAB_LABELS, registerFamilyFor } from '../components/rentroll/rentRollColumns';
 import { DEAL_STRUCTURE_LABELS } from '../utils/dealStructures';
 import { isValidPair as isValidStructurePair } from '../utils/dealStructureMatrix';
 
@@ -47,6 +48,7 @@ const RiskTab      = lazy(() => import('../components/deal/RiskTab'));
 const CompsTab     = lazy(() => import('../components/deal/CompsTab'));
 const ZoningTab    = lazy(() => import('../components/deal/ZoningTab'));
 const AuditTab     = lazy(() => import('../components/deal/AuditTab'));
+const RentRollTab  = lazy(() => import('../components/rentroll/RentRollTab'));
 import ShareDealPanel from '../components/deal/ShareDealPanel';
 import DealWorkspaceTour from '../components/onboarding/DealWorkspaceTour';
 
@@ -68,6 +70,9 @@ const TABS = [
   { id: 'documents',  label: 'Documents' },
   { id: 'activity',   label: 'Activity' },
   { id: 'financial',  label: 'Financial' },
+  // Label adapts per register family (Rent Roll / Sales & Collections /
+  // Operating Roll / Occupants & Sales) where TABS feeds <Tabs>.
+  { id: 'rentroll',   label: 'Rent Roll' },
   { id: 'dd',         label: 'DD & Approvals' },
   { id: 'risk',       label: 'Risk' },
   { id: 'comps',      label: 'Market / Comps' },
@@ -419,9 +424,13 @@ export default function DealDetailPage() {
           </div>
         )}
 
-        {/* Tab navigation */}
+        {/* Tab navigation. The register tab's label follows the deal's
+            register family — a "Rent Roll" label on a plotted or hotel deal
+            would misdescribe what the register holds. */}
         <Tabs
-          items={TABS}
+          items={TABS.map((t) => (t.id === 'rentroll'
+            ? { ...t, label: REGISTER_TAB_LABELS[registerFamilyFor(deal.asset_class)] || t.label }
+            : t))}
           value={activeTab}
           onChange={setTab}
           ariaLabel="Deal sections"
@@ -452,6 +461,7 @@ export default function DealDetailPage() {
             {activeTab === 'risk' && <RiskTab />}
             {activeTab === 'comps' && <CompsTab />}
             {activeTab === 'audit' && <AuditTab />}
+            {activeTab === 'rentroll' && <RentRollTab canEdit={canEdit} />}
           </Suspense>
         </div>
 
