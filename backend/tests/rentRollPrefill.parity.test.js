@@ -147,11 +147,11 @@ describe('rentRollPrefill — behavior (hand-computed)', () => {
     expect(r.fields.map((f) => f.name)).not.toContain('baseRentPerSqftMonth');
   });
 
-  test('development-family classes are honestly unsupported', () => {
-    for (const cls of ['residential_apartments', 'villas', 'mixed_use', 'raw_land']) {
-      const r = backend.buildRegisterPrefill({ records: RECORDS, register: REGISTER, assetClass: cls });
+  test('classes without a bridge yet are honestly unsupported', () => {
+    for (const cls of ['residential_apartments', 'villas', 'mixed_use', 'hospitality', 'redevelopment']) {
+      const r = backend.buildRegisterPrefill({ records: { lease: RECORDS }, register: REGISTER, assetClass: cls });
       expect(r.supported).toBe(false);
-      expect(r.reason).toMatch(/development-family/);
+      expect(r.reason).toMatch(/does not have a register/);
     }
   });
 
@@ -170,11 +170,53 @@ describe('rentRollPrefill — behavior (hand-computed)', () => {
   test('provenance carries counts + as-of + metrics version', () => {
     expect(result.provenance).toMatchObject({
       source: 'rent_roll',
-      contractedLeases: 2,
+      basisCount: 2,
+      basisNoun: 'lease',
       totalRecords: 3,
       asOfDate: '2026-07-14',
     });
     expect(result.provenance.metricsVersion).toBeTruthy();
+  });
+});
+
+describe('rentRollPrefill — plotted (sales_collections) bridge', () => {
+  const SALE_RECORDS = {
+    sale: [
+      { id: 1, status: 'sold', area_sqft: 1500, base_price_per_sqft: 7200, agreement_value: 11500000, amount_collected: 9500000 },
+      { id: 2, status: 'booked', area_sqft: 2400, base_price_per_sqft: 7600, other_charges_amount: 950000, amount_collected: 6000000 },
+      { id: 3, status: 'unsold', area_sqft: 1200, base_price_per_sqft: 6900, current_market_rate: 8000 },
+    ],
+  };
+  const PARENT = { as_of_date: '2026-07-14', settings: {} };
+
+  const result = backend.buildRegisterPrefill({
+    records: SALE_RECORDS, register: PARENT, assetClass: 'plotted_development',
+  });
+  const byName = Object.fromEntries(result.fields.map((f) => [f.name, f]));
+
+  test('parity: frontend agrees on the plotted proposal', () => {
+    expect(frontend.buildRegisterPrefill({
+      records: SALE_RECORDS, register: PARENT, assetClass: 'plotted_development',
+    })).toEqual(result);
+  });
+
+  test('seeds selling rate (weighted sold base rate) + avg plot size only', () => {
+    expect(result.supported).toBe(true);
+    expect(result.fields.map((f) => f.name).sort()).toEqual(['avgPlotSizeSqft', 'sellingRatePerSqft']);
+    // (7200×1500 + 7600×2400) / 3900 = 7446.15 → rounded to whole ₹
+    expect(byName.sellingRatePerSqft.derived).toBe(7446);
+    expect(byName.sellingRatePerSqft.note).toMatch(/base list rate/i);
+    // mean of 1500 & 2400
+    expect(byName.avgPlotSizeSqft.derived).toBe(1950);
+  });
+
+  test('provenance uses the sold-unit basis', () => {
+    expect(result.provenance).toMatchObject({ source: 'rent_roll', basisCount: 2, basisNoun: 'sold unit' });
+  });
+
+  test('never seeds project land area from summed plot areas', () => {
+    expect(result.fields.map((f) => f.name)).not.toContain('totalLandSqft');
+    expect(result.fields.map((f) => f.name)).not.toContain('saleableLandPct');
   });
 });
 

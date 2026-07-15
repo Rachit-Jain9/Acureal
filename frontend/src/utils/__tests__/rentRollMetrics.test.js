@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 // parity test reads the file as text under a Node shim and could not catch it.)
 import {
   computeLeaseMetrics,
+  computeSaleMetrics,
   fyLabel,
   parseDate,
   monthlyBaseRentPaise,
@@ -37,5 +38,14 @@ describe('rentRollMetrics (frontend ESM mirror) evaluates in a browser-like modu
     expect(fyLabel(parseDate('2027-04-01'))).toBe('FY28');
     expect(monthlyBaseRentPaise(FIXTURE[0])).toBe(400000000);
     expect(toLeaseExtract(FIXTURE, { asOf: AS_OF })).toHaveLength(1);
+  });
+
+  it('computeSaleMetrics evaluates (sales family)', () => {
+    const m = computeSaleMetrics([
+      { id: 1, status: 'sold', area_sqft: 1000, agreement_value: 5000000, amount_collected: 4000000 },
+      { id: 2, status: 'unsold', area_sqft: 1200, base_price_per_sqft: 6900, current_market_rate: 8000 },
+    ], { as_of_date: AS_OF, settings: {} });
+    expect(m.collections.receivable).toBeCloseTo(1000000, 2);
+    expect(m.unsold.unsoldMtmPct).toBeCloseTo((8000 / 6900 - 1) * 100, 6);
   });
 });
