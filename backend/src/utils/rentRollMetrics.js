@@ -1248,12 +1248,274 @@ const validateHotelRoll = (recordsByKind = {}) => {
   return warnings;
 };
 
+// ── Redevelopment occupant family (Shape C: existing occupiers) ─────────────
+//
+// One row per existing occupier of a building slated for redevelopment. The
+// register captures the developer's REHOUSING obligations (the cost of clearing
+// the site) and the VACATION progress (execution risk — you cannot demolish
+// until occupiers move out). It never asserts a legal fact about title, consent
+// validity, or PAAA enforceability — those stay human-verified evidence.
+//
+// Two obligation kinds:
+//   • one-time payments — shifting allowance, brokerage, corpus, other;
+//   • transit rent — a monthly carry paid to the vacated occupier until the
+//     rehab unit is handed back. Escalates annually. The FORWARD (remaining)
+//     liability from the as-of date is what an underwriter funds; already-paid
+//     transit is sunk and not projected.
+
+const OCCUPANT_STATUSES = new Set(['in_place', 'vacated', 'disputed']);
+const OCCUPANT_VACATED_STATUS = 'vacated';
+const OCCUPANT_IN_PLACE_STATUS = 'in_place';
+
+const sumPaise = (v) => {
+  const n = num(v);
+  return n === null ? null : toPaise(n);
+};
+
+// The escalated monthly transit rate in effect at `atDate`, in paise. Transit
+// rent steps up every 12 months from its escalation anchor — the recorded
+// transit_rent_start, or an explicit `anchorOverride` (the forward projection
+// passes the projected vacation point when no start is recorded). Null when no
+// monthly rate is present; flat when no anchor or no escalation is known.
+const transitRatePaiseAt = (r, atDate, anchorOverride = null) => {
+  const monthly = num(r.transit_rent_monthly);
+  if (monthly === null) return null;
+  const esc = num(r.transit_rent_escalation_pct);
+  const anchor = anchorOverride || parseDate(r.transit_rent_start);
+  if (anchor === null || esc === null || esc === 0) return toPaise(monthly);
+  const yearsElapsed = Math.max(0, Math.floor(monthsBetween(anchor, atDate) / 12));
+  return Math.round(toPaise(monthly) * ((1 + esc / 100) ** yearsElapsed));
+};
+
+// A transit window is "active" as of `asOf` when it has begun and not ended.
+// Missing bounds are treated as open (a vacated occupier with a monthly rate
+// but no dates is being paid now); an in-place occupier has not yet moved out.
+const transitWindowActive = (r, asOf) => {
+  const start = parseDate(r.transit_rent_start);
+  const end = parseDate(r.transit_rent_end);
+  return (start === null || start <= asOf) && (end === null || end >= asOf);
+};
+
+// Forward (remaining) transit-rent liability from `asOf`, in paise, escalation-
+// compounded month by month — the same straight-line-over-term discipline as
+// effectiveRentRate. Returns null when the end of the window can't be resolved
+// (transit_rent_end, else rehab_possession_target); the row is then excluded
+// from the projection and counted, never guessed at.
+const transitRentRemainingPaise = (r, asOf) => {
+  const monthly = num(r.transit_rent_monthly);
+  if (monthly === null || monthly === 0) return 0;
+  const end = parseDate(r.transit_rent_end) || parseDate(r.rehab_possession_target);
+  if (end === null) return null;
+  const start = parseDate(r.transit_rent_start);
+  const remainingStart = start !== null && start > asOf ? start : asOf;
+  const months = Math.max(0, monthsBetween(remainingStart, end));
+  if (months <= 0) return 0;
+  // Escalate from the true start when known, else from the projected vacation
+  // point (remainingStart) — so an in-place occupier with no start date still
+  // steps up on the same schedule a vacated occupier projected from as-of
+  // would, rather than being silently projected flat.
+  const escAnchor = start !== null ? start : remainingStart;
+  let total = 0;
+  for (let i = 0; i < months; i += 1) {
+    total += transitRatePaiseAt(r, addMonthsUtc(remainingStart, i), escAnchor);
+  }
+  return total;
+};
+
+/**
+ * Compute the full redevelopment-occupant metric set.
+ *
+ * @param {Array<object>} records  live occupant_records rows (snake_case)
+ * @param {object} parent          deal_registers row ({ as_of_date, settings })
+ * @param {object} [opts]          { asOf?: Date|string }
+ */
+const computeOccupantMetrics = (records, parent = {}, opts = {}) => {
+  const asOf = parseDate(opts.asOf) || parseDate(parent.as_of_date) || new Date();
+  const rows = (records || []).filter((r) => r && !r.deleted_at);
+  const excluded = { missingCarpet: 0, missingEntitlement: 0, missingTransitEnd: 0 };
+
+  const counts = { total: rows.length, inPlace: 0, vacated: 0, disputed: 0 };
+
+  // Areas.
+  let existingCarpet = 0;
+  let vacatedCarpet = 0;
+  let rehabEntitlement = 0;
+  let additionalArea = 0;
+  let upliftExisting = 0;   // Σ existing carpet where entitlement also present
+  let upliftEntitlement = 0;
+
+  // Obligations (paise).
+  let shiftingP = 0;
+  let brokerageP = 0;
+  let corpusP = 0;
+  let otherP = 0;
+  let currentMonthlyTransitP = 0;
+  let transitRemainingP = 0;
+
+  // Risk.
+  const risk = { low: 0, medium: 0, high: 0, unspecified: 0 };
+  let disputedUnits = 0;
+
+  for (const r of rows) {
+    if (r.status === OCCUPANT_VACATED_STATUS) counts.vacated += 1;
+    else if (r.status === OCCUPANT_IN_PLACE_STATUS) counts.inPlace += 1;
+    else if (r.status === 'disputed') { counts.disputed += 1; disputedUnits += 1; }
+
+    const carpet = num(r.existing_carpet_area_sqft);
+    if (carpet !== null) {
+      existingCarpet += carpet;
+      if (r.status === OCCUPANT_VACATED_STATUS) vacatedCarpet += carpet;
+    } else {
+      excluded.missingCarpet += 1;
+    }
+
+    const entitlement = num(r.rehab_entitlement_sqft);
+    if (entitlement !== null) rehabEntitlement += entitlement;
+    else excluded.missingEntitlement += 1;
+
+    const additional = num(r.additional_area_sqft);
+    if (additional !== null) additionalArea += additional;
+
+    // Area-weighted uplift needs BOTH the existing and the entitlement area.
+    if (carpet !== null && carpet > 0 && entitlement !== null) {
+      upliftExisting += carpet;
+      upliftEntitlement += entitlement;
+    }
+
+    const shifting = sumPaise(r.shifting_allowance);
+    if (shifting !== null) shiftingP += shifting;
+    const brokerage = sumPaise(r.brokerage_amount);
+    if (brokerage !== null) brokerageP += brokerage;
+    const corpus = sumPaise(r.corpus_amount);
+    if (corpus !== null) corpusP += corpus;
+    const other = sumPaise(r.other_obligation_amount);
+    if (other !== null) otherP += other;
+
+    // Current transit run-rate: only occupiers who have actually moved out draw
+    // it (an in-place occupier's clock has not started), and only within an
+    // active window. The escalated current rate is the truthful run-rate.
+    if (r.status !== OCCUPANT_IN_PLACE_STATUS && transitWindowActive(r, asOf)) {
+      const rate = transitRatePaiseAt(r, asOf);
+      if (rate !== null) currentMonthlyTransitP += rate;
+    }
+
+    // Forward remaining liability covers every occupier who will draw transit
+    // rent (in-place included — they will once they vacate), provided the end
+    // of the window is resolvable.
+    const remaining = transitRentRemainingPaise(r, asOf);
+    if (remaining === null) excluded.missingTransitEnd += 1;
+    else transitRemainingP += remaining;
+
+    const band = r.documentation_risk;
+    if (band === 'low' || band === 'medium' || band === 'high') risk[band] += 1;
+    else risk.unspecified += 1;
+  }
+
+  const oneTimeP = shiftingP + brokerageP + corpusP + otherP;
+  const totalRehousingP = oneTimeP + transitRemainingP;
+  const totalRehabAreaSqft = rehabEntitlement + additionalArea;
+
+  return {
+    metricsVersion: METRICS_VERSION,
+    asOf: asOf.toISOString().slice(0, 10),
+    counts,
+    excluded,
+    vacancy: {
+      inPlaceUnits: counts.inPlace,
+      vacatedUnits: counts.vacated,
+      disputedUnits: counts.disputed,
+      vacatedByCountPct: counts.total > 0 ? (counts.vacated / counts.total) * 100 : null,
+      vacatedByAreaPct: existingCarpet > 0 ? (vacatedCarpet / existingCarpet) * 100 : null,
+      existingCarpetSqft: existingCarpet,
+      vacatedCarpetSqft: vacatedCarpet,
+    },
+    entitlement: {
+      existingCarpetSqft: existingCarpet,
+      rehabEntitlementSqft: rehabEntitlement,
+      additionalAreaSqft: additionalArea,
+      totalRehabAreaSqft,
+      avgUpliftPct: upliftExisting > 0 ? (upliftEntitlement / upliftExisting - 1) * 100 : null,
+    },
+    obligations: {
+      shiftingAllowanceTotal: fromPaise(shiftingP),
+      brokerageTotal: fromPaise(brokerageP),
+      corpusTotal: fromPaise(corpusP),
+      otherObligationTotal: fromPaise(otherP),
+      oneTimeTotal: fromPaise(oneTimeP),
+      currentMonthlyTransitRent: fromPaise(currentMonthlyTransitP),
+      annualizedTransitRunRate: fromPaise(currentMonthlyTransitP * 12),
+      transitRentRemaining: fromPaise(transitRemainingP),
+      totalRehousingObligation: fromPaise(totalRehousingP),
+      byType: [
+        { type: 'Transit rent (remaining)', amount: fromPaise(transitRemainingP) },
+        { type: 'Corpus', amount: fromPaise(corpusP) },
+        { type: 'Brokerage', amount: fromPaise(brokerageP) },
+        { type: 'Shifting', amount: fromPaise(shiftingP) },
+        { type: 'Other', amount: fromPaise(otherP) },
+      ],
+    },
+    risk: {
+      documentationRisk: risk,
+      highRiskUnits: risk.high,
+      disputedUnits,
+      atRiskUnits: rows.filter(
+        (r) => r.status === 'disputed' || r.documentation_risk === 'high',
+      ).length,
+    },
+  };
+};
+
+const validateOccupantRoll = (records, parent = {}) => {
+  const warnings = [];
+  const rows = (records || []).filter((r) => r && !r.deleted_at);
+  const add = (code, message, recordIds = []) => warnings.push({ code, message, recordIds });
+
+  const belowExisting = rows.filter((r) => {
+    const carpet = num(r.existing_carpet_area_sqft);
+    const entitlement = num(r.rehab_entitlement_sqft);
+    return carpet !== null && entitlement !== null && entitlement < carpet;
+  });
+  if (belowExisting.length > 0) {
+    add('entitlement_below_existing',
+      `${belowExisting.length} occupant(s) have a rehab entitlement smaller than their existing carpet area.`,
+      belowExisting.map((r) => r.id));
+  }
+
+  const badTransitDates = rows.filter((r) => {
+    const start = parseDate(r.transit_rent_start);
+    const end = parseDate(r.transit_rent_end);
+    return start && end && end < start;
+  });
+  if (badTransitDates.length > 0) {
+    add('transit_end_before_start',
+      `${badTransitDates.length} occupant(s) have a transit-rent end date before its start.`,
+      badTransitDates.map((r) => r.id));
+  }
+
+  const negatives = rows.filter((r) => {
+    for (const col of ['transit_rent_monthly', 'shifting_allowance', 'brokerage_amount',
+      'corpus_amount', 'other_obligation_amount']) {
+      const v = num(r[col]);
+      if (v !== null && v < 0) return true;
+    }
+    return false;
+  });
+  if (negatives.length > 0) {
+    add('negative_obligation',
+      `${negatives.length} occupant(s) carry a negative rehousing obligation amount.`,
+      negatives.map((r) => r.id));
+  }
+
+  return warnings;
+};
+
 module.exports = {
   METRICS_VERSION,
   SQFT_PER_ACRE,
   PHYSICAL_STATUSES,
   CONTRACTED_STATUSES,
   SALE_SOLD_STATUSES,
+  OCCUPANT_STATUSES,
   isPresent,
   num,
   parseDate,
@@ -1278,4 +1540,7 @@ module.exports = {
   daysInMonth,
   computeHotelMetrics,
   validateHotelRoll,
+  transitRentRemainingPaise,
+  computeOccupantMetrics,
+  validateOccupantRoll,
 };

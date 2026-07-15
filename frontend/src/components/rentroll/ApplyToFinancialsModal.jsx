@@ -24,6 +24,14 @@ const fmtValue = (v, unit) => {
   return grouped;
 };
 
+const compactINR = (n) => {
+  if (!Number.isFinite(Number(n))) return '—';
+  const v = Number(n);
+  if (Math.abs(v) >= 1e7) return `₹${(v / 1e7).toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr`;
+  if (Math.abs(v) >= 1e5) return `₹${(v / 1e5).toLocaleString('en-IN', { maximumFractionDigits: 2 })} L`;
+  return `₹${Math.round(v).toLocaleString('en-IN')}`;
+};
+
 const differs = (current, derived) => {
   const c = Number(current);
   if (current === null || current === undefined || current === '' || !Number.isFinite(c)) return true;
@@ -113,17 +121,28 @@ export default function ApplyToFinancialsModal({
     );
   }
 
-  // Supported class, but nothing derivable (e.g. sourcing-stage rows with no
-  // areas or rents yet) — say so honestly instead of an empty comparison.
+  // Supported class, but no model INPUT is derivable yet (e.g. sourcing-stage
+  // rows with no areas or rates). Say so honestly — and still surface any cost
+  // signal (e.g. a redevelopment rehousing obligation), which is the register's
+  // core output and must never disappear behind a "nothing derivable" message.
   if (proposal.fields.length === 0) {
     return (
       <Modal open={open} onClose={onClose} title="Apply register to Financials" size="md"
         footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
         <p className="text-sm text-content-secondary">
-          Nothing can be derived from the register yet — the recorded leases are missing the
-          figures the model needs (chargeable areas and base rents, or a total leasable area).
-          Fill those in on the Rent Roll tab and this comparison will populate.
+          {proposal.costSignal
+            ? 'No model inputs can be derived from the register yet, but it surfaces an obligation to carry into the model manually:'
+            : 'Nothing can be derived from the register yet — the recorded rows are missing the figures the model needs (areas and rates). Fill those in on the register tab and this comparison will populate.'}
         </p>
+        {proposal.costSignal && (
+          <div className="mt-3 rounded-editorial border border-hairline bg-bg-secondary px-3 py-2.5">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-medium text-content-primary">{proposal.costSignal.label}</span>
+              <span className="text-sm font-semibold tabular-nums text-content-primary">{compactINR(proposal.costSignal.amount)}</span>
+            </div>
+            <p className="text-xs text-content-muted mt-1">{proposal.costSignal.note}</p>
+          </div>
+        )}
       </Modal>
     );
   }
@@ -194,6 +213,15 @@ export default function ApplyToFinancialsModal({
           </tbody>
         </table>
       </div>
+      {proposal.costSignal && (
+        <div className="mt-3 rounded-editorial border border-hairline bg-bg-secondary px-3 py-2.5">
+          <div className="flex items-baseline justify-between gap-3">
+            <span className="text-sm font-medium text-content-primary">{proposal.costSignal.label}</span>
+            <span className="text-sm font-semibold tabular-nums text-content-primary">{compactINR(proposal.costSignal.amount)}</span>
+          </div>
+          <p className="text-xs text-content-muted mt-1">{proposal.costSignal.note}</p>
+        </div>
+      )}
       <p className="text-xs text-content-muted mt-3">
         Rent figures are gross — for JDA/JV structures the model applies the ownership share downstream.
         Applying freezes a register snapshot; the saved model cites it, and REDIP warns if the register changes afterwards.

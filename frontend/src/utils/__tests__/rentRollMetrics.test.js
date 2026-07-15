@@ -9,6 +9,7 @@ import {
   computeLeaseMetrics,
   computeSaleMetrics,
   computeHotelMetrics,
+  computeOccupantMetrics,
   fyLabel,
   parseDate,
   monthlyBaseRentPaise,
@@ -58,5 +59,20 @@ describe('rentRollMetrics (frontend ESM mirror) evaluates in a browser-like modu
     expect(m.keys.availableKeys).toBe(100);
     expect(m.operating.basis).toBe('room_nights');
     expect(m.operating.ttmOwnerNoi).toBeCloseTo(3000000, 2);
+  });
+
+  it('computeOccupantMetrics evaluates (redevelopment family)', () => {
+    const m = computeOccupantMetrics([
+      {
+        id: 1, status: 'vacated', existing_carpet_area_sqft: 500, rehab_entitlement_sqft: 600,
+        transit_rent_monthly: 30000, transit_rent_start: '2026-01-01', transit_rent_end: '2027-01-01',
+        corpus_amount: 100000,
+      },
+      { id: 2, status: 'in_place', existing_carpet_area_sqft: 400, rehab_entitlement_sqft: 480, documentation_risk: 'high' },
+    ], { as_of_date: '2026-07-14', settings: {} });
+    expect(m.counts).toEqual({ total: 2, inPlace: 1, vacated: 1, disputed: 0 });
+    expect(m.vacancy.vacatedByCountPct).toBeCloseTo(50, 6);
+    expect(m.obligations.totalRehousingObligation).toBeGreaterThan(0);
+    expect(m.risk.highRiskUnits).toBe(1);
   });
 });
