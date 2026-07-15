@@ -86,6 +86,30 @@ describe('rentRollMetrics backend ↔ frontend parity', () => {
       .toEqual(backend.validateLeaseRoll(FIXTURE, PARENT, inputs));
   });
 
+  test('computeOccupantMetrics + validateOccupantRoll are identical on a redevelopment fixture', () => {
+    const occ = [
+      {
+        id: 1, status: 'vacated', existing_carpet_area_sqft: 500, rehab_entitlement_sqft: 600,
+        additional_area_sqft: 50, transit_rent_monthly: 30000, transit_rent_start: '2025-07-01',
+        transit_rent_end: '2027-07-01', transit_rent_escalation_pct: 5,
+        corpus_amount: 100000, shifting_allowance: 20000, brokerage_amount: 30000, documentation_risk: 'low',
+      },
+      {
+        // In-place, escalating, NO transit_start — exercises the projected-
+        // vacation escalation anchor on both mirrors.
+        id: 2, status: 'in_place', existing_carpet_area_sqft: 300, rehab_entitlement_sqft: 300,
+        transit_rent_monthly: 40000, transit_rent_escalation_pct: 8,
+        rehab_possession_target: '2029-07-14', documentation_risk: 'high',
+      },
+      { id: 3, status: 'disputed', existing_carpet_area_sqft: 450, rehab_entitlement_sqft: 400 },
+    ];
+    const parent = { as_of_date: AS_OF, settings: {} };
+    expect(frontend.computeOccupantMetrics(occ, parent)).toEqual(backend.computeOccupantMetrics(occ, parent));
+    expect(frontend.validateOccupantRoll(occ)).toEqual(backend.validateOccupantRoll(occ));
+    expect(frontend.transitRentRemainingPaise(occ[0], frontend.parseDate(AS_OF)))
+      .toBe(backend.transitRentRemainingPaise(occ[0], backend.parseDate(AS_OF)));
+  });
+
   test('per-record functions are identical', () => {
     const lease = FIXTURE[0];
     expect(frontend.effectiveRentRate({

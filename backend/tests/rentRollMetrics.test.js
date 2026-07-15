@@ -25,6 +25,9 @@ const {
   validateSaleRoll,
   computeHotelMetrics,
   validateHotelRoll,
+  transitRentRemainingPaise,
+  computeOccupantMetrics,
+  validateOccupantRoll,
 } = require('../src/utils/rentRollMetrics');
 
 const AS_OF = '2026-07-14';
@@ -695,5 +698,178 @@ describe('toLeaseExtract — forward-compat kernel seam', () => {
       rentFreeMonths: null,
       rentSteps: null,
     });
+  });
+});
+
+// ── Redevelopment occupants ─────────────────────────────────────────────────
+// A four-occupier society redevelopment as of 2026-07-14. Every expected value
+// is hand-computed below.
+const OCC_ASOF = '2026-07-14';
+const OCCUPANT_RECORDS = [
+  {
+    id: 1, status: 'vacated', occupant_name: 'Flat 101', occupancy_type: 'owner',
+    existing_carpet_area_sqft: 500, rehab_entitlement_sqft: 600, additional_area_sqft: 50,
+    transit_rent_monthly: 30000, transit_rent_start: '2025-07-01', transit_rent_end: '2027-07-01',
+    transit_rent_escalation_pct: 5,
+    shifting_allowance: 20000, brokerage_amount: 30000, corpus_amount: 100000, other_obligation_amount: 0,
+    documentation_risk: 'low', agreement_status: 'Registered PAAA',
+  },
+  {
+    id: 2, status: 'vacated', occupant_name: 'Flat 102', occupancy_type: 'tenant',
+    existing_carpet_area_sqft: 400, rehab_entitlement_sqft: 480, additional_area_sqft: 0,
+    transit_rent_monthly: 25000, transit_rent_start: '2026-01-01', transit_rent_end: '2027-07-01',
+    transit_rent_escalation_pct: 0,
+    shifting_allowance: 20000, brokerage_amount: 25000, corpus_amount: 80000,
+    documentation_risk: 'medium',
+  },
+  {
+    id: 3, status: 'in_place', occupant_name: 'Shop 1', occupancy_type: 'commercial',
+    existing_carpet_area_sqft: 300, rehab_entitlement_sqft: 300,
+    transit_rent_monthly: 40000, // will be paid once vacated; no window yet
+    corpus_amount: 50000, documentation_risk: 'high',
+  },
+  {
+    id: 4, status: 'disputed', occupant_name: 'Flat 201',
+    existing_carpet_area_sqft: 450, rehab_entitlement_sqft: 500,
+    documentation_risk: 'high',
+  },
+];
+
+describe('computeOccupantMetrics — golden redevelopment fixture', () => {
+  const m = computeOccupantMetrics(OCCUPANT_RECORDS, { as_of_date: OCC_ASOF, settings: {} });
+
+  test('status counts', () => {
+    expect(m.counts).toEqual({ total: 4, inPlace: 1, vacated: 2, disputed: 1 });
+  });
+
+  test('vacation progress by count and by existing carpet area', () => {
+    expect(m.vacancy.vacatedByCountPct).toBeCloseTo(50, 6);          // 2/4
+    // vacated carpet 500+400=900 of 1650 total
+    expect(m.vacancy.existingCarpetSqft).toBe(1650);
+    expect(m.vacancy.vacatedCarpetSqft).toBe(900);
+    expect(m.vacancy.vacatedByAreaPct).toBeCloseTo((900 / 1650) * 100, 6);
+  });
+
+  test('entitlement areas + area-weighted uplift', () => {
+    expect(m.entitlement.rehabEntitlementSqft).toBe(1880);          // 600+480+300+500
+    expect(m.entitlement.additionalAreaSqft).toBe(50);
+    expect(m.entitlement.totalRehabAreaSqft).toBe(1930);            // 1880+50
+    // Σ entitlement / Σ existing − 1 = 1880/1650 − 1
+    expect(m.entitlement.avgUpliftPct).toBeCloseTo((1880 / 1650 - 1) * 100, 6);
+  });
+
+  test('one-time obligations sum by type', () => {
+    expect(m.obligations.shiftingAllowanceTotal).toBe(40000);       // 20k+20k
+    expect(m.obligations.brokerageTotal).toBe(55000);               // 30k+25k
+    expect(m.obligations.corpusTotal).toBe(230000);                 // 100k+80k+50k
+    expect(m.obligations.otherObligationTotal).toBe(0);
+    expect(m.obligations.oneTimeTotal).toBe(325000);
+  });
+
+  test('current transit run-rate = escalated rate on active vacated windows only', () => {
+    // O1: started 2025-07-01, 1 full year elapsed by asOf → 30000×1.05 = 31,500.
+    // O2: started 2026-01-01, 0 years, no escalation → 25,000.
+    // O3 (in_place) is not yet drawing; O4 has no transit rent.
+    expect(m.obligations.currentMonthlyTransitRent).toBe(56500);
+    expect(m.obligations.annualizedTransitRunRate).toBe(56500 * 12);
+  });
+
+  test('forward transit liability is escalation-compounded and excludes unresolved windows', () => {
+    // Both O1 and O2 have 11 whole months remaining to 2027-07-01 from 2026-07-14.
+    // O1: all 11 months sit in escalation tier 1 (5%) → 11 × 31,500 = 346,500.
+    // O2: no escalation → 11 × 25,000 = 275,000.
+    // O3: monthly rent but no end/possession date → excluded, counted.
+    expect(m.obligations.transitRentRemaining).toBe(346500 + 275000);
+    expect(m.excluded.missingTransitEnd).toBe(1);
+  });
+
+  test('total rehousing obligation = one-time + forward transit', () => {
+    expect(m.obligations.totalRehousingObligation).toBe(325000 + 621500);
+    expect(m.obligations.byType.find((b) => b.type === 'Corpus').amount).toBe(230000);
+  });
+
+  test('documentation-risk bands + at-risk count', () => {
+    expect(m.risk.documentationRisk).toEqual({ low: 1, medium: 1, high: 2, unspecified: 0 });
+    expect(m.risk.highRiskUnits).toBe(2);
+    expect(m.risk.disputedUnits).toBe(1);
+    // Distinct occupiers that are disputed OR high-risk: Shop 1 (high) + Flat 201 (disputed+high).
+    expect(m.risk.atRiskUnits).toBe(2);
+  });
+
+  test('missing inputs are excluded, never coerced to zero', () => {
+    const partial = computeOccupantMetrics([
+      { id: 1, status: 'vacated' }, // nothing recorded
+      { id: 2, status: 'in_place', existing_carpet_area_sqft: 400 },
+    ], { as_of_date: OCC_ASOF });
+    expect(partial.excluded.missingCarpet).toBe(1);
+    expect(partial.excluded.missingEntitlement).toBe(2);
+    expect(partial.entitlement.avgUpliftPct).toBeNull();
+    expect(partial.obligations.totalRehousingObligation).toBe(0);
+    expect(partial.vacancy.vacatedByAreaPct).toBe(0); // no vacated carpet of 400 total
+  });
+
+  test('transitRentRemainingPaise falls back to possession target when no transit end', () => {
+    // Monthly 10,000, no escalation, no transit_end, possession target 6 whole months out.
+    const paise = transitRentRemainingPaise(
+      { transit_rent_monthly: 10000, rehab_possession_target: '2027-01-14' },
+      parseDate('2026-07-14'),
+    );
+    expect(paise).toBe(6 * 1000000); // 6 months × ₹10,000 → paise
+  });
+
+  test('escalation applies to an in-place occupier projected from as-of (no transit_start)', () => {
+    // 36 months out, 10% pa: 12×50,000 + 12×55,000 + 12×60,500 = ₹19,86,000.
+    // Anchoring escalation to the projected vacation point (as-of) — NOT flat —
+    // so identical economics never diverge by move-out status.
+    const inPlace = transitRentRemainingPaise(
+      {
+        status: 'in_place', transit_rent_monthly: 50000,
+        transit_rent_escalation_pct: 10, rehab_possession_target: '2029-07-14',
+      },
+      parseDate('2026-07-14'),
+    );
+    expect(inPlace).toBe(1986000 * 100);
+    // A vacated occupier starting at as-of with the same terms is identical.
+    const vacatedAtAsOf = transitRentRemainingPaise(
+      {
+        status: 'vacated', transit_rent_monthly: 50000, transit_rent_escalation_pct: 10,
+        transit_rent_start: '2026-07-14', transit_rent_end: '2029-07-14',
+      },
+      parseDate('2026-07-14'),
+    );
+    expect(vacatedAtAsOf).toBe(inPlace);
+  });
+
+  test('empty register yields honest nulls, never NaN', () => {
+    const empty = computeOccupantMetrics([], { as_of_date: OCC_ASOF });
+    expect(empty.counts.total).toBe(0);
+    expect(empty.vacancy.vacatedByCountPct).toBeNull();
+    expect(empty.entitlement.avgUpliftPct).toBeNull();
+    expect(empty.obligations.totalRehousingObligation).toBe(0);
+  });
+});
+
+describe('validateOccupantRoll — WARN-only findings', () => {
+  test('flags a rehab entitlement below existing carpet', () => {
+    const w = validateOccupantRoll([
+      { id: 1, existing_carpet_area_sqft: 500, rehab_entitlement_sqft: 450 },
+    ]);
+    expect(w.map((x) => x.code)).toContain('entitlement_below_existing');
+  });
+
+  test('flags a reversed transit window', () => {
+    const w = validateOccupantRoll([
+      { id: 1, transit_rent_start: '2027-01-01', transit_rent_end: '2026-01-01' },
+    ]);
+    expect(w.map((x) => x.code)).toContain('transit_end_before_start');
+  });
+
+  test('flags a negative obligation amount', () => {
+    const w = validateOccupantRoll([{ id: 1, corpus_amount: -5000 }]);
+    expect(w.map((x) => x.code)).toContain('negative_obligation');
+  });
+
+  test('the golden fixture is clean (a normal occupier mix is not a data warning)', () => {
+    expect(validateOccupantRoll(OCCUPANT_RECORDS)).toEqual([]);
   });
 });

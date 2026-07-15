@@ -4,11 +4,11 @@ import { registerFamilyFor, REGISTER_TAB_LABELS } from './rentRollColumns';
 import LeaseRegisterView from './LeaseRegisterView';
 import SalesRegisterView from './SalesRegisterView';
 import HotelRegisterView from './HotelRegisterView';
+import OccupantRegisterView from './OccupantRegisterView';
 
 // Deal Register tab — a thin dispatcher. Each asset class routes to its
 // register family's view; the shared scaffolding (settings autosave, staleness
-// banner, Apply-to-Financials) lives in registerShared.jsx. Redevelopment
-// (occupants + free-sale) ships next as an honest placeholder here.
+// banner, Apply-to-Financials) lives in registerShared.jsx.
 
 export default function RentRollTab({ canEdit = false }) {
   const { dealId } = useDealContext();
@@ -24,6 +24,9 @@ export default function RentRollTab({ canEdit = false }) {
   }
   if (family === 'hotel_operating') {
     return <HotelRegisterView dealId={dealId} assetClass={assetClass} canEdit={canEdit} />;
+  }
+  if (family === 'redevelopment') {
+    return <OccupantRegisterView dealId={dealId} assetClass={assetClass} canEdit={canEdit} />;
   }
 
   return (

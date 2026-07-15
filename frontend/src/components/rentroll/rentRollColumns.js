@@ -404,3 +404,101 @@ export const visibleHotelSections = (kind) => {
 // `month` maps to a <input type="month"> in the drawer; the API stores the
 // first-of-month date, so the drawer normalizes YYYY-MM → YYYY-MM-01.
 export const HOTEL_MONTH_DATE_FIELD = 'month';
+
+// ── Redevelopment occupant family (Shape C: existing occupiers) ─────────────
+// Status drives the vacation-progress metric: you cannot demolish until the
+// occupier has moved out. Disputed occupiers are the execution-risk tail.
+
+export const OCCUPANT_STATUS_CONFIG = {
+  in_place: { label: 'In place', tone: 'warn' },
+  vacated: { label: 'Vacated', tone: 'success' },
+  disputed: { label: 'Disputed', tone: 'danger' },
+};
+
+export const OCCUPANT_STATUS_OPTIONS = Object.entries(OCCUPANT_STATUS_CONFIG)
+  .map(([value, cfg]) => ({ value, label: cfg.label }));
+
+export const OCCUPANCY_TYPE_OPTIONS = [
+  { value: 'owner', label: 'Owner' },
+  { value: 'tenant', label: 'Tenant' },
+  { value: 'commercial', label: 'Commercial' },
+  { value: 'other', label: 'Other' },
+];
+
+export const DOC_RISK_OPTIONS = [
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
+
+export const DOC_RISK_TONE = { low: 'success', medium: 'warn', high: 'danger' };
+
+export const OCCUPANT_FIELD_SECTIONS = [
+  {
+    title: 'Identity',
+    fields: [
+      { name: 'record_label', label: 'Existing Unit Ref', type: 'text' },
+      { name: 'building', label: 'Existing Building / Wing', type: 'text' },
+      { name: 'occupant_name', label: 'Occupant Name', type: 'text' },
+      { name: 'occupancy_type', label: 'Occupier Type', type: 'select', options: OCCUPANCY_TYPE_OPTIONS, allowEmpty: true },
+      {
+        name: 'agreement_status', label: 'Agreement Status', type: 'text',
+        hint: 'Free text — e.g. “Registered PAAA”, “Consent pending”. Not a legal determination.',
+      },
+      { name: 'status', label: 'Vacation Status', type: 'select', options: OCCUPANT_STATUS_OPTIONS },
+    ],
+  },
+  {
+    title: 'Rehab entitlement (area)',
+    fields: [
+      { name: 'existing_carpet_area_sqft', label: 'Existing Carpet (sqft)', type: 'number', step: '1' },
+      {
+        name: 'rehab_entitlement_sqft', label: 'Rehab Entitlement (sqft)', type: 'number', step: '1',
+        hint: 'Free rehab area owed — typically existing carpet plus the statutory uplift.',
+      },
+      {
+        name: 'additional_area_sqft', label: 'Additional / Fungible (sqft)', type: 'number', step: '1',
+        hint: 'Extra area beyond the base entitlement (often purchased by the occupier).',
+      },
+    ],
+  },
+  {
+    title: 'Transit rent',
+    fields: [
+      {
+        name: 'transit_rent_monthly', label: 'Transit Rent (₹/month)', type: 'number', step: '1',
+        hint: 'Monthly carry paid to the vacated occupier until the rehab unit is handed back.',
+      },
+      { name: 'transit_rent_start', label: 'Transit Start', type: 'date' },
+      { name: 'transit_rent_end', label: 'Transit End', type: 'date', hint: 'Falls back to the rehab possession target when blank.' },
+      { name: 'transit_rent_escalation_pct', label: 'Transit Escalation (% pa)', type: 'number', step: '0.5' },
+    ],
+  },
+  {
+    title: 'One-time obligations',
+    fields: [
+      { name: 'shifting_allowance', label: 'Shifting Allowance (₹)', type: 'number', step: '1' },
+      { name: 'brokerage_amount', label: 'Brokerage (₹)', type: 'number', step: '1' },
+      { name: 'corpus_amount', label: 'Corpus / Hardship (₹)', type: 'number', step: '1' },
+      { name: 'other_obligation_amount', label: 'Other Obligation (₹)', type: 'number', step: '1' },
+    ],
+  },
+  {
+    title: 'Delivery & risk',
+    fields: [
+      { name: 'rehab_possession_target', label: 'Rehab Possession Target', type: 'date' },
+      {
+        name: 'documentation_risk', label: 'Documentation Risk', type: 'select', options: DOC_RISK_OPTIONS, allowEmpty: true,
+        hint: 'Your own read of the paperwork completeness — not a legal opinion.',
+      },
+    ],
+  },
+];
+
+export const visibleOccupantSections = () => OCCUPANT_FIELD_SECTIONS;
+
+export const NUMERIC_OCCUPANT_FIELDS = new Set(
+  OCCUPANT_FIELD_SECTIONS.flatMap((s) => s.fields)
+    .filter((f) => f.type === 'number')
+    .map((f) => f.name),
+);

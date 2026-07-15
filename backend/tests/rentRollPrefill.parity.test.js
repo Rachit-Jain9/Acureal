@@ -148,7 +148,7 @@ describe('rentRollPrefill — behavior (hand-computed)', () => {
   });
 
   test('classes without a bridge yet are honestly unsupported', () => {
-    for (const cls of ['residential_apartments', 'villas', 'mixed_use', 'redevelopment']) {
+    for (const cls of ['residential_apartments', 'villas', 'mixed_use']) {
       const r = backend.buildRegisterPrefill({ records: { lease: RECORDS }, register: REGISTER, assetClass: cls });
       expect(r.supported).toBe(false);
       expect(r.reason).toMatch(/does not have a register/);
@@ -274,6 +274,56 @@ describe('rentRollPrefill — hospitality (hotel_operating) bridge', () => {
     // availableKeys would be 95; the permanent operating inventory is 100.
     expect(keys.derived).toBe(100);
     expect(keys.note).toMatch(/temporary haircut/i);
+  });
+});
+
+describe('rentRollPrefill — redevelopment (occupants + free-sale) bridge', () => {
+  const REDEV_RECORDS = {
+    sale: [
+      { id: 1, status: 'sold', area_sqft: 1200, base_price_per_sqft: 9000, agreement_value: 11500000, amount_collected: 8000000 },
+      { id: 2, status: 'booked', area_sqft: 1400, base_price_per_sqft: 9500, other_charges_amount: 800000, amount_collected: 5000000 },
+      { id: 3, status: 'unsold', area_sqft: 1300, base_price_per_sqft: 8800, current_market_rate: 9800 },
+    ],
+    occupant: [
+      {
+        id: 10, status: 'vacated', existing_carpet_area_sqft: 500, rehab_entitlement_sqft: 600,
+        transit_rent_monthly: 30000, transit_rent_start: '2026-01-01', transit_rent_end: '2027-01-01',
+        corpus_amount: 100000, shifting_allowance: 20000,
+      },
+      {
+        id: 11, status: 'in_place', existing_carpet_area_sqft: 400, rehab_entitlement_sqft: 480,
+        corpus_amount: 80000,
+      },
+    ],
+  };
+  const REDEV_PARENT = { as_of_date: '2026-07-14', settings: {} };
+  const result = backend.buildRegisterPrefill({ records: REDEV_RECORDS, register: REDEV_PARENT, assetClass: 'redevelopment' });
+
+  test('parity: frontend agrees on the redevelopment proposal', () => {
+    expect(frontend.buildRegisterPrefill({ records: REDEV_RECORDS, register: REDEV_PARENT, assetClass: 'redevelopment' }))
+      .toEqual(result);
+  });
+
+  test('seeds ONLY the free-sale rate (residential-model revenue driver)', () => {
+    expect(result.supported).toBe(true);
+    expect(result.fields.map((f) => f.name)).toEqual(['sellingRatePerSqft']);
+    // (9000×1200 + 9500×1400) / 2600 = 9269.23 → whole ₹
+    expect(result.fields[0].derived).toBe(9269);
+    expect(result.fields[0].note).toMatch(/free-sale/i);
+    // Never seeds avgPlotSizeSqft — redevelopment has no plot-count driver.
+    expect(result.fields.map((f) => f.name)).not.toContain('avgPlotSizeSqft');
+  });
+
+  test('surfaces the occupant rehousing obligation as a cost signal, never an applied field', () => {
+    expect(result.costSignal).toBeTruthy();
+    expect(result.costSignal.amount).toBeGreaterThan(0);
+    expect(result.costSignal.note).toMatch(/soft cost/i);
+    // The obligation is NOT one of the accept-able fields.
+    expect(result.fields.map((f) => f.name)).not.toContain('rehousingCostCr');
+  });
+
+  test('provenance counts both free-sale and occupant records', () => {
+    expect(result.provenance).toMatchObject({ source: 'rent_roll', basisCount: 2, basisNoun: 'sold unit', totalRecords: 5 });
   });
 });
 

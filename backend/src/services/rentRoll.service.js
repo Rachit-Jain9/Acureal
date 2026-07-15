@@ -29,6 +29,8 @@ const {
   validateSaleRoll,
   computeHotelMetrics,
   validateHotelRoll,
+  computeOccupantMetrics,
+  validateOccupantRoll,
 } = require('../utils/rentRollMetrics');
 
 // Family → metric/validator dispatch. Centralized so recomputeSummary,
@@ -43,6 +45,12 @@ const metricsForFamily = (register, recordsByKind) => {
       return computeSaleMetrics(recordsByKind.sale || [], register);
     case 'hotel_operating':
       return computeHotelMetrics(recordsByKind, register);
+    case 'redevelopment':
+      // Two kinds under one register: occupant obligations + free-sale inventory.
+      return {
+        occupant: computeOccupantMetrics(recordsByKind.occupant || [], register),
+        sale: computeSaleMetrics(recordsByKind.sale || [], register),
+      };
     default:
       return null;
   }
@@ -56,6 +64,11 @@ const warningsForFamily = (register, recordsByKind, financialInputs) => {
       return validateSaleRoll(recordsByKind.sale || [], register);
     case 'hotel_operating':
       return validateHotelRoll(recordsByKind);
+    case 'redevelopment':
+      return [
+        ...validateOccupantRoll(recordsByKind.occupant || [], register),
+        ...validateSaleRoll(recordsByKind.sale || [], register),
+      ];
     default:
       return [];
   }

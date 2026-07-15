@@ -18,13 +18,14 @@
 //     mean plot size for the merchant-sale model.
 // Every other class returns { supported: false } with an honest reason.
 
-import { computeLeaseMetrics, computeSaleMetrics, computeHotelMetrics, METRICS_VERSION } from './rentRollMetrics';
+import { computeLeaseMetrics, computeSaleMetrics, computeHotelMetrics, computeOccupantMetrics, METRICS_VERSION } from './rentRollMetrics';
 
 export const INCOME_PREFILL_CLASSES = new Set([
   'commercial_office', 'retail', 'industrial_warehousing',
 ]);
 export const SALES_PREFILL_CLASSES = new Set(['plotted_development']);
 export const HOSPITALITY_PREFILL_CLASSES = new Set(['hospitality']);
+export const REDEVELOPMENT_PREFILL_CLASSES = new Set(['redevelopment']);
 
 const round = (v, dp) => {
   if (v === null || v === undefined || !Number.isFinite(Number(v))) return null;
@@ -37,6 +38,7 @@ const round = (v, dp) => {
 const leaseRowsOf = (records) => (Array.isArray(records) ? records : (records?.lease || []));
 const saleRowsOf = (records) => (Array.isArray(records) ? [] : (records?.sale || []));
 const hotelMapOf = (records) => (Array.isArray(records) ? {} : (records || {}));
+const occupantRowsOf = (records) => (Array.isArray(records) ? [] : (records?.occupant || []));
 
 const pushField = (fields) => (name, label, derived, unit, note) => {
   if (derived === null) return;
@@ -203,6 +205,50 @@ const buildHospitalityPrefill = ({ records, register }) => {
   };
 };
 
+// ── redevelopment → residential-model free-sale rate + rehousing cost signal ─
+// The kernel underwrites redevelopment on the residential merchant-sale model.
+// Free-sale inventory (sale_records) seeds the revenue driver; the occupant
+// rehousing obligation is surfaced as a COST SIGNAL, not an auto-applied field —
+// the residential form exposes no rehousing input yet, so wiring it into the
+// model is a deliberate future step (never a silently-dropped field).
+const buildRedevelopmentPrefill = ({ records, register }) => {
+  const sale = computeSaleMetrics(saleRowsOf(records), register || {});
+  const occupant = computeOccupantMetrics(occupantRowsOf(records), register || {});
+  const fields = [];
+  const push = pushField(fields);
+
+  // Free-sale flats price on the base rate per saleable sqft — the same
+  // gross, charge-exclusive basis the residential model's sellingRatePerSqft
+  // expects (PLC / floor-rise / amenities sit on top, outside the kernel rate).
+  push(
+    'sellingRatePerSqft', 'Free-sale Rate (₹/sqft)',
+    round(sale.pricing.avgSoldBaseRatePerSqft, 0), '₹/sqft',
+    'Area-weighted base rate on sold free-sale units — the model’s revenue driver (gross, excl. charges)',
+  );
+
+  const rehousing = occupant.obligations.totalRehousingObligation;
+  return {
+    supported: true,
+    fields,
+    // Not a model input — an explicit prompt to fund the rehousing carry as a
+    // soft cost. Displayed in the Apply comparison; carried in the recap.
+    costSignal: rehousing > 0 ? {
+      label: 'Rehousing obligation (estimate)',
+      amount: rehousing,
+      note: `Forward transit rent + corpus / shifting / brokerage across ${occupant.counts.total} occupant(s). `
+        + 'The redevelopment model has no rehousing input yet — enter this as a soft cost manually.',
+    } : null,
+    provenance: {
+      source: 'rent_roll',
+      basisCount: sale.inventory.soldUnits,
+      basisNoun: 'sold unit',
+      totalRecords: sale.counts.total + occupant.counts.total,
+      asOfDate: sale.asOf,
+      metricsVersion: METRICS_VERSION,
+    },
+  };
+};
+
 /**
  * Build the field-by-field prefill proposal for the Apply-to-Financials
  * comparison. Returns { supported: false, reason } for classes with no
@@ -223,6 +269,9 @@ export const buildRegisterPrefill = ({ records, register, assetClass }) => {
   }
   if (HOSPITALITY_PREFILL_CLASSES.has(assetClass)) {
     return buildHospitalityPrefill({ records, register });
+  }
+  if (REDEVELOPMENT_PREFILL_CLASSES.has(assetClass)) {
+    return buildRedevelopmentPrefill({ records, register });
   }
   return {
     supported: false,

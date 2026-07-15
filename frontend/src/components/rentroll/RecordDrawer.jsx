@@ -127,8 +127,8 @@ export default function RecordDrawer({
                 <Field key={f.name} label={f.label} helper={f.hint}>
                   {f.type === 'select' ? (
                     <Select value={form[f.name]} onChange={setField(f.name)}>
-                      {/* Descriptor selects are optional — allow clearing to unset. */}
-                      {f.isAttribute && <option value="">—</option>}
+                      {/* Descriptor / optional selects can be cleared to unset. */}
+                      {(f.isAttribute || f.allowEmpty) && <option value="">—</option>}
                       {f.options.map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}
