@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 import {
   computeLeaseMetrics,
   computeSaleMetrics,
+  computeHotelMetrics,
   fyLabel,
   parseDate,
   monthlyBaseRentPaise,
@@ -47,5 +48,15 @@ describe('rentRollMetrics (frontend ESM mirror) evaluates in a browser-like modu
     ], { as_of_date: AS_OF, settings: {} });
     expect(m.collections.receivable).toBeCloseTo(1000000, 2);
     expect(m.unsold.unsoldMtmPct).toBeCloseTo((8000 / 6900 - 1) * 100, 6);
+  });
+
+  it('computeHotelMetrics evaluates (hotel operating family)', () => {
+    const m = computeHotelMetrics({
+      hotel_key_block: [{ id: 1, keys_count: 100, operational: true, ooo_pct: 0 }],
+      hotel_operating_month: [{ id: 100, month: '2026-06-01', occupancy_pct: 70, adr: 6000, room_revenue: 12600000, gop: 5000000, owner_noi: 3000000 }],
+    }, { as_of_date: '2026-07-31', settings: {} });
+    expect(m.keys.availableKeys).toBe(100);
+    expect(m.operating.basis).toBe('room_nights');
+    expect(m.operating.ttmOwnerNoi).toBeCloseTo(3000000, 2);
   });
 });

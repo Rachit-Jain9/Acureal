@@ -1,3 +1,5 @@
+'use strict';
+
 // Mirror of backend/src/utils/rentRollPrefill.js. Keep in lockstep — run
 // backend/tests/rentRollPrefill.parity.test.js.
 //
@@ -16,12 +18,13 @@
 //     mean plot size for the merchant-sale model.
 // Every other class returns { supported: false } with an honest reason.
 
-import { computeLeaseMetrics, computeSaleMetrics, METRICS_VERSION } from './rentRollMetrics';
+import { computeLeaseMetrics, computeSaleMetrics, computeHotelMetrics, METRICS_VERSION } from './rentRollMetrics';
 
 export const INCOME_PREFILL_CLASSES = new Set([
   'commercial_office', 'retail', 'industrial_warehousing',
 ]);
 export const SALES_PREFILL_CLASSES = new Set(['plotted_development']);
+export const HOSPITALITY_PREFILL_CLASSES = new Set(['hospitality']);
 
 const round = (v, dp) => {
   if (v === null || v === undefined || !Number.isFinite(Number(v))) return null;
@@ -33,6 +36,7 @@ const round = (v, dp) => {
 // callers/tests pass a bare lease-row array. Tolerate both.
 const leaseRowsOf = (records) => (Array.isArray(records) ? records : (records?.lease || []));
 const saleRowsOf = (records) => (Array.isArray(records) ? [] : (records?.sale || []));
+const hotelMapOf = (records) => (Array.isArray(records) ? {} : (records || {}));
 
 const pushField = (fields) => (name, label, derived, unit, note) => {
   if (derived === null) return;
@@ -139,6 +143,66 @@ const buildSalesPrefill = ({ records, register }) => {
   };
 };
 
+// ── hotel_operating → keys-based operating model ────────────────────────────
+const buildHospitalityPrefill = ({ records, register }) => {
+  const metrics = computeHotelMetrics(hotelMapOf(records), register || {});
+  const { keys, operating } = metrics;
+  const fields = [];
+  const push = pushField(fields);
+  const basisNote = operating.basis === 'room_nights'
+    ? `room-night weighted over ${operating.monthsCovered} month(s) of actuals`
+    : `${operating.monthsCovered} month(s) of actuals (no key inventory — days-weighted)`;
+
+  // Seed the OPERATIONAL key count, not the OOO-adjusted available count: the
+  // kernel scales hard cost / FF&E / working capital by permanent inventory,
+  // and out-of-order is a temporary availability haircut that already lives in
+  // the occupancy figure (occupancy is measured against available keys).
+  const seedKeys = keys.operationalKeys > 0 ? keys.operationalKeys : keys.totalKeys;
+  push(
+    'keys', 'Number of Keys (rooms)',
+    seedKeys > 0 ? Math.round(seedKeys) : null, 'keys',
+    'Operational room inventory (out-of-order is a temporary haircut, captured in occupancy)',
+  );
+  push(
+    'adr', 'Average Daily Rate (₹/night)',
+    round(operating.ttmAdr, 0), '₹/night',
+    `Trailing ADR — ${basisNote}`,
+  );
+  push(
+    'stabilizedOccPct', 'Stabilized Occupancy (%)',
+    round(operating.ttmOccupancyPct, 1), '%',
+    `Trailing occupancy — ${basisNote}`,
+  );
+  push(
+    'gopMarginPct', 'GOP Margin (%)',
+    round(operating.ttmGopMarginPct, 1), '%',
+    'Trailing GOP ÷ total revenue from the actual P&L',
+  );
+  push(
+    'fbRevPct', 'F&B Revenue (% of rooms)',
+    round(operating.fbRevPct, 1), '%',
+    'Trailing F&B ÷ room revenue',
+  );
+  push(
+    'otherRevPct', 'Other Revenue (% of rooms)',
+    round(operating.otherRevPct, 1), '%',
+    'Trailing other ÷ room revenue',
+  );
+
+  return {
+    supported: true,
+    fields,
+    provenance: {
+      source: 'rent_roll',
+      basisCount: operating.monthsCovered,
+      basisNoun: 'operating month',
+      totalRecords: metrics.counts.operatingMonths + metrics.counts.keyBlocks + metrics.counts.contracts,
+      asOfDate: metrics.asOf,
+      metricsVersion: METRICS_VERSION,
+    },
+  };
+};
+
 /**
  * Build the field-by-field prefill proposal for the Apply-to-Financials
  * comparison. Returns { supported: false, reason } for classes with no
@@ -156,6 +220,9 @@ export const buildRegisterPrefill = ({ records, register, assetClass }) => {
   }
   if (SALES_PREFILL_CLASSES.has(assetClass)) {
     return buildSalesPrefill({ records, register });
+  }
+  if (HOSPITALITY_PREFILL_CLASSES.has(assetClass)) {
+    return buildHospitalityPrefill({ records, register });
   }
   return {
     supported: false,

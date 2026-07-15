@@ -23,6 +23,8 @@ const {
   toLeaseExtract,
   computeSaleMetrics,
   validateSaleRoll,
+  computeHotelMetrics,
+  validateHotelRoll,
 } = require('../src/utils/rentRollMetrics');
 
 const AS_OF = '2026-07-14';
@@ -524,6 +526,158 @@ describe('validateSaleRoll — WARN-only findings', () => {
 
   test('clean fixture raises no warnings', () => {
     expect(validateSaleRoll(SALE_FIXTURE)).toEqual([]);
+  });
+});
+
+// ── Hotel operating golden fixture, as of 2026-07-31 ────────────────────────
+// 100 keys, fully operational, 0% OOO → availableKeys = 100.
+// Two TTM months chosen so ADR blends to a clean ₹6,000 and F&B/other are
+// exact 25% / 10% of room revenue.
+const HOTEL_ASOF = '2026-07-31';
+const HOTEL_RECORDS = {
+  hotel_key_block: [
+    { id: 1, room_type: 'Deluxe King', keys_count: 100, operational: true, ooo_pct: 0, adr_premium_pct: 0 },
+  ],
+  hotel_contract: [
+    { id: 10, contract_type: 'hma', operator_name: 'Sample Operator', brand: 'Sample Brand', base_fee_pct: 2.5, incentive_fee_pct: 8, ffe_reserve_pct: 4, keys_covered: 100, start_date: '2025-01-01', end_date: '2044-12-31' },
+  ],
+  hotel_operating_month: [
+    // June: 30 days, availNights 3000, occ 60% → occNights 1800, ADR 6000 → room 10,800,000
+    { id: 100, month: '2026-06-01', occupancy_pct: 60, adr: 6000, room_revenue: 10800000, fnb_revenue: 2700000, other_revenue: 1080000, gop: 5000000, owner_noi: 3000000 },
+    // July: 31 days, availNights 3100, occ 80% → occNights 2480, ADR 6000 → room 14,880,000
+    { id: 101, month: '2026-07-01', occupancy_pct: 80, adr: 6000, room_revenue: 14880000, fnb_revenue: 3720000, other_revenue: 1488000, gop: 8000000, owner_noi: 5000000 },
+  ],
+};
+
+describe('computeHotelMetrics — golden fixture', () => {
+  const m = computeHotelMetrics(HOTEL_RECORDS, { as_of_date: HOTEL_ASOF, settings: {} });
+
+  test('counts + key inventory (100 available, 0% OOO)', () => {
+    expect(m.counts).toEqual({ keyBlocks: 1, contracts: 1, operatingMonths: 2 });
+    expect(m.keys).toMatchObject({ totalKeys: 100, availableKeys: 100, operationalKeys: 100, roomTypes: 1 });
+    expect(m.keys.weightedAdrPremiumPct).toBeCloseTo(0, 10);
+  });
+
+  test('out-of-order keys reduce availability', () => {
+    const withOoo = computeHotelMetrics({
+      hotel_key_block: [{ id: 1, keys_count: 80, operational: true, ooo_pct: 2, adr_premium_pct: 0 },
+        { id: 2, keys_count: 40, operational: true, ooo_pct: 2, adr_premium_pct: -3 }],
+    }, { as_of_date: HOTEL_ASOF });
+    expect(withOoo.keys.availableKeys).toBeCloseTo(117.6, 6); // 80×.98 + 40×.98
+    expect(withOoo.keys.weightedAdrPremiumPct).toBeCloseTo(-1, 6); // (0×80 + -3×40)/120
+  });
+
+  test('contract summary surfaces the governing HMA fee structure', () => {
+    expect(m.contract).toMatchObject({
+      count: 1, primaryType: 'hma', operator: 'Sample Operator', brand: 'Sample Brand',
+      baseFeePct: 2.5, incentiveFeePct: 8, ffeReservePct: 4, keysCovered: 100,
+    });
+  });
+
+  test('TTM occupancy is room-night weighted: 4280 / 6100', () => {
+    // occNights = 1800 + 2480 = 4280; availNights = 3000 + 3100 = 6100
+    expect(m.operating.basis).toBe('room_nights');
+    expect(m.operating.ttmOccupancyPct).toBeCloseTo((4280 / 6100) * 100, 6);
+  });
+
+  test('TTM ADR is room-revenue weighted → ₹6,000; RevPAR = room/availNights', () => {
+    // both months ADR 6000 → blended 6000; roomRev 25,680,000 / occNights 4280 = 6000
+    expect(m.operating.ttmAdr).toBeCloseTo(6000, 6);
+    expect(m.operating.ttmRevpar).toBeCloseTo(25680000 / 6100, 4);
+  });
+
+  test('TTM revenue composition + margins (F&B 25%, other 10%)', () => {
+    expect(m.operating.ttmRoomRevenue).toBeCloseTo(25680000, 2);
+    expect(m.operating.ttmFnbRevenue).toBeCloseTo(6420000, 2);
+    expect(m.operating.ttmOtherRevenue).toBeCloseTo(2568000, 2);
+    expect(m.operating.ttmTotalRevenue).toBeCloseTo(34668000, 2);
+    expect(m.operating.fbRevPct).toBeCloseTo(25, 6);
+    expect(m.operating.otherRevPct).toBeCloseTo(10, 6);
+    // GOP 13,000,000 / total 34,668,000
+    expect(m.operating.ttmGop).toBeCloseTo(13000000, 2);
+    expect(m.operating.ttmGopMarginPct).toBeCloseTo((13000000 / 34668000) * 100, 6);
+    expect(m.operating.ttmOwnerNoi).toBeCloseTo(8000000, 2);
+  });
+
+  test('per-month series carries RevPAR = ADR × occupancy', () => {
+    expect(m.operating.series).toHaveLength(2);
+    expect(m.operating.series[0]).toMatchObject({ month: '2026-06', occupancyPct: 60, adr: 6000 });
+    expect(m.operating.series[0].revpar).toBeCloseTo(6000 * 0.60, 6);
+    expect(m.operating.series[1].revpar).toBeCloseTo(6000 * 0.80, 6);
+  });
+
+  test('falls back to days-weighted occupancy when no key inventory recorded', () => {
+    const noKeys = computeHotelMetrics({ hotel_operating_month: HOTEL_RECORDS.hotel_operating_month }, { as_of_date: HOTEL_ASOF });
+    expect(noKeys.operating.basis).toBe('stored_averages');
+    // (60×30 + 80×31) / 61 = (1800 + 2480)/61
+    expect(noKeys.operating.ttmOccupancyPct).toBeCloseTo((1800 + 2480) / 61, 6);
+    expect(noKeys.operating.ttmAdr).toBeCloseTo(6000, 6); // mean of 6000, 6000
+  });
+
+  test('a month missing occupancy never deflates TTM occupancy or inflates ADR', () => {
+    // Row A fully specified (occ 80, ADR 4500 → room 10.8M); Row B has room
+    // revenue but NO occupancy. Occupancy and ADR must use only Row A; RevPAR
+    // may use both (room revenue is present on both).
+    const partial = {
+      hotel_key_block: [{ id: 1, keys_count: 100, operational: true, ooo_pct: 0 }],
+      hotel_operating_month: [
+        { id: 200, month: '2026-06-01', occupancy_pct: 80, adr: 4500, room_revenue: 10800000 },
+        { id: 201, month: '2026-07-01', room_revenue: 5000000 }, // occ omitted
+      ],
+    };
+    const mm = computeHotelMetrics(partial, { as_of_date: HOTEL_ASOF });
+    expect(mm.operating.ttmOccupancyPct).toBeCloseTo(80, 6);   // Row A only: 2400/3000
+    expect(mm.operating.ttmAdr).toBeCloseTo(4500, 6);          // Row A only: 10.8M/2400
+    // RevPAR spans both revenue months: (10.8M + 5.0M) / (3000 + 3100)
+    expect(mm.operating.ttmRevpar).toBeCloseTo(15800000 / 6100, 4);
+  });
+
+  test('a blank GOP column yields a null margin, never 0%', () => {
+    const noGop = {
+      hotel_key_block: [{ id: 1, keys_count: 100, operational: true, ooo_pct: 0 }],
+      hotel_operating_month: [{ id: 300, month: '2026-06-01', occupancy_pct: 70, adr: 6000, room_revenue: 12600000, fnb_revenue: 3150000 }],
+    };
+    const mm = computeHotelMetrics(noGop, { as_of_date: HOTEL_ASOF });
+    expect(mm.operating.ttmGopMarginPct).toBeNull();
+    expect(mm.operating.fbRevPct).toBeCloseTo(25, 6);   // fnb recorded → derivable
+    expect(mm.operating.otherRevPct).toBeNull();         // other never recorded
+  });
+
+  test('TTM window keeps only the latest 12 months at/behind as-of', () => {
+    const many = { hotel_operating_month: [] };
+    for (let i = 0; i < 18; i += 1) {
+      const mm = String((i % 12) + 1).padStart(2, '0');
+      const yy = 2025 + Math.floor(i / 12);
+      many.hotel_operating_month.push({ id: i, month: `${yy}-${mm}-01`, occupancy_pct: 70, adr: 6000, room_revenue: 1000000 });
+    }
+    const res = computeHotelMetrics(many, { as_of_date: '2026-12-31' });
+    expect(res.operating.monthsCovered).toBe(12);
+    expect(res.counts.operatingMonths).toBe(18);
+  });
+});
+
+describe('validateHotelRoll — WARN-only findings', () => {
+  test('flags occupancy out of range', () => {
+    const w = validateHotelRoll({ hotel_operating_month: [{ id: 1, occupancy_pct: 120 }] });
+    expect(w.some((x) => x.code === 'occupancy_out_of_range')).toBe(true);
+  });
+  test('flags GOP above total revenue', () => {
+    const w = validateHotelRoll({ hotel_operating_month: [{ id: 1, room_revenue: 1000000, gop: 1500000 }] });
+    expect(w.some((x) => x.code === 'gop_exceeds_revenue')).toBe(true);
+  });
+  test('flags owner NOI above GOP', () => {
+    const w = validateHotelRoll({ hotel_operating_month: [{ id: 1, gop: 500000, owner_noi: 800000 }] });
+    expect(w.some((x) => x.code === 'noi_exceeds_gop')).toBe(true);
+  });
+  test('flags a contract keys-covered mismatch vs inventory', () => {
+    const w = validateHotelRoll({
+      hotel_key_block: [{ id: 1, keys_count: 100 }],
+      hotel_contract: [{ id: 2, contract_type: 'hma', keys_covered: 160 }],
+    });
+    expect(w.some((x) => x.code === 'contract_keys_mismatch')).toBe(true);
+  });
+  test('clean fixture raises no warnings', () => {
+    expect(validateHotelRoll(HOTEL_RECORDS)).toEqual([]);
   });
 });
 

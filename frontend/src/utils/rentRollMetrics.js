@@ -77,6 +77,8 @@ export const addMonthsUtc = (date, months) => {
 
 const daysBetween = (from, to) => (to.getTime() - from.getTime()) / 86400000;
 const yearsBetween = (from, to) => daysBetween(from, to) / DAYS_PER_YEAR;
+export const daysInMonth = (date) =>
+  new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 0)).getUTCDate();
 
 // Whole calendar months from `from` to `to` (fractional months floor).
 export const monthsBetween = (from, to) => {
@@ -986,6 +988,264 @@ export const validateSaleRoll = (records, parent = {}) => {
     add('overdue_exceeds_receivable',
       `${overdueExceedsReceivable.length} unit(s) show an overdue amount larger than the outstanding receivable.`,
       overdueExceedsReceivable.map((r) => r.id));
+  }
+
+  return warnings;
+};
+
+// ── Hotel operating family (Shape C: keys × contracts × monthly actuals) ────
+//
+// Three record kinds under one register. The metric set has three parts:
+//   • key inventory rollup — total / available (net out-of-order) keys, room
+//     types, key-weighted ADR premium;
+//   • management-contract summary — the governing fee structure;
+//   • a trailing-twelve-months (TTM) operating rollup from ACTUAL monthly
+//     P&L rows — the evidence of how the asset actually trades. Occupancy and
+//     ADR are ROOM-NIGHT weighted (available keys × days per month), the only
+//     defensible blend; when no key inventory is recorded it falls back to
+//     days-weighted occupancy + arithmetic-mean ADR, and reports which basis
+//     it used. Forecasting stays the deterministic kernel's job — this grounds it.
+
+// Summarize the governing management contract (HMA / lease / franchise). The
+// first non-cancelled contract governs; its fee structure drives owner NOI.
+const summarizeHotelContracts = (contracts) => {
+  if (!contracts || contracts.length === 0) {
+    return { count: 0, primaryType: null, baseFeePct: null, incentiveFeePct: null, ffeReservePct: null, operator: null, brand: null };
+  }
+  const primary = contracts.find((c) => c.contract_type === 'hma' || c.contract_type === 'master_lease') || contracts[0];
+  return {
+    count: contracts.length,
+    primaryType: primary.contract_type || null,
+    operator: isPresent(primary.operator_name) ? primary.operator_name : null,
+    brand: isPresent(primary.brand) ? primary.brand : null,
+    baseFeePct: num(primary.base_fee_pct),
+    incentiveFeePct: num(primary.incentive_fee_pct),
+    ffeReservePct: num(primary.ffe_reserve_pct),
+    keysCovered: num(primary.keys_covered),
+  };
+};
+
+/**
+ * Compute the full hotel operating metric set.
+ *
+ * @param {object} recordsByKind  { hotel_key_block, hotel_contract, hotel_operating_month }
+ * @param {object} parent         deal_registers row ({ as_of_date, settings })
+ * @param {object} [opts]         { asOf?: Date|string }
+ */
+export const computeHotelMetrics = (recordsByKind = {}, parent = {}, opts = {}) => {
+  const asOf = parseDate(opts.asOf) || parseDate(parent.as_of_date) || new Date();
+  const live = (r) => r && !r.deleted_at;
+  const blocks = (recordsByKind.hotel_key_block || []).filter(live);
+  const contracts = (recordsByKind.hotel_contract || []).filter(live);
+  const monthsAll = (recordsByKind.hotel_operating_month || []).filter(live);
+
+  // ── Key inventory ──
+  let totalKeys = 0;
+  let availableKeys = 0;
+  let operationalKeys = 0;
+  let premiumKeyWeighted = 0;
+  let premiumKeys = 0;
+  for (const b of blocks) {
+    const keys = num(b.keys_count);
+    if (keys === null) continue;
+    totalKeys += keys;
+    const operational = b.operational !== false; // default true
+    if (operational) {
+      operationalKeys += keys;
+      const ooo = num(b.ooo_pct);
+      const oooFrac = ooo === null ? 0 : Math.min(Math.max(ooo, 0), 100) / 100;
+      availableKeys += keys * (1 - oooFrac);
+    }
+    const prem = num(b.adr_premium_pct);
+    if (prem !== null) { premiumKeyWeighted += prem * keys; premiumKeys += keys; }
+  }
+
+  // ── TTM window: the latest ≤12 months at/behind the as-of date ──
+  const months = monthsAll
+    .map((m) => ({ row: m, date: parseDate(m.month) }))
+    .filter((m) => m.date && m.date <= asOf)
+    .sort((a, b) => b.date - a.date)
+    .slice(0, 12)
+    .sort((a, b) => a.date - b.date);
+
+  let roomRevP = 0;
+  let fnbP = 0;
+  let otherP = 0;
+  let gopP = 0;
+  let noiP = 0;
+  // Presence counters — a ratio is only defensible when its component was
+  // actually recorded (blank GOP must not read as 0% margin).
+  let gopCount = 0;
+  let fnbCount = 0;
+  let otherCount = 0;
+  // Room-night pools, each gated on the presence of EVERY input it needs so a
+  // month with revenue-but-no-occupancy can never inflate ADR, nor a month
+  // with occupancy-but-no-revenue deflate it. Each pool's numerator and
+  // denominator therefore always cover exactly the same months.
+  let occAvailNights = 0;  // occupancy known
+  let occOccNights = 0;
+  let adrOccNights = 0;    // occupancy AND room revenue known
+  let adrRoomRevP = 0;
+  let revparAvailNights = 0; // room revenue known
+  let revparRoomRevP = 0;
+  // Stored-average fallback (no key inventory).
+  let occDaysWeighted = 0;
+  let daysWithOcc = 0;
+  let adrSum = 0;
+  let adrCount = 0;
+  const series = [];
+
+  for (const { row: m, date } of months) {
+    const days = daysInMonth(date);
+    const occ = num(m.occupancy_pct);
+    const adr = num(m.adr);
+    const roomRev = num(m.room_revenue);
+    const fnb = num(m.fnb_revenue);
+    const other = num(m.other_revenue);
+    const gop = num(m.gop);
+    const noi = num(m.owner_noi);
+
+    if (roomRev !== null) roomRevP += toPaise(roomRev);
+    if (fnb !== null) { fnbP += toPaise(fnb); fnbCount += 1; }
+    if (other !== null) { otherP += toPaise(other); otherCount += 1; }
+    if (gop !== null) { gopP += toPaise(gop); gopCount += 1; }
+    if (noi !== null) noiP += toPaise(noi);
+
+    if (availableKeys > 0) {
+      const an = availableKeys * days;
+      if (occ !== null) {
+        occAvailNights += an;
+        occOccNights += an * (occ / 100);
+        if (roomRev !== null) {
+          adrOccNights += an * (occ / 100);
+          adrRoomRevP += toPaise(roomRev);
+        }
+      }
+      if (roomRev !== null) {
+        revparAvailNights += an;
+        revparRoomRevP += toPaise(roomRev);
+      }
+    }
+    if (occ !== null) { occDaysWeighted += occ * days; daysWithOcc += days; }
+    if (adr !== null) { adrSum += adr; adrCount += 1; }
+
+    const hasRev = roomRev !== null || fnb !== null || other !== null;
+    const totalRev = (roomRev || 0) + (fnb || 0) + (other || 0);
+    series.push({
+      month: date.toISOString().slice(0, 7),
+      occupancyPct: occ,
+      adr,
+      revpar: (adr !== null && occ !== null) ? adr * (occ / 100) : null,
+      roomRevenue: roomRev,
+      fnbRevenue: fnb,
+      otherRevenue: other,
+      totalRevenue: hasRev ? totalRev : null,
+      gop,
+      gopMarginPct: (gop !== null && totalRev > 0) ? (gop / totalRev) * 100 : null,
+      ownerNoi: noi,
+    });
+  }
+
+  const totalRevP = roomRevP + fnbP + otherP;
+  const roomNightBasis = availableKeys > 0;
+  const ttmOccupancyPct = roomNightBasis && occAvailNights > 0
+    ? (occOccNights / occAvailNights) * 100
+    : (daysWithOcc > 0 ? occDaysWeighted / daysWithOcc : null);
+  const ttmAdr = roomNightBasis && adrOccNights > 0
+    ? fromPaise(adrRoomRevP) / adrOccNights
+    : (adrCount > 0 ? adrSum / adrCount : null);
+  const ttmRevpar = roomNightBasis && revparAvailNights > 0
+    ? fromPaise(revparRoomRevP) / revparAvailNights
+    : (ttmAdr !== null && ttmOccupancyPct !== null ? ttmAdr * (ttmOccupancyPct / 100) : null);
+
+  return {
+    metricsVersion: METRICS_VERSION,
+    asOf: asOf.toISOString().slice(0, 10),
+    counts: {
+      keyBlocks: blocks.length,
+      contracts: contracts.length,
+      operatingMonths: monthsAll.length,
+    },
+    keys: {
+      totalKeys,
+      availableKeys,
+      operationalKeys,
+      roomTypes: blocks.length,
+      weightedAdrPremiumPct: premiumKeys > 0 ? premiumKeyWeighted / premiumKeys : null,
+    },
+    contract: summarizeHotelContracts(contracts),
+    operating: {
+      monthsCovered: months.length,
+      basis: roomNightBasis ? 'room_nights' : 'stored_averages',
+      ttmOccupancyPct,
+      ttmAdr,
+      ttmRevpar,
+      ttmTotalRevenue: fromPaise(totalRevP),
+      ttmRoomRevenue: fromPaise(roomRevP),
+      ttmFnbRevenue: fromPaise(fnbP),
+      ttmOtherRevenue: fromPaise(otherP),
+      ttmGop: fromPaise(gopP),
+      // Null (not 0%) when no month recorded a GOP figure — a blank GOP column
+      // is missing data, not a zero-margin quarter. Same for the mix ratios.
+      ttmGopMarginPct: gopCount > 0 && totalRevP > 0 ? (gopP / totalRevP) * 100 : null,
+      ttmOwnerNoi: fromPaise(noiP),
+      fbRevPct: fnbCount > 0 && roomRevP > 0 ? (fnbP / roomRevP) * 100 : null,
+      otherRevPct: otherCount > 0 && roomRevP > 0 ? (otherP / roomRevP) * 100 : null,
+      series,
+    },
+  };
+};
+
+export const validateHotelRoll = (recordsByKind = {}) => {
+  const warnings = [];
+  const live = (r) => r && !r.deleted_at;
+  const add = (code, message, recordIds = []) => warnings.push({ code, message, recordIds });
+  const months = (recordsByKind.hotel_operating_month || []).filter(live);
+  const contracts = (recordsByKind.hotel_contract || []).filter(live);
+  const blocks = (recordsByKind.hotel_key_block || []).filter(live);
+
+  const badOccupancy = months.filter((m) => {
+    const occ = num(m.occupancy_pct);
+    return occ !== null && (occ < 0 || occ > 100);
+  });
+  if (badOccupancy.length > 0) {
+    add('occupancy_out_of_range', `${badOccupancy.length} operating month(s) have an occupancy outside 0–100%.`, badOccupancy.map((m) => m.id));
+  }
+
+  const gopExceedsRevenue = months.filter((m) => {
+    const gop = num(m.gop);
+    const total = (num(m.room_revenue) || 0) + (num(m.fnb_revenue) || 0) + (num(m.other_revenue) || 0);
+    return gop !== null && total > 0 && gop > total * 1.001;
+  });
+  if (gopExceedsRevenue.length > 0) {
+    add('gop_exceeds_revenue', `${gopExceedsRevenue.length} operating month(s) show GOP above total revenue.`, gopExceedsRevenue.map((m) => m.id));
+  }
+
+  const noiExceedsGop = months.filter((m) => {
+    const noi = num(m.owner_noi);
+    const gop = num(m.gop);
+    return noi !== null && gop !== null && noi > gop + 1;
+  });
+  if (noiExceedsGop.length > 0) {
+    add('noi_exceeds_gop', `${noiExceedsGop.length} operating month(s) show owner NOI above GOP.`, noiExceedsGop.map((m) => m.id));
+  }
+
+  const badContractDates = contracts.filter((c) => {
+    const start = parseDate(c.start_date);
+    const end = parseDate(c.end_date);
+    return start && end && end < start;
+  });
+  if (badContractDates.length > 0) {
+    add('contract_end_before_start', `${badContractDates.length} contract(s) end before they start.`, badContractDates.map((c) => c.id));
+  }
+
+  // Contract keys-covered vs recorded inventory — a >10% mismatch is worth a look.
+  const totalKeys = blocks.reduce((s, b) => s + (num(b.keys_count) || 0), 0);
+  const primary = contracts.find((c) => c.contract_type === 'hma' || c.contract_type === 'master_lease') || contracts[0];
+  const covered = primary ? num(primary.keys_covered) : null;
+  if (totalKeys > 0 && covered !== null && covered > 0 && Math.abs(covered - totalKeys) / totalKeys > 0.10) {
+    add('contract_keys_mismatch',
+      `The governing contract covers ${covered} keys but the inventory records ${totalKeys}.`);
   }
 
   return warnings;

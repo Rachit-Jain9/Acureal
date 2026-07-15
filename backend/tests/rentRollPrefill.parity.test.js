@@ -148,7 +148,7 @@ describe('rentRollPrefill — behavior (hand-computed)', () => {
   });
 
   test('classes without a bridge yet are honestly unsupported', () => {
-    for (const cls of ['residential_apartments', 'villas', 'mixed_use', 'hospitality', 'redevelopment']) {
+    for (const cls of ['residential_apartments', 'villas', 'mixed_use', 'redevelopment']) {
       const r = backend.buildRegisterPrefill({ records: { lease: RECORDS }, register: REGISTER, assetClass: cls });
       expect(r.supported).toBe(false);
       expect(r.reason).toMatch(/does not have a register/);
@@ -217,6 +217,63 @@ describe('rentRollPrefill — plotted (sales_collections) bridge', () => {
   test('never seeds project land area from summed plot areas', () => {
     expect(result.fields.map((f) => f.name)).not.toContain('totalLandSqft');
     expect(result.fields.map((f) => f.name)).not.toContain('saleableLandPct');
+  });
+});
+
+describe('rentRollPrefill — hospitality (hotel_operating) bridge', () => {
+  const HOTEL_RECORDS = {
+    hotel_key_block: [{ id: 1, keys_count: 100, operational: true, ooo_pct: 0 }],
+    hotel_operating_month: [
+      { id: 100, month: '2026-06-01', occupancy_pct: 60, adr: 6000, room_revenue: 10800000, fnb_revenue: 2700000, other_revenue: 1080000, gop: 5000000 },
+      { id: 101, month: '2026-07-01', occupancy_pct: 80, adr: 6000, room_revenue: 14880000, fnb_revenue: 3720000, other_revenue: 1488000, gop: 8000000 },
+    ],
+  };
+  const PARENT = { as_of_date: '2026-07-31', settings: {} };
+  const result = backend.buildRegisterPrefill({ records: HOTEL_RECORDS, register: PARENT, assetClass: 'hospitality' });
+  const byName = Object.fromEntries(result.fields.map((f) => [f.name, f]));
+
+  test('parity: frontend agrees on the hotel proposal', () => {
+    expect(frontend.buildRegisterPrefill({ records: HOTEL_RECORDS, register: PARENT, assetClass: 'hospitality' }))
+      .toEqual(result);
+  });
+
+  test('seeds keys + ADR + occupancy + margins from TTM actuals', () => {
+    expect(result.supported).toBe(true);
+    expect(byName.keys.derived).toBe(100);             // available keys
+    expect(byName.adr.derived).toBe(6000);             // room-revenue weighted
+    expect(byName.stabilizedOccPct.derived).toBeCloseTo(70.2, 1); // 4280/6100
+    expect(byName.gopMarginPct.derived).toBeCloseTo(37.5, 1);     // 13M/34.668M
+    expect(byName.fbRevPct.derived).toBe(25);
+    expect(byName.otherRevPct.derived).toBe(10);
+    expect(byName.adr.note).toMatch(/room-night weighted/);
+  });
+
+  test('provenance uses the operating-month basis', () => {
+    expect(result.provenance).toMatchObject({ source: 'rent_roll', basisCount: 2, basisNoun: 'operating month' });
+  });
+
+  test('keys omitted when no inventory recorded (never seeds a guess)', () => {
+    const noKeys = backend.buildRegisterPrefill({
+      records: { hotel_operating_month: HOTEL_RECORDS.hotel_operating_month },
+      register: PARENT, assetClass: 'hospitality',
+    });
+    expect(noKeys.fields.map((f) => f.name)).not.toContain('keys');
+    // ADR/occupancy still derive from the stored-average fallback.
+    expect(noKeys.fields.map((f) => f.name)).toContain('adr');
+  });
+
+  test('keys seed from OPERATIONAL inventory, not the OOO-adjusted available count', () => {
+    const withOoo = backend.buildRegisterPrefill({
+      records: {
+        hotel_key_block: [{ id: 1, keys_count: 100, operational: true, ooo_pct: 5 }],
+        hotel_operating_month: HOTEL_RECORDS.hotel_operating_month,
+      },
+      register: PARENT, assetClass: 'hospitality',
+    });
+    const keys = withOoo.fields.find((f) => f.name === 'keys');
+    // availableKeys would be 95; the permanent operating inventory is 100.
+    expect(keys.derived).toBe(100);
+    expect(keys.note).toMatch(/temporary haircut/i);
   });
 });
 

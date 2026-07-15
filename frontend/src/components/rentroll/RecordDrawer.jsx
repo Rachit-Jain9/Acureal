@@ -11,17 +11,26 @@ import { Modal, Button, Field, Input, Select, confirm } from '../../design-syste
 // record.attributes; the payload builder splits them out and merges over the
 // record's existing attributes so reserved keys survive.
 
-const toFormValue = (v) => {
+const toFormValue = (v, f) => {
   if (v === null || v === undefined) return '';
-  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(v)) return v.slice(0, 10);
-  return String(v);
+  if (f?.boolean) return v === true || v === 'true' ? 'true' : 'false';
+  const s = typeof v === 'string' ? v : String(v);
+  // Date/month columns arrive as 'YYYY-MM-DD' (production + CI run the API on
+  // UTC, where the pg DATE serializes with no offset). month inputs bind to
+  // YYYY-MM, date inputs to YYYY-MM-DD. (A non-UTC API server would shift a
+  // bare DATE by its offset — a global pg DATE type-parser fix tracked
+  // separately; it does not affect the deployed product.)
+  if (f?.type === 'month') return s.slice(0, 7);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s.slice(0, 10);
+  if (f?.type === 'date') return s.slice(0, 10);
+  return s;
 };
 
 const buildForm = (record, sections, defaults) => {
   const form = {};
   for (const section of sections) {
     for (const f of section.fields) {
-      form[f.name] = toFormValue(f.isAttribute ? record?.attributes?.[f.name] : record?.[f.name]);
+      form[f.name] = toFormValue(f.isAttribute ? record?.attributes?.[f.name] : record?.[f.name], f);
     }
   }
   if (!record) Object.assign(form, defaults || {});
@@ -40,10 +49,13 @@ const cleanPayload = (form, sections, record) => {
   for (const [name, raw] of Object.entries(form)) {
     const def = fieldByName.get(name);
     let value;
-    if (raw === '') value = null;
+    if (def?.boolean) value = raw === 'true';        // booleans are never null (select is bound)
+    else if (raw === '') value = null;
     else if (def?.type === 'number') {
       const n = Number(raw);
       value = Number.isFinite(n) ? n : null;
+    } else if (def?.type === 'month') {
+      value = `${raw}-01`;                            // YYYY-MM → first-of-month date
     } else value = raw;
 
     if (def?.isAttribute) { attributes[name] = value; attributesTouched = true; }
