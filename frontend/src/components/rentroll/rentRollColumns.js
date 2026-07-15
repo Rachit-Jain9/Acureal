@@ -142,11 +142,77 @@ export const LEASE_FIELD_SECTIONS = [
   },
 ];
 
-export const visibleLeaseSections = (assetClass) =>
-  LEASE_FIELD_SECTIONS.map((section) => ({
+// ── Per-class descriptor fields (stored under record.attributes) ────────────
+// Straight from the operator's template pack: each lease-family class carries
+// a handful of descriptors that matter for that asset type. All optional,
+// display + evidence only — never metric inputs.
+
+const opts = (...labels) => labels.map((l) => ({ value: l, label: l }));
+
+export const CLASS_DESCRIPTOR_FIELDS = {
+  residential_apartments: [
+    { name: 'configuration', label: 'Configuration', type: 'select', options: opts('Studio', '1 BHK', '2 BHK', '2.5 BHK', '3 BHK', '3.5 BHK', '4 BHK', '4+ BHK') },
+    { name: 'carpet_area_sqft', label: 'Carpet Area (sqft)', type: 'number', step: '1' },
+    { name: 'furnishing', label: 'Furnishing', type: 'select', options: opts('Unfurnished', 'Semi-furnished', 'Fully furnished') },
+    { name: 'society_treatment', label: 'Society / RWA Charges', type: 'select', options: opts('Tenant pays society', 'Owner pays society', 'Included in rent') },
+  ],
+  villas: [
+    { name: 'plot_area_sqft', label: 'Plot Area (sqft)', type: 'number', step: '1' },
+    { name: 'built_up_area_sqft', label: 'Built-up Area (sqft)', type: 'number', step: '1' },
+    { name: 'furnishing', label: 'Furnishing', type: 'select', options: opts('Unfurnished', 'Semi-furnished', 'Fully furnished') },
+    { name: 'pool_garden_opex', label: 'Pool / Garden Upkeep', type: 'select', options: opts('Tenant maintains', 'Owner maintains', 'Shared') },
+  ],
+  commercial_office: [
+    { name: 'building_grade', label: 'Building Grade', type: 'select', options: opts('Grade A+', 'Grade A', 'Grade B', 'Grade C') },
+    { name: 'area_measurement', label: 'Area Measurement', type: 'select', options: opts('Super built-up', 'Built-up', 'Carpet', 'Chargeable') },
+    { name: 'sez_stpi', label: 'SEZ / STPI', type: 'select', options: opts('None', 'SEZ', 'STPI') },
+    { name: 'fit_out_condition', label: 'Fit-out Condition', type: 'select', options: opts('Warm shell', 'Bare shell', 'Fully fitted', 'Plug & play') },
+  ],
+  retail: [
+    { name: 'retail_category', label: 'Retail Category', type: 'text' },
+    { name: 'anchor_inline', label: 'Anchor / Inline', type: 'select', options: opts('Anchor', 'Mini anchor', 'Inline', 'Kiosk', 'F&B') },
+    { name: 'store_carpet_area_sqft', label: 'Store Carpet Area (sqft)', type: 'number', step: '1' },
+    { name: 'trading_density', label: 'Trading Density (₹/sqft/month)', type: 'number', step: '1' },
+  ],
+  industrial_warehousing: [
+    { name: 'facility_type', label: 'Facility Type', type: 'select', options: opts('Grade A warehouse', 'Standard warehouse', 'Cold storage', 'Light manufacturing', 'In-city fulfilment') },
+    { name: 'clear_height_ft', label: 'Clear Height (ft)', type: 'number', step: '0.5' },
+    { name: 'dock_doors', label: 'Dock Doors', type: 'number', step: '1' },
+    { name: 'power_load_kva', label: 'Power Load (kVA)', type: 'number', step: '1' },
+  ],
+  mixed_use: [
+    { name: 'component_asset_class', label: 'Component', type: 'select', options: opts('Commercial Office', 'Retail', 'Residential', 'Hospitality', 'Other') },
+    { name: 'component_tower', label: 'Component / Tower', type: 'text' },
+    { name: 'revenue_model', label: 'Revenue Model', type: 'select', options: opts('Fixed rent', 'Revenue share', 'MG + revenue share') },
+  ],
+  raw_land: [
+    { name: 'permitted_land_use', label: 'Permitted Land Use', type: 'text' },
+    { name: 'lease_licence_type', label: 'Lease / Licence Type', type: 'select', options: opts('Long-term lease', 'Short-term lease', 'Licence', 'Ground lease') },
+    { name: 'upfront_premium', label: 'Upfront Premium (₹)', type: 'number', step: '1' },
+  ],
+};
+
+// Attribute writes are constrained BY CONSTRUCTION: the drawer's form is
+// built from CLASS_DESCRIPTOR_FIELDS, so only catalog keys ever reach
+// record.attributes from the UI (existing keys, e.g. the reserved area_input
+// echo, are merged and preserved). Import/extraction paths must apply the
+// same catalog when they land.
+
+export const visibleLeaseSections = (assetClass) => {
+  const sections = LEASE_FIELD_SECTIONS.map((section) => ({
     ...section,
     fields: section.fields.filter((f) => !f.visibleWhen || f.visibleWhen(assetClass)),
   })).filter((section) => section.fields.length > 0);
+
+  const descriptors = CLASS_DESCRIPTOR_FIELDS[assetClass];
+  if (descriptors && descriptors.length > 0) {
+    sections.push({
+      title: 'Asset specifics',
+      fields: descriptors.map((f) => ({ ...f, isAttribute: true })),
+    });
+  }
+  return sections;
+};
 
 // Numeric lease fields — inline grid editors and the drawer coerce these
 // before PATCH so the API receives numbers, not strings.

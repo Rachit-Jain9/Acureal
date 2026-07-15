@@ -105,10 +105,15 @@ export function mapProgrammeToInputs({ assetClass, programme, buildability }) {
 }
 
 export function stashPrefill(dealId, payload) {
-  if (!dealId || !payload) return;
+  if (!dealId || !payload) return false;
   try {
     window.sessionStorage.setItem(PREFILL_KEY_PREFIX + dealId, JSON.stringify(payload));
-  } catch { /* private mode / storage full — silently skip */ }
+    return true;
+  } catch {
+    // Private mode / storage quota. Callers that PROMISE staging (the
+    // rent-roll Apply flow) must check this and not pretend it worked.
+    return false;
+  }
 }
 
 export function readPrefill(dealId) {

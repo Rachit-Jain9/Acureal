@@ -391,6 +391,55 @@ const validateCompFreshness = (ctx, core, addIssue) => {
 };
 
 /**
+ * Rent-roll register consistency (2026-07-14, rent-roll program PR-4).
+ * Surfaces the register's own WARN-only findings (validateLeaseRoll — dates,
+ * area overrun, model-rent drift) at export time, plus a staleness check:
+ * when the saved model carries rentRollProvenance (assumptions were seeded
+ * from a register snapshot) and the LIVE register's content hash differs,
+ * the model may be citing income evidence that has since changed.
+ * Reads the already-computed export slice — never re-derives register math.
+ */
+const RENT_ROLL_WARNING_CAP = 5;
+const validateRentRollConsistency = (ctx, core, addIssue) => {
+  const slice = ctx.exportContext?.rentRoll;
+  if (!slice) return;
+
+  const warnings = Array.isArray(slice.warnings) ? slice.warnings : [];
+  for (const w of warnings.slice(0, RENT_ROLL_WARNING_CAP)) {
+    addIssue(
+      'warn',
+      'Rent roll — register consistency',
+      w.code || 'rent_roll',
+      w.message,
+      'Re-examine the flagged register records (Rent Roll tab) before circulating this workbook.',
+      slice.family || 'register',
+    );
+  }
+  if (warnings.length > RENT_ROLL_WARNING_CAP) {
+    addIssue(
+      'warn',
+      'Rent roll — register consistency',
+      'rent_roll_more',
+      `${warnings.length - RENT_ROLL_WARNING_CAP} further register finding(s) not listed here.`,
+      'Open the Rent Roll tab for the full list.',
+      slice.family || 'register',
+    );
+  }
+
+  const provenance = ctx.exportContext?.deal?.model_params?.rentRollProvenance || null;
+  if (provenance?.dataHash && slice.dataHash && provenance.dataHash !== slice.dataHash) {
+    addIssue(
+      'warn',
+      'Rent roll — model staleness',
+      'rentRollProvenance',
+      'The saved financial model was seeded from a rent-roll snapshot that no longer matches the live register — leases have been added, edited, or removed since.',
+      'Re-open Apply to Financials on the Rent Roll tab and re-seed (or document why the older snapshot governs).',
+      slice.family || 'register',
+    );
+  }
+};
+
+/**
  * Orchestrator — runs all market-benchmark validators against the export
  * context. Each individual validator is fail-open (try/catch wrapper here
  * is belt-and-suspenders; the validators themselves don't throw).
@@ -410,6 +459,8 @@ const runMarketBenchmarkValidators = (ctx, core, addIssue) => {
     validateYocVsExitCapSpread,
     // 2026-06-11: cross-asset-class fundamental-economics floor (IRR<0, EM<1.0×)
     validateFundamentalEconomics,
+    // 2026-07-14: rent-roll register findings + seeded-model staleness
+    validateRentRollConsistency,
   ];
   for (const validator of runners) {
     try {
@@ -502,6 +553,7 @@ module.exports = {
     validateDscrFloor,
     validateYocVsExitCapSpread,
     validateFundamentalEconomics,
+    validateRentRollConsistency,
     RBI_DSCR_FLOOR,
     RBI_DSCR_FLOOR_BPS,
     YOC_VS_EXIT_CAP_MIN_SPREAD_BPS,

@@ -23,7 +23,7 @@
 //   transform nets downstream; benchmark comparisons also use gross.
 // - GST/TDS are informational and excluded from all rent/NOI metrics.
 
-const METRICS_VERSION = 'rr-metrics-1.0.0';
+const METRICS_VERSION = 'rr-metrics-1.1.0';
 const SQFT_PER_ACRE = 43560;
 const DAYS_PER_YEAR = 365.25;
 
@@ -335,14 +335,42 @@ const computeLeaseMetrics = (records, parent = {}, opts = {}) => {
   let lockinAreaDays = 0;
   let lockinArea = 0;
 
+  // Financial-bridge aggregates. Opex counts EVERY live row (an owner bears
+  // upkeep on vacant floors too); the % basis is the kernel's EGR analogue —
+  // contracted base rent plus LOI base rent when the policy counts LOIs
+  // toward committed occupancy (vacancyPct is derived from that same basis).
+  let ownerOpexPaise = 0;
+  let opexRecordedRows = 0;    // "no opex recorded" must yield null, never 0%
+  let loiBasePaise = 0;        // monthly base rent proposed on LOI rows
+  let escWeightPaise = 0;      // Σ base rent of rows with a resolvable escalation
+  let escWeightedSumPaise = 0; // Σ base × annualized escalation %
+  // Retail: the kernel's baseRentPerSqftMonth is the INLINE (non-anchor)
+  // rate — it applies the anchor discount itself via blendedFactor. Track an
+  // ex-anchor weighted rate so the bridge never double-counts the discount.
+  let exAnchorRentPaise = 0;
+  let exAnchorArea = 0;
+
   const ladder = new Map(); // fy → { fy, areaSqft, annualRentPaise (base), leaseCount }
   let expiredArea = 0;
   const tenants = new Map(); // tenant → monthly base paise
+
+  const isAnchorRow = (r) => {
+    const flag = r.attributes && r.attributes.anchor_inline;
+    return flag === 'Anchor' || flag === 'Mini anchor';
+  };
 
   for (const r of rows) {
     const area = num(r.chargeable_area_sqft);
     const contracted = CONTRACTED_STATUSES.has(r.status);
     const physical = PHYSICAL_STATUSES.has(r.status);
+
+    // Owner opex is borne regardless of letting status — accumulate BEFORE
+    // any status filtering so a vacant floor's upkeep is never dropped.
+    const opexAnyStatus = num(r.owner_opex_annual);
+    if (opexAnyStatus !== null) {
+      ownerOpexPaise += toPaise(opexAnyStatus);
+      opexRecordedRows += 1;
+    }
 
     if (area !== null) {
       totalRowArea += area;
@@ -362,7 +390,15 @@ const computeLeaseMetrics = (records, parent = {}, opts = {}) => {
       else excluded.missingMarket += 1;
       continue;
     }
-    if (!contracted) continue; // loi / expired rows carry no revenue
+    if (!contracted) {
+      // LOI rows: proposed rent joins the EGR basis under the include policy
+      // (committed occupancy — and therefore vacancyPct — already counts them).
+      if (r.status === LOI_STATUS) {
+        const loiBase = monthlyBaseRentPaise(r);
+        if (loiBase !== null) loiBasePaise += loiBase;
+      }
+      continue; // loi / expired rows carry no contracted revenue
+    }
 
     const base = monthlyBaseRentPaise(r);
     if (base === null) {
@@ -388,6 +424,21 @@ const computeLeaseMetrics = (records, parent = {}, opts = {}) => {
 
       if (isPresent(r.tenant_name)) {
         tenants.set(r.tenant_name, (tenants.get(r.tenant_name) || 0) + base);
+      }
+
+      if (!isAnchorRow(r) && r.rent_basis === 'per_sqft_month' && area !== null && area > 0) {
+        exAnchorRentPaise += base;
+        exAnchorArea += area;
+      }
+
+      // Annualized escalation, rent-weighted. Explicit rent_steps have no
+      // single "% pa" — such rows are excluded from the weighted average
+      // (their step economics already live in effectiveRentRate).
+      const escPct = num(r.escalation_pct);
+      const escEvery = num(r.escalation_every_months);
+      if (!rentSteps(r) && escPct !== null && escEvery !== null && escEvery > 0) {
+        escWeightPaise += base;
+        escWeightedSumPaise += base * (escPct * (12 / escEvery));
       }
     }
 
@@ -532,6 +583,26 @@ const computeLeaseMetrics = (records, parent = {}, opts = {}) => {
       cashNOI: cashGrossAnnual - expensesAnnual,
       ervVacantAnnual: fromPaise(ervVacantPaise),
       inPlaceRentPerSqftMonth,
+      // Financial-bridge aggregates (see accumulators note).
+      baseRentAnnual: fromPaise(contractedBasePaise * 12),
+      // ALL recorded owner opex — vacant/LOI/expired floors included; the
+      // owner bears upkeep regardless of letting status.
+      ownerOpexAnnual: fromPaise(ownerOpexPaise),
+      // % over the kernel's EGR analogue: contracted base rent + LOI base
+      // rent when the policy counts LOIs (matching the vacancyPct basis).
+      opexPctOfEgrBasis: (() => {
+        const egrBasisPaise = (contractedBasePaise
+          + (loiPolicy === 'include' ? loiBasePaise : 0)) * 12;
+        return opexRecordedRows > 0 && egrBasisPaise > 0
+          ? (ownerOpexPaise / egrBasisPaise) * 100 : null;
+      })(),
+      weightedEscalationPctAnnual: escWeightPaise > 0
+        ? escWeightedSumPaise / escWeightPaise : null,
+      // Ex-anchor weighted rate — what the retail kernel's baseRentPerSqftMonth
+      // actually means (it blends the anchor discount in itself). Equals the
+      // blended figure when no row is flagged Anchor / Mini anchor.
+      inPlaceRentPerSqftMonthExAnchor: exAnchorArea > 0
+        ? fromPaise(exAnchorRentPaise) / exAnchorArea : null,
     },
     deposits: {
       total: fromPaise(depositPaise),

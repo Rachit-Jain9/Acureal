@@ -149,7 +149,6 @@ export default function InputForm({
   onSubmit,
   isLoading,
   prefill,
-  onPrefillConsumed,
 }) {
   const [inputs, setInputs] = useState(() => buildInitialInputs(null, assetClass, deal, prefill));
   const [hintOpen, setHintOpen] = useState(null);
@@ -165,10 +164,14 @@ export default function InputForm({
     benchmarkData?.bands,
   );
 
+  // The prefill is stable for the page visit (FinancialsPage reads-and-clears
+  // sessionStorage once at mount and keeps the value in state) — no
+  // consumption callback. The old onPrefillConsumed pattern nulled the parent
+  // state, refired this effect with prefill=null, and erased the seeded
+  // values from the form one tick after applying them.
   useEffect(() => {
     if (initialValues) setInputs(buildInitialInputs(initialValues, assetClass, deal, prefill));
     else setInputs(buildInitialInputs(null, assetClass, deal, prefill));
-    if (prefill && typeof onPrefillConsumed === 'function') onPrefillConsumed();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialValues, assetClass, deal, prefill]);
 
