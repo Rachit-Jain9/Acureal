@@ -4,6 +4,19 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-15 (Rent-roll program — Hotel Operating Roll shipped; PR-8 next) (PR #984)
+
+Third register family in the rent-roll program. Hospitality deals now carry a real **Operating Roll**: a room-type key inventory, HMA/franchise/lease management contracts, and a month-by-month actual-trading history (occupancy, ADR, room/F&B/other revenue, GOP, owner NOI). The deterministic engine rolls a trailing-12-month view — occupancy, ADR, RevPAR, GOP margin, revenue mix, owner NOI — all room-night-weighted so a month missing one input never distorts the others. "Apply to Financials" proposes keys, ADR, stabilised occupancy and GOP margin to the underwriting model with the same current-vs-proposed comparison and staleness banner as the lease and sales families.
+
+- **Ship state**: PR #984 merged to master (6c3e500), production deploy **success**. Backend 3,728 tests / 232 suites, frontend 1,282 + build + theme-token guard all green. Adversarial review found and fixed **8 real bugs before merge** (chart tooltips branching on dataKey not series name; a viewer-role grid crash; TTM occupancy/ADR/RevPAR basis mismatch on partial months; GOP-margin/mix seeded 0% when blank; keys seeded from available not operational; bare-DATE TZ shift documented).
+- **Not done this session**: the live Chrome walk-through on a throwaway hospitality deal (add key block + contract + two operating months, eyeball KPIs/charts vs hand-calc, confirm Apply + staleness). Tests/build passed; the browser smoke is the one carried-forward PR-7 item. Hand-computed expected values for that deal: Available Keys 100, TTM Occupancy 70.2%, TTM ADR ₹6,000, RevPAR ₹4,210, Owner NOI ₹0.80 Cr, GOP margin 37.5%; bridge proposes keys 100 / ADR 6000 / occ 70.2 / GOP 37.5 / F&B 25 / other 10.
+
+### What's left to do next (plan v2 sequencing)
+- **PR-8** redevelopment occupants (occupant register: entitlements, transit rent, shifting/brokerage/corpus obligations, PAAA/vacated status, documentation risk) + free-sale reuse of the sales register already shipped.
+- Then **exports** (delete orphaned `buildLeaseRollSheet`/`buildUnitMixSheet`; add rent-roll + sales + operating sheets in the XLSX committed-block pattern, DOCX section, PPTX slide), **template download + hardened deterministic import**, then **AI extraction** doctype. Future operator-gated: kernel-native `leases[]`.
+
+---
+
 ## 2026-07-13 (JDA structure-aware KERNEL math — REDIP now models Bengaluru's most common deal correctly) (PR #974)
 
 The single biggest structural accuracy fix in the model, built and verified end-to-end. Every generic tool — and, until now, REDIP's deterministic kernel — charges the developer the **full land cost** for every deal, even a Joint Development Agreement. But a JDA doesn't buy the land: the landowner **contributes** it for a share of revenue. So a JDA was modeled as value-destroying when it's often the opposite.
