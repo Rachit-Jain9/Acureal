@@ -221,3 +221,80 @@ export const NUMERIC_LEASE_FIELDS = new Set(
     .filter((f) => f.type === 'number')
     .map((f) => f.name),
 );
+
+// ── Sales & collections family (Shape B: plotted / free-sale inventory) ─────
+
+export const SALE_STATUS_CONFIG = {
+  unsold: { label: 'Unsold', tone: 'neutral' },
+  booked: { label: 'Booked', tone: 'info' },
+  sold: { label: 'Sold', tone: 'success' },
+  registered: { label: 'Registered', tone: 'success' },
+  cancelled: { label: 'Cancelled', tone: 'danger' },
+};
+
+export const SALE_STATUS_OPTIONS = Object.entries(SALE_STATUS_CONFIG)
+  .map(([value, cfg]) => ({ value, label: cfg.label }));
+
+export const SALE_FIELD_SECTIONS = [
+  {
+    title: 'Identity',
+    fields: [
+      { name: 'record_label', label: 'Plot / Unit No.', type: 'text' },
+      { name: 'block_phase', label: 'Block / Phase', type: 'text' },
+      { name: 'unit_type', label: 'Plot Use / Type', type: 'text' },
+      { name: 'customer_name', label: 'Customer / Channel', type: 'text' },
+      { name: 'status', label: 'Status', type: 'select', options: SALE_STATUS_OPTIONS },
+    ],
+  },
+  {
+    title: 'Area & pricing',
+    fields: [
+      { name: 'area_sqft', label: 'Plot Area (sqft)', type: 'number', step: '1', hint: '1 acre = 43,560 sqft.' },
+      { name: 'base_price_per_sqft', label: 'Base Price (₹/sqft)', type: 'number', step: '1' },
+      {
+        name: 'other_charges_amount', label: 'Other Charges (₹)', type: 'number', step: '1',
+        hint: 'PLC + infra + club + registration etc. Added to the base to form the agreement value.',
+      },
+      { name: 'gst_pct', label: 'GST (%) — informational', type: 'number', step: '0.5' },
+      {
+        name: 'agreement_value', label: 'Agreement Value (₹)', type: 'number', step: '1',
+        hint: 'The consideration governs when entered; otherwise base × area + charges.',
+      },
+      { name: 'current_market_rate', label: 'Current Market Rate (₹/sqft)', type: 'number', step: '1', hint: 'Drives unsold GDV / mark-to-market.' },
+    ],
+  },
+  {
+    title: 'Collections',
+    fields: [
+      { name: 'amount_collected', label: 'Collected to Date (₹)', type: 'number', step: '1' },
+      { name: 'amount_overdue', label: 'Overdue Amount (₹)', type: 'number', step: '1' },
+    ],
+  },
+  {
+    title: 'Dates',
+    fields: [
+      { name: 'booking_date', label: 'Booking Date', type: 'date' },
+      { name: 'agreement_date', label: 'Agreement Date', type: 'date' },
+      { name: 'possession_date', label: 'Possession Date', type: 'date' },
+    ],
+  },
+];
+
+// Plot descriptors (stored under record.attributes), straight from the pack.
+const PLOT_DESCRIPTOR_FIELDS = [
+  { name: 'facing', label: 'Facing', type: 'select', options: ['East', 'West', 'North', 'South', 'North-East', 'North-West', 'South-East', 'South-West'].map((v) => ({ value: v, label: v })) },
+  { name: 'corner_plot', label: 'Corner Plot', type: 'select', options: [{ value: 'Yes', label: 'Yes' }, { value: 'No', label: 'No' }] },
+  { name: 'dimensions', label: 'Dimensions', type: 'text' },
+  { name: 'salesperson', label: 'Salesperson', type: 'text' },
+];
+
+export const visibleSaleSections = () => [
+  ...SALE_FIELD_SECTIONS,
+  { title: 'Plot specifics', fields: PLOT_DESCRIPTOR_FIELDS.map((f) => ({ ...f, isAttribute: true })) },
+];
+
+export const NUMERIC_SALE_FIELDS = new Set(
+  SALE_FIELD_SECTIONS.flatMap((s) => s.fields)
+    .filter((f) => f.type === 'number')
+    .map((f) => f.name),
+);

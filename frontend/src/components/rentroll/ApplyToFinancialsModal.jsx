@@ -44,7 +44,8 @@ export default function ApplyToFinancialsModal({
   const [applying, setApplying] = useState(false);
 
   const proposal = useMemo(
-    () => buildRegisterPrefill({ records: records?.lease || [], register, assetClass }),
+    // Pass the whole kind-map — the mapper picks lease vs sale rows by class.
+    () => buildRegisterPrefill({ records, register, assetClass }),
     [records, register, assetClass],
   );
 
@@ -135,7 +136,7 @@ export default function ApplyToFinancialsModal({
       onClose={applying ? () => {} : onClose}
       closeOnOverlayClick={!applying}
       title="Apply register to Financials"
-      description={`Derived from ${proposal.provenance.contractedLeases} contracted lease(s), as of ${proposal.provenance.asOfDate}. Accept field by field — Apply freezes a register snapshot and stages the values; the model itself only changes when you hit Calculate.`}
+      description={`Derived from ${proposal.provenance.basisCount} ${proposal.provenance.basisNoun}${proposal.provenance.basisCount === 1 ? '' : 's'}, as of ${proposal.provenance.asOfDate}. Accept field by field — Apply freezes a register snapshot and stages the values; the model itself only changes when you hit Calculate.`}
       size="lg"
       footer={(
         <div className="flex w-full items-center justify-end gap-2">

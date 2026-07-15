@@ -1,23 +1,27 @@
-// Mirror of backend/src/utils/rentRollPrefill.js. Keep in lockstep — change
-// one, change both, run backend/tests/rentRollPrefill.parity.test.js.
+// Mirror of backend/src/utils/rentRollPrefill.js. Keep in lockstep — run
+// backend/tests/rentRollPrefill.parity.test.js.
 //
-// Register → financial-model prefill mapper. A thin, pure layer over
-// computeLeaseMetrics — it maps already-computed aggregates onto the kernel's
-// canonical income inputs and NEVER re-derives math (CLAUDE.md hard rule).
+// Register → financial-model prefill mapper. A thin, pure layer over the
+// deterministic metric engines — it maps already-computed aggregates onto the
+// kernel's canonical inputs and NEVER re-derives math (CLAUDE.md hard rule).
 //
-// Scope (plan v2): only the kernel's INCOME family consumes lease-register
-// aggregates — the development-family models (residential/villas/mixed_use/
-// raw_land route there) are merchant-sale models with no rent inputs to seed.
-// Their bridges arrive with the sales/hospitality register PRs.
+// Mirrored at frontend/src/utils/rentRollPrefill.js — keep in lockstep, run
+// backend/tests/rentRollPrefill.parity.test.js.
 //
-// The rent figure is GROSS (pre JDA/JV landowner share) by construction —
-// the kernel's structure transform nets ownership downstream. Never pre-net.
+// Two families seed a model today:
+//   • lease_income (office / retail / industrial) → in-place rent, occupancy,
+//     escalation, opex. GROSS rent (the kernel's JDA/JV transform nets
+//     ownership downstream — never pre-net).
+//   • sales_collections (plotted development) → sold-plot realization rate and
+//     mean plot size for the merchant-sale model.
+// Every other class returns { supported: false } with an honest reason.
 
-import { computeLeaseMetrics, METRICS_VERSION } from './rentRollMetrics';
+import { computeLeaseMetrics, computeSaleMetrics, METRICS_VERSION } from './rentRollMetrics';
 
 export const INCOME_PREFILL_CLASSES = new Set([
   'commercial_office', 'retail', 'industrial_warehousing',
 ]);
+export const SALES_PREFILL_CLASSES = new Set(['plotted_development']);
 
 const round = (v, dp) => {
   if (v === null || v === undefined || !Number.isFinite(Number(v))) return null;
@@ -25,37 +29,23 @@ const round = (v, dp) => {
   return Math.round(Number(v) * f) / f;
 };
 
-/**
- * Build the field-by-field prefill proposal for the Apply-to-Financials
- * comparison. Returns { supported, reason? } for classes whose financial
- * model has no lease-income inputs, else { supported, fields, provenance }.
- *
- * Each field: { name (canonical kernel input), label, derived (number),
- * unit, note (how it was derived — shown under the comparison row) }.
- * Fields whose aggregate is underivable from the register are omitted —
- * the comparison never proposes a value it cannot ground.
- */
-export const buildRegisterPrefill = ({ records, register, assetClass }) => {
-  if (!INCOME_PREFILL_CLASSES.has(assetClass)) {
-    return {
-      supported: false,
-      reason: 'This deal’s financial model is development-family — lease income does not seed it. '
-        + 'The register remains the evidence layer; its own family bridge ships separately.',
-    };
-  }
+// The modal passes the whole kind-map ({ lease, sale, ... }); older income
+// callers/tests pass a bare lease-row array. Tolerate both.
+const leaseRowsOf = (records) => (Array.isArray(records) ? records : (records?.lease || []));
+const saleRowsOf = (records) => (Array.isArray(records) ? [] : (records?.sale || []));
 
-  const metrics = computeLeaseMetrics(records || [], register || {});
+const pushField = (fields) => (name, label, derived, unit, note) => {
+  if (derived === null) return;
+  fields.push({ name, label, derived, unit, note });
+};
+
+// ── lease_income → income model ─────────────────────────────────────────────
+const buildIncomePrefill = ({ records, register, assetClass }) => {
+  const metrics = computeLeaseMetrics(leaseRowsOf(records), register || {});
   const { occupancy, revenue, counts } = metrics;
-
   const fields = [];
-  const push = (name, label, derived, unit, note) => {
-    if (derived === null) return;
-    fields.push({ name, label, derived, unit, note });
-  };
+  const push = pushField(fields);
 
-  // Occupancy denominator is only a defensible leasable-area figure when it
-  // came from the register total or the summed rows — never echo back a
-  // financial-inputs fallback as if the register measured it.
   const areaDerivable = occupancy.denominatorSqft !== null
     && (occupancy.denominatorSource === 'register_total' || occupancy.denominatorSource === 'sum_of_rows');
   push(
@@ -102,11 +92,75 @@ export const buildRegisterPrefill = ({ records, register, assetClass }) => {
     fields,
     provenance: {
       source: 'rent_roll',
-      contractedLeases: counts.contracted,
+      basisCount: counts.contracted,
+      basisNoun: 'lease',
       totalRecords: counts.total,
       asOfDate: metrics.asOf,
       metricsVersion: METRICS_VERSION,
     },
+  };
+};
+
+// ── sales_collections → plotted merchant-sale model ─────────────────────────
+const buildSalesPrefill = ({ records, register }) => {
+  const metrics = computeSaleMetrics(saleRowsOf(records), register || {});
+  const { pricing, inventory } = metrics;
+  const fields = [];
+  const push = pushField(fields);
+
+  // The kernel's revenue = totalPlots × avgPlotSize × sellingRate, all on the
+  // BASE list rate (charges like PLC/infra live outside it). Seed the weighted
+  // base rate on sold plots, not the charge-inclusive realization.
+  push(
+    'sellingRatePerSqft', 'Selling Rate (₹/sqft)',
+    round(pricing.avgSoldBaseRatePerSqft, 0), '₹/sqft',
+    'Area-weighted base list rate on sold plots (excl. PLC / infra / other charges)',
+  );
+  push(
+    'avgPlotSizeSqft', 'Avg Plot Size (sqft)',
+    round(pricing.avgSoldPlotSizeSqft, 0), 'sqft',
+    'Mean saleable area across sold plots',
+  );
+  // Deliberately NOT seeded: totalLandSqft / saleableLandPct describe the whole
+  // project (plots are ~50–60% of gross land) — summing plot areas would
+  // understate the land base. The operator owns those inputs.
+
+  return {
+    supported: true,
+    fields,
+    provenance: {
+      source: 'rent_roll',
+      basisCount: inventory.soldUnits,
+      basisNoun: 'sold unit',
+      totalRecords: metrics.counts.total,
+      asOfDate: metrics.asOf,
+      metricsVersion: METRICS_VERSION,
+    },
+  };
+};
+
+/**
+ * Build the field-by-field prefill proposal for the Apply-to-Financials
+ * comparison. Returns { supported: false, reason } for classes with no
+ * register bridge yet, else { supported: true, fields, provenance }.
+ *
+ * @param {object} args
+ * @param {object|Array} args.records  the register's kind-map, or a bare
+ *   lease-row array (income back-compat)
+ * @param {object} args.register       the deal_registers row
+ * @param {string} args.assetClass
+ */
+export const buildRegisterPrefill = ({ records, register, assetClass }) => {
+  if (INCOME_PREFILL_CLASSES.has(assetClass)) {
+    return buildIncomePrefill({ records, register, assetClass });
+  }
+  if (SALES_PREFILL_CLASSES.has(assetClass)) {
+    return buildSalesPrefill({ records, register });
+  }
+  return {
+    supported: false,
+    reason: 'This deal type does not have a register → model bridge yet. '
+      + 'The register remains the evidence layer; its family bridge ships separately.',
   };
 };
 
@@ -139,3 +193,4 @@ export const reconcileRentRollProvenance = (previous, incoming, kernelInputs) =>
   }
   return previous;
 };
+

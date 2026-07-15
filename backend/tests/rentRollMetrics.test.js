@@ -21,6 +21,8 @@ const {
   computeLeaseMetrics,
   validateLeaseRoll,
   toLeaseExtract,
+  computeSaleMetrics,
+  validateSaleRoll,
 } = require('../src/utils/rentRollMetrics');
 
 const AS_OF = '2026-07-14';
@@ -407,6 +409,121 @@ describe('validateLeaseRoll — WARN-only findings', () => {
   test('clean fixture raises no structural warnings', () => {
     const w = validateLeaseRoll(FIXTURE, PARENT);
     expect(w).toEqual([]);
+  });
+});
+
+// ── Sales & collections golden fixture (plotted), as of 2026-07-14 ──────────
+const SALE_PARENT = { as_of_date: AS_OF, settings: {} };
+const SALE_FIXTURE = [
+  {
+    // Explicit agreement value governs; no milestones.
+    id: 1, status: 'sold', area_sqft: 1500, base_price_per_sqft: 7200,
+    other_charges_amount: 700000, agreement_value: 11500000,
+    amount_collected: 9500000, amount_overdue: 0,
+    booking_date: '2025-05-15', possession_date: '2026-12-31',
+  },
+  {
+    // Derived agreement (7600×2400 + 950,000 = 19,190,000); milestone aging.
+    id: 2, status: 'booked', area_sqft: 2400, base_price_per_sqft: 7600,
+    other_charges_amount: 950000, amount_collected: 6000000, amount_overdue: 500000,
+    booking_date: '2026-04-10', possession_date: '2027-06-30',
+    payment_milestones: [
+      { name: 'Booking', pct: 10, due_date: '2026-04-10', collected: 1919000 },
+      { name: 'Agreement', pct: 20, due_date: '2026-05-05', collected: 2000000 },
+      { name: 'Construction', pct: 60, due_date: '2026-12-31' },
+    ],
+  },
+  {
+    id: 3, status: 'unsold', area_sqft: 1200, base_price_per_sqft: 6900, current_market_rate: 8000,
+  },
+  { id: 4, status: 'cancelled', area_sqft: 1800, base_price_per_sqft: 7000, agreement_value: 13000000 },
+];
+
+describe('computeSaleMetrics — golden plotted fixture', () => {
+  const m = computeSaleMetrics(SALE_FIXTURE, SALE_PARENT);
+
+  test('status counts + inventory sell-through', () => {
+    expect(m.counts).toMatchObject({ total: 4, unsold: 1, booked: 1, sold: 1, registered: 0, cancelled: 1 });
+    expect(m.inventory).toMatchObject({ totalUnits: 3, soldUnits: 2, unsoldUnits: 1 });
+    expect(m.inventory.sellThroughByCountPct).toBeCloseTo((2 / 3) * 100, 6);
+  });
+
+  test('areas exclude cancelled; sell-through by area 76.47%', () => {
+    expect(m.area).toMatchObject({ totalAreaSqft: 5100, soldAreaSqft: 3900, unsoldAreaSqft: 1200 });
+    expect(m.area.sellThroughByAreaPct).toBeCloseTo((3900 / 5100) * 100, 6);
+  });
+
+  test('collections funnel: GDV 3.069cr, collected 1.55cr, receivable 1.519cr', () => {
+    // sold GDV = 11,500,000 (explicit) + 19,190,000 (derived) = 30,690,000
+    expect(m.collections.soldGDV).toBeCloseTo(30690000, 2);
+    expect(m.collections.collected).toBeCloseTo(15500000, 2);
+    expect(m.collections.receivable).toBeCloseTo(15190000, 2);
+    expect(m.collections.overdue).toBeCloseTo(500000, 2);
+    expect(m.collections.collectionEfficiencyPct).toBeCloseTo((15500000 / 30690000) * 100, 6);
+  });
+
+  test('unsold GDV/MTM: market 96L vs base 82.8L → +15.94%', () => {
+    expect(m.unsold.unsoldGDV).toBeCloseTo(9600000, 2);
+    expect(m.unsold.unsoldBaseGDV).toBeCloseTo(8280000, 2);
+    expect(m.unsold.unsoldMtmPct).toBeCloseTo((9600000 / 8280000 - 1) * 100, 6);
+  });
+
+  test('bridge pricing: base rate ₹7446.15/sf, realization ₹7869.23/sf, plot 1950 sf', () => {
+    // (7200×1500 + 7600×2400) / 3900
+    expect(m.pricing.avgSoldBaseRatePerSqft).toBeCloseTo(29040000 / 3900, 4);
+    expect(m.pricing.avgSoldRealizationPerSqft).toBeCloseTo(30690000 / 3900, 4);
+    expect(m.pricing.avgSoldPlotSizeSqft).toBeCloseTo(1950, 10);
+  });
+
+  test('receivables aging from milestones: ₹18.38L in the 61-90 day bucket', () => {
+    // Agreement milestone due 2026-05-05, demanded 20%×19.19M=3.838M, collected 2.0M
+    // → outstanding 1.838M, 70 days overdue → 61-90 bucket. Booking milestone
+    // fully collected (skipped); Construction not yet due.
+    const b = Object.fromEntries(m.aging.buckets.map((x) => [x.bucket, x.amount]));
+    expect(b['61-90']).toBeCloseTo(1838000, 2);
+    expect(b['0-30']).toBe(0);
+    expect(b['31-60']).toBe(0);
+    expect(b['90+']).toBe(0);
+    expect(m.aging.unaged).toBe(0); // row 2 matched milestones → not double-counted
+    expect(m.aging.hasMilestoneData).toBe(true);
+  });
+
+  test('rows without milestones fall back to unaged overdue', () => {
+    const noMilestones = [
+      { id: 9, status: 'sold', area_sqft: 1000, agreement_value: 5000000, amount_collected: 3000000, amount_overdue: 800000 },
+    ];
+    const mm = computeSaleMetrics(noMilestones, SALE_PARENT);
+    expect(mm.aging.unaged).toBeCloseTo(800000, 2);
+    expect(mm.aging.hasMilestoneData).toBe(false);
+  });
+
+  test('Number(null) safety: a sold row with no agreement is excluded, not zeroed', () => {
+    const bare = [{ id: 7, status: 'sold', area_sqft: 1000 }];
+    const mb = computeSaleMetrics(bare, SALE_PARENT);
+    expect(mb.collections.soldGDV).toBe(0);
+    expect(mb.excluded.missingAgreement).toBe(1);
+    expect(mb.pricing.avgSoldBaseRatePerSqft).toBeNull();
+  });
+});
+
+describe('validateSaleRoll — WARN-only findings', () => {
+  test('flags collections exceeding agreement value', () => {
+    const w = validateSaleRoll([{ id: 1, status: 'sold', agreement_value: 1000000, amount_collected: 1200000 }]);
+    expect(w.some((x) => x.code === 'collected_exceeds_agreement')).toBe(true);
+  });
+
+  test('flags possession before booking', () => {
+    const w = validateSaleRoll([{ id: 1, status: 'booked', booking_date: '2026-06-01', possession_date: '2026-01-01' }]);
+    expect(w.some((x) => x.code === 'possession_before_booking')).toBe(true);
+  });
+
+  test('flags overdue larger than the outstanding receivable', () => {
+    const w = validateSaleRoll([{ id: 1, status: 'sold', agreement_value: 1000000, amount_collected: 900000, amount_overdue: 500000 }]);
+    expect(w.some((x) => x.code === 'overdue_exceeds_receivable')).toBe(true);
+  });
+
+  test('clean fixture raises no warnings', () => {
+    expect(validateSaleRoll(SALE_FIXTURE)).toEqual([]);
   });
 });
 

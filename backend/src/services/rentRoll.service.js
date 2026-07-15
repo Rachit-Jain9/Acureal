@@ -25,7 +25,35 @@ const {
   METRICS_VERSION,
   computeLeaseMetrics,
   validateLeaseRoll,
+  computeSaleMetrics,
+  validateSaleRoll,
 } = require('../utils/rentRollMetrics');
+
+// Family → metric/validator dispatch. Centralized so recomputeSummary,
+// createSnapshot, and getExportSlice can never drift on which engine runs for
+// which register family. Families without an engine yet return null metrics
+// (record counts still keep the summary honest).
+const metricsForFamily = (register, recordsByKind) => {
+  switch (register.register_family) {
+    case 'lease_income':
+      return computeLeaseMetrics(recordsByKind.lease || [], register);
+    case 'sales_collections':
+      return computeSaleMetrics(recordsByKind.sale || [], register);
+    default:
+      return null;
+  }
+};
+
+const warningsForFamily = (register, recordsByKind, financialInputs) => {
+  switch (register.register_family) {
+    case 'lease_income':
+      return validateLeaseRoll(recordsByKind.lease || [], register, financialInputs);
+    case 'sales_collections':
+      return validateSaleRoll(recordsByKind.sale || [], register);
+    default:
+      return [];
+  }
+};
 
 // ── Family / kind registry ──────────────────────────────────────────────────
 
@@ -220,12 +248,9 @@ const recomputeSummary = async (client, register) => {
     Object.entries(recordsByKind).map(([k, rows]) => [k, rows.length]),
   );
 
-  let metrics = null;
-  if (register.register_family === 'lease_income') {
-    metrics = computeLeaseMetrics(recordsByKind.lease || [], register);
-  }
-  // sales_collections / hotel_operating / redevelopment metrics land with
-  // their family PRs — counts keep the summary honest until then.
+  // hotel_operating / redevelopment metrics land with their family PRs —
+  // record counts keep the summary honest until then.
+  const metrics = metricsForFamily(register, recordsByKind);
 
   const dataHash = hashRegister(register, recordsByKind);
   const summary = {
@@ -540,9 +565,8 @@ async function createSnapshot(dealId, { label = null, trigger = 'manual' } = {},
     for (const kind of kindsForFamily(register.register_family)) {
       recordsByKind[kind] = await listRecordsForKind(client, dealId, kind);
     }
-    const metrics = register.register_family === 'lease_income'
-      ? computeLeaseMetrics(recordsByKind.lease || [], register)
-      : { recordCounts: Object.fromEntries(Object.entries(recordsByKind).map(([k, v]) => [k, v.length])) };
+    const metrics = metricsForFamily(register, recordsByKind)
+      || { recordCounts: Object.fromEntries(Object.entries(recordsByKind).map(([k, v]) => [k, v.length])) };
     const dataHash = hashRegister(register, recordsByKind);
 
     const res = await client.query(
@@ -617,12 +641,8 @@ async function getExportSlice(dealId, financialInputs = null) {
   try {
     const { register, records } = await getRegister(dealId);
     if (!register) return null;
-    const metrics = register.register_family === 'lease_income'
-      ? computeLeaseMetrics(records.lease || [], register)
-      : null;
-    const warnings = register.register_family === 'lease_income'
-      ? validateLeaseRoll(records.lease || [], register, financialInputs)
-      : [];
+    const metrics = metricsForFamily(register, records);
+    const warnings = warningsForFamily(register, records, financialInputs);
     return {
       family: register.register_family,
       asOfDate: register.as_of_date,

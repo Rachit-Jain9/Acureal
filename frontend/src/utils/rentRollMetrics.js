@@ -720,3 +720,274 @@ export const toLeaseExtract = (records, opts = {}) => {
     });
 };
 
+// ── Sales & collections family (Shape B: plotted + free-sale inventory) ─────
+//
+// One row per plot/unit. Status drives eligibility: booked/sold/registered are
+// "sold" (carry agreement value, collections, receivables); unsold rows carry
+// only inventory GDV/MTM potential; cancelled rows are excluded from both.
+
+export const SALE_SOLD_STATUSES = new Set(['booked', 'sold', 'registered']);
+const SALE_UNSOLD_STATUS = 'unsold';
+const SALE_CANCELLED_STATUS = 'cancelled';
+
+// Aging bucket edges (days overdue). '90+' captures the tail.
+const AGING_BUCKETS = [
+  { key: '0-30', maxDays: 30 },
+  { key: '31-60', maxDays: 60 },
+  { key: '61-90', maxDays: 90 },
+  { key: '90+', maxDays: Infinity },
+];
+
+// Agreement (consideration) value for a sale row, in paise. The stored column
+// is the source of truth; when absent it is derived from base rate × area plus
+// other charges — mirroring the template's `base×area + charges`. Null when
+// neither is resolvable (the row is then excluded from GDV, never zeroed).
+export const agreementValuePaise = (r) => {
+  const stored = num(r.agreement_value);
+  if (stored !== null) return toPaise(stored);
+  const rate = num(r.base_price_per_sqft);
+  const area = num(r.area_sqft);
+  if (rate === null || area === null) return null;
+  const charges = num(r.other_charges_amount);
+  return toPaise(rate * area + (charges === null ? 0 : charges));
+};
+
+// Unsold inventory GDV in paise: area × current market rate, falling back to
+// the base list price. Null when neither a rate nor area is known.
+const unsoldGdvPaise = (r) => {
+  const area = num(r.area_sqft);
+  if (area === null) return null;
+  const market = num(r.current_market_rate);
+  const base = num(r.base_price_per_sqft);
+  const rate = market !== null ? market : base;
+  return rate === null ? null : toPaise(rate * area);
+};
+
+// Receivables aging from a row's payment-plan milestones. Each milestone that
+// has fallen due (due_date <= asOf) and is not fully collected contributes its
+// outstanding amount to the bucket for its days-overdue. Milestone amount is
+// taken from an explicit `amount`, else `pct` of the row's agreement value.
+// Returns per-bucket paise; rows without milestone data return null so the
+// caller can fall back to the (unaged) overdue column.
+const agingFromMilestones = (r, asOf, agreementPaise) => {
+  if (!Array.isArray(r.payment_milestones) || r.payment_milestones.length === 0) return null;
+  const buckets = Object.fromEntries(AGING_BUCKETS.map((b) => [b.key, 0]));
+  let matched = false;
+  for (const m of r.payment_milestones) {
+    const due = parseDate(m.due_date);
+    if (!due || due > asOf) continue;
+    let demandedPaise = null;
+    const amt = num(m.amount);
+    if (amt !== null) demandedPaise = toPaise(amt);
+    else {
+      const pct = num(m.pct);
+      if (pct !== null && agreementPaise !== null) demandedPaise = Math.round(agreementPaise * (pct / 100));
+    }
+    if (demandedPaise === null) continue;
+    const collectedPaise = num(m.collected) !== null ? toPaise(num(m.collected)) : 0;
+    const outstanding = demandedPaise - collectedPaise;
+    if (outstanding <= 0) continue;
+    matched = true;
+    const daysOverdue = daysBetween(due, asOf);
+    const bucket = AGING_BUCKETS.find((b) => daysOverdue <= b.maxDays) || AGING_BUCKETS[AGING_BUCKETS.length - 1];
+    buckets[bucket.key] += outstanding;
+  }
+  return matched ? buckets : null;
+};
+
+/**
+ * Compute the full sales-&-collections metric set.
+ *
+ * @param {Array<object>} records  live sale_records rows (snake_case)
+ * @param {object} parent          deal_registers row ({ as_of_date, settings })
+ * @param {object} [opts]          { asOf?: Date|string }
+ */
+export const computeSaleMetrics = (records, parent = {}, opts = {}) => {
+  const asOf = parseDate(opts.asOf) || parseDate(parent.as_of_date) || new Date();
+  const rows = (records || []).filter((r) => r && !r.deleted_at);
+  const excluded = { missingArea: 0, missingAgreement: 0, missingUnsoldRate: 0 };
+
+  const counts = { total: rows.length, unsold: 0, booked: 0, sold: 0, registered: 0, cancelled: 0 };
+  let totalArea = 0;
+  let soldArea = 0;
+  let unsoldArea = 0;
+
+  let soldGdvPaise = 0;
+  let collectedPaise = 0;
+  let overduePaise = 0;
+  let unsoldGdvTotalPaise = 0;
+  let unsoldBaseGdvPaise = 0;
+
+  // Sold pricing (bridge inputs): weighted base rate + mean plot size.
+  let soldBaseRateAreaPaise = 0; // Σ base_price × area (paise·sqft basis via toPaise on rate)
+  let soldBaseRateArea = 0;      // Σ area for rows with a base rate
+  let soldRealizationPaise = 0;  // Σ agreement value on sold rows with area
+  let soldRealizationArea = 0;
+  let soldPlotSizeSum = 0;
+  let soldPlotSizeCount = 0;
+
+  const aging = Object.fromEntries(AGING_BUCKETS.map((b) => [b.key, 0]));
+  let unagedOverduePaise = 0;
+
+  for (const r of rows) {
+    const status = r.status;
+    if (status && Object.prototype.hasOwnProperty.call(counts, status)) counts[status] += 1;
+
+    if (status === SALE_CANCELLED_STATUS) continue;
+
+    const area = num(r.area_sqft);
+    if (area !== null) totalArea += area;
+    else excluded.missingArea += 1;
+
+    if (status === SALE_UNSOLD_STATUS) {
+      if (area !== null) unsoldArea += area;
+      const gdv = unsoldGdvPaise(r);
+      if (gdv !== null) unsoldGdvTotalPaise += gdv;
+      else excluded.missingUnsoldRate += 1;
+      const base = num(r.base_price_per_sqft);
+      if (base !== null && area !== null) unsoldBaseGdvPaise += toPaise(base * area);
+      continue;
+    }
+
+    if (!SALE_SOLD_STATUSES.has(status)) continue; // unknown status → inventory only
+
+    if (area !== null) soldArea += area;
+
+    const agreement = agreementValuePaise(r);
+    if (agreement === null) {
+      excluded.missingAgreement += 1;
+    } else {
+      soldGdvPaise += agreement;
+      const collected = num(r.amount_collected);
+      if (collected !== null) collectedPaise += toPaise(collected);
+      if (area !== null && area > 0) {
+        soldRealizationPaise += agreement;
+        soldRealizationArea += area;
+      }
+    }
+
+    const overdue = num(r.amount_overdue);
+    const rowAging = agingFromMilestones(r, asOf, agreement);
+    if (rowAging) {
+      for (const b of AGING_BUCKETS) aging[b.key] += rowAging[b.key];
+    } else if (overdue !== null && overdue > 0) {
+      unagedOverduePaise += toPaise(overdue);
+    }
+    if (overdue !== null) overduePaise += toPaise(overdue);
+
+    const base = num(r.base_price_per_sqft);
+    if (base !== null && area !== null && area > 0) {
+      soldBaseRateAreaPaise += toPaise(base) * area;
+      soldBaseRateArea += area;
+    }
+    if (area !== null && area > 0) {
+      soldPlotSizeSum += area;
+      soldPlotSizeCount += 1;
+    }
+  }
+
+  const receivablePaise = Math.max(0, soldGdvPaise - collectedPaise);
+  const soldUnits = counts.booked + counts.sold + counts.registered;
+  const activeUnits = counts.total - counts.cancelled;
+
+  return {
+    metricsVersion: METRICS_VERSION,
+    asOf: asOf.toISOString().slice(0, 10),
+    counts,
+    excluded,
+    inventory: {
+      totalUnits: activeUnits,
+      soldUnits,
+      unsoldUnits: counts.unsold,
+      sellThroughByCountPct: activeUnits > 0 ? (soldUnits / activeUnits) * 100 : null,
+    },
+    area: {
+      totalAreaSqft: totalArea,
+      soldAreaSqft: soldArea,
+      unsoldAreaSqft: unsoldArea,
+      sellThroughByAreaPct: totalArea > 0 ? (soldArea / totalArea) * 100 : null,
+    },
+    collections: {
+      soldGDV: fromPaise(soldGdvPaise),
+      collected: fromPaise(collectedPaise),
+      receivable: fromPaise(receivablePaise),
+      overdue: fromPaise(overduePaise),
+      collectionEfficiencyPct: soldGdvPaise > 0 ? (collectedPaise / soldGdvPaise) * 100 : null,
+    },
+    unsold: {
+      unsoldGDV: fromPaise(unsoldGdvTotalPaise),
+      unsoldBaseGDV: fromPaise(unsoldBaseGdvPaise),
+      unsoldMtmPct: unsoldBaseGdvPaise > 0
+        ? (unsoldGdvTotalPaise / unsoldBaseGdvPaise - 1) * 100 : null,
+    },
+    pricing: {
+      avgSoldBaseRatePerSqft: soldBaseRateArea > 0
+        ? fromPaise(soldBaseRateAreaPaise / soldBaseRateArea) : null,
+      avgSoldRealizationPerSqft: soldRealizationArea > 0
+        ? fromPaise(soldRealizationPaise) / soldRealizationArea : null,
+      avgSoldPlotSizeSqft: soldPlotSizeCount > 0 ? soldPlotSizeSum / soldPlotSizeCount : null,
+    },
+    aging: {
+      buckets: AGING_BUCKETS.map((b) => ({ bucket: b.key, amount: fromPaise(aging[b.key]) })),
+      unaged: fromPaise(unagedOverduePaise),
+      hasMilestoneData: AGING_BUCKETS.some((b) => aging[b.key] > 0),
+    },
+  };
+};
+
+export const validateSaleRoll = (records, parent = {}) => {
+  const warnings = [];
+  const rows = (records || []).filter((r) => r && !r.deleted_at);
+  const add = (code, message, recordIds = []) => warnings.push({ code, message, recordIds });
+
+  const overCollected = rows.filter((r) => {
+    const agreement = agreementValuePaise(r);
+    const collected = num(r.amount_collected);
+    return agreement !== null && collected !== null && toPaise(collected) > agreement * 1.001;
+  });
+  if (overCollected.length > 0) {
+    add('collected_exceeds_agreement',
+      `${overCollected.length} unit(s) have collections exceeding the agreement value.`,
+      overCollected.map((r) => r.id));
+  }
+
+  const negatives = rows.filter((r) => {
+    const a = num(r.agreement_value);
+    const c = num(r.amount_collected);
+    const o = num(r.amount_overdue);
+    return (a !== null && a < 0) || (c !== null && c < 0) || (o !== null && o < 0);
+  });
+  if (negatives.length > 0) {
+    add('negative_sale_amount', `${negatives.length} unit(s) carry a negative amount.`,
+      negatives.map((r) => r.id));
+  }
+
+  const badPossession = rows.filter((r) => {
+    const booking = parseDate(r.booking_date);
+    const possession = parseDate(r.possession_date);
+    return booking && possession && possession < booking;
+  });
+  if (badPossession.length > 0) {
+    add('possession_before_booking',
+      `${badPossession.length} unit(s) have a possession date before booking.`,
+      badPossession.map((r) => r.id));
+  }
+
+  const overdueExceedsReceivable = rows.filter((r) => {
+    if (!SALE_SOLD_STATUSES.has(r.status)) return false;
+    const agreement = agreementValuePaise(r);
+    const collected = num(r.amount_collected);
+    const overdue = num(r.amount_overdue);
+    if (agreement === null || overdue === null) return false;
+    const receivable = agreement - (collected !== null ? toPaise(collected) : 0);
+    return toPaise(overdue) > receivable + 1;
+  });
+  if (overdueExceedsReceivable.length > 0) {
+    add('overdue_exceeds_receivable',
+      `${overdueExceedsReceivable.length} unit(s) show an overdue amount larger than the outstanding receivable.`,
+      overdueExceedsReceivable.map((r) => r.id));
+  }
+
+  return warnings;
+};
+
