@@ -298,3 +298,109 @@ export const NUMERIC_SALE_FIELDS = new Set(
     .filter((f) => f.type === 'number')
     .map((f) => f.name),
 );
+
+// ── Hotel operating family (Shape C: keys × contracts × monthly actuals) ────
+
+const YES_NO = [{ value: 'true', label: 'Operational' }, { value: 'false', label: 'Out of service' }];
+
+export const HOTEL_CONTRACT_TYPE_OPTIONS = [
+  { value: 'hma', label: 'Hotel Management Agreement' },
+  { value: 'franchise', label: 'Franchise' },
+  { value: 'master_lease', label: 'Master Lease' },
+  { value: 'revenue_share', label: 'Revenue Share' },
+  { value: 'other', label: 'Other' },
+];
+export const HOTEL_CONTRACT_TYPE_LABELS = Object.fromEntries(
+  HOTEL_CONTRACT_TYPE_OPTIONS.map((o) => [o.value, o.label]),
+);
+
+// Key inventory drawer.
+export const HOTEL_KEY_SECTIONS = [
+  {
+    title: 'Room type',
+    fields: [
+      { name: 'room_type', label: 'Room Type', type: 'text' },
+      { name: 'keys_count', label: 'Keys', type: 'number', step: '1' },
+      { name: 'operational', label: 'Status', type: 'select', options: YES_NO, boolean: true },
+      { name: 'ooo_pct', label: 'Out-of-Order (%)', type: 'number', step: '0.5', hint: 'Rooms unavailable for renovation/repair.' },
+      { name: 'adr_premium_pct', label: 'ADR Premium / (Discount) (%)', type: 'number', step: '1', hint: 'Relative to the base room ADR.' },
+      { name: 'floor_wing', label: 'Floor / Wing', type: 'text' },
+    ],
+  },
+];
+
+// Management-contract drawer.
+export const HOTEL_CONTRACT_SECTIONS = [
+  {
+    title: 'Contract',
+    fields: [
+      { name: 'record_label', label: 'Contract Ref', type: 'text' },
+      { name: 'operator_name', label: 'Operator / Lessee', type: 'text' },
+      { name: 'brand', label: 'Brand', type: 'text' },
+      { name: 'contract_type', label: 'Contract Type', type: 'select', options: HOTEL_CONTRACT_TYPE_OPTIONS },
+      { name: 'keys_covered', label: 'Keys Covered', type: 'number', step: '1' },
+    ],
+  },
+  {
+    title: 'Economics',
+    fields: [
+      { name: 'base_fee_pct', label: 'Base Fee (% of revenue)', type: 'number', step: '0.25' },
+      { name: 'incentive_fee_pct', label: 'Incentive Fee (% of GOP)', type: 'number', step: '0.5' },
+      { name: 'ffe_reserve_pct', label: 'FF&E Reserve (%)', type: 'number', step: '0.5' },
+      { name: 'minimum_guarantee_annual', label: 'Minimum Guarantee (₹/year)', type: 'number', step: '1' },
+      { name: 'owner_priority_annual', label: 'Owner Priority (₹/year)', type: 'number', step: '1' },
+      { name: 'key_money', label: 'Key Money (₹)', type: 'number', step: '1' },
+      { name: 'security_deposit_amount', label: 'Security Deposit (₹)', type: 'number', step: '1' },
+    ],
+  },
+  {
+    title: 'Dates',
+    fields: [
+      { name: 'start_date', label: 'Start Date', type: 'date' },
+      { name: 'end_date', label: 'End Date', type: 'date' },
+      { name: 'lockin_end', label: 'Lock-in End', type: 'date' },
+      { name: 'notice_period_months', label: 'Notice (months)', type: 'number', step: '1' },
+    ],
+  },
+];
+
+// Monthly-operations drawer (one row per month of actual P&L).
+export const HOTEL_MONTH_SECTIONS = [
+  {
+    title: 'Month',
+    fields: [
+      { name: 'month', label: 'Month', type: 'month', hint: 'First of the month; one row per month of actuals.' },
+      { name: 'occupancy_pct', label: 'Occupancy (%)', type: 'number', step: '0.1' },
+      { name: 'adr', label: 'ADR (₹/night)', type: 'number', step: '1' },
+    ],
+  },
+  {
+    title: 'Revenue (₹, actual)',
+    fields: [
+      { name: 'room_revenue', label: 'Room Revenue', type: 'number', step: '1' },
+      { name: 'fnb_revenue', label: 'F&B Revenue', type: 'number', step: '1' },
+      { name: 'other_revenue', label: 'Other Revenue', type: 'number', step: '1' },
+    ],
+  },
+  {
+    title: 'Profit (₹, actual)',
+    fields: [
+      { name: 'dept_expenses', label: 'Departmental Expenses', type: 'number', step: '1' },
+      { name: 'undistributed_expenses', label: 'Undistributed Expenses', type: 'number', step: '1' },
+      { name: 'gop', label: 'Gross Operating Profit (GOP)', type: 'number', step: '1' },
+      { name: 'fees_paid', label: 'Management Fees', type: 'number', step: '1' },
+      { name: 'ffe_reserve', label: 'FF&E Reserve', type: 'number', step: '1' },
+      { name: 'owner_noi', label: 'Owner NOI / EBITDA', type: 'number', step: '1' },
+    ],
+  },
+];
+
+export const visibleHotelSections = (kind) => {
+  if (kind === 'hotel_key_block') return HOTEL_KEY_SECTIONS;
+  if (kind === 'hotel_contract') return HOTEL_CONTRACT_SECTIONS;
+  return HOTEL_MONTH_SECTIONS;
+};
+
+// `month` maps to a <input type="month"> in the drawer; the API stores the
+// first-of-month date, so the drawer normalizes YYYY-MM → YYYY-MM-01.
+export const HOTEL_MONTH_DATE_FIELD = 'month';
