@@ -10040,3 +10040,18 @@ The deterministic-math review found **no** front-end/back-end numeric divergence
 
 ### What's left to do next (plan v2 sequencing)
 - PR-6: Sales & Collections family (plotted + redevelopment free-sale) with salesMetrics; PR-7 hospitality; PR-8 redevelopment occupants; PR-9/10 exports (delete orphaned buildLeaseRollSheet/buildUnitMixSheet); PR-11 template import; PR-12 AI extraction. Future gated: kernel-native leases[].
+
+## 2026-07-15 (cont.) — Sales & Collections register for plotted development (PR #983 — merged, live-verified)
+
+**What was worked on (plain English):** Built the second register family. Plotted-development deals now get a full Sales & Collections register (the tab showed a placeholder before). For a plotted layout, collections risk IS the deal risk, so this is the register that makes plotted DD real.
+
+**#983 — the vertical.** `computeSaleMetrics` (mirrored + parity): status counts, sell-through (area + count), collections funnel (sold GDV → collected → receivable → overdue), collection efficiency, unsold GDV/MTM, weighted sold base rate + mean plot size (bridge inputs), and receivables aging derived from payment-plan milestones with an honest unaged-overdue fallback. Paise integers; cancelled + underivable rows excluded, never zeroed. `validateSaleRoll` WARN checks. Service family dispatch centralized (`metricsForFamily`/`warningsForFamily`) so recompute/snapshot/export never drift. Plotted bridge seeds `sellingRatePerSqft` (weighted BASE list rate on sold plots — charges excluded to match the kernel's revenue basis; seeding the charge-inclusive realization would overstate revenue) + `avgPlotSizeSqft`; deliberately never seeds `totalLandSqft` (plots are ~50-60% of gross land). Provenance generalized to basisCount/basisNoun. Frontend: `CollectionsGrid` (inline status + collected), `SaleDrawer` on a new shared `RecordDrawer` (LeaseDrawer refactored onto it — zero duplication), sales KPI strip, lazy Recharts `SalesCharts` (collections funnel + receivables aging).
+
+**Live production verification (operator's Chrome, throwaway plotted deal, then marked dead):** tab label rendered "Sales & Collections"; added sold + booked + unsold plots; EVERY KPI matched hand-calculation to the rupee — Sold GDV ₹3.07 Cr, collection efficiency 50.5%, receivable ₹1.52 Cr, overdue ₹5 L, 76% sold by area/2-of-3 units, unsold MTM +15.9%; funnel + aging charts rendered (aging honestly labeled "(UNAGED)" with no milestone data); grid agreement values/coll%/overdue/MTM all correct; Apply to Financials proposed the BASE ₹7,446/sqft (NOT the ₹7,869 charge-inclusive realization) + 1,950 sqft plot size and did NOT propose land area; seeded values landed in the plotted financial form; Calculate saved (201); editing a plot's collected 6M→8M moved efficiency 50.5%→57.0% and receivable ₹1.52→₹1.32 Cr live, and the staleness banner appeared with its full body text ("2 sold units").
+
+**Verified:** backend 3,706 (232 suites, +47) + frontend 1,281 + build + token guard green; full live end-to-end in production.
+
+### What's left to do next (plan v2 sequencing)
+- PR-7 hospitality (key inventory + HMA/franchise contracts + monthly operating actuals) — the operating-roll family with its own 36-month trading history table.
+- PR-8 redevelopment occupants (+ free-sale reuse of the sales register just shipped).
+- Then exports (delete orphaned buildLeaseRollSheet/buildUnitMixSheet; add rent-roll + sales sheets to XLSX committed-block pattern, DOCX section, PPTX slide), template download + hardened deterministic import, AI extraction doctype. Future gated: kernel-native leases[].
