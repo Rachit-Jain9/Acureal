@@ -36,6 +36,20 @@ const TOOLTIP_STYLE = {
 };
 const AXIS_TICK = { fontSize: 11, fill: 'var(--color-text-muted)' };
 
+// A Recharts <Tooltip> formatter receives the series `name` prop, NOT the
+// dataKey. Branch on the human label each series was given below. Keying on the
+// lowercase dataKey silently collapses every series onto the fallback label and
+// skips the percent branch — that shipped once for the revenue-mix chart (GOP
+// margin rendered as ₹, room/F&B/other all read "Other"), which is why these
+// are extracted as pure functions and covered by HotelCharts.test.js.
+export const formatTradeTooltip = (value, name) => (name === 'Occupancy'
+  ? [`${Number(value).toFixed(1)}%`, 'Occupancy']
+  : [`₹${Math.round(Number(value)).toLocaleString('en-IN')}`, 'ADR']);
+
+export const formatRevenueMixTooltip = (value, name) => (name === 'GOP margin'
+  ? [`${Number(value).toFixed(1)}%`, 'GOP margin']
+  : [`₹${Math.round(Number(value)).toLocaleString('en-IN')}`, name]);
+
 export default function HotelCharts({ metrics }) {
   const chartAnim = useChartAnim();
   const series = metrics?.operating?.series || [];
@@ -65,10 +79,7 @@ export default function HotelCharts({ metrics }) {
               <Tooltip
                 contentStyle={TOOLTIP_STYLE}
                 cursor={{ fill: 'var(--color-brand-accent-soft)' }}
-                /* Recharts passes the series `name` prop here, not the dataKey. */
-                formatter={(value, name) => (name === 'Occupancy'
-                  ? [`${Number(value).toFixed(1)}%`, 'Occupancy']
-                  : [`₹${Math.round(value).toLocaleString('en-IN')}`, 'ADR'])}
+                formatter={formatTradeTooltip}
               />
               <Legend wrapperStyle={{ fontSize: 11, color: 'var(--color-text-muted)' }} />
               <Bar yAxisId="adr" dataKey="adr" name="ADR" fill="var(--color-brand-accent)" radius={[3, 3, 0, 0]} maxBarSize={26} {...chartAnim} animationDuration={700} animationEasing="ease-out" />
@@ -87,7 +98,7 @@ export default function HotelCharts({ metrics }) {
               <XAxis dataKey="name" tick={AXIS_TICK} axisLine={{ stroke: 'var(--color-border-primary)' }} tickLine={false} interval="preserveStartEnd" />
               <YAxis yAxisId="rev" tick={AXIS_TICK} axisLine={false} tickLine={false} tickFormatter={compactINR} />
               <YAxis yAxisId="margin" orientation="right" domain={[0, 100]} tick={AXIS_TICK} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
-              <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--color-brand-accent-soft)' }} formatter={(v, key) => (key === 'gopMargin' ? [`${Number(v).toFixed(1)}%`, 'GOP margin'] : [`₹${Math.round(v).toLocaleString('en-IN')}`, key === 'room' ? 'Room' : key === 'fnb' ? 'F&B' : 'Other'])} />
+              <Tooltip contentStyle={TOOLTIP_STYLE} cursor={{ fill: 'var(--color-brand-accent-soft)' }} formatter={formatRevenueMixTooltip} />
               <Legend wrapperStyle={{ fontSize: 11, color: 'var(--color-text-muted)' }} />
               <Bar yAxisId="rev" dataKey="room" name="Room" stackId="rev" fill="var(--color-brand-accent)" maxBarSize={26} {...chartAnim} animationDuration={700} animationEasing="ease-out" />
               <Bar yAxisId="rev" dataKey="fnb" name="F&B" stackId="rev" fill="var(--color-brand-premium)" maxBarSize={26} {...chartAnim} animationDuration={700} animationEasing="ease-out" />
