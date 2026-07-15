@@ -127,13 +127,20 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
   // manual recalculate carries the prior citation forward ONLY while every
   // accepted field still holds its accepted value (hand-editing a seeded
   // assumption breaks traceability — the citation is dropped, never left
-  // dangling on a model it no longer describes).
-  const prevProvenanceRes = await query(
-    `SELECT model_params FROM financials
-      WHERE deal_id = $1 AND organization_id = current_organization_id()`,
-    [dealId],
-  );
-  const previousProvenance = prevProvenanceRes.rows[0]?.model_params?.rentRollProvenance || null;
+  // dangling on a model it no longer describes). The lookup is FAIL-OPEN:
+  // a citation is WARN-grade metadata and must never block a model save —
+  // on any read failure the carry-forward is simply skipped.
+  let previousProvenance = null;
+  try {
+    const prevProvenanceRes = await query(
+      `SELECT model_params FROM financials
+        WHERE deal_id = $1 AND organization_id = current_organization_id()`,
+      [dealId],
+    );
+    previousProvenance = prevProvenanceRes?.rows?.[0]?.model_params?.rentRollProvenance || null;
+  } catch {
+    previousProvenance = null;
+  }
   const resolvedProvenance = reconcileRentRollProvenance(
     previousProvenance, rentRollProvenance, computed.inputs || {},
   );
