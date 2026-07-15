@@ -209,6 +209,57 @@ describe('rentRollMetrics — golden office fixture', () => {
   test('weighted in-place rent ₹102.31/sqft/mo (gross, prefill seam)', () => {
     expect(m.revenue.inPlaceRentPerSqftMonth).toBeCloseTo(6650000 / 65000, 6);
   });
+
+  test('financial-bridge aggregates (hand-computed)', () => {
+    // Base rent annual: (4.0M + 2.2M + 0.45M) × 12 = 79,800,000
+    expect(m.revenue.baseRentAnnual).toBeCloseTo(79800000, 2);
+    // Owner opex: 2,400,000 + 1,200,000 (CAM offset excluded by design)
+    expect(m.revenue.ownerOpexAnnual).toBeCloseTo(3600000, 2);
+    // EGR basis = contracted 79.8M + LOI L4 (105 × 10,000 × 12 = 12.6M)
+    // under the default include policy → 3.6M / 92.4M = 3.8961%
+    expect(m.revenue.opexPctOfEgrBasis).toBeCloseTo((3600000 / 92400000) * 100, 6);
+    // Only L1 carries pct-model escalation: 15% every 36mo → 5% pa annualized;
+    // rent-weighted over rows WITH escalation → exactly 5.
+    expect(m.revenue.weightedEscalationPctAnnual).toBeCloseTo(5, 10);
+    // No row is flagged Anchor → ex-anchor rate equals the blended rate.
+    expect(m.revenue.inPlaceRentPerSqftMonthExAnchor)
+      .toBeCloseTo(m.revenue.inPlaceRentPerSqftMonth, 10);
+  });
+
+  test('loi_policy=exclude drops LOI rent from the EGR basis', () => {
+    const excl = computeLeaseMetrics(FIXTURE, { ...PARENT, settings: { loi_policy: 'exclude' } });
+    expect(excl.revenue.opexPctOfEgrBasis).toBeCloseTo((3600000 / 79800000) * 100, 6);
+  });
+
+  test('owner opex on VACANT rows still counts — upkeep is status-agnostic', () => {
+    const withVacantOpex = FIXTURE.map((r) => (r.id === 3
+      ? { ...r, owner_opex_annual: 1200000 }
+      : r));
+    const mv = computeLeaseMetrics(withVacantOpex, PARENT);
+    expect(mv.revenue.ownerOpexAnnual).toBeCloseTo(4800000, 2);
+    expect(mv.revenue.opexPctOfEgrBasis).toBeCloseTo((4800000 / 92400000) * 100, 6);
+  });
+
+  test('retail anchor rows drop out of the ex-anchor rate (kernel inline basis)', () => {
+    const withAnchor = FIXTURE.map((r) => (r.id === 1
+      ? { ...r, attributes: { anchor_inline: 'Anchor' } }
+      : r));
+    const ma = computeLeaseMetrics(withAnchor, PARENT);
+    // Remaining per-sqft contracted rows: L2 20,000@110 + L5 5,000@90
+    // → (2.2M + 0.45M) / 25,000 = 106
+    expect(ma.revenue.inPlaceRentPerSqftMonthExAnchor).toBeCloseTo(2650000 / 25000, 10);
+    // Blended figure is unchanged — only the ex-anchor view moves.
+    expect(ma.revenue.inPlaceRentPerSqftMonth).toBeCloseTo(6650000 / 65000, 10);
+  });
+
+  test('rent_steps rows are excluded from the weighted escalation average', () => {
+    const withSteps = FIXTURE.map((r) => (r.id === 1
+      ? { ...r, rent_steps: [{ from_date: '2028-07-01', rate: 120 }] }
+      : r));
+    const ms = computeLeaseMetrics(withSteps, PARENT);
+    // L1 was the only escalation contributor; as a stepped lease it drops out.
+    expect(ms.revenue.weightedEscalationPctAnnual).toBeNull();
+  });
 });
 
 describe('rentRollMetrics — unit behaviors', () => {

@@ -67,36 +67,62 @@ export default function FinancialsPage() {
   const canEdit = useCanEdit();
   useScrollOnMount();
 
-  const existingClass = financials?.asset_class || 'residential_apartments';
-  const [selectedClass, setSelectedClass] = useState(null); // null = use stored
+  // Prefill staged by "Apply to underwriting" (Zoning) or "Apply to
+  // Financials" (Rent Roll) lives in sessionStorage. Read-and-clear ONCE at
+  // mount: the value then lives in page state for the whole visit, so a
+  // refresh never re-applies it over user edits, and nothing downstream can
+  // wipe it mid-render (the old consume-callback pattern nulled the state one
+  // effect-tick after applying, erasing the seeded values from the form).
+  const [prefill, setPrefill] = useState(() => {
+    const staged = readPrefill(dealId);
+    if (staged) clearPrefill(dealId);
+    return staged;
+  });
+  // Snapshot citation rides the eventual Calculate (one-shot, class-gated).
+  const [rentRollProvenance, setRentRollProvenance] = useState(
+    () => prefill?.__rentRollProvenance || null,
+  );
+  // Class resolution order: explicit user choice → the class the prefill was
+  // built for (an Apply flow must land on ITS model, not whatever an older
+  // saved row says) → the saved model's class → the deal's own asset class.
+  // Defaulting to residential on a first-time model silently discarded the
+  // register prefill through InputForm's class-mismatch guard.
+  const existingClass = financials?.asset_class || deal?.asset_class || 'residential_apartments';
+  const [selectedClass, setSelectedClass] = useState(
+    () => prefill?.__prefilledAssetClass || null,
+  ); // null = use stored/deal class
   const activeClass = selectedClass || existingClass;
+
+  // Cross-deal navigation only — the mount case is handled by the
+  // initializers above (re-running the read here would find the storage
+  // already cleared and null out the state we just captured).
+  const prevDealIdRef = useRef(dealId);
+  useEffect(() => {
+    if (prevDealIdRef.current === dealId) return;
+    prevDealIdRef.current = dealId;
+    const next = readPrefill(dealId);
+    if (next) clearPrefill(dealId);
+    setPrefill(next);
+    setRentRollProvenance(next?.__rentRollProvenance || null);
+    setSelectedClass(next?.__prefilledAssetClass || null);
+  }, [dealId]);
 
   const inputsRef = useRef(null);
   const scrollToInputs = () => {
     inputsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
-
-  // Prefill staged on the Zoning tab via "Apply to underwriting" lives in
-  // sessionStorage until consumed. Read once; clear on first consumption so a
-  // page refresh doesn't keep re-applying it over user edits.
-  const [prefill, setPrefill] = useState(() => readPrefill(dealId));
   useEffect(() => {
-    // If the user lands here from another deal, re-read the prefill.
-    setPrefill(readPrefill(dealId));
-  }, [dealId]);
-  useEffect(() => {
-    if (prefill) {
+    if (!prefill) return;
+    if (prefill.__prefilledFrom === 'rent_roll') {
+      const p = prefill.__rentRollProvenance || {};
+      toast.success(
+        `Income assumptions pre-filled from the rent roll (${p.contractedLeases ?? '—'} lease(s), as of ${p.asOfDate ?? '—'}). Review and hit Calculate.`,
+      );
+    } else {
       toast.success('Underwriting inputs pre-filled from buildability programme. Review and hit Calculate.');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill]);
-  const handlePrefillConsumed = () => {
-    if (prefill) {
-      clearPrefill(dealId);
-      setPrefill(null);
-    }
-  };
-
   const normalizedFinancials = useMemo(() => normalizeFinancials(financials), [financials]);
   const hasResults = !!normalizedFinancials;
   const activeFinancialModelLabel = getFinancialModelLabel(activeClass);
@@ -106,7 +132,20 @@ export default function FinancialsPage() {
   );
 
   const handleCalculate = (data) => {
-    calculateMutation.mutate({ dealId, data });
+    // Attach the register-snapshot citation ONLY when calculating the class
+    // the seeding was built for, and only once — after a successful save the
+    // server's reconciliation rule owns the citation (it carries it forward
+    // while the accepted values still hold, drops it on hand-edits).
+    const attachProvenance = Boolean(
+      rentRollProvenance && prefill?.__prefilledAssetClass === activeClass,
+    );
+    calculateMutation.mutate(
+      {
+        dealId,
+        data: attachProvenance ? { ...data, rentRollProvenance } : data,
+      },
+      { onSuccess: () => { if (attachProvenance) setRentRollProvenance(null); } },
+    );
   };
 
   const handleClassChange = (cls) => {
@@ -288,7 +327,6 @@ export default function FinancialsPage() {
                   onSubmit={handleCalculate}
                   isLoading={calculateMutation.isPending}
                   prefill={prefill}
-                  onPrefillConsumed={handlePrefillConsumed}
                 />
               </>
             ) : (
@@ -318,7 +356,6 @@ export default function FinancialsPage() {
               onSubmit={handleCalculate}
               isLoading={calculateMutation.isPending}
               prefill={prefill}
-              onPrefillConsumed={handlePrefillConsumed}
             />
             {/* Waterfall panels available even before DCF is run */}
             <JDAWaterfallPanel financials={null} deal={deal} />

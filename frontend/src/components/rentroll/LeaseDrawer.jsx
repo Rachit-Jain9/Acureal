@@ -1,11 +1,15 @@
 import { useMemo, useState } from 'react';
 import { Modal, Button, Field, Input, Select, confirm } from '../../design-system';
-import { visibleLeaseSections, NUMERIC_LEASE_FIELDS } from './rentRollColumns';
+import { visibleLeaseSections } from './rentRollColumns';
 
 // Full-record editor for one lease. Driven entirely by the column catalog so
 // the form, grid, import mapping, and export columns can never disagree on
 // structure. Explicit Save/Cancel — records are discrete audited entities,
 // so no keystroke autosave here (register-level settings autosave instead).
+//
+// Per-class descriptor fields (catalog `isAttribute`) live under
+// record.attributes; the payload builder splits them out and merges over the
+// record's existing attributes so reserved keys (e.g. area_input) survive.
 
 const toFormValue = (v) => {
   if (v === null || v === undefined) return '';
@@ -17,7 +21,7 @@ const buildForm = (record, sections) => {
   const form = {};
   for (const section of sections) {
     for (const f of section.fields) {
-      form[f.name] = toFormValue(record?.[f.name]);
+      form[f.name] = toFormValue(f.isAttribute ? record?.attributes?.[f.name] : record?.[f.name]);
     }
   }
   // Defaults for a fresh lease keep the row metric-eligible from keystroke one.
@@ -30,19 +34,35 @@ const buildForm = (record, sections) => {
 };
 
 // '' → null (never 0 — Number('') is 0 and would corrupt weighted averages
-// server-side); numeric fields coerced so the API receives numbers.
-const cleanPayload = (form) => {
+// server-side); numeric fields coerced so the API receives numbers. Catalog
+// attribute fields are folded into `attributes`, preserving existing keys.
+const cleanPayload = (form, sections, record) => {
+  const fieldByName = new Map(
+    sections.flatMap((s) => s.fields).map((f) => [f.name, f]),
+  );
   const out = {};
+  const attributes = { ...(record?.attributes || {}) };
+  let attributesTouched = false;
+
   for (const [name, raw] of Object.entries(form)) {
+    const def = fieldByName.get(name);
+    let value;
     if (raw === '') {
-      out[name] = null;
-    } else if (NUMERIC_LEASE_FIELDS.has(name)) {
+      value = null;
+    } else if (def?.type === 'number') {
       const n = Number(raw);
-      out[name] = Number.isFinite(n) ? n : null;
+      value = Number.isFinite(n) ? n : null;
     } else {
-      out[name] = raw;
+      value = raw;
+    }
+    if (def?.isAttribute) {
+      attributes[name] = value;
+      attributesTouched = true;
+    } else {
+      out[name] = value;
     }
   }
+  if (attributesTouched) out.attributes = attributes;
   return out;
 };
 
@@ -89,7 +109,7 @@ export default function LeaseDrawer({
           </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={onClose} disabled={saving}>Cancel</Button>
-            <Button variant="primary" loading={saving} onClick={() => onSave(cleanPayload(form))}>
+            <Button variant="primary" loading={saving} onClick={() => onSave(cleanPayload(form, sections, record))}>
               {isEdit ? 'Save changes' : 'Add lease'}
             </Button>
           </div>
@@ -107,6 +127,8 @@ export default function LeaseDrawer({
                 <Field key={f.name} label={f.label} helper={f.hint}>
                   {f.type === 'select' ? (
                     <Select value={form[f.name]} onChange={setField(f.name)}>
+                      {/* Descriptor selects are optional — allow clearing back to unset. */}
+                      {f.isAttribute && <option value="">—</option>}
                       {f.options.map((o) => (
                         <option key={o.value} value={o.value}>{o.label}</option>
                       ))}

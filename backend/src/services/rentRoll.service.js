@@ -227,7 +227,7 @@ const recomputeSummary = async (client, register) => {
   // sales_collections / hotel_operating / redevelopment metrics land with
   // their family PRs — counts keep the summary honest until then.
 
-  const dataHash = hashRecords(recordsByKind);
+  const dataHash = hashRegister(register, recordsByKind);
   const summary = {
     metricsVersion: METRICS_VERSION,
     computedAt: new Date().toISOString(),
@@ -247,15 +247,26 @@ const recomputeSummary = async (client, register) => {
   return res.rows[0] || register;
 };
 
-// Stable content hash over the register's live rows (provenance/staleness).
-const hashRecords = (recordsByKind) => {
-  const canonical = Object.keys(recordsByKind).sort().map((kind) => [
-    kind,
-    recordsByKind[kind].map((r) => {
-      const { created_at, updated_at, ...rest } = r;
-      return rest;
-    }),
-  ]);
+// Stable content hash over the register's live rows PLUS the register-level
+// scalars that drive derived metrics and the financial bridge (as-of date,
+// leasable-area denominator, LOI policy). A denominator or policy edit changes
+// occupancy/vacancy without touching a single row — the hash must move with
+// it or staleness checks would sleep through exactly the changes that matter.
+const hashRegister = (register, recordsByKind) => {
+  const canonical = [
+    {
+      as_of_date: register?.as_of_date ?? null,
+      total_leasable_area_sqft: register?.total_leasable_area_sqft ?? null,
+      loi_policy: register?.settings?.loi_policy ?? 'include',
+    },
+    Object.keys(recordsByKind).sort().map((kind) => [
+      kind,
+      recordsByKind[kind].map((r) => {
+        const { created_at, updated_at, ...rest } = r;
+        return rest;
+      }),
+    ]),
+  ];
   return crypto.createHash('sha256').update(JSON.stringify(canonical)).digest('hex');
 };
 
@@ -532,7 +543,7 @@ async function createSnapshot(dealId, { label = null, trigger = 'manual' } = {},
     const metrics = register.register_family === 'lease_income'
       ? computeLeaseMetrics(recordsByKind.lease || [], register)
       : { recordCounts: Object.fromEntries(Object.entries(recordsByKind).map(([k, v]) => [k, v.length])) };
-    const dataHash = hashRecords(recordsByKind);
+    const dataHash = hashRegister(register, recordsByKind);
 
     const res = await client.query(
       `INSERT INTO register_snapshots
@@ -620,7 +631,7 @@ async function getExportSlice(dealId, financialInputs = null) {
       records,
       metrics,
       warnings,
-      dataHash: hashRecords(records),
+      dataHash: hashRegister(register, records),
       metricsVersion: METRICS_VERSION,
       updatedAt: register.updated_at,
     };

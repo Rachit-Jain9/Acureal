@@ -11,6 +11,7 @@ const {
 } = require('../constants/assetClasses');
 const auditService = require('./audit.service');
 const dealAuditLog = require('./dealAuditLog.service');
+const { reconcileRentRollProvenance } = require('../utils/rentRollPrefill');
 
 // ─── SCENARIO PERSISTENCE ────────────────────────────────────────────────────
 
@@ -101,10 +102,16 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
   if (dealRow.is_archived) throw createError('Restore this deal before recalculating financials.', 409);
   if (dealRow.stage === 'dead') throw createError('Financial models cannot be saved to a dead deal.', 409);
 
-  const selectedAssetClass = inputData.assetClass || 'residential_apartments';
+  // Register-seeding provenance rides ALONGSIDE the inputs, never through the
+  // kernel: strip it before normalization so no metadata reaches the math,
+  // persist it in model_params so exports and staleness checks can cite which
+  // rent-roll snapshot seeded the assumptions.
+  const { rentRollProvenance = null, ...kernelInputData } = inputData;
+
+  const selectedAssetClass = kernelInputData.assetClass || 'residential_apartments';
   const modelAssetClass = resolveFinancialModelClass(selectedAssetClass);
   const normalizedInput = {
-    ...inputData,
+    ...kernelInputData,
     assetClass: modelAssetClass,
   };
 
@@ -115,6 +122,21 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
   const kpis       = computed.kpis    || {};
   const costs      = computed.costs   || {};
   const areas      = computed.areas   || {};
+
+  // Provenance reconciliation: a seeded Calculate cites its snapshot; a
+  // manual recalculate carries the prior citation forward ONLY while every
+  // accepted field still holds its accepted value (hand-editing a seeded
+  // assumption breaks traceability — the citation is dropped, never left
+  // dangling on a model it no longer describes).
+  const prevProvenanceRes = await query(
+    `SELECT model_params FROM financials
+      WHERE deal_id = $1 AND organization_id = current_organization_id()`,
+    [dealId],
+  );
+  const previousProvenance = prevProvenanceRes.rows[0]?.model_params?.rentRollProvenance || null;
+  const resolvedProvenance = reconcileRentRollProvenance(
+    previousProvenance, rentRollProvenance, computed.inputs || {},
+  );
 
   // Store everything including scenarios in model_params (no separate column needed)
   const modelParams = JSON.stringify({
@@ -134,6 +156,11 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
     // kernel + input set produced the saved numbers.
     engineVersion: computed.engineVersion || 'kernel-v2',
     computedAt: new Date().toISOString(),
+    // Which rent-roll snapshot (if any) seeded the income assumptions —
+    // {snapshotId, dataHash, metricsVersion, contractedLeases, asOfDate,
+    // acceptedFields}. Null for models not seeded from a register (or whose
+    // seeded assumptions have since been hand-edited — see reconciliation).
+    rentRollProvenance: resolvedProvenance,
   });
 
   const params = [

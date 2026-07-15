@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, ScrollText } from 'lucide-react';
+import { Plus, ScrollText, ArrowRight } from 'lucide-react';
 import {
-  Card, SectionHeader, MetricTile, Button, Field, Input, Select,
+  Card, SectionHeader, MetricTile, Button, Field, Input,
   EmptyState, ErrorState, SkeletonList,
 } from '../../design-system';
 import { useDealContext, useDealRecord } from '../../hooks/useDealContext';
 import {
   useRentRoll, useSaveRegisterSettings, useCreateRecord, useUpdateRecord, useDeleteRecord,
 } from '../../hooks/useRentRoll';
+import { useFinancials } from '../../hooks/useFinancials';
 import { computeLeaseMetrics } from '../../utils/rentRollMetrics';
+import { INCOME_PREFILL_CLASSES } from '../../utils/rentRollPrefill';
 import { registerFamilyFor, REGISTER_TAB_LABELS } from './rentRollColumns';
 import LeaseGrid from './LeaseGrid';
 import LeaseDrawer from './LeaseDrawer';
+import ApplyToFinancialsModal from './ApplyToFinancialsModal';
 
 // Deal Register tab. PR-3 ships the lease-income family (offices, retail,
 // warehousing, rental residential, villas, land licences, mixed-use);
@@ -103,14 +106,25 @@ function LeaseKpiStrip({ metrics }) {
 
 function LeaseRegisterView({ dealId, assetClass, canEdit }) {
   const { data, isLoading } = useRentRoll(dealId);
+  const { data: financials } = useFinancials(dealId);
   const createRecord = useCreateRecord();
   const updateRecord = useUpdateRecord();
   const deleteRecord = useDeleteRecord();
   const [drawer, setDrawer] = useState(null); // null | { record: row|null }
+  const [applyOpen, setApplyOpen] = useState(false);
 
   const register = data?.register || null;
   const leases = data?.records?.lease || [];
   const { form, setForm } = useSettingsAutosave(dealId, register);
+
+  const bridgeSupported = INCOME_PREFILL_CLASSES.has(assetClass);
+  const savedProvenance = financials?.model_params?.rentRollProvenance || null;
+  const liveDataHash = register?.summary?.dataHash || null;
+  // The saved model cites a frozen snapshot; if the live register's content
+  // hash has moved on, the model is quoting older evidence.
+  const modelIsStale = Boolean(
+    savedProvenance?.dataHash && liveDataHash && savedProvenance.dataHash !== liveDataHash,
+  );
 
   // Metrics recompute locally from the fetched rows (mirrored deterministic
   // util) so KPIs are instant; the server recomputes the same numbers into
@@ -127,11 +141,9 @@ function LeaseRegisterView({ dealId, assetClass, canEdit }) {
 
   if (data?.unavailable) {
     return (
-      <ErrorState
-        tone="info"
-        title="Register storage is being provisioned"
-        description="The database update for deal registers has not been applied yet. Data entry opens as soon as it lands."
-      />
+      <ErrorState tone="info" title="Register storage is being provisioned">
+        The database update for deal registers has not been applied yet. Data entry opens as soon as it lands.
+      </ErrorState>
     );
   }
 
@@ -149,6 +161,12 @@ function LeaseRegisterView({ dealId, assetClass, canEdit }) {
     <div className="space-y-4">
       {leases.length > 0 && <LeaseKpiStrip metrics={metrics} />}
 
+      {modelIsStale && (
+        <ErrorState tone="warn" title="The saved financial model cites an older rent roll">
+          {`Assumptions were seeded from the snapshot of ${savedProvenance.asOfDate || 'an earlier date'} (${savedProvenance.contractedLeases ?? '—'} lease(s)); the register has changed since. Use “Apply to Financials” to re-seed, or keep the older snapshot deliberately.`}
+        </ErrorState>
+      )}
+
       <Card className="p-4">
         <SectionHeader
           size="sm"
@@ -157,9 +175,21 @@ function LeaseRegisterView({ dealId, assetClass, canEdit }) {
           title="Rent Roll"
           sub={`One row per lease or licence. Figures are gross (pre ownership share); vacant rows count toward potential, never contracted income.${metrics.counts.total > 0 ? ` ${metrics.counts.total} record(s).` : ''}`}
           action={canEdit && (
-            <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={() => setDrawer({ record: null })}>
-              Add lease
-            </Button>
+            <div className="flex items-center gap-2">
+              {bridgeSupported && leases.length > 0 && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  rightIcon={<ArrowRight size={14} />}
+                  onClick={() => setApplyOpen(true)}
+                >
+                  Apply to Financials
+                </Button>
+              )}
+              <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={() => setDrawer({ record: null })}>
+                Add lease
+              </Button>
+            </div>
           )}
         />
 
@@ -216,6 +246,18 @@ function LeaseRegisterView({ dealId, assetClass, canEdit }) {
             { onSuccess: () => setDrawer(null) },
           )}
           onClose={() => setDrawer(null)}
+        />
+      )}
+
+      {applyOpen && (
+        <ApplyToFinancialsModal
+          open
+          dealId={dealId}
+          assetClass={assetClass}
+          records={data?.records || {}}
+          register={register}
+          currentInputs={financials?.model_params?.inputs || null}
+          onClose={() => setApplyOpen(false)}
         />
       )}
     </div>
