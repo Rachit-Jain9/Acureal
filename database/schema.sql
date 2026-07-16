@@ -465,7 +465,15 @@ CREATE TABLE document_extractions (
     provider VARCHAR(50) NOT NULL DEFAULT 'gemini',
     raw_extraction JSONB,
     structured_fields JSONB,
+    -- Per-field verification score 0..1 + _overall + _signal_version.
+    -- v2 (20260728) = DETERMINISTIC: grounding against the document's own text,
+    -- schema shape, legal-four lane cap. Rows with no _signal_version predate
+    -- that and hold a FILL-RATE (1.0 = the field was merely non-empty) — never
+    -- calibrate on them. Produced by utils/extractionFieldQuality.js.
     confidence_scores JSONB,
+    -- The assessment BEHIND each score {status, reason, lane, grounded,
+    -- schemaValid} — what the review UI shows in place of a bare percentage.
+    field_quality JSONB,
     human_corrections JSONB,
     correction_history JSONB DEFAULT '[]'::jsonb,
     language_detected VARCHAR(20),

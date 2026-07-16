@@ -86,6 +86,16 @@ describe('reapStuckExtractions', () => {
 });
 
 describe('getDealExtractions — reaper + failures + coverage', () => {
+  // getDealExtractions feature-detects the `field_quality` column once per warm
+  // instance (canStoreFieldQuality, added 2026-07-16). Warm that cache here so
+  // the per-test mock chains below reflect only the reaper + SELECT + failures
+  // queries and don't have to account for the one-time detect.
+  beforeAll(async () => {
+    query.mockReset();
+    query.mockResolvedValue({ rows: [{ exists: true }] });
+    await extractionService.getDealExtractions('warm-cache').catch(() => {});
+  });
+
   beforeEach(() => query.mockReset());
 
   test('reaps first, then returns extractions, failures and a coverage breakdown', async () => {

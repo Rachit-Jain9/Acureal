@@ -33,6 +33,7 @@ const {
   unsupportedExtractionMessage,
   FALLBACK_MIME,
 } = require('../constants/documentFormats');
+const { assessExtractionFields } = require('../utils/extractionFieldQuality');
 const { redactText, redactFields } = require('./ai/promptRedaction');
 const embeddingsService = require('./embeddings.service');
 const { EVENTS, publish } = require('../lib/eventBus');
@@ -51,27 +52,8 @@ const MAX_EXTRACTION_FILE_SIZE_MB = Math.max(
   ),
 );
 const MAX_FILE_BYTES = MAX_EXTRACTION_FILE_SIZE_MB * 1024 * 1024;
-// Claude normalization is a quality-improvement pass over Gemini's output.
-// Tighter than the original 12s — if Claude can't normalize in 5s, the
-// Gemini output is already good enough for review, so we skip rather than
-// blocking the whole extraction. Tabular-rule documents (Volume 6 Zoning,
-// FAR tables, BBMP UAV) come back from Gemini already well-structured;
-// running them through Claude rarely changes the output but doubles the
-// latency, so we skip Claude entirely for those types.
-const CLAUDE_NORMALIZATION_TIMEOUT_MS = 5000;
-const CLAUDE_NORMALIZATION_SKIP_DOC_TYPES = new Set([
-  'rmp_table',
-  'far_table',
-  'bbmp_uav_pdf',
-  'guidance_value_report',
-  // A rent roll is a multi-row table Gemini already returns as a clean
-  // { records: [...] } array. Running it through Claude's field-normalizer
-  // doubles latency and risks reshaping the array — and the extract bridge
-  // re-normalizes every field deterministically against the column catalog
-  // anyway, so the LLM pass adds nothing here.
-  'rent_roll',
-]);
 let documentsDocTypeColumnAvailable = null;
+let fieldQualityColumnAvailable = null;
 // Same feature-detect cache for document_extractions.extraction_started_at —
 // lets the pipeline run whether or not the reaper migration has been applied
 // yet, so a code deploy that lands before the DB update never breaks
@@ -273,14 +255,6 @@ async function callExtractionWithFallback({ prompt, base64Data, mimeType, attach
   throw geminiError || new Error('Gemini extraction failed and Claude fallback is not configured.');
 }
 
-const withTimeout = (promise, ms, label) =>
-  Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
-    ),
-  ]);
-
 function parseJsonResponse(text) {
   // Strip markdown code fences if present
   const cleaned = text
@@ -291,29 +265,25 @@ function parseJsonResponse(text) {
   return JSON.parse(cleaned);
 }
 
-function computeConfidenceScores(structuredFields) {
-  // Produce a flat map of field -> 0|1 based on whether value is non-null/non-empty
-  if (!structuredFields || typeof structuredFields !== 'object') {
-    return {};
-  }
-
-  const scores = {};
-  for (const [key, value] of Object.entries(structuredFields)) {
-    if (Array.isArray(value)) {
-      scores[key] = value.length > 0 ? 1 : 0;
-    } else if (value !== null && value !== undefined && value !== '') {
-      scores[key] = 1;
-    } else {
-      scores[key] = 0;
-    }
-  }
-
-  const filled = Object.values(scores).filter(Boolean).length;
-  const total = Object.keys(scores).length || 1;
-  scores._overall = parseFloat((filled / total).toFixed(2));
-
-  return scores;
-}
+// ─── REMOVED 2026-07-16: `computeConfidenceScores` ────────────────────────────
+//
+// It scored a field 1.0 for being non-empty and 0 for being null, then stored
+// that fill-rate in `confidence_scores` — where the review UI rendered it as
+// "High · 100% confidence" and PRE-TICKED the row for one-click application to
+// the deal record. It measured presence, never correctness: a hallucinated
+// owner name and a perfectly-read one both scored 1.0. Because a field only
+// enters the field map when non-empty, the only surviving variance was
+// FIELD_MAP_RULES' alias `boost` — so the "confidence" an operator read
+// actually encoded WHICH ALIAS SPELLING MATCHED, and 39 of 40 candidates
+// landed in the HIGH band. Ownership and parcel identity (`owner_name`,
+// `survey_number`, `khata_number`, `pid`) — CLAUDE.md's legal-four title lane,
+// which is "extraction aid only, with human verification prompts" — arrived
+// pre-approved for bulk apply.
+//
+// Replaced by `utils/extractionFieldQuality.assessExtractionFields`, which
+// invents no probability and judges each field only by rules REDIP can execute
+// and explain: grounding against the document's own text, schema shape, and
+// the legal-four lane cap. See that module's header for the full rationale.
 
 // True when an extraction holds at least one non-empty extracted field.
 // A 'completed' extraction that fails this is "no data" — processed cleanly
@@ -328,70 +298,38 @@ function hasExtractedValue(fields) {
   });
 }
 
-function pickBestStructuredFields(primaryFields, secondaryFields) {
-  if (!secondaryFields) return primaryFields;
-  if (!primaryFields) return secondaryFields;
-
-  const primaryScore = computeConfidenceScores(primaryFields)._overall || 0;
-  const secondaryScore = computeConfidenceScores(secondaryFields)._overall || 0;
-  return secondaryScore > primaryScore ? secondaryFields : primaryFields;
-}
-
-async function normalizeStructuredFieldsWithClaude({ docType, rawText, structuredFields, language = null }) {
-  // Function name retained for backward compatibility — the call inside now
-  // routes via `runClaudeReasoning` (routing-aware) so it dispatches to
-  // OpenAI when the env says openai. Renaming the function would touch 4+
-  // call sites; the internal logic is what matters.
-  if (!structuredFields || !getProviderAvailability().gpt_compatible) {
-    return null;
-  }
-  // Skip the LLM-normalization pass for doc types where Gemini already
-  // returns clean tabular structure. The marginal quality lift isn't worth
-  // the extra hop.
-  if (docType && CLAUDE_NORMALIZATION_SKIP_DOC_TYPES.has(docType)) {
-    return null;
-  }
-
-  const systemPrompt = `You validate structured extraction output for Indian real-estate documents.
-
-STRICT RULES:
-- Return ONLY valid JSON.
-- Preserve the exact shape of the provided extracted_json object.
-- Do not invent facts, numbers, dates, parties, or clauses.
-- If a field is not explicitly supported by the source extraction, keep the current value or set it to null / empty.
-- Normalize obvious formatting only: dates, number strings, whitespace, duplicated array values.
-- Be conservative. Prefer missing over guessed.`;
-
-  const normalized = await withTimeout(
-    runClaudeReasoning({
-      task: 'document_extraction',
-      systemPrompt,
-      // The systemPrompt is identical across normalization calls for the
-      // same doc_type; opt into Anthropic's ephemeral prompt cache so the
-      // 2nd+ normalization within 5 minutes pays 0.1× the input cost on
-      // the cached portion.
-      cachePrompt: true,
-      payload: {
-        doc_type: docType,
-        extracted_json: structuredFields,
-        raw_extraction_text: rawText,
-      },
-      maxTokens: 1600,
-      metadata: {
-        stage: 'extraction_normalization',
-        doc_type: docType,
-        // Mirror to the dedicated columns so the AI usage dashboard's
-        // doctype × language breakdown populates for normalization calls.
-        doctype: docType,
-        ...(language && language !== 'und' ? { language } : {}),
-      },
-    }),
-    CLAUDE_NORMALIZATION_TIMEOUT_MS,
-    'Claude extraction normalization'
-  );
-
-  return parseJsonResponse(normalized);
-}
+// ─── REMOVED 2026-07-16: the second-AI "normalization" pass ───────────────────
+//
+// `normalizeStructuredFieldsWithClaude` + `pickBestStructuredFields` used to
+// run here: a second LLM call re-wrote Gemini's extraction to "normalize
+// obvious formatting only", and whichever of the two outputs scored higher on
+// `computeConfidenceScores._overall` won. Both are deleted. The reasons are
+// worth keeping, because they are the reasons not to reintroduce it:
+//
+//  1. IT NEVER RAN. Production telemetry (ai_call_logs, stage=
+//     'extraction_normalization') across its whole life: every call succeeded
+//     at the provider, but the FASTEST was 5,988 ms — against a 5,000 ms
+//     deadline. Median ~17 s; two calls took 205 s and 602 s. It timed out on
+//     100% of calls, so REDIP paid ~$0.011–0.016 per document for a result it
+//     always discarded, and spent 5 s of every extraction waiting for it.
+//
+//  2. IT WAS THE WRONG TOOL. Its entire mandate — normalise dates, number
+//     strings, whitespace — is deterministic transformation. CLAUDE.md:
+//     "Never use LLMs for deterministic math, rule-engine decisions..."
+//     `06.02.2024` → `2024-02-06` is testable code, not a probabilistic call.
+//
+//  3. ITS SELECTION RULE INVERTED SAFETY. `pickBestStructuredFields` kept
+//     whichever output had MORE non-empty fields (see the note on
+//     computeConfidenceScores' removal). That literally rewards a model for
+//     filling boxes: a conservative 12-verified-field answer loses to a
+//     15-field answer whose extra 3 were inferred. On title diligence that is
+//     a fact-invention path, and the prompt saying "do not invent" is prose,
+//     not architecture. It survived only because the pass never completed.
+//
+// Formatting consistency is a real need and is being addressed the right way:
+// deterministic, versioned, per-field normalizers that keep the raw value
+// immutable. Extraction output is now persisted EXACTLY as the provider
+// returned it.
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Core functions
@@ -502,6 +440,33 @@ async function canStoreExtractionStartedAt() {
     extractionStartedAtColumnAvailable = false;
   }
   return extractionStartedAtColumnAvailable;
+}
+
+// Feature-detect document_extractions.field_quality (added by migration
+// 20260728). Holds the per-field verification assessment — the WHY behind each
+// score, which the review UI shows in place of a bare percentage. Same
+// pre-migration-safe pattern as the two detects above: absent column → the
+// column is simply omitted and the UI degrades to score-only (still honest,
+// just less explanatory).
+async function canStoreFieldQuality() {
+  if (fieldQualityColumnAvailable !== null) {
+    return fieldQualityColumnAvailable;
+  }
+  try {
+    const result = await query(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'document_extractions'
+           AND column_name = 'field_quality'
+       ) AS exists`
+    );
+    fieldQualityColumnAvailable = Boolean(result.rows[0]?.exists);
+  } catch {
+    fieldQualityColumnAvailable = false;
+  }
+  return fieldQualityColumnAvailable;
 }
 
 async function updateDocumentDocType(documentId, docType) {
@@ -700,37 +665,27 @@ async function extractStoredFileFields({
     notes.push(`Extracted via Claude fallback after Gemini failed (${extraction.fallbackReason || 'transient error'}).`);
   }
 
-  if (structuredFields) {
-    try {
-      structuredFields = pickBestStructuredFields(
-        structuredFields,
-        toPlainObject(await normalizeStructuredFieldsWithClaude({
-          docType,
-          rawText,
-          structuredFields,
-          language: detectedLanguage,
-        }))
-      );
-    } catch (normalizationError) {
-      // The normalization pass is an OPTIONAL formatting polish over an
-      // already-complete extraction (see normalizeStructuredFieldsWithClaude:
-      // skipping it is the documented, intended behaviour whenever it can't
-      // finish inside CLAUDE_NORMALIZATION_TIMEOUT_MS). Skipping it removes
-      // nothing from the payload, so it must not degrade the status. Recorded
-      // as a note + telemetry so the skip rate stays observable.
-      log.info('extraction_normalization_skipped', {
-        doc_type: docType,
-        reason: normalizationError.message,
-      });
-      notes.push(`Formatting-normalization pass skipped (${normalizationError.message}). Extracted values are unchanged.`);
-    }
-  }
+  // `structuredFields` is now exactly what the provider returned — no second
+  // model rewrites it (see the removal note above). The quality signal below
+  // is computed from it by DETERMINISTIC rules only.
+  //
+  // `documentText` is the verbatim transcription of a 'parseable'-tier file
+  // (spreadsheet / doc / deck / CSV / KML). When present it lets us GROUND an
+  // extracted value — prove it literally appears in the document — which is
+  // the only non-probabilistic way to tell a real read from a fluent guess.
+  // Native scans (PDF / image) have no separate source text, so grounding
+  // reports "unknown" there rather than pretending.
+  const fieldQuality = assessExtractionFields(structuredFields, {
+    docType,
+    sourceText: documentText,
+  });
 
   return {
     docType,
     rawText,
     structuredFields,
-    confidenceScores: structuredFields ? computeConfidenceScores(structuredFields) : {},
+    confidenceScores: fieldQuality.scores,
+    fieldQuality: fieldQuality.assessments,
     parseError,
     notes,
     effectiveMime,
@@ -787,6 +742,7 @@ async function extractDocument(
       rawText,
       structuredFields,
       confidenceScores,
+      fieldQuality,
       parseError,
       notes,
       detectedLanguage,
@@ -804,6 +760,32 @@ async function extractDocument(
     // getDealExtractions has always SELECTed it and the UI has always been
     // ready to show it, but no code path populated the column (so every
     // Kannada/Hindi document read as "unknown language").
+    //
+    // field_quality carries the per-field verification assessment (the WHY
+    // behind each score). Feature-detected so this code is safe to deploy
+    // before migration 20260728 lands: without the column the scores still
+    // persist honestly, only the per-field reason is unavailable.
+    const storeFieldQuality = await canStoreFieldQuality();
+    const persistParams = [
+      docType,
+      // ONLY a genuine data problem degrades the status. Provenance notes
+      // (Claude fallback used) describe a COMPLETE extraction and must not
+      // surface as "some fields may be missing" — see the notes-vs-errors
+      // block in extractStoredFileFields.
+      parseError ? 'partial' : 'completed',
+      JSON.stringify({ raw_text: rawText }),
+      structuredFields ? JSON.stringify(structuredFields) : null,
+      JSON.stringify(confidenceScores),
+      null, // pages_processed not available from inline extraction
+      // error_message carries the real error when there is one, else the
+      // notes (kept for diagnostics; no UI treats a 'completed' row's
+      // message as a failure).
+      parseError || (notes && notes.length ? notes.join(' ') : null),
+      detectedLanguage && detectedLanguage !== 'und' ? detectedLanguage : null,
+    ];
+    if (storeFieldQuality) persistParams.push(JSON.stringify(fieldQuality || {}));
+    persistParams.push(extractionId);
+
     const updateResult = await query(
       `UPDATE document_extractions
        SET doc_type          = $1,
@@ -814,28 +796,12 @@ async function extractDocument(
            pages_processed   = $6,
            error_message     = $7,
            language_detected = $8,
+           ${storeFieldQuality ? 'field_quality     = $9,' : ''}
            extracted_at      = NOW(),
            updated_at        = NOW()
-       WHERE id = $9
+       WHERE id = $${storeFieldQuality ? 10 : 9}
        RETURNING *`,
-      [
-        docType,
-        // ONLY a genuine data problem degrades the status. Provenance notes
-        // (Claude fallback used, optional normalization skipped) describe a
-        // COMPLETE extraction and must not surface as "some fields may be
-        // missing" — see the notes-vs-errors block in extractStoredFileFields.
-        parseError ? 'partial' : 'completed',
-        JSON.stringify({ raw_text: rawText }),
-        structuredFields ? JSON.stringify(structuredFields) : null,
-        JSON.stringify(confidenceScores),
-        null, // pages_processed not available from inline extraction
-        // error_message carries the real error when there is one, else the
-        // notes (kept for diagnostics; no UI treats a 'completed' row's
-        // message as a failure).
-        parseError || (notes && notes.length ? notes.join(' ') : null),
-        detectedLanguage && detectedLanguage !== 'und' ? detectedLanguage : null,
-        extractionId,
-      ],
+      persistParams,
     );
 
     // Also update document table with doc_type if column exists
@@ -1019,6 +985,11 @@ async function getDealExtractions(dealId) {
   // they surface in `failures` instead of silently vanishing. Best-effort.
   await reapStuckExtractions(dealId);
 
+  // field_quality is feature-detected: SELECTing a column that does not exist
+  // yet would 42703 the whole read, so the projection adapts. Pre-migration
+  // the UI simply has no per-field reason to show.
+  const hasFieldQuality = await canStoreFieldQuality();
+
   const result = await query(
     `SELECT DISTINCT ON (de.document_id)
             de.id,
@@ -1027,6 +998,7 @@ async function getDealExtractions(dealId) {
             de.extraction_status,
             de.structured_fields,
             de.confidence_scores,
+            ${hasFieldQuality ? 'de.field_quality,' : ''}
             de.human_corrections,
             de.correction_history,
             de.language_detected,
@@ -1074,6 +1046,10 @@ async function getDealExtractions(dealId) {
       reviewed_at: row.reviewed_at,
       fields,
       confidence: row.confidence_scores || {},
+      // Per-field verification assessment ({status, reason, lane, grounded,
+      // schemaValid}) — the WHY the review UI shows instead of a bare
+      // percentage. Empty object pre-migration.
+      field_quality: row.field_quality || {},
       has_corrections: Object.keys(corrections).length > 0,
       applied_canonical_fields: Array.from(appliedCanonicalFields),
       // "no data" vs "has data": a completed extraction with no non-empty
@@ -1207,13 +1183,30 @@ function buildFieldMap(extractions) {
         const value = ext.fields?.[sourceKey];
         if (value == null || value === '') continue;
         const confidence = Number(ext.confidence?.[sourceKey] ?? 0);
+        // `boost` expresses alias PREFERENCE (an exact `owner_name` beats a
+        // `seller_name` alias), so it still ranks competing candidates. It is
+        // deliberately NOT allowed to lift a field across a band boundary:
+        // before 2026-07-16 confidence was always 1.0, so `effective` WAS the
+        // boost, and 39 of 40 aliases scored ≥0.80 — the alias table alone
+        // decided what got pre-ticked. The verification signal decides the
+        // band now; the boost only breaks ties within it.
         const effective = confidence * boost;
+        const assessment = ext.field_quality?.[sourceKey] || null;
         const existing = map[canonical];
         if (!existing || effective > existing.confidence) {
           map[canonical] = {
             value,
             raw_key: sourceKey,
             confidence: effective,
+            // The band the UI must honour, computed from the deterministic
+            // verification status alone — never from the alias boost.
+            signal_score: confidence,
+            signal: assessment && {
+              status: assessment.status,
+              reason: assessment.reason,
+              lane: assessment.lane || null,
+              grounded: assessment.grounded ?? null,
+            },
             from_corrections: ext.has_corrections && ext.fields?.[sourceKey] !== undefined,
             document_id: ext.document_id,
             document_name: ext.document_name,
@@ -1296,4 +1289,7 @@ module.exports = {
   reapStuckExtractions,
   applyCorrections,
   GEMINI_EXTRACTION_PROMPTS,
+  // Exported for tests — notably the legal-four CI guard, which asserts every
+  // canonical auto-fill destination has a deliberately reviewed lane.
+  __internal: { FIELD_MAP_RULES, buildFieldMap },
 };

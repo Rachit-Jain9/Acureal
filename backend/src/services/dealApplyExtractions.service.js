@@ -145,6 +145,11 @@ const applyExtractionsToDeal = async (dealId, approvedExtractions, userId = null
       source_document_id: item.source_document_id || null,
       source_field: item.source_field || null,
       confidence: item.confidence != null ? Number(item.confidence) : null,
+      // The deterministic verification basis the operator saw when they
+      // approved this value (found-in-source / verify-legal / unverified / …).
+      // Recorded in the immutable audit trail so a later reviewer can see WHY
+      // a value was trusted, not just that it was.
+      verification_status: typeof item.verification_status === 'string' ? item.verification_status : null,
     });
 
     if (srcExtractionId) sourceExtractionIds.add(srcExtractionId);
