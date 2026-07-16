@@ -24,9 +24,16 @@ Operator reported three live bugs (screenshots) plus a three-part feature ask. R
 
 **Verified:** backend 3,855 tests (was 3,706; +149: numericColumnBounds unit suite, overflow regression, IRR-ceiling validator tests, documentFormats parity, 26 real-file parser tests, multi-format routing + stored-only-refusal guard, upload-queue hook); frontend 1,310 (was 1,281; +29: LandPricingFields incl. white-on-white guard, IRR-ceiling mirror, useUploadQueue); theme-token + hover-state + bundle-budget guards; production build clean. Both PRs CI-green, squash-merged, production redeployed (dpl_6vXg…, commit 45bd8d2, READY).
 
+**Migration applied + live-verified (2026-07-16, same session).** First operator run hit `0A000: cannot alter type of a column used by a view` — the `deal_summary` view reads `financials.irr_pct`/`gross_margin_pct`. Migration v2 (committed a7f9238) drops the view, widens the columns, and recreates it byte-for-byte from the live `pg_get_viewdef` WITH `security_invoker=true` (the RLS-preserving option from 20260430 — omitting it would silently bypass row-level security) + re-grants, all in one transaction. Operator ran v2: success. DB verified: all 8 columns NUMERIC(12,4), view rebuilt with security_invoker + grants, serving 15 rows. **Lesson for future column-type migrations: check `pg_depend` for dependent views first; recreate with reloptions + grants captured live.**
+
+**Live production walk-through (operator's Chrome, same session) — all passed:**
+- New Deal modal (light mode): ₹12,000/sqft × 45,000 sqft → "Computed total land price **54.00 Cr**" clearly visible in the accent-soft tile (the exact white-on-white repro from the operator's screenshot).
+- Edit deal on Jaraka Bande / Kaval: full Land Pricing block present; saved rate-based pricing round-tripped (basis INR/acre, ₹15 Cr/acre, extent 30.00 acres editable, linked-property fallback line).
+- **The crash deal calculates and SAVES**: Jaraka Bande (13,06,800 sqft, ₹7,500 sell, ₹12 Cr land, ₹500 dev) → IRR 1,85,71,661% / NPV ₹379.33 Cr / EM 4.42× / revenue ₹538.20 Cr; "Audit signed · HMAC-SHA256"; the new plausibility WARN rendered with full copy; DB row confirmed `irr_pct=18571660.9639` (impossible pre-migration); deals-list card rolls up IRR + revenue (was dashes).
+- Documents tab: multi-file "Choose Files · pick several" input + honest capability copy live; images now carry the extract action (was PDF-only). Actual multi-file batch upload left for the operator (Chrome's file-upload security boundary only permits user-shared files).
+
 ### What's left to do next
-- **Operator: apply migration `20260727`** via Supabase SQL editor (full IRR headroom; code already safe without it). **Operator: log into production** so the live UI walk-through can run (session expired; I don't authenticate on the operator's behalf).
-- Live-verify on production once logged in: plotted-dev Calculate saves (no 500), Edit-deal land extent round-trips, computed-price tile visible in light mode, multi-file upload of a mixed batch (xlsx + png + dwg) shows per-file progress + the dwg "stored, not AI-readable" chip, a Kannada/Hindi document extracts with language chip.
+- Operator: run one real mixed multi-file upload (e.g. an XLSX + a photo + a DWG) to see per-file progress + the "stored, not AI-readable" chip; upload one Kannada/Hindi document to see the language handling end-to-end.
 - Future (not in scope this session): Gemini File API for >20 MB scans; PPTX/DOCX image-OCR (currently text-only); optional docType-override select on the deal extract action (plumbing already exists).
 
 ## 2026-07-16 (Rent-roll program — AI extraction, the final leg; PR-12) (PR #991)
