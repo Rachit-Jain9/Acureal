@@ -354,6 +354,25 @@ async function getRegister(dealId) {
   }
 }
 
+/**
+ * Resolve a deal's register family (from its asset class) + name — for the
+ * import-template download, which must work BEFORE any register exists.
+ */
+async function getDealRegisterInfo(dealId) {
+  const res = await query(
+    `SELECT id, name, asset_class FROM deals
+      WHERE id = $1 AND organization_id = current_organization_id()`,
+    [dealId],
+  );
+  const deal = res.rows[0];
+  if (!deal) {
+    const err = new Error('Deal not found');
+    err.statusCode = 404;
+    throw err;
+  }
+  return { dealId: deal.id, dealName: deal.name, assetClass: deal.asset_class, family: resolveFamily(deal.asset_class) };
+}
+
 /** Update register-level settings (creating the register lazily). */
 async function updateSettings(dealId, data, userId) {
   const updated = await transaction(async (client) => {
@@ -687,6 +706,7 @@ module.exports = {
   RECORD_COLUMNS_BY_KIND,
   resolveFamily,
   getRegister,
+  getDealRegisterInfo,
   updateSettings,
   createRecord,
   updateRecord,
