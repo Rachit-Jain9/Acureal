@@ -57,6 +57,12 @@ const CLAUDE_NORMALIZATION_SKIP_DOC_TYPES = new Set([
   'far_table',
   'bbmp_uav_pdf',
   'guidance_value_report',
+  // A rent roll is a multi-row table Gemini already returns as a clean
+  // { records: [...] } array. Running it through Claude's field-normalizer
+  // doubles latency and risks reshaping the array — and the extract bridge
+  // re-normalizes every field deterministically against the column catalog
+  // anyway, so the LLM pass adds nothing here.
+  'rent_roll',
 ]);
 let documentsDocTypeColumnAvailable = null;
 // Same feature-detect cache for document_extractions.extraction_started_at —

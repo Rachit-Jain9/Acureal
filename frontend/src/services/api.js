@@ -325,6 +325,12 @@ export const rentRollAPI = {
   // Import a filled template: staged preview (no writes) → commit (re-parsed server-side).
   previewImport: (dealId, fileBase64) => api.post(`/deals/${dealId}/rent-roll/import/preview`, { fileBase64 }),
   commitImport: (dealId, fileBase64) => api.post(`/deals/${dealId}/rent-roll/import/commit`, { fileBase64 }),
+  // Read an already-uploaded document with AI: staged preview (no writes) →
+  // commit (re-read server-side). Extraction can take up to a minute.
+  previewExtract: (dealId, documentId) =>
+    api.post(`/deals/${dealId}/rent-roll/extract/preview`, { documentId }, { timeout: 5 * 60 * 1000 }),
+  commitExtract: (dealId, extractionId) =>
+    api.post(`/deals/${dealId}/rent-roll/extract/commit`, { extractionId }),
 };
 
 // Properties

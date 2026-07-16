@@ -140,6 +140,7 @@ const DOC_TYPES = [
   'e_khata',
   'rmp_table',
   'kgis_extract',
+  'rent_roll',
   'other',
 ];
 
