@@ -322,6 +322,9 @@ export const rentRollAPI = {
   listSnapshots: (dealId) => api.get(`/deals/${dealId}/rent-roll/snapshots`),
   // Schema-correct blank XLSX template (family-adaptive) to fill offline.
   downloadTemplate: (dealId) => api.get(`/deals/${dealId}/rent-roll/template`, { responseType: 'blob' }),
+  // Import a filled template: staged preview (no writes) → commit (re-parsed server-side).
+  previewImport: (dealId, fileBase64) => api.post(`/deals/${dealId}/rent-roll/import/preview`, { fileBase64 }),
+  commitImport: (dealId, fileBase64) => api.post(`/deals/${dealId}/rent-roll/import/commit`, { fileBase64 }),
 };
 
 // Properties

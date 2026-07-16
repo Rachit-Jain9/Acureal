@@ -12,6 +12,7 @@ import CollectionsGrid from './CollectionsGrid';
 import OccupantDrawer from './OccupantDrawer';
 import SaleDrawer from './SaleDrawer';
 import ApplyToFinancialsModal from './ApplyToFinancialsModal';
+import ImportRegisterButton from './ImportRegisterModal';
 import { OCCUPANT_STATUS_CONFIG, OCCUPANT_STATUS_OPTIONS, DOC_RISK_TONE } from './rentRollColumns';
 import {
   fmtPct, fmtCr, fmtCrOrL, fmtInt,
@@ -209,6 +210,7 @@ export default function OccupantRegisterView({ dealId, assetClass, canEdit }) {
                 </Button>
               )}
               <TemplateDownloadButton dealId={dealId} />
+              <ImportRegisterButton dealId={dealId} />
             </div>
           )}
         />

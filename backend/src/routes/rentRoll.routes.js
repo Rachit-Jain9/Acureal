@@ -10,8 +10,17 @@ const express = require('express');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const rentRollService = require('../services/rentRoll.service');
 const rentRollTemplate = require('../services/rentRollTemplate.service');
+const rentRollImport = require('../services/rentRollImport.service');
 
 const router = express.Router();
+
+const decodeUpload = (body) => {
+  const fileBase64 = body && body.fileBase64;
+  if (!fileBase64 || typeof fileBase64 !== 'string') return null;
+  // Tolerate a data-URI prefix if the client sends one.
+  const b64 = fileBase64.includes(',') ? fileBase64.slice(fileBase64.indexOf(',') + 1) : fileBase64;
+  return Buffer.from(b64, 'base64');
+};
 
 // GET /deals/:dealId/rent-roll/template → a schema-correct blank XLSX to fill
 // offline, adapted to the deal's register family. Available before any register
@@ -34,6 +43,34 @@ router.get('/deals/:dealId/rent-roll', authenticate, async (req, res, next) => {
   try {
     const data = await rentRollService.getRegister(req.params.dealId);
     return res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /deals/:dealId/rent-roll/import/preview → parse a filled template into a
+// STAGED preview (no writes). Body: { fileBase64 }. Family is checked against
+// the deal so a wrong-type template is rejected with a readable reason.
+router.post('/deals/:dealId/rent-roll/import/preview', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const buffer = decodeUpload(req.body);
+    if (!buffer) return res.status(400).json({ success: false, message: 'fileBase64 is required' });
+    const { family } = await rentRollService.getDealRegisterInfo(req.params.dealId);
+    const preview = await rentRollImport.parseTemplateBuffer(buffer, { expectedFamily: family });
+    return res.json({ success: true, data: preview });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /deals/:dealId/rent-roll/import/commit → re-parse (authoritative) + write.
+router.post('/deals/:dealId/rent-roll/import/commit', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const buffer = decodeUpload(req.body);
+    if (!buffer) return res.status(400).json({ success: false, message: 'fileBase64 is required' });
+    const { family } = await rentRollService.getDealRegisterInfo(req.params.dealId);
+    const result = await rentRollImport.commitImport(req.params.dealId, buffer, { expectedFamily: family, userId: req.user.id });
+    return res.status(201).json({ success: true, data: result, message: `Imported ${result.total} record(s)` });
   } catch (err) {
     next(err);
   }

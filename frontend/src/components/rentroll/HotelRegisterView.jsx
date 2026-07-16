@@ -10,6 +10,7 @@ import { HOSPITALITY_PREFILL_CLASSES } from '../../utils/rentRollPrefill';
 import RegisterGrid from './RegisterGrid';
 import HotelDrawer from './HotelDrawer';
 import ApplyToFinancialsModal from './ApplyToFinancialsModal';
+import ImportRegisterButton from './ImportRegisterModal';
 import { HOTEL_CONTRACT_TYPE_LABELS } from './rentRollColumns';
 import {
   fmtPct, fmtCr, fmtCrOrL, fmtInt,
@@ -170,6 +171,7 @@ export default function HotelRegisterView({ dealId, assetClass, canEdit }) {
                 </Button>
               )}
               <TemplateDownloadButton dealId={dealId} />
+              <ImportRegisterButton dealId={dealId} />
             </div>
           )}
         />

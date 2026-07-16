@@ -10,6 +10,7 @@ import { INCOME_PREFILL_CLASSES } from '../../utils/rentRollPrefill';
 import LeaseGrid from './LeaseGrid';
 import LeaseDrawer from './LeaseDrawer';
 import ApplyToFinancialsModal from './ApplyToFinancialsModal';
+import ImportRegisterButton from './ImportRegisterModal';
 import {
   fmtPct, fmtYears, fmtCr, fmtSignedPct,
   useSettingsAutosave, StaleModelBanner, RegisterSettingsRow, RegisterUnavailable, TemplateDownloadButton,
@@ -119,9 +120,10 @@ export default function LeaseRegisterView({ dealId, assetClass, canEdit }) {
             title="No leases recorded yet"
             description="Add the first lease with whatever is known — tenant, area, or rent alone is enough at sourcing stage. Or download a blank template to prepare the roll in Excel with the exact columns this register accepts."
             action={canEdit && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap justify-center">
                 <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setDrawer({ record: null })}>Add first lease</Button>
                 <TemplateDownloadButton dealId={dealId} />
+                <ImportRegisterButton dealId={dealId} />
               </div>
             )}
           />
