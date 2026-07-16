@@ -32,9 +32,27 @@ Operator reported three live bugs (screenshots) plus a three-part feature ask. R
 - **The crash deal calculates and SAVES**: Jaraka Bande (13,06,800 sqft, ₹7,500 sell, ₹12 Cr land, ₹500 dev) → IRR 1,85,71,661% / NPV ₹379.33 Cr / EM 4.42× / revenue ₹538.20 Cr; "Audit signed · HMAC-SHA256"; the new plausibility WARN rendered with full copy; DB row confirmed `irr_pct=18571660.9639` (impossible pre-migration); deals-list card rolls up IRR + revenue (was dashes).
 - Documents tab: multi-file "Choose Files · pick several" input + honest capability copy live; images now carry the extract action (was PDF-only). Actual multi-file batch upload left for the operator (Chrome's file-upload security boundary only permits user-shared files).
 
+### #994 — Extraction status honesty (found during the operator's live test, fixed + merged same session)
+
+Operator's live extraction showed **"Document partially extracted — some fields may be missing. Please review."** on a COMPLETE extraction. Root cause: two purely INFORMATIONAL events were degrading `extraction_status` to `partial`:
+1. **The optional formatting-normalization pass timing out.** Evidence from `ai_call_logs` (`stage=extraction_normalization`): **10 calls, ALL 'success' at the provider, avg latency 34.7 s, max 208 s — against a 5,000 ms cap.** It has therefore timed out on **100% of calls** since the cap was tightened, appending "Claude normalization skipped: …" to `parseError` → `partial`. Skipping it is the *documented, intended* behaviour and removes nothing from the payload.
+2. **A successful Claude-fallback extraction** — a full extraction, noted with a `"Note:"` prefix that still degraded status.
+
+Fix: separated `parseError` (data genuinely incomplete → `partial`) from `notes[]` (provenance about a COMPLETE extraction → `completed`). `error_message` still carries notes for diagnostics (rentRollExtract already documents that field as a "non-fatal note surfaced for review"; no UI treats a `completed` row's message as a failure). Skip now logged as `extraction_normalization_skipped` telemetry. 5 new tests pin notes-vs-errors both ways. **A bulk historical backfill of the 2 mislabelled rows was deliberately NOT run** (auto-mode correctly blocked unrequested data surgery) — re-running extraction fixes them naturally, which is what happened.
+
+**KNOWN COST LEAK, operator-gated, NOT changed:** the normalization pass costs money on 100% of calls and delivers its result on 0% (provider finishes ~35 s, we abandon at 5 s) — ~$0.01/extraction + 5 s latency on every document. Options for the operator: route it to a fast model (it's a mechanical formatting task, not reasoning), abort the in-flight call on timeout, or drop the pass entirely.
+
+**Live production proof after #994 deployed (dpl_DGMz…, commit c40de67):**
+- **A .docx was AI-read for the first time** — "New Microsoft Word Document.docx" → doctype `broker_quote`, **19 fields**, `completed`, lang `en`. The mammoth→text→Gemini parseable path working end-to-end in production. That format was unreadable before this session.
+- **Images now extract** — 5 JPEGs classified: 4 × `rtc_pahani` (24 fields, Kannada land records), `sale_deed`, `other` (9 fields, lang **`mul`** = mixed-script detected). `language_detected` is populated for the first time ever.
+- **Every row reads green, zero orange warnings**; "Auto-fill from documents" 5 → 6.
+- Cross-document analysis now does real work off the wider corpus: flagged *"RTC document lists 34.32 acres, whereas sale deeds document 8.2 acres for survey number 72"* — a genuine title discrepancy surfaced by comparing a Word doc against scans.
+
 ### What's left to do next
-- Operator: run one real mixed multi-file upload (e.g. an XLSX + a photo + a DWG) to see per-file progress + the "stored, not AI-readable" chip; upload one Kannada/Hindi document to see the language handling end-to-end.
-- Future (not in scope this session): Gemini File API for >20 MB scans; PPTX/DOCX image-OCR (currently text-only); optional docType-override select on the deal extract action (plumbing already exists).
+- **Operator decision on the normalization cost leak** (see #994 note above) — recommend routing it to a fast model or dropping it.
+- Operator: try a mixed multi-file upload (XLSX + photo + DWG) to see per-file progress + the "stored, not AI-readable" chip on the DWG.
+- Follow up on the real finding the AI just surfaced: the 34.32 vs 8.2 acre discrepancy on survey number 72.
+- Future (not in scope): Gemini File API for >20 MB scans; PPTX/DOCX image-OCR (currently text-only); optional docType-override select on the deal extract action (plumbing already exists).
 
 ## 2026-07-16 (Rent-roll program — AI extraction, the final leg; PR-12) (PR #991)
 
