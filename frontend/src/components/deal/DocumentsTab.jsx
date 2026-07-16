@@ -24,6 +24,7 @@ import DependentsPopover from '../common/DependentsPopover';
 // useDeleteDocument / useExtractDocument — they already invalidate the
 // `['deal-workspace', dealId]` query key so the shared cache stays fresh.
 import { useUploadDocument, useDeleteDocument, useExtractDocument } from '../../hooks/useDocuments';
+import { useUploadQueue } from '../../hooks/useUploadQueue';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
 import { useDealContext, useDealRecord, useDealDocuments } from '../../hooks/useDealContext';
 import { useCanEdit } from '../../hooks/useCanEdit';
@@ -31,7 +32,11 @@ import { documentsAPI } from '../../services/api';
 import { toast } from '../common/Toast';
 import { SectionHeader, SkeletonList, confirm } from '../../design-system';
 import SemanticSearchPanel from '../common/SemanticSearchPanel';
+import UploadQueueList from './UploadQueueList';
 import AutoFillFromDocumentsModal from './AutoFillFromDocumentsModal';
+import {
+  ACCEPT_ATTRIBUTE, extractionTierFor, isExtractable, labelFor,
+} from '../../utils/documentFormats';
 // PR-NX49 (2026-05-19) — surface Claude's cross-document analysis +
 // inconsistency findings inline on the Documents tab. Same content
 // that ships in the DOCX Document-Derived Insights section (PR-NX45).
@@ -50,15 +55,6 @@ const CATEGORIES = [
 
 const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.value, c]));
 
-const ALLOWED_TYPES = [
-  'application/pdf',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'image/png',
-  'image/jpeg',
-];
 const MAX_SIZE_MB = 50;
 
 function formatBytes(bytes) {
@@ -68,10 +64,19 @@ function formatBytes(bytes) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function isPdfDocument(doc) {
-  const type = String(doc?.file_type || doc?.mime_type || doc?.type || '').toLowerCase();
-  const name = String(doc?.original_name || doc?.file_name || doc?.name || '').toLowerCase();
-  return type.includes('pdf') || name.endsWith('.pdf');
+// A document is AI-readable if the shared format registry says its type is
+// native (PDF/image) or parseable (spreadsheet/doc/deck/CSV/JSON/KML…). This
+// replaced the old PDF-only gate, which was stricter than the backend, which
+// has always read images too.
+function docIsExtractable(doc) {
+  const fileName = String(doc?.original_name || doc?.file_name || doc?.name || '');
+  const fileType = String(doc?.file_type || doc?.mime_type || doc?.type || '');
+  return isExtractable({ fileName, fileType });
+}
+
+function docLabel(doc) {
+  const fileName = String(doc?.original_name || doc?.file_name || doc?.name || '');
+  return labelFor(fileName);
 }
 
 function formatDocType(docType) {
@@ -93,12 +98,11 @@ export default function DocumentsTab() {
   const deleteDoc = useDeleteDocument();
   const extractDoc = useExtractDocument();
   const canEdit = useCanEdit();
+  const queue = useUploadQueue(uploadDoc);
 
   const [showUploadForm, setShowUploadForm] = useState(false);
   const [category, setCategory] = useState('other');
   const [description, setDescription] = useState('');
-  const [file, setFile] = useState(null);
-  const [fileError, setFileError] = useState('');
   const [downloading, setDownloading] = useState(null);
   const [extractingDocId, setExtractingDocId] = useState(null);
   const [autoFillOpen, setAutoFillOpen] = useState(false);
@@ -142,50 +146,48 @@ export default function DocumentsTab() {
   }, [extractionData?.failures]);
 
   const handleFileChange = (e) => {
-    const selected = e.target.files[0];
-    setFileError('');
-    if (!selected) {
-      setFile(null);
-      return;
-    }
-    if (!ALLOWED_TYPES.includes(selected.type)) {
-      setFileError('Only PDF, DOC, DOCX, XLS, XLSX, PNG, JPG files are allowed.');
-      setFile(null);
-      return;
-    }
-    if (selected.size > MAX_SIZE_MB * 1024 * 1024) {
-      setFileError(`File must be under ${MAX_SIZE_MB} MB.`);
-      setFile(null);
-      return;
-    }
-    setFile(selected);
+    queue.addFiles(e.target.files);
+    // Clear the native input so re-selecting the same file re-adds it.
+    if (fileRef.current) fileRef.current.value = '';
+  };
+
+  const closeUploadForm = () => {
+    setShowUploadForm(false);
+    queue.reset();
+    setDescription('');
+    setCategory('other');
+    if (fileRef.current) fileRef.current.value = '';
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!file) {
-      setFileError('Please select a file.');
-      return;
+    if (queue.counts.queued === 0) return;
+
+    const { uploaded, failed, uploadedDocs } = await queue.run({
+      dealId,
+      category,
+      description: description.trim() || undefined,
+    });
+
+    // ONE summary toast for the whole batch instead of N per-file toasts.
+    if (uploaded > 0 && failed === 0) {
+      toast.success(uploaded === 1 ? 'Document uploaded' : `${uploaded} documents uploaded`);
+    } else if (uploaded > 0 && failed > 0) {
+      toast.warning(`${uploaded} uploaded · ${failed} failed`);
+    } else if (failed > 0) {
+      toast.error(failed === 1 ? 'Upload failed' : `${failed} uploads failed`);
     }
 
-    try {
-      const uploaded = await uploadDoc.mutateAsync({
-        dealId,
-        file,
-        category,
-        description: description.trim() || undefined,
-      });
-      const uploadedDoc = uploaded?.data || uploaded;
-      setShowUploadForm(false);
-      setFile(null);
-      setDescription('');
-      setCategory('other');
-      if (fileRef.current) fileRef.current.value = '';
-      if (uploadedDoc?.id && isPdfDocument(file)) {
-        await handleExtract(uploadedDoc);
-      }
-    } catch {
-      // Handled by mutation hook
+    // Auto-extract the readable uploads, one at a time (each is a synchronous
+    // provider call; serial keeps cost + the UI lock sane). Stored-only files
+    // are skipped — they were accepted for the record, not for reading.
+    const readable = uploadedDocs.filter((d) => d.tier !== 'stored_only');
+    if (uploaded > 0 && failed === 0 && queue.counts.error === 0) {
+      // Clean batch — close the form; extraction continues in the list below.
+      closeUploadForm();
+    }
+    for (const doc of readable) {
+      if (doc?.id) await handleExtract(doc); // eslint-disable-line no-await-in-loop
     }
   };
 
@@ -324,45 +326,50 @@ export default function DocumentsTab() {
             </div>
             <div>
               <label className="block text-xs font-medium text-content-secondary mb-1">
-                File <span className="text-content-muted">(PDF, DOC, DOCX, XLS, XLSX, PNG, JPG · max 50 MB)</span>
+                Files <span className="text-content-muted">(PDF, images, Office, CSV, JSON, KML/KMZ &amp; more · pick several · max {MAX_SIZE_MB} MB each)</span>
               </label>
               <input
                 ref={fileRef}
                 type="file"
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                multiple
+                accept={ACCEPT_ATTRIBUTE}
                 onChange={handleFileChange}
-                className="block w-full text-sm text-content-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-accent-soft file:text-accent hover:file:bg-accent-soft cursor-pointer"
+                disabled={queue.isRunning}
+                className="block w-full text-sm text-content-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-accent-soft file:text-accent hover:file:bg-accent-soft cursor-pointer disabled:opacity-60"
               />
-              {fileError && <p className="text-xs text-data-negative mt-1">{fileError}</p>}
-              {file && !fileError && (
-                <p className="text-xs text-content-secondary mt-1">
-                  {file.name} · {formatBytes(file.size)}
-                </p>
-              )}
+              <p className="mt-1 text-[11px] text-content-muted">
+                REDIP reads PDFs, images, spreadsheets, Word/PowerPoint, CSV/JSON and map files in English, Hindi &amp; Kannada. CAD, BIM, SketchUp and Primavera files are stored for the record but not auto-read.
+              </p>
             </div>
+
+            {queue.items.length > 0 && (
+              <UploadQueueList items={queue.items} onRemove={queue.remove} isRunning={queue.isRunning} />
+            )}
+
             <div className="flex gap-2 pt-1">
               <button
                 type="button"
-                onClick={() => {
-                  setShowUploadForm(false);
-                  setFile(null);
-                  setFileError('');
-                }}
+                onClick={closeUploadForm}
+                disabled={queue.isRunning}
                 className="btn btn-secondary text-sm"
               >
-                Cancel
+                {queue.counts.done > 0 ? 'Done' : 'Cancel'}
               </button>
               <button
                 type="submit"
-                disabled={uploadDoc.isPending || !file}
+                disabled={queue.isRunning || queue.counts.queued === 0}
                 className="btn btn-primary text-sm flex items-center gap-1.5"
               >
-                {uploadDoc.isPending ? (
+                {queue.isRunning ? (
                   <Loader2 size={14} className="animate-spin" />
                 ) : (
                   <Upload size={14} />
                 )}
-                {uploadDoc.isPending ? 'Uploading...' : 'Upload'}
+                {queue.isRunning
+                  ? 'Uploading…'
+                  : queue.counts.queued > 1
+                    ? `Upload ${queue.counts.queued} files`
+                    : 'Upload'}
               </button>
             </div>
           </form>
@@ -394,7 +401,7 @@ export default function DocumentsTab() {
                   {items.map((doc) => {
                     const extraction = extractionByDocument.get(doc.id);
                     const failure = failureByDocument.get(doc.id);
-                    const canExtract = isPdfDocument(doc);
+                    const canExtract = docIsExtractable(doc);
                     const isExtracting = extractingDocId === doc.id;
 
                     return (
@@ -439,6 +446,18 @@ export default function DocumentsTab() {
                             <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-hairline bg-premium-soft px-1.5 py-0.5 text-[10px] font-medium text-premium">
                               <Loader2 size={10} className="animate-spin motion-reduce:animate-none" />
                               Extracting…
+                            </span>
+                          )}
+                          {/* Stored-only formats carry no extract button —
+                              explain the absence honestly rather than leaving
+                              a mystery. */}
+                          {!canExtract && (
+                            <span
+                              className="ml-2 inline-flex items-center gap-1 rounded-full border border-hairline bg-bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-content-muted"
+                              title={`${docLabel(doc)} files are stored and downloadable, but REDIP cannot read them with AI yet.`}
+                            >
+                              <FileText size={10} />
+                              Stored · not AI-readable
                             </span>
                           )}
                         </p>

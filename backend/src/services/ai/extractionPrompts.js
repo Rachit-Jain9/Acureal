@@ -44,9 +44,38 @@ const { IMPORT_COLUMNS_BY_KIND } = require('../../constants/rentRollImportColumn
 
 // Bump whenever any prompt body or CLASSIFY_PROMPT changes. The format is
 // YYYY-MM-DD.<seq>; the seq lets us bump twice in one day if needed.
-const PROMPT_REGISTRY_VERSION = '2026-07-16.1';
+const PROMPT_REGISTRY_VERSION = '2026-07-16.2';
 
 const sha256 = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
+
+/**
+ * Multilingual reading contract, appended to EVERY extraction prompt.
+ *
+ * Karnataka land records are routinely Kannada-only (RTC/Pahani, mutation
+ * extracts, older sale deeds), Hindi appears on central-government and
+ * bank paperwork, and most deal packs mix scripts inside a single page.
+ * Gemini reads all three natively, but nothing in the prompts ever SAID what
+ * to do with them: field values came back in whatever script the document
+ * used, so downstream matching, comps, and exports saw mixed-script values.
+ *
+ * The contract: read every script; return field VALUES in English; keep the
+ * original script alongside for proper nouns (never silently replace a name
+ * with a transliteration — the reviewer must be able to check it against the
+ * document); never translate identifiers. Extraction only — no legal reading
+ * of any kind, matching the AI carve-out on the legal four.
+ */
+const MULTILINGUAL_RULES = `
+
+LANGUAGE HANDLING (applies to every field above):
+- This document may be in Kannada, Hindi, English, or any mix of them, including handwritten or stamped text. Read ALL scripts present. Never skip a section because it is not in English.
+- Return field VALUES in English. Transliterate proper nouns (person names, village names, taluk, hobli, district) to Latin script.
+- For any proper noun or free-text value you transliterated or translated, also return the ORIGINAL text exactly as printed, in the same object, under the same key with the suffix "_original" (e.g. "owner_name": "Ramesh Kumar", "owner_name_original": "ರಮೇಶ್ ಕುಮಾರ್"). If the value was already in English, omit the _original key.
+- NEVER translate or transliterate identifiers: survey numbers, khata numbers, document/registration numbers, PIDs, RERA numbers, dates, and amounts stay exactly as printed. Convert Kannada/Devanagari NUMERALS to Western Arabic digits (೧೨೩ → 123, १२३ → 123).
+- Add "detected_languages": ["kn"|"hi"|"en", ...] listing every language you actually saw in the document.
+- If a passage is illegible or you cannot read the script confidently, set the affected field to null and say so in the verification/notes field. Do not guess.`;
+
+/** Append the multilingual contract to a prompt body. */
+const withMultilingualRules = (body) => `${body}${MULTILINGUAL_RULES}`;
 
 const GEMINI_EXTRACTION_PROMPTS = {
   title_deed: `You are a legal document extraction assistant specialised in Indian real estate.
@@ -698,7 +727,17 @@ Return ONLY the JSON object. No commentary, no markdown fences.`;
 
 GEMINI_EXTRACTION_PROMPTS.rent_roll = buildRentRollExtractionPrompt();
 
+// Every doctype gets the multilingual contract — a Kannada RTC and an English
+// term sheet flow through the same prompt registry, so the rules belong on all
+// of them rather than on a hand-picked subset that would drift. Applied before
+// PROMPT_VERSIONS is computed, so each prompt's sha256 covers the appended
+// block and the response cache invalidates prior single-language extractions.
+for (const kind of Object.keys(GEMINI_EXTRACTION_PROMPTS)) {
+  GEMINI_EXTRACTION_PROMPTS[kind] = withMultilingualRules(GEMINI_EXTRACTION_PROMPTS[kind]);
+}
+
 const CLASSIFY_PROMPT = `You are a legal document classifier specialised in Indian real estate documents.
+The document may be in Kannada, Hindi, English, or a mix of them — read every script present and classify on the document's SUBSTANCE, not its language. A Kannada RTC/Pahani is "rtc_pahani", not "other".
 Classify the document into exactly ONE of these types:
 title_deed, mother_deed, sale_deed, ec, rtc_pahani, mutation, conversion_certificate,
 khata, layout_approval, sanctioned_plan, jda_jv, broker_quote, comps_rate_sheet,
@@ -773,5 +812,6 @@ module.exports = {
   PROMPT_VERSIONS,
   CLASSIFY_PROMPT_VERSION,
   CLASSIFY_RESPONSE_SCHEMA,
+  MULTILINGUAL_RULES,
   getExtractionPromptVersion,
 };

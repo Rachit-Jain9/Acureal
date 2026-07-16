@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { documentsAPI, extractionAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
@@ -85,26 +86,34 @@ export function useDocuments(dealId, category) {
  *   1. Get a presigned URL from the backend
  *   2. PUT the file directly to Supabase (bypasses Vercel 4.5 MB limit)
  *   3. Confirm the upload with the backend to save metadata
+ *
+ * Variables:
+ *   • onProgress(pct) — 0-100 upload progress, driven by the direct PUT.
+ *   • silent — suppress the per-file success toast. The multi-file queue sets
+ *     this and shows ONE summary toast at the end instead of N.
  */
 export function useUploadDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ dealId, file, category, description }) => {
+    mutationFn: async ({ dealId, file, category, description, onProgress }) => {
       // Step 1: get presigned upload URL
       const urlRes = await documentsAPI.getUploadUrl(dealId, file.name, file.size);
       const { signedUrl, storagePath } = urlRes.data.data;
 
-      // Step 2: upload directly to Supabase
-      const uploadRes = await fetch(signedUrl, {
-        method: 'PUT',
+      // Step 2: PUT directly to Supabase. A BARE axios call (not the shared
+      // `api` instance) so no auth interceptor / baseURL ever touches the
+      // signed URL — and so we get real upload-progress events, which the
+      // fetch API cannot report.
+      await axios.put(signedUrl, file, {
         headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        body: file,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        onUploadProgress: (evt) => {
+          if (typeof onProgress === 'function' && evt.total) {
+            onProgress(Math.min(100, Math.round((evt.loaded / evt.total) * 100)));
+          }
+        },
       });
-
-      if (!uploadRes.ok) {
-        const errText = await uploadRes.text().catch(() => '');
-        throw new Error(`Direct upload failed (${uploadRes.status}): ${errText || uploadRes.statusText}`);
-      }
 
       // Step 3: confirm upload with backend
       const confirmRes = await documentsAPI.confirmUpload(dealId, {
@@ -118,12 +127,16 @@ export function useUploadDocument() {
 
       return confirmRes.data;
     },
-    onSuccess: (_, { dealId }) => {
+    onSuccess: (_, { dealId, silent }) => {
       qc.invalidateQueries({ queryKey: ['documents', dealId] });
       qc.invalidateQueries({ queryKey: ['deal-workspace', dealId] });
-      toast.success('Document uploaded');
+      if (!silent) toast.success('Document uploaded');
     },
-    onError: (err) => toast.error(getDocumentErrorMessage(err, 'Upload failed')),
+    // The queue reports a single summary error/success; a per-file toast here
+    // would spam under a batch. Only toast when not silent.
+    onError: (err, vars) => {
+      if (!vars?.silent) toast.error(getDocumentErrorMessage(err, 'Upload failed'));
+    },
   });
 }
 
