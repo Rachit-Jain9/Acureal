@@ -1193,7 +1193,18 @@ function buildFieldMap(extractions) {
         const effective = confidence * boost;
         const assessment = ext.field_quality?.[sourceKey] || null;
         const existing = map[canonical];
-        if (!existing || effective > existing.confidence) {
+        // Candidate ranking: a graded assessment is strictly more informative
+        // than a legacy fill-rate, so a SIGNALLED candidate always beats an
+        // unsignalled one — even when the legacy fill-rate's raw number is
+        // higher (a stale 1.0 must not outrank a fresh legal-cap 0.4 and hide
+        // its "verify — legal" reason). Within the same signal-presence tier,
+        // higher effective wins.
+        const hasSignal = Boolean(assessment);
+        const existingHasSignal = Boolean(existing?.signal);
+        const wins = !existing
+          || (hasSignal && !existingHasSignal)
+          || (hasSignal === existingHasSignal && effective > existing.confidence);
+        if (wins) {
           map[canonical] = {
             value,
             raw_key: sourceKey,

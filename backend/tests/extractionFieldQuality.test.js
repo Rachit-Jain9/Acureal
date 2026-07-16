@@ -176,8 +176,24 @@ describe('schema rules — shape only, never plausibility', () => {
   });
 
   test('a throwing rule never condemns a value', () => {
-    expect(__internal.checkSchema('area_sqft', { weird: 'object' })).toBe(false); // handled, not thrown
     expect(() => __internal.checkSchema('registration_date', null)).not.toThrow();
+    expect(() => __internal.checkSchema('area_sqft', Symbol('x'))).not.toThrow();
+  });
+
+  test('a CONTAINER value (array/object) is declined, never condemned as a mismatch', () => {
+    // key_dates: [{date, label}] is a container of facts, not a misread date.
+    expect(__internal.checkSchema('key_dates', [{ date: '2024-02-06' }])).toBeNull();
+    expect(__internal.checkSchema('property_details', { area: '34 acres' })).toBeNull();
+    expect(__internal.checkSchema('area_sqft', { nested: 1 })).toBeNull();
+  });
+});
+
+describe('container fields read as unverified (a review prompt), not a mismatch', () => {
+  test('an array-valued date container is unverified, not format_mismatch', () => {
+    const a = assessOf({ key_dates: [{ date: '06.02.2024', label: 'Document Date' }] });
+    expect(a.key_dates.schemaValid).toBeNull();
+    expect(a.key_dates.status).toBe('unverified');
+    expect(a.key_dates.reason).not.toMatch(/misread/i);
   });
 });
 

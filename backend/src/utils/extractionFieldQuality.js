@@ -204,6 +204,12 @@ const SCHEMA_RULES = Object.freeze([
 
 /** @returns {true|false|null} null = no rule for this field name. */
 const checkSchema = (fieldName, value) => {
+  // Shape rules validate SCALARS. A field whose value is an array or object
+  // (e.g. `key_dates: [{date, label}, …]`, `property_details: {…}`) is a
+  // CONTAINER — its leaves are facts, the container is not. Condemning it as a
+  // "format mismatch" ("likely misread") would be a wrong reason: nothing was
+  // misread, we simply didn't shape-check at this level. Decline instead.
+  if (value !== null && typeof value === 'object') return null;
   for (const rule of SCHEMA_RULES) {
     if (rule.pattern.test(fieldName)) {
       try {
