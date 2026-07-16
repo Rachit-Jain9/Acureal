@@ -14,6 +14,8 @@ import { roleSatisfies } from '../utils/roles';
 import Badge from '../components/common/Badge';
 import AmountReadout from '../components/common/AmountReadout';
 import { handleNumericPaste } from '../components/common/numericPaste';
+import LandPricingFields from '../components/deals/LandPricingFields';
+import { buildLandPricingPreview } from '../utils/landPricing';
 import {
   Skeleton, SkeletonKpi, SkeletonCard,
   Button, Modal, Tabs, Field, Input, Select, Textarea,
@@ -85,6 +87,14 @@ const buildEditForm = (deal) => ({
   dealStructure:      deal.deal_structure || '',
   assetClass:         deal.asset_class || '',
   priority:           deal.priority || 'medium',
+  // Land pricing is basis-aware, mirroring the New Deal modal: the backend
+  // recomputes land_ask_price_cr from rate × extent whenever the basis is
+  // per_sqft / per_acre, so the edit surface must expose all four inputs —
+  // a bare ask-price field would silently discard rate-based pricing.
+  landPricingBasis:     deal.land_pricing_basis || 'total_cr',
+  landPriceRateInr:     deal.land_price_rate_inr ?? '',
+  landExtentInputValue: deal.land_extent_input_value ?? '',
+  landExtentInputUnit:  deal.land_extent_input_unit || 'sqft',
   landAskPriceCr:     deal.land_ask_price_cr ?? '',
   negotiatedPriceCr:  deal.negotiated_price_cr ?? '',
   targetLaunchDate:   deal.target_launch_date ? deal.target_launch_date.slice(0, 10) : '',
@@ -93,19 +103,38 @@ const buildEditForm = (deal) => ({
   notes:              deal.notes || '',
 });
 
-const buildEditPayload = (form) => ({
-  name:               form.name.trim(),
-  dealType:           form.dealType,
-  dealStructure:      form.dealStructure || undefined,
-  assetClass:         form.assetClass || undefined,
-  priority:           form.priority,
-  landAskPriceCr:     form.landAskPriceCr === '' ? undefined : Number(form.landAskPriceCr),
-  negotiatedPriceCr:  form.negotiatedPriceCr === '' ? undefined : Number(form.negotiatedPriceCr),
-  targetLaunchDate:   form.targetLaunchDate || undefined,
-  expectedCloseDate:  form.expectedCloseDate || undefined,
-  reraNumber:         form.reraNumber.trim() || undefined,
-  notes:              form.notes.trim() || undefined,
-});
+const buildEditPayload = (form, fallbackAreaSqft = null) => {
+  const preview = buildLandPricingPreview({
+    pricingBasis: form.landPricingBasis,
+    totalPriceCr: form.landAskPriceCr,
+    rateInr: form.landPriceRateInr,
+    extentValue: form.landExtentInputValue,
+    extentUnit: form.landExtentInputUnit,
+    fallbackAreaSqft,
+  });
+  return {
+    name:               form.name.trim(),
+    dealType:           form.dealType,
+    dealStructure:      form.dealStructure || undefined,
+    assetClass:         form.assetClass || undefined,
+    priority:           form.priority,
+    landPricingBasis:   form.landPricingBasis,
+    landPriceRateInr:   form.landPriceRateInr === '' ? undefined : Number(form.landPriceRateInr),
+    landExtentInputValue: form.landExtentInputValue === '' ? undefined : Number(form.landExtentInputValue),
+    landExtentInputUnit:  form.landExtentInputUnit,
+    // Same convention as the create form: rate-based pricing sends the
+    // normalized preview total (the server re-derives it authoritatively);
+    // total-basis sends the operator's typed number.
+    landAskPriceCr:     form.landPricingBasis === 'total_cr'
+      ? (form.landAskPriceCr === '' ? undefined : Number(form.landAskPriceCr))
+      : (preview.totalPriceCr ?? undefined),
+    negotiatedPriceCr:  form.negotiatedPriceCr === '' ? undefined : Number(form.negotiatedPriceCr),
+    targetLaunchDate:   form.targetLaunchDate || undefined,
+    expectedCloseDate:  form.expectedCloseDate || undefined,
+    reraNumber:         form.reraNumber.trim() || undefined,
+    notes:              form.notes.trim() || undefined,
+  };
+};
 
 // ── Header identity, factored out so the same markup paints in the loading
 // skeleton (from a cached "peek") and in the fully-loaded header — no drift,
@@ -235,7 +264,7 @@ export default function DealDetailPage() {
     e.preventDefault();
     if (!editForm) return;
     try {
-      await updateDeal.mutateAsync({ id, data: buildEditPayload(editForm) });
+      await updateDeal.mutateAsync({ id, data: buildEditPayload(editForm, deal?.land_area_sqft ?? null) });
       setShowEditModal(false);
     } catch {
       // Mutation hook handles the toast
@@ -564,21 +593,18 @@ export default function DealDetailPage() {
                 </Field>
               </div>
 
+              {/* Basis-aware land pricing — shared with the New Deal modal so
+                  create and edit can never drift. Exposes pricing basis, rate,
+                  and land extent (the missing edit surface), with the same
+                  normalized live preview. */}
+              <LandPricingFields
+                values={editForm}
+                onFieldChange={updateField}
+                fallbackAreaSqft={deal?.land_area_sqft ?? null}
+                hasLinkedProperty={Boolean(deal?.property_id)}
+              />
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Field label="Land ask price (₹ Cr)">
-                    <Input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      value={editForm.landAskPriceCr}
-                      onChange={(e) => updateField('landAskPriceCr', e.target.value)}
-                      onPaste={(e) => handleNumericPaste(e, 'rupeeCrore', (v) => updateField('landAskPriceCr', v))}
-                      placeholder="Optional"
-                    />
-                  </Field>
-                  <AmountReadout value={editForm.landAskPriceCr} kind="rupeeCrore" />
-                </div>
                 <div>
                   <Field label="Negotiated price (₹ Cr)">
                     <Input

@@ -71,6 +71,41 @@ describe('financial.calculateAndSave — atomic + fail-closed (#13/#14)', () => 
     ).rejects.toThrow(/HMAC key missing/);
   });
 
+  test('overflow regression: an astronomic kernel IRR persists as NULL in the column params, raw in model_params', async () => {
+    // Plotted-development shape: front-loaded sales vs tiny month-0 outflow
+    // annualises to an IRR no NUMERIC column holds. Pre-fix this INSERT threw
+    // Postgres 22003 "numeric field overflow" and the Calculate 500'd.
+    const { computeFullFinancials } = require('../src/engines/kernel.service');
+    computeFullFinancials.mockReturnValueOnce({
+      kpis: { irr: 1.6e9, equityMultiple: 42.5, npv: 512.3 },
+      costs: {}, areas: {}, revenue: {}, capitalStack: {}, proforma: {},
+      inputs: { x: 1 }, _legacy: {}, engineVersion: 'kernel-v2', cashFlows: [], sensitivityMatrix: null,
+    });
+    query.mockResolvedValueOnce(OK_DEAL);
+    let insertParams = null;
+    installTxn((text, params) => {
+      if (/SELECT id FROM financials/i.test(text)) return Promise.resolve({ rows: [] });
+      if (/INSERT INTO financials\b/i.test(text)) {
+        insertParams = params;
+        return Promise.resolve({ rows: [{ id: 'f1' }] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+
+    const res = await financialService.calculateAndSave('d1', { assetClass: 'plotted_development' }, {});
+
+    expect(insertParams).not.toBeNull();
+    // Param $29 (index 28) is irr_pct — the un-storable value must be NULL.
+    expect(insertParams[28]).toBeNull();
+    // Param $31 (index 30) is equity_multiple — 42.5 fits and passes through.
+    expect(insertParams[30]).toBe(42.5);
+    // Param $28 (index 27) is npv_cr — fits.
+    expect(insertParams[27]).toBe(512.3);
+    // The raw IRR is preserved in model_params (param $2) and in the response.
+    expect(JSON.parse(insertParams[1]).kpis.irr).toBe(1.6e9);
+    expect(res.computed.kpis.irr).toBe(1.6e9);
+  });
+
   test('atomic: a scenarios-write failure aborts before the financials row is written', async () => {
     query.mockResolvedValueOnce(OK_DEAL);
     const seen = [];

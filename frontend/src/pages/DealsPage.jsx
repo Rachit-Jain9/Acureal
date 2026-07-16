@@ -28,8 +28,7 @@ import { useProperties } from '../hooks/useProperties';
 // capture branch — so code-splitting it keeps ~150KB of map JS + leaflet.css
 // off the frequently-hit /deals route until capture mode is actually opened.
 const PropertyCaptureField = lazy(() => import('../components/deal/PropertyCaptureField'));
-import AmountReadout from '../components/common/AmountReadout';
-import { handleNumericPaste } from '../components/common/numericPaste';
+import LandPricingFields from '../components/deals/LandPricingFields';
 import { useSavedDealViews } from '../hooks/useSavedDealViews';
 import SavedViewsMenu from '../components/deals/SavedViewsMenu';
 // DealCard was extracted from this file (2026-05-25) when DealsPage
@@ -1111,132 +1110,12 @@ export default function DealsPage() {
                 );
               })()}
 
-              <div className="rounded-xl border border-hairline-strong bg-bg-secondary p-4">
-                <div className="mb-3 flex items-center justify-between">
-                  <div>
-                    <h4 className="text-sm font-semibold text-content-primary">Land Pricing</h4>
-                    <p className="text-xs text-content-secondary">Quote land cost in crore, per acre, or per sqft. REDIP will normalize the total.</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-content-secondary mb-1">Pricing Basis</label>
-                    <select
-                      name="landPricingBasis"
-                      aria-label="Land pricing basis"
-                      value={form.landPricingBasis}
-                      onChange={handleFormChange}
-                      className="input w-full"
-                    >
-                      <option value="total_cr">Total in Cr</option>
-                      <option value="per_sqft">INR / sqft</option>
-                      <option value="per_acre">INR / acre</option>
-                    </select>
-                  </div>
-
-                  {form.landPricingBasis === 'total_cr' ? (
-                    <div>
-                      <label className="block text-sm font-medium text-content-secondary mb-1">Total Land Price (Cr)</label>
-                      <input
-                        type="number"
-                        name="landAskPriceCr"
-                        aria-label="Total land price in crore"
-                        value={form.landAskPriceCr}
-                        onChange={handleFormChange}
-                        onPaste={(e) => handleNumericPaste(e, 'rupeeCrore', (v) => handleFormChange({ target: { name: 'landAskPriceCr', value: v } }))}
-                        step="0.01"
-                        min="0"
-                        placeholder="e.g. 25.50"
-                        className="input w-full"
-                      />
-                      <AmountReadout value={form.landAskPriceCr} kind="rupeeCrore" />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-content-secondary mb-1">
-                        {form.landPricingBasis === 'per_acre' ? 'Land Rate (INR / acre)' : 'Land Rate (INR / sqft)'}
-                      </label>
-                      <input
-                        type="number"
-                        name="landPriceRateInr"
-                        aria-label="Land rate"
-                        value={form.landPriceRateInr}
-                        onChange={handleFormChange}
-                        onPaste={(e) => handleNumericPaste(e, 'rupeePlain', (v) => handleFormChange({ target: { name: 'landPriceRateInr', value: v } }))}
-                        step="0.01"
-                        min="0"
-                        placeholder={form.landPricingBasis === 'per_acre' ? 'e.g. 250000000' : 'e.g. 12000'}
-                        className="input w-full"
-                      />
-                      <AmountReadout
-                        value={form.landPriceRateInr}
-                        kind="rupeePlain"
-                        unitSuffix={form.landPricingBasis === 'per_acre' ? '/acre' : '/sqft'}
-                      />
-                    </div>
-                  )}
-
-                  <div className="md:col-span-2">
-                    <label className="block text-sm font-medium text-content-secondary mb-1">Land Extent for Pricing</label>
-                    <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
-                      <input
-                        type="number"
-                        name="landExtentInputValue"
-                        aria-label="Land extent for pricing"
-                        value={form.landExtentInputValue}
-                        onChange={handleFormChange}
-                        onPaste={(e) => handleNumericPaste(e, 'count', (v) => handleFormChange({ target: { name: 'landExtentInputValue', value: v } }))}
-                        step="0.01"
-                        min="0"
-                        placeholder={selectedProperty?.land_area_sqft ? 'Optional override. Blank uses linked property area.' : 'Enter the deal land extent'}
-                        className="input w-full"
-                      />
-                      <select
-                        name="landExtentInputUnit"
-                        aria-label="Land extent unit"
-                        value={form.landExtentInputUnit}
-                        onChange={handleFormChange}
-                        className="input w-full"
-                      >
-                        <option value="sqft">sq ft</option>
-                        <option value="acre">acre</option>
-                      </select>
-                    </div>
-                    <AmountReadout
-                      value={form.landExtentInputValue}
-                      kind="count"
-                      unitSuffix={form.landExtentInputUnit === 'acre' ? 'acre' : 'sqft'}
-                    />
-                    <p className="mt-2 text-xs text-content-secondary">
-                      {selectedProperty?.land_area_sqft
-                        ? `Linked property fallback area: ${Number(selectedProperty.land_area_sqft).toLocaleString('en-IN')} sqft`
-                        : 'If no linked property exists yet, enter the sourcing extent here so total pricing can still be calculated.'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
-                  <div className="rounded-lg bg-bg-elevated px-3 py-2">
-                    <p className="text-xs text-content-secondary">Normalized area</p>
-                    <p className="text-sm font-semibold text-content-primary">
-                      {landPricingPreview.areaSqft ? `${landPricingPreview.areaSqft.toLocaleString('en-IN')} sqft` : '-'}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-bg-elevated px-3 py-2">
-                    <p className="text-xs text-content-secondary">Equivalent acres</p>
-                    <p className="text-sm font-semibold text-content-primary">
-                      {landPricingPreview.areaAcres ? landPricingPreview.areaAcres.toFixed(4) : '-'}
-                    </p>
-                  </div>
-                  <div className="rounded-lg bg-bg-primary px-3 py-2 text-white">
-                    <p className="text-xs text-content-muted">Computed total land price</p>
-                    <p className="text-sm font-semibold">
-                      {landPricingPreview.totalPriceCr != null ? `${landPricingPreview.totalPriceCr.toFixed(2)} Cr` : '-'}
-                    </p>
-                  </div>
-                </div>
-              </div>
+              <LandPricingFields
+                values={form}
+                onFieldChange={(name, value) => handleFormChange({ target: { name, value } })}
+                fallbackAreaSqft={selectedProperty?.land_area_sqft ?? null}
+                hasLinkedProperty={Boolean(form.propertyId)}
+              />
 
               <div>
                 <label className="block text-sm font-medium text-content-secondary mb-1">Notes</label>

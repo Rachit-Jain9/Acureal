@@ -263,4 +263,22 @@ describe('PR-NX56 — computeKernelWarnings (post-Calculate)', () => {
     expect(computeKernelWarnings({ irr: NaN, equityMultiple: undefined }, {}, thresholds)).toEqual([]);
     expect(computeKernelWarnings({}, {}, thresholds)).toEqual([]);
   });
+
+  // ── IRR plausibility ceiling (2026-07-16): mirrors marketBenchmarkValidator ──
+  // An annualised IRR above 1,000% is real kernel output (front-loaded sales vs
+  // near-zero month-0 outflow) but not a meaningful ranking metric; also
+  // explains why the persisted irr_pct column can be NULL (fit-or-NULL guard).
+  it('flags an implausibly high IRR (>1000%) as warn', () => {
+    const w = computeKernelWarnings({ irr: 1.6e9, equityMultiple: 4.8 }, {}, thresholds);
+    expect(w).toHaveLength(1);
+    expect(w[0].kind).toBe('irr');
+    expect(w[0].severity).toBe('warn');
+    expect(w[0].label).toMatch(/above any plausible underwriting range/);
+    expect(w[0].detail).toMatch(/equity multiple and absolute profit/);
+  });
+
+  it('does NOT flag a high-but-plausible IRR (boundary: exactly 1000% is silent)', () => {
+    expect(computeKernelWarnings({ irr: 1000, equityMultiple: 3.0 }, {}, thresholds)).toEqual([]);
+    expect(computeKernelWarnings({ irr: 180, equityMultiple: 2.4 }, {}, thresholds)).toEqual([]);
+  });
 });

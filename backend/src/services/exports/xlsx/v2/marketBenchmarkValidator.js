@@ -194,6 +194,11 @@ const validateCompCoverage = (ctx, core, addIssue) => {
  */
 const RBI_DSCR_FLOOR = 1.20;
 
+// Annualised-IRR plausibility ceiling (percent). Mirrored in the in-app
+// post-Calculate warnings (frontend useBenchmarkBands.computeKernelWarnings) —
+// keep the two in lockstep.
+const IRR_PLAUSIBILITY_CEILING_PCT = 1000;
+
 const validateDscrFloor = (ctx, core, addIssue) => {
   if (ctx.dealFamily !== 'income') return;
 
@@ -339,6 +344,25 @@ const validateFundamentalEconomics = (ctx, core, addIssue) => {
       'IRR',
       `Computed IRR is ${irrPct.toFixed(2)}% — negative. The kernel's annualised return is below zero: projected cash flows return less than the capital invested.`,
       'Re-examine the cost, pricing, and timing inputs and stress-test the downside. A negative-IRR model should not go to IC as a base case without an explicit, documented rationale.',
+      'all asset classes',
+    );
+  }
+
+  // Plausibility ceiling (2026-07-16, mirror of computeKernelWarnings): an
+  // annualised IRR above 1,000% is mathematically real kernel output but
+  // almost always an input-shape artifact — a near-zero month-0 equity outlay
+  // against front-loaded revenue makes (1+r_monthly)^12−1 explode. Above the
+  // ceiling IRR stops being a meaningful ranking metric, and the persistence
+  // layer may store the column as NULL (fit-or-NULL, numericColumnBounds.js),
+  // so the workbook must explain rather than silently omit. WARN, never
+  // BLOCKER, matching the rest of this validator's posture.
+  if (irrPct !== null && irrPct > IRR_PLAUSIBILITY_CEILING_PCT) {
+    addIssue(
+      'warn',
+      'Fundamental economics — return plausibility',
+      'IRR',
+      `Computed IRR is ${Math.round(irrPct).toLocaleString('en-IN')}% — above any plausible underwriting range (>${IRR_PLAUSIBILITY_CEILING_PCT.toLocaleString('en-IN')}%). This usually means the cash-flow shape, not the deal, is driving the number: a very small day-one outflow against heavily front-loaded revenue annualises to an astronomic rate.`,
+      'Re-examine the land cost, equity outlay, phasing, and sales-pacing inputs before relying on returns. At this magnitude IRR is not a meaningful ranking metric — use equity multiple and absolute profit instead.',
       'all asset classes',
     );
   }
@@ -555,6 +579,7 @@ module.exports = {
     validateFundamentalEconomics,
     validateRentRollConsistency,
     RBI_DSCR_FLOOR,
+    IRR_PLAUSIBILITY_CEILING_PCT,
     RBI_DSCR_FLOOR_BPS,
     YOC_VS_EXIT_CAP_MIN_SPREAD_BPS,
     YOC_VS_EXIT_CAP_HEALTHY_SPREAD_BPS,
