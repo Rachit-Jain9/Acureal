@@ -53,26 +53,24 @@ beforeEach(() => {
   runClaudeReasoning.mockResolvedValue(JSON.stringify({ grantor: 'A', grantee: 'B', area_sqft: 4500 }));
 });
 
-describe('an optional normalization skip does NOT mark a complete extraction partial', () => {
-  test('normalization timeout → status completed, fields intact, note recorded', async () => {
-    runClaudeReasoning.mockRejectedValueOnce(new Error('Claude extraction normalization timed out after 5000ms'));
-
-    await extractionService.extractDocument('doc-1', 'https://f', 'deed.pdf', null, 'deal-1', 'u1', { docType: 'title_deed' });
-
-    const row = finalUpdate();
-    expect(row.status).toBe('completed'); // was 'partial' — the bug
-    // The payload is untouched: skipping a formatting pass loses no fields.
-    expect(JSON.parse(row.structuredFields)).toMatchObject({ grantor: 'A', grantee: 'B', area_sqft: 4500 });
-    // The skip stays visible for diagnostics, phrased as a note, not a defect.
-    expect(row.errorMessage).toMatch(/normalization pass skipped/i);
-    expect(row.errorMessage).toMatch(/Extracted values are unchanged/);
-  });
-
-  test('normalization success → status completed with no note at all', async () => {
+describe('a clean provider extraction is completed, unmodified, with no note', () => {
+  // The second-AI "normalization" pass was REMOVED 2026-07-16 (it never once
+  // finished inside its deadline and its selection rule rewarded box-filling).
+  // A clean read is now simply 'completed' — no second call, no note, and the
+  // provider's output is persisted exactly as returned.
+  test('status completed, provider output untouched, no error_message', async () => {
     await extractionService.extractDocument('doc-1', 'https://f', 'deed.pdf', null, 'deal-1', 'u1', { docType: 'title_deed' });
     const row = finalUpdate();
     expect(row.status).toBe('completed');
     expect(row.errorMessage).toBeNull();
+    expect(JSON.parse(row.structuredFields)).toEqual({ grantor: 'A', grantee: 'B', area_sqft: 4500 });
+  });
+
+  test('the removed normalization model is never called', async () => {
+    await extractionService.extractDocument('doc-1', 'https://f', 'deed.pdf', null, 'deal-1', 'u1', { docType: 'title_deed' });
+    // Gemini extracts; the reasoning model is not invoked for a successful read.
+    expect(runGeminiInline).toHaveBeenCalled();
+    expect(runClaudeReasoning).not.toHaveBeenCalled();
   });
 });
 

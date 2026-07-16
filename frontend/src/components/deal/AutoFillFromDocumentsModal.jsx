@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
-import { X, Sparkles, FileText, CheckCircle2, AlertTriangle, Info, RotateCcw } from 'lucide-react';
+import { X, Sparkles, FileText, CheckCircle2, AlertTriangle, Info, RotateCcw, ShieldCheck, ScanLine, HelpCircle, ShieldAlert } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
 import { useApplyExtractions } from '../../hooks/useApplyExtractions';
@@ -8,40 +8,35 @@ import useScrollLock from '../../hooks/useScrollLock';
 import ontologyV1 from '@redip/real-estate-ontology';
 
 /**
- * AutoFillFromDocumentsModal (PR-NX26) — the operator-visible half of
- * document ingestion. Renders one row per extracted-and-mapped field:
+ * AutoFillFromDocumentsModal (PR-NX26; verification-signal redesign 2026-07-16)
+ * — the operator-visible half of document ingestion. One row per
+ * extracted-and-mapped field:
  *
- *   • CURRENT deal value (on the left)
- *   • PROPOSED extracted value (on the right) with confidence pill +
- *     source-document chip + per-field india_context tooltip
- *   • APPROVE checkbox (defaults on for HIGH-confidence rows)
+ *   • CURRENT deal value
+ *   • PROPOSED extracted value (editable inline)
+ *   • a VERIFICATION BASIS — not a percentage. Each field carries a
+ *     deterministic status computed by the backend
+ *     (utils/extractionFieldQuality): whether the value was found verbatim in
+ *     the document, whether its shape checks out, and whether it is one of
+ *     CLAUDE.md's "legal four" statutory facts that a human must verify.
+ *   • an APPROVE checkbox
  *
- * Bulk actions: select-all-high, select-all-medium, clear-all, plus a
- * sticky "Apply N selected" footer button. On apply, POSTs to
- * /api/deals/:id/apply-extractions and surfaces the applied/skipped
- * breakdown via toast.
- *
- * Per AI_ROADMAP §10 (UX/UI conventions for AI surfaces):
- *   - Mandatory "AI-assisted — requires human review" banner.
- *   - Confidence rendered as bands (high/medium/low), not raw %.
- *   - Source-document chips name the originating document (full name on hover).
- *   - Skeleton-then-list on initial extraction load.
+ * What changed and why: the old surface showed a "confidence %" that was
+ * actually a fill-rate (1.0 for any non-empty field) multiplied by an alias
+ * preference, and PRE-TICKED every field scoring ≥0.80 — which was ~all of
+ * them, including ownership and survey numbers. This version pre-ticks ONLY
+ * values proven verbatim against the source AND outside the legal four, shows
+ * the operator WHY each value is or isn't trusted, and never auto-selects a
+ * statutory fact at any strength.
  *
  * The ontology field_map is the single source of truth for field labels +
- * india_context — the same v1.json the backend validates writes against.
+ * india_context. The per-field signal comes from the backend field_map's
+ * `signal` (status/reason/lane/grounded); when it is absent (a document
+ * extracted before this shipped, or before migration 20260728), the row
+ * degrades to "review" and is never pre-ticked — honest by default.
  */
 
 const FIELD_SPECS = ontologyV1.extraction_field_map.fields;
-const CONFIDENCE_BANDS = ontologyV1.confidence_bands.bands;
-
-const bandFor = (confidence) => {
-  if (confidence == null || !Number.isFinite(Number(confidence))) return null;
-  const n = Number(confidence);
-  for (const band of CONFIDENCE_BANDS) {
-    if (n >= band.min && n <= band.max) return band;
-  }
-  return null;
-};
 
 const formatValue = (value, valueType) => {
   if (value == null || value === '') return '—';
@@ -54,10 +49,35 @@ const formatValue = (value, valueType) => {
   return String(value);
 };
 
-const BAND_PILL = {
-  high:   'bg-pos-soft text-data-positive border-hairline',
-  medium: 'bg-premium-soft text-premium border-hairline',
-  low:    'bg-bg-secondary text-content-secondary border-hairline',
+/**
+ * Verification-status → display. `autoFill` gates BOTH the default pre-tick and
+ * the "Select verified" bulk action — only `source_verified` (found verbatim,
+ * shape valid, NOT legal-four) is ever selected without a human touching it.
+ * `chip` is one restrained soft tone (no chip-soup, FRONTEND_GUIDELINES §0);
+ * the short label is the at-a-glance signal, the backend `reason` is the
+ * explanation shown beneath the field — together one composite signal (§11).
+ */
+const SIGNAL_DISPLAY = {
+  source_verified: { label: 'Found in source', short: 'Verified', Icon: ShieldCheck, chip: 'bg-pos-soft text-data-positive', autoFill: true },
+  format_checked:  { label: 'Format checked',  short: 'Check',    Icon: ScanLine,   chip: 'bg-bg-secondary text-content-secondary', autoFill: false },
+  unverified:      { label: 'Unverified',      short: 'Review',   Icon: HelpCircle, chip: 'bg-bg-secondary text-content-secondary', autoFill: false },
+  not_in_source:   { label: 'Not in source',   short: 'Not found', Icon: AlertTriangle, chip: 'bg-neg-soft text-data-negative', autoFill: false },
+  format_mismatch: { label: 'Format mismatch', short: 'Mismatch', Icon: AlertTriangle, chip: 'bg-neg-soft text-data-negative', autoFill: false },
+  verify_legal:    { label: 'Verify — legal',  short: 'Legal',    Icon: ShieldAlert, chip: 'bg-premium-soft text-premium', autoFill: false },
+  absent:          { label: '—',               short: '—',        Icon: HelpCircle, chip: 'bg-bg-secondary text-content-tertiary', autoFill: false },
+};
+
+// A field whose extraction predates the signal (no field_quality persisted).
+// Honest default: show it as review-required, never pre-ticked.
+const FALLBACK_DISPLAY = { label: 'Review', short: 'Review', Icon: HelpCircle, chip: 'bg-bg-secondary text-content-secondary', autoFill: false };
+const FALLBACK_REASON = 'Read by AI. Check this value against the source document before applying.';
+
+const displayForSignal = (signal) => {
+  if (!signal || !signal.status) return { display: FALLBACK_DISPLAY, reason: FALLBACK_REASON };
+  return {
+    display: SIGNAL_DISPLAY[signal.status] || FALLBACK_DISPLAY,
+    reason: signal.reason || FALLBACK_REASON,
+  };
 };
 
 export default function AutoFillFromDocumentsModal({ dealId, open, onClose, dealCurrentValues = {}, propertyCurrentValues = {} }) {
@@ -93,21 +113,35 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
         const currentBag = spec.table === 'properties' ? propertyCurrentValues : dealCurrentValues;
         const currentValue = currentBag[spec.column] ?? null;
 
-        const band = bandFor(source.confidence);
+        const { display, reason } = displayForSignal(source.signal);
 
         return {
           canonicalKey,
           spec,
           source,
           currentValue,
-          band,
+          display,
+          reason,
+          isLegal: Boolean(source.signal?.lane),
+          autoFillable: display.autoFill,
         };
       })
       .filter(Boolean);
   }, [extractionData?.field_map, dealCurrentValues, propertyCurrentValues]);
 
+  // A stable signature of WHICH fields (and their verification status) are on
+  // offer. Re-seeding on this — instead of the old `candidates.length` — means
+  // approvals reset correctly when the field set changes without a count
+  // change, and never silently discards state on an unrelated re-render.
+  const candidateSignature = useMemo(
+    () => candidates.map((c) => `${c.canonicalKey}:${c.source.signal?.status || 'x'}`).join('|'),
+    [candidates],
+  );
+
   // Approval state — Set of canonical keys the operator has approved.
-  // Default: every HIGH-confidence row is checked on first render.
+  // Default: ONLY source-verified, non-legal fields are pre-ticked. A statutory
+  // fact (owner, survey number, RERA, approval status) is NEVER auto-selected,
+  // however well it verifies — CLAUDE.md: extraction aid only, human verifies.
   const [approvedKeys, setApprovedKeys] = useState(() => new Set());
 
   // Inline corrections — canonical key → operator-typed value. A key present
@@ -115,20 +149,17 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
   // means they are taking the AI's extracted value as-is.
   const [editedValues, setEditedValues] = useState({});
 
-  // Reset / re-seed approvals + edits whenever the candidate list changes
-  // (e.g., after the modal re-opens with fresh extractions).
   useEffect(() => {
     setEditedValues({});
-    if (!candidates.length) {
-      setApprovedKeys(new Set());
-      return;
-    }
     const defaults = new Set();
     for (const c of candidates) {
-      if (c.band?.key === 'high') defaults.add(c.canonicalKey);
+      if (c.autoFillable) defaults.add(c.canonicalKey);
     }
     setApprovedKeys(defaults);
-  }, [candidates.length]); // re-seed when the count changes
+  }, [candidateSignature]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const verifiedCount = useMemo(() => candidates.filter((c) => c.autoFillable).length, [candidates]);
+  const legalCount = useMemo(() => candidates.filter((c) => c.isLegal).length, [candidates]);
 
   if (!open) return null;
 
@@ -141,11 +172,14 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
     });
   };
 
-  const selectAllByBand = (bandKey) => {
+  // Bulk-select only what is safe to apply without reading each one: the
+  // source-verified, non-legal rows. There is deliberately no "select all" —
+  // that is the affordance that let unverified and statutory values slip in.
+  const selectVerified = () => {
     setApprovedKeys((prev) => {
       const next = new Set(prev);
       for (const c of candidates) {
-        if (c.band?.key === bandKey) next.add(c.canonicalKey);
+        if (c.autoFillable) next.add(c.canonicalKey);
       }
       return next;
     });
@@ -189,7 +223,11 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
         source_extraction_id: c.source.extraction_id || null,
         source_document_id: c.source.document_id || null,
         source_field: c.source.raw_key || null,
-        confidence: c.source.confidence != null ? Number(c.source.confidence) : null,
+        // Audit trail carries the verification BASIS (found-in-source /
+        // legal-verify / …) and its deterministic score — not a fabricated
+        // percentage. `confidence` stays for backward-compatible audit shape.
+        verification_status: c.source.signal?.status || null,
+        confidence: c.source.signal_score != null ? Number(c.source.signal_score) : null,
       }));
 
     if (approved.length === 0) return;
@@ -228,7 +266,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                 Auto-fill deal from extracted documents
               </h2>
               <p className="text-xs text-content-secondary mt-0.5">
-                Review each proposed value, correct it if the AI got it wrong, then apply. Ontology v{ontologyV1.ontology_version}.
+                Values proven against the source are pre-selected. Everything else — and every legal fact — is for you to check. Ontology v{ontologyV1.ontology_version}.
               </p>
             </div>
           </div>
@@ -280,30 +318,40 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
 
           {!isLoading && candidates.length > 0 && (
             <>
-              {/* Bulk action toolbar */}
+              {/* Bulk action toolbar. Only "verified" can be bulk-selected —
+                  the rest must be reviewed one at a time. Legal-lane rows are
+                  never in any bulk set. */}
               <div className="sticky top-0 z-10 px-6 py-2.5 bg-paper border-b border-hairline flex items-center gap-2 text-xs">
-                <span className="text-content-secondary mr-2">Bulk:</span>
                 <button
                   type="button"
-                  onClick={() => selectAllByBand('high')}
-                  className="px-2 py-1 rounded border border-hairline text-content-primary hover:bg-paper-200"
+                  onClick={selectVerified}
+                  disabled={verifiedCount === 0}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border border-hairline text-content-primary
+                    transition-colors duration-[120ms] ease-out hover:bg-paper-200
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:bg-paper-200/70
+                    disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Select all high-confidence
-                </button>
-                <button
-                  type="button"
-                  onClick={() => selectAllByBand('medium')}
-                  className="px-2 py-1 rounded border border-hairline text-content-primary hover:bg-paper-200"
-                >
-                  + medium
+                  <ShieldCheck size={12} className="text-data-positive" />
+                  Select verified{verifiedCount > 0 ? ` (${verifiedCount})` : ''}
                 </button>
                 <button
                   type="button"
                   onClick={clearAll}
-                  className="px-2 py-1 rounded border border-hairline text-content-tertiary hover:bg-paper-200 ml-1"
+                  className="px-2.5 py-1 rounded border border-hairline text-content-tertiary
+                    transition-colors duration-[120ms] ease-out hover:bg-paper-200
+                    focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 active:bg-paper-200/70"
                 >
                   Clear
                 </button>
+                {legalCount > 0 && (
+                  <span
+                    className="inline-flex items-center gap-1 text-[11px] text-premium"
+                    title="Title, encumbrance, RERA and statutory-approval facts are never selected automatically — tick each one only after checking it against the source document."
+                  >
+                    <ShieldAlert size={12} />
+                    {legalCount} legal field{legalCount === 1 ? '' : 's'} need your review
+                  </span>
+                )}
                 <span className="ml-auto text-content-tertiary tabular-nums">
                   {approvedCount} of {totalCount} selected
                 </span>
@@ -338,10 +386,17 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                         />
                       </label>
 
-                      {/* Field label + india_context */}
+                      {/* Field label + the verification REASON (why this value
+                          is or isn't trusted) — the schema-routing trivia that
+                          used to sit here moved into the label's tooltip. */}
                       <div className="col-span-4 min-w-0">
                         <div className="flex items-center gap-1">
-                          <span className="text-sm font-medium text-content-primary">{c.spec.label}</span>
+                          <span
+                            className="text-sm font-medium text-content-primary"
+                            title={`${c.spec.table}.${c.spec.column}${c.spec.transform ? ` · transform: ${c.spec.transform}` : ''}`}
+                          >
+                            {c.spec.label}
+                          </span>
                           {c.spec.india_context && (
                             <span
                               title={c.spec.india_context}
@@ -351,11 +406,11 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-content-tertiary mt-0.5 break-words">
-                          → {c.spec.table}.{c.spec.column}
-                          {c.spec.transform && (
-                            <span className="ml-1 text-premium">· transform: {c.spec.transform}</span>
-                          )}
+                        <p className={clsx(
+                          'text-[11px] mt-0.5 break-words',
+                          c.isLegal ? 'text-premium' : 'text-content-tertiary',
+                        )}>
+                          {c.reason}
                         </p>
                       </div>
 
@@ -406,19 +461,20 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                         </div>
                       </div>
 
-                      {/* Source + confidence */}
+                      {/* Verification basis + source document. The pill is the
+                          at-a-glance status; the reason under the field label
+                          is its explanation — one composite signal (§11). */}
                       <div className="col-span-1 flex flex-col items-end gap-1">
-                        {c.band && (
-                          <span
-                            className={clsx(
-                              'inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium border tabular-nums',
-                              BAND_PILL[c.band.key],
-                            )}
-                            title={c.band.applies}
-                          >
-                            {c.band.label} · {(c.source.confidence * 100).toFixed(0)}%
-                          </span>
-                        )}
+                        <span
+                          className={clsx(
+                            'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium',
+                            c.display.chip,
+                          )}
+                          title={c.reason}
+                        >
+                          <c.display.Icon size={10} />
+                          {c.display.short}
+                        </span>
                         {c.source.document_name && (
                           <span
                             className="inline-flex items-center gap-0.5 text-[10px] text-content-tertiary truncate max-w-[120px]"

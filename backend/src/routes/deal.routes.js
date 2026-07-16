@@ -332,6 +332,10 @@ router.post(
     body('approved.*.source_document_id').optional({ nullable: true }).isUUID(),
     body('approved.*.source_field').optional({ nullable: true }).isString().isLength({ max: 200 }),
     body('approved.*.confidence').optional({ nullable: true }).isFloat({ min: 0, max: 1 }),
+    // The deterministic verification basis shown to the operator at approval
+    // time — recorded in the audit trail (optional, bounded to the known set).
+    body('approved.*.verification_status').optional({ nullable: true })
+      .isIn(['source_verified', 'format_checked', 'unverified', 'not_in_source', 'format_mismatch', 'verify_legal', 'absent']),
   ],
   handleValidation,
   async (req, res, next) => {
