@@ -182,3 +182,50 @@ describe('CI guard — every auto-fill destination has a reviewed lane', () => {
     expect(general.length).toBeGreaterThanOrEqual(canonicalFields.length - 5);
   });
 });
+
+describe('buildFieldMap — a graded signal always beats a stale legacy fill-rate', () => {
+  const { buildFieldMap } = __internal;
+
+  // During the migration window an OLD extraction carries a fill-rate 1.0 and
+  // NO field_quality; a re-run carries the real graded score and its signal.
+  // The stale 1.0 must not outrank the fresh legal-cap 0.4 and hide its reason.
+  const legacyExtraction = {
+    id: 'old', document_id: 'd-old', document_name: 'old.jpg', doc_type: 'rtc_pahani',
+    fields: { survey_number: '72' },
+    confidence: { survey_number: 1 },     // legacy fill-rate
+    field_quality: {},                    // no signal
+    applied_canonical_fields: [],
+  };
+  const gradedExtraction = {
+    id: 'new', document_id: 'd-new', document_name: 'new.jpg', doc_type: 'rtc_pahani',
+    fields: { survey_number: '72' },
+    confidence: { survey_number: 0.4 },   // verify_legal cap
+    field_quality: {
+      survey_number: { status: 'verify_legal', lane: 'legal_title', grounded: true, reason: 'legal — verify' },
+    },
+    applied_canonical_fields: [],
+  };
+
+  test('the graded (signalled) candidate wins even though its raw score is lower', () => {
+    // Legacy first, graded second — graded must still win.
+    const map = buildFieldMap([legacyExtraction, gradedExtraction]);
+    expect(map.survey_number.extraction_id).toBe('new');
+    expect(map.survey_number.signal.status).toBe('verify_legal');
+    expect(map.survey_number.signal.lane).toBe('legal_title');
+  });
+
+  test('order-independent: graded still wins when it is seen first', () => {
+    const map = buildFieldMap([gradedExtraction, legacyExtraction]);
+    expect(map.survey_number.extraction_id).toBe('new');
+  });
+
+  test('among two graded candidates, the higher effective score wins', () => {
+    const lower = { ...gradedExtraction, id: 'g-low', confidence: { survey_number: 0.4 } };
+    const higher = {
+      ...gradedExtraction, id: 'g-high', confidence: { survey_number: 0.9 },
+      field_quality: { survey_number: { status: 'source_verified', lane: null, grounded: true, reason: 'found' } },
+    };
+    const map = buildFieldMap([lower, higher]);
+    expect(map.survey_number.extraction_id).toBe('g-high');
+  });
+});
