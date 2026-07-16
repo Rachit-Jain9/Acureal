@@ -2579,6 +2579,145 @@ const renderSiteYield = (pptx, slide, context, pageNumber, totalSlides) => {
 };
 
 
+// ── Deal Register slide (rent-roll program) ─────────────────────────────────
+// Family-adaptive: a 4-up committed-KPI row + a top-N records table, from the
+// server-recomputed register slice. Renders only when the deck manifest gates
+// it in (deal has a register with records). Deterministic — no AI wording; the
+// date-only footer comes from addTopHeader. Register money aggregates arrive in
+// absolute ₹ → divide by 1e7 for the ₹-crore formatters.
+const LEASE_STATUS_PPTX = { vacant: 'Vacant', loi: 'LOI', committed: 'Committed', occupied: 'Occupied', notice_served: 'Notice served', expired: 'Expired / MTM' };
+const SALE_STATUS_PPTX = { unsold: 'Unsold', booked: 'Booked', sold: 'Sold', registered: 'Registered', cancelled: 'Cancelled' };
+const OCC_STATUS_PPTX = { in_place: 'In place', vacated: 'Vacated', disputed: 'Disputed' };
+const rrCrPptx = (v) => (v == null ? '–' : (formatCrores(Number(v) / 1e7) || '–'));
+const rrRupeePptx = (v) => (v == null || !Number.isFinite(Number(v)) ? '–' : `INR ${formatNumber(v)}`);
+
+const RENT_ROLL_SLIDE = {
+  lease_income: (slice) => {
+    const m = slice.metrics || {};
+    const occ = m.occupancy || {}; const wale = m.wale || {}; const rev = m.revenue || {}; const mtm = m.mtm || {};
+    const rows = ((slice.records && slice.records.lease) || []).slice(0, 6);
+    return {
+      kpis: [
+        { label: 'Committed occupancy', value: formatPct(occ.committedPct) || '–' },
+        { label: 'WALE to expiry', value: wale.toExpiryRentYears == null ? '–' : `${Number(wale.toExpiryRentYears).toFixed(1)} yr` },
+        { label: 'Accrual NOI', value: rrCrPptx(rev.accrualNOI) },
+        { label: 'In-place vs market', value: formatPct(mtm.portfolioPct) || '–' },
+      ],
+      headers: ['Tenant / Occupier', 'Status', 'Area (sqft)', 'Base rate', 'Expiry'],
+      colW: [3.9, 1.9, 2.14, 1.9, 2.4],
+      rows: rows.map((r) => [
+        firstText(r.tenant_name, r.record_label) || '–',
+        LEASE_STATUS_PPTX[r.status] || r.status || '–',
+        formatNumber(r.chargeable_area_sqft) || '–',
+        formatNumber(r.base_rent_rate, 2) || '–',
+        r.lease_expiry ? String(r.lease_expiry).slice(0, 10) : '–',
+      ]),
+    };
+  },
+  sales_collections: (slice) => {
+    const m = slice.metrics || {};
+    const area = m.area || {}; const coll = m.collections || {};
+    const rows = ((slice.records && slice.records.sale) || []).slice(0, 6);
+    return {
+      kpis: [
+        { label: 'Sell-through (area)', value: formatPct(area.sellThroughByAreaPct) || '–' },
+        { label: 'Sold GDV', value: rrCrPptx(coll.soldGDV) },
+        { label: 'Collection efficiency', value: formatPct(coll.collectionEfficiencyPct) || '–' },
+        { label: 'Overdue', value: rrCrPptx(coll.overdue) },
+      ],
+      headers: ['Plot / Unit', 'Status', 'Area (sqft)', 'Base ₹/sqft', 'Agreement'],
+      colW: [3.0, 2.0, 2.14, 2.2, 2.9],
+      rows: rows.map((r) => [
+        firstText(r.record_label) || '–',
+        SALE_STATUS_PPTX[r.status] || r.status || '–',
+        formatNumber(r.area_sqft) || '–',
+        formatNumber(r.base_price_per_sqft) || '–',
+        rrCrPptx(r.agreement_value),
+      ]),
+    };
+  },
+  hotel_operating: (slice) => {
+    const m = slice.metrics || {};
+    const op = m.operating || {};
+    const series = (Array.isArray(op.series) ? op.series : []).slice(-6);
+    return {
+      kpis: [
+        { label: 'TTM occupancy', value: formatPct(op.ttmOccupancyPct) || '–' },
+        { label: 'TTM ADR', value: rrRupeePptx(op.ttmAdr) },
+        { label: 'TTM RevPAR', value: rrRupeePptx(op.ttmRevpar) },
+        { label: 'TTM owner NOI', value: rrCrPptx(op.ttmOwnerNoi) },
+      ],
+      headers: ['Month', 'Occupancy', 'ADR', 'RevPAR', 'Owner NOI'],
+      colW: [2.5, 2.4, 2.4, 2.4, 2.53],
+      rows: series.map((s) => [
+        s.month || '–',
+        formatPct(s.occupancyPct) || '–',
+        rrRupeePptx(s.adr),
+        rrRupeePptx(s.revpar),
+        rrRupeePptx(s.ownerNoi),
+      ]),
+    };
+  },
+  redevelopment: (slice) => {
+    const m = slice.metrics || {};
+    const occ = m.occupant || {};
+    const vac = occ.vacancy || {}; const ent = occ.entitlement || {}; const obl = occ.obligations || {}; const risk = occ.risk || {};
+    const rows = ((slice.records && slice.records.occupant) || []).slice(0, 6);
+    return {
+      kpis: [
+        { label: 'Vacation progress', value: formatPct(vac.vacatedByCountPct) || '–' },
+        { label: 'Free rehab area', value: ent.rehabEntitlementSqft == null ? '–' : `${formatNumber(ent.rehabEntitlementSqft)} sqft` },
+        { label: 'Rehousing obligation', value: rrCrPptx(obl.totalRehousingObligation) },
+        { label: 'At-risk occupiers', value: risk.atRiskUnits == null ? '–' : String(risk.atRiskUnits) },
+      ],
+      headers: ['Unit / Ref', 'Occupant', 'Status', 'Existing (sqft)', 'Transit ₹/mo'],
+      colW: [2.4, 3.0, 1.9, 2.4, 2.53],
+      rows: rows.map((r) => [
+        firstText(r.record_label) || '–',
+        firstText(r.occupant_name) || '–',
+        OCC_STATUS_PPTX[r.status] || r.status || '–',
+        formatNumber(r.existing_carpet_area_sqft) || '–',
+        formatNumber(r.transit_rent_monthly) || '–',
+      ]),
+    };
+  },
+};
+
+const renderRentRoll = (pptx, slide, context, pageNumber, totalSlides) => {
+  const slice = context.rentRoll;
+  addTopHeader(
+    pptx, slide, context,
+    context.rentRollTitle || 'Deal Register',
+    pageNumber, totalSlides,
+    `Deal register as of ${(slice && slice.asOfDate) || 'n/a'} | gross figures, pre ownership share`,
+  );
+  if (!slice || !slice.family || !RENT_ROLL_SLIDE[slice.family]) return;
+  const data = RENT_ROLL_SLIDE[slice.family](slice);
+
+  const cardW = 2.95;
+  const gap = 0.13;
+  data.kpis.slice(0, 4).forEach((k, i) => addKpiCard(pptx, slide, {
+    x: 0.55 + i * (cardW + gap), y: 1.6, w: cardW, h: 1.35,
+    label: k.label, value: k.value, tone: i % 2 === 0 ? COLORS.plum : COLORS.sandDeep,
+  }));
+
+  if (data.rows && data.rows.length) {
+    const headerCell = (t) => ({ text: t, options: { bold: true, fill: COLORS.mist, color: COLORS.charcoal } });
+    const tableRows = [data.headers.map(headerCell), ...data.rows];
+    addTable(slide, tableRows, { x: 0.55, y: 3.35, w: 12.23, colW: data.colW, fontSize: 9.5, rowH: 0.34 });
+  } else {
+    slide.addText('No individual records to list — the committed metrics above summarise the register.', {
+      x: 0.55, y: 3.5, w: 12.23, h: 0.4, fontFace: FONT, fontSize: 11, color: COLORS.muted,
+    });
+  }
+
+  slide.addText(
+    'Committed metrics from the deterministic deal register; the full roll with live formulas is in the Excel workbook.',
+    { x: 0.55, y: 6.9, w: 12.23, h: 0.3, fontFace: FONT, fontSize: 8, italic: true, color: COLORS.muted, fit: 'shrink' },
+  );
+};
+
+
 /**
  * Pros & Cons slide. Two-column layout, deterministic-then-AI synthesis.
  * Renders even when prosCons narrative is unavailable — falls back to
@@ -3095,6 +3234,7 @@ module.exports = {
   renderPlanningContext,
   renderAssetSnapshot,
   renderSiteYield,
+  renderRentRoll,
   renderReadiness,
   renderFinancialOverview,
   renderCashFlowSensitivity,
