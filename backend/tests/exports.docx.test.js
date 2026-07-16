@@ -757,12 +757,15 @@ describe('services/exports/docx/buildReport', () => {
       // 'Site Yield & Massing' inserted at position 5 (after Overview), shifting
       // every later section number by +1.
       expect(text).toMatch(/5\. *Site Yield &(?:amp;)? Massing/);
-      expect(text).toMatch(/14\. *Risk Register/);
-      expect(text).toMatch(/16\. *Approvals Tracker/);
-      expect(text).toMatch(/17\. *Provenance &(?:amp;)? Source Register/);
-      expect(text).toMatch(/18\. *Document-Derived Insights/);
-      expect(text).toMatch(/21\. *Methodology &(?:amp;)? Assumptions/);
-      expect(text).toMatch(/22\. *Disclaimer/);
+      // 'Deal Register' inserted at position 14 (after Financials & KPIs),
+      // shifting every later section number by +1.
+      expect(text).toMatch(/14\. *Deal Register/);
+      expect(text).toMatch(/15\. *Risk Register/);
+      expect(text).toMatch(/17\. *Approvals Tracker/);
+      expect(text).toMatch(/18\. *Provenance &(?:amp;)? Source Register/);
+      expect(text).toMatch(/19\. *Document-Derived Insights/);
+      expect(text).toMatch(/22\. *Methodology &(?:amp;)? Assumptions/);
+      expect(text).toMatch(/23\. *Disclaimer/);
     });
 
     test('PR-NX74: Table of Contents no longer tags AI vs Platform per section', async () => {
@@ -774,14 +777,15 @@ describe('services/exports/docx/buildReport', () => {
       expect(text).not.toMatch(/· Platform Data/);
     });
 
-    test('SECTION_ORDER exports the 22 canonical section names', () => {
+    test('SECTION_ORDER exports the 23 canonical section names', () => {
       expect(Array.isArray(__internal.SECTION_ORDER)).toBe(true);
-      expect(__internal.SECTION_ORDER).toHaveLength(22);
+      expect(__internal.SECTION_ORDER).toHaveLength(23);
       // PR-NX74 (2026-05-19) — first section renamed "AI-Assisted Briefing" → "Executive Briefing".
       expect(__internal.SECTION_ORDER[0]).toBe('Executive Briefing');
       expect(__internal.SECTION_ORDER[__internal.SECTION_ORDER.length - 1]).toBe('Disclaimer');
       expect(__internal.SECTION_ORDER).toContain('Document-Derived Insights');
       expect(__internal.SECTION_ORDER).toContain('Site Yield & Massing');
+      expect(__internal.SECTION_ORDER).toContain('Deal Register');
     });
 
     // ── Methodology & Assumptions ────────────────────────────────────

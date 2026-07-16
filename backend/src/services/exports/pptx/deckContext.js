@@ -101,6 +101,13 @@ const buildSlideManifest = (context) => {
     slides.push({ key: 'siteYield', title: 'Site Yield & Massing' });
   }
 
+  // Deal register (rent roll / sales / operating roll / occupants) — the
+  // contracted-income evidence. Renders only when the deal has a register
+  // with records (mirrors the XLSX/DOCX auto-hide).
+  if (context.hasRentRoll) {
+    slides.push({ key: 'rentRoll', title: context.rentRollTitle });
+  }
+
   if (context.showReadinessSlide) {
     slides.push({
       key: 'readiness',
@@ -315,6 +322,18 @@ const buildDeckContext = (exportContext, options = {}) => {
   // when a programme was computed.
   context.siteYield = exportContext.siteYield || null;
   context.hasSiteYield = !!(context.siteYield && context.siteYield.computed && context.siteYield.computed.ok);
+  // Deal register slice (recomputed server-side by rentRoll.service.getExportSlice).
+  context.rentRoll = exportContext.rentRoll || null;
+  context.rentRollRecordCount = context.rentRoll && context.rentRoll.records
+    ? Object.values(context.rentRoll.records).reduce((n, r) => n + (Array.isArray(r) ? r.length : 0), 0)
+    : 0;
+  context.hasRentRoll = !!(context.rentRoll && context.rentRoll.family && context.rentRollRecordCount > 0);
+  context.rentRollTitle = ({
+    lease_income: 'Rent Roll',
+    sales_collections: 'Sales & Collections',
+    hotel_operating: 'Operating Roll',
+    redevelopment: 'Occupants & Sales',
+  })[context.rentRoll && context.rentRoll.family] || 'Deal Register';
   context.slideManifest = buildSlideManifest(context);
 
   return context;

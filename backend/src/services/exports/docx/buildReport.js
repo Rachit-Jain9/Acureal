@@ -445,6 +445,7 @@ const SECTION_ORDER = [
   'Comparable Transactions',
   'Better Alternatives in this Micro-Market',
   'Financials & KPIs',
+  'Deal Register',
   'Risk Register',
   'Due Diligence Status',
   'Approvals Tracker',
@@ -1485,6 +1486,223 @@ const severityColor = (severity) => {
   if (s === 'medium' || s === 'commercial_blocker') return HEX('mutedHigh');
   if (s === 'completed' || s === 'validated' || s === 'mitigated' || s === 'resolved') return HEX('dataPositive');
   return HEX('mutedHigh');
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// Deal Register (rent roll / sales & collections / operating roll / occupants)
+// ─────────────────────────────────────────────────────────────────────────
+// Deterministic income evidence from the deal register — rentRoll.service
+// getExportSlice recomputes the metrics from live rows at export time. Summary
+// grade: the committed headline block + a truncated records table; the full
+// register with live formulas is the XLSX workbook. PLATFORM DATA, never AI.
+
+const REGISTER_DOC_TITLE = {
+  lease_income: 'Rent Roll',
+  sales_collections: 'Sales & Collections',
+  hotel_operating: 'Operating Roll',
+  redevelopment: 'Occupants & Sales',
+};
+const LEASE_STATUS_DOC = { vacant: 'Vacant', loi: 'LOI', committed: 'Committed', occupied: 'Occupied', notice_served: 'Notice served', expired: 'Expired / MTM' };
+const SALE_STATUS_DOC = { unsold: 'Unsold', booked: 'Booked', sold: 'Sold', registered: 'Registered', cancelled: 'Cancelled' };
+const OCC_STATUS_DOC = { in_place: 'In place', vacated: 'Vacated', disputed: 'Disputed' };
+const RISK_DOC = { low: 'Low', medium: 'Medium', high: 'High' };
+const CONTRACT_TYPE_DOC = { hma: 'HMA', franchise: 'Franchise', master_lease: 'Master lease', revenue_share: 'Revenue share', other: 'Other' };
+const REGISTER_DOC_CAP = 15;
+
+const registerCountRecords = (records = {}) =>
+  Object.values(records || {}).reduce((n, rows) => n + (Array.isArray(rows) ? rows.length : 0), 0);
+
+// Register money aggregates arrive in absolute ₹; show ₹ Cr for headline
+// figures, raw ₹ for per-record consideration.
+const rrCr = (v) => { const n = num(v); return n === null ? '–' : formatCrores(n / 1e7, 2); };
+const rrRupees = (v) => { const n = num(v); return n === null ? '–' : `INR ${formatNumber(n)}`; };
+const rrText = (v) => (v == null || String(v).trim() === '' ? '–' : String(v));
+
+const registerTable = (headers, bodyRows) => new Table({
+  width: { size: 100, type: WidthType.PERCENTAGE },
+  borders: TABLE_BORDER,
+  rows: [buildHeaderTableRow(headers), ...bodyRows],
+});
+
+const registerTruncNote = (children, shown, total) => {
+  if (total > shown) {
+    children.push(bodyPara(
+      `Showing ${shown} of ${total} record(s) — the full register with live formulas is in the Excel workbook.`,
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+  }
+};
+
+const appendLeaseRegisterDoc = (children, slice) => {
+  const m = slice.metrics || {};
+  const occ = m.occupancy || {};
+  const wale = m.wale || {};
+  const rev = m.revenue || {};
+  const mtm = m.mtm || {};
+  const counts = m.counts || {};
+  children.push(buildLabelValueTable([
+    labelValueRow('Committed occupancy', formatPct(occ.committedPct)),
+    labelValueRow('Physical occupancy', formatPct(occ.physicalPct)),
+    labelValueRow('Leasable area', formatArea(occ.denominatorSqft)),
+    labelValueRow('WALE to expiry (rent-weighted)', wale.toExpiryRentYears == null ? '–' : `${formatNumber(wale.toExpiryRentYears, 1)} yr`),
+    labelValueRow('In-place vs market (MTM)', formatPct(mtm.portfolioPct)),
+    labelValueRow('In-place rent', rev.inPlaceRentPerSqftMonth == null ? '–' : `INR ${formatNumber(rev.inPlaceRentPerSqftMonth, 2)} / sqft / mo`),
+    labelValueRow('Contracted annual gross', rrCr(rev.contractedAnnualGross)),
+    labelValueRow('Accrual NOI', rrCr(rev.accrualNOI)),
+    labelValueRow('Coverage', `${counts.contracted || 0} contracted · ${counts.vacant || 0} vacant · ${counts.loi || 0} LOI`),
+  ]));
+  const rows = (slice.records && slice.records.lease) || [];
+  const shown = rows.slice(0, REGISTER_DOC_CAP);
+  children.push(blank());
+  children.push(registerTable(
+    ['Unit / Ref', 'Tenant / Occupier', 'Status', 'Area (sqft)', 'Base rate', 'Expiry', 'Market rate'],
+    shown.map((r, i) => buildBodyTableRow([
+      rrText(r.record_label), rrText(r.tenant_name), LEASE_STATUS_DOC[r.status] || rrText(r.status),
+      formatNumber(r.chargeable_area_sqft), formatNumber(r.base_rent_rate, 2),
+      formatDate(r.lease_expiry), formatNumber(r.market_rent_rate, 2),
+    ], { alt: i % 2 === 1 })),
+  ));
+  registerTruncNote(children, shown.length, rows.length);
+};
+
+const appendSalesRegisterDoc = (children, slice) => {
+  const m = slice.metrics || {};
+  const inv = m.inventory || {};
+  const area = m.area || {};
+  const coll = m.collections || {};
+  const unsold = m.unsold || {};
+  const pricing = m.pricing || {};
+  children.push(buildLabelValueTable([
+    labelValueRow('Units (active)', formatNumber(inv.totalUnits)),
+    labelValueRow('Sold units', formatNumber(inv.soldUnits)),
+    labelValueRow('Sell-through (by area)', formatPct(area.sellThroughByAreaPct)),
+    labelValueRow('Sold GDV', rrCr(coll.soldGDV)),
+    labelValueRow('Collected', rrCr(coll.collected)),
+    labelValueRow('Collection efficiency', formatPct(coll.collectionEfficiencyPct)),
+    labelValueRow('Overdue', rrCr(coll.overdue)),
+    labelValueRow('Avg sold rate', pricing.avgSoldRealizationPerSqft == null ? '–' : `INR ${formatNumber(pricing.avgSoldRealizationPerSqft)} / sqft`),
+    labelValueRow('Unsold GDV (market)', rrCr(unsold.unsoldGDV)),
+  ]));
+  const rows = (slice.records && slice.records.sale) || [];
+  const shown = rows.slice(0, REGISTER_DOC_CAP);
+  children.push(blank());
+  children.push(registerTable(
+    ['Plot / Unit', 'Block / Phase', 'Status', 'Area (sqft)', 'Base ₹/sqft', 'Agreement', 'Collected'],
+    shown.map((r, i) => buildBodyTableRow([
+      rrText(r.record_label), rrText(r.block_phase), SALE_STATUS_DOC[r.status] || rrText(r.status),
+      formatNumber(r.area_sqft), formatNumber(r.base_price_per_sqft), rrRupees(r.agreement_value), rrRupees(r.amount_collected),
+    ], { alt: i % 2 === 1 })),
+  ));
+  registerTruncNote(children, shown.length, rows.length);
+};
+
+const appendHotelRegisterDoc = (children, slice) => {
+  const m = slice.metrics || {};
+  const keys = m.keys || {};
+  const contract = m.contract || {};
+  const op = m.operating || {};
+  const contractText = contract.primaryType
+    ? `${CONTRACT_TYPE_DOC[contract.primaryType] || contract.primaryType}${contract.operator ? ` · ${contract.operator}` : ''}${contract.brand ? ` (${contract.brand})` : ''}`
+    : 'None recorded';
+  children.push(buildLabelValueTable([
+    labelValueRow('Total keys', formatNumber(keys.totalKeys)),
+    labelValueRow('Available keys (net OOO)', formatNumber(keys.availableKeys, 1)),
+    labelValueRow('Governing contract', contractText),
+    labelValueRow('TTM occupancy', formatPct(op.ttmOccupancyPct)),
+    labelValueRow('TTM ADR', op.ttmAdr == null ? '–' : `INR ${formatNumber(op.ttmAdr)}`),
+    labelValueRow('TTM RevPAR', op.ttmRevpar == null ? '–' : `INR ${formatNumber(op.ttmRevpar)}`),
+    labelValueRow('TTM GOP margin', formatPct(op.ttmGopMarginPct)),
+    labelValueRow('TTM total revenue', rrCr(op.ttmTotalRevenue)),
+    labelValueRow('TTM owner NOI', rrCr(op.ttmOwnerNoi)),
+  ]));
+  const series = Array.isArray(op.series) ? op.series : [];
+  const shown = series.slice(-REGISTER_DOC_CAP);
+  if (shown.length) {
+    children.push(blank());
+    children.push(eyebrow('Operating history — actual monthly P&L'));
+    children.push(registerTable(
+      ['Month', 'Occupancy', 'ADR', 'RevPAR', 'Total revenue', 'GOP', 'Owner NOI'],
+      shown.map((s, i) => buildBodyTableRow([
+        rrText(s.month), formatPct(s.occupancyPct),
+        s.adr == null ? '–' : `INR ${formatNumber(s.adr)}`,
+        s.revpar == null ? '–' : `INR ${formatNumber(s.revpar)}`,
+        rrRupees(s.totalRevenue), rrRupees(s.gop), rrRupees(s.ownerNoi),
+      ], { alt: i % 2 === 1 })),
+    ));
+    registerTruncNote(children, shown.length, series.length);
+  }
+};
+
+const appendOccupantRegisterDoc = (children, slice) => {
+  const m = slice.metrics || {};
+  const occ = m.occupant || {};
+  const sale = m.sale || {};
+  const vac = occ.vacancy || {};
+  const ent = occ.entitlement || {};
+  const obl = occ.obligations || {};
+  const risk = occ.risk || {};
+  children.push(buildLabelValueTable([
+    labelValueRow('Vacation progress (by count)', formatPct(vac.vacatedByCountPct)),
+    labelValueRow('Vacation progress (by area)', formatPct(vac.vacatedByAreaPct)),
+    labelValueRow('Existing carpet', formatArea(ent.existingCarpetSqft)),
+    labelValueRow('Free rehab area', formatArea(ent.rehabEntitlementSqft)),
+    labelValueRow('Area uplift over existing', formatPct(ent.avgUpliftPct)),
+    labelValueRow('Current transit run-rate', obl.currentMonthlyTransitRent == null ? '–' : `INR ${formatNumber(obl.currentMonthlyTransitRent)} / mo`),
+    labelValueRow('Transit remaining', rrCr(obl.transitRentRemaining)),
+    labelValueRow('One-time obligations', rrCr(obl.oneTimeTotal)),
+    labelValueRow('Total rehousing obligation', rrCr(obl.totalRehousingObligation)),
+    labelValueRow('At-risk occupiers', `${risk.atRiskUnits || 0} (${risk.highRiskUnits || 0} high doc-risk · ${risk.disputedUnits || 0} disputed)`),
+  ]));
+  const occupants = (slice.records && slice.records.occupant) || [];
+  const shownOcc = occupants.slice(0, REGISTER_DOC_CAP);
+  children.push(blank());
+  children.push(eyebrow('Existing occupiers & rehousing obligations'));
+  children.push(registerTable(
+    ['Unit / Ref', 'Occupant', 'Status', 'Existing (sqft)', 'Rehab (sqft)', 'Transit ₹/mo', 'Doc risk'],
+    shownOcc.map((r, i) => buildBodyTableRow([
+      rrText(r.record_label), rrText(r.occupant_name), OCC_STATUS_DOC[r.status] || rrText(r.status),
+      formatNumber(r.existing_carpet_area_sqft), formatNumber(r.rehab_entitlement_sqft),
+      formatNumber(r.transit_rent_monthly), RISK_DOC[r.documentation_risk] || '–',
+    ], { alt: i % 2 === 1 })),
+  ));
+  registerTruncNote(children, shownOcc.length, occupants.length);
+  // Free-sale one-liner (the sales register already renders in full for plotted deals).
+  const freeSale = (slice.records && slice.records.sale) || [];
+  if (freeSale.length) {
+    const si = sale.inventory || {};
+    const sc = sale.collections || {};
+    children.push(blank());
+    children.push(bodyPara(
+      `Free sale: ${si.soldUnits || 0}/${si.totalUnits || 0} units sold · sold GDV ${rrCr(sc.soldGDV)} · collection ${formatPct(sc.collectionEfficiencyPct)}.`,
+      { color: HEX('mutedHigh') },
+    ));
+  }
+};
+
+const buildRentRoll = (ctx) => {
+  const children = [sectionHeading('Deal Register'), platformBadge()];
+  const slice = ctx.exportContext && ctx.exportContext.rentRoll;
+  if (!slice || !slice.family || registerCountRecords(slice.records) === 0) {
+    children.push(bodyPara(
+      'No register has been created for this deal yet. The rent roll / sales & collections / operating roll / occupant register is captured in the deal workspace and appears here once records are added.',
+      { italic: true, color: HEX('mutedHigh') },
+    ));
+    return children;
+  }
+  children.push(eyebrow(`${REGISTER_DOC_TITLE[slice.family] || 'Deal Register'} · as of ${formatDate(slice.asOfDate)} · figures are gross (pre ownership share)`));
+
+  if (slice.family === 'lease_income') appendLeaseRegisterDoc(children, slice);
+  else if (slice.family === 'sales_collections') appendSalesRegisterDoc(children, slice);
+  else if (slice.family === 'hotel_operating') appendHotelRegisterDoc(children, slice);
+  else if (slice.family === 'redevelopment') appendOccupantRegisterDoc(children, slice);
+
+  const warnings = Array.isArray(slice.warnings) ? slice.warnings : [];
+  if (warnings.length) {
+    children.push(blank());
+    children.push(eyebrow('Register consistency'));
+    warnings.slice(0, 5).forEach((w) => children.push(bodyPara(`• ${w.message}`, { color: HEX('dataWarning') })));
+  }
+  return children;
 };
 
 const buildRiskRegister = (ctx) => {
@@ -2795,6 +3013,9 @@ const buildDealReportDocx = async (exportContext = {}, options = {}) => {
     ...buildComparables(ctx),
     ...buildBetterAlternatives(ctx),
     ...buildFinancials(ctx),
+    // Deal register (rent roll / sales / operating roll / occupants) — the
+    // contracted-income evidence under the model, right after Financials.
+    ...buildRentRoll(ctx),
     // PR-NX35 (2026-05-17): IC-grade platform-data sections between
     // Financials and Pros & Cons — operator-curated facts (risks /
     // DD progress / approval tracker) come BEFORE the AI synthesis
@@ -2896,6 +3117,9 @@ module.exports = {
     DEAL_TYPE_LABELS,
     DEAL_STRUCTURE_LABELS,
     STAGE_LABELS,
+    // Deal register (rent-roll program) — PR-10
+    buildRentRoll,
+    registerCountRecords,
     // PR-NX35 (2026-05-17) — Risk / DD / Approvals sections
     buildRiskRegister,
     buildDDStatus,
