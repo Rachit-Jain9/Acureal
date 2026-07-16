@@ -53,6 +53,16 @@ export function useUpdateRecord() {
   });
 }
 
+export function useCommitImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, fileBase64 }) =>
+      rentRollAPI.commitImport(dealId, fileBase64).then((r) => r.data),
+    onSuccess: (_res, { dealId }) => invalidate(qc, dealId),
+    onError: (err) => toast.error(err?.response?.data?.message || 'Could not import the template'),
+  });
+}
+
 export function useDeleteRecord() {
   const qc = useQueryClient();
   return useMutation({
