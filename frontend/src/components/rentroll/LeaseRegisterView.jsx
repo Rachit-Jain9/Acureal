@@ -11,6 +11,7 @@ import LeaseGrid from './LeaseGrid';
 import LeaseDrawer from './LeaseDrawer';
 import ApplyToFinancialsModal from './ApplyToFinancialsModal';
 import ImportRegisterButton from './ImportRegisterModal';
+import ExtractRegisterButton from './ExtractRegisterModal';
 import {
   fmtPct, fmtYears, fmtCr, fmtSignedPct,
   useSettingsAutosave, StaleModelBanner, RegisterSettingsRow, RegisterUnavailable, TemplateDownloadButton,
@@ -107,6 +108,7 @@ export default function LeaseRegisterView({ dealId, assetClass, canEdit }) {
                   Apply to Financials
                 </Button>
               )}
+              {leases.length > 0 && <ExtractRegisterButton dealId={dealId} />}
               <Button variant="primary" size="sm" leftIcon={<Plus size={14} />} onClick={() => setDrawer({ record: null })}>
                 Add lease
               </Button>
@@ -122,6 +124,7 @@ export default function LeaseRegisterView({ dealId, assetClass, canEdit }) {
             action={canEdit && (
               <div className="flex items-center gap-2 flex-wrap justify-center">
                 <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setDrawer({ record: null })}>Add first lease</Button>
+                <ExtractRegisterButton dealId={dealId} />
                 <TemplateDownloadButton dealId={dealId} />
                 <ImportRegisterButton dealId={dealId} />
               </div>

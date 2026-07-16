@@ -108,6 +108,25 @@ const normalizeCell = (col, raw) => {
   }
 };
 
+// Normalise a raw record object ({ dbKey: value }) against a kind's catalog →
+// { record, warnings }. The record keeps only present, valid fields (invalid
+// enums/dates/numbers dropped with a warning). Shared with the AI-extraction
+// bridge (rentRollExtract.service) so a template row and an extracted row pass
+// through the exact same validation before they ever reach the register.
+const normalizeRecord = (kind, raw, rowRef) => {
+  const columns = IMPORT_COLUMNS_BY_KIND[kind] || [];
+  const record = {};
+  const warnings = [];
+  const src = raw && typeof raw === 'object' ? raw : {};
+  for (const col of columns) {
+    if (!Object.prototype.hasOwnProperty.call(src, col.key)) continue;
+    const { value, warn } = normalizeCell(col, src[col.key]);
+    if (warn) warnings.push({ kind, row: rowRef, message: warn });
+    if (value !== null && value !== undefined && value !== '') record[col.key] = value;
+  }
+  return { record, warnings };
+};
+
 // Read + validate the redip_meta contract. Throws a readable 422 on mismatch.
 const readMeta = (workbook, expectedFamily) => {
   const meta = workbook.getWorksheet(META_SHEET);
@@ -246,6 +265,9 @@ async function commitImport(dealId, buffer, opts = {}) {
 module.exports = {
   parseTemplateBuffer,
   commitImport,
+  normalizeRecord,
   // exported for unit tests
-  __internal: { literalValue, normalizeCell, readMeta, majorOf, MAX_BYTES, ROW_CAP },
+  __internal: {
+    literalValue, normalizeCell, normalizeRecord, readMeta, majorOf, MAX_BYTES, ROW_CAP,
+  },
 };

@@ -11,6 +11,7 @@ const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const rentRollService = require('../services/rentRoll.service');
 const rentRollTemplate = require('../services/rentRollTemplate.service');
 const rentRollImport = require('../services/rentRollImport.service');
+const rentRollExtract = require('../services/rentRollExtract.service');
 
 const router = express.Router();
 
@@ -70,6 +71,35 @@ router.post('/deals/:dealId/rent-roll/import/commit', authenticate, requireAdmin
     if (!buffer) return res.status(400).json({ success: false, message: 'fileBase64 is required' });
     const { family } = await rentRollService.getDealRegisterInfo(req.params.dealId);
     const result = await rentRollImport.commitImport(req.params.dealId, buffer, { expectedFamily: family, userId: req.user.id });
+    return res.status(201).json({ success: true, data: result, message: `Imported ${result.total} record(s)` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /deals/:dealId/rent-roll/extract/preview → read an already-uploaded
+// register document with AI into a STAGED preview (no writes). Body:
+// { documentId }. Reuses the metered/audited extraction pipeline; every field
+// is re-validated against the column catalog before it can be reviewed.
+router.post('/deals/:dealId/rent-roll/extract/preview', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const { documentId } = req.body || {};
+    if (!documentId) return res.status(400).json({ success: false, message: 'documentId is required' });
+    const preview = await rentRollExtract.stagePreview(req.params.dealId, documentId, req.user.id);
+    return res.json({ success: true, data: preview });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// POST /deals/:dealId/rent-roll/extract/commit → re-read the persisted
+// extraction server-side (authoritative) + write the rows as unverified,
+// provenance-tagged records. Body: { extractionId }.
+router.post('/deals/:dealId/rent-roll/extract/commit', authenticate, requireAdminOrAnalyst, async (req, res, next) => {
+  try {
+    const { extractionId } = req.body || {};
+    if (!extractionId) return res.status(400).json({ success: false, message: 'extractionId is required' });
+    const result = await rentRollExtract.commitFromExtraction(req.params.dealId, extractionId, req.user.id);
     return res.status(201).json({ success: true, data: result, message: `Imported ${result.total} record(s)` });
   } catch (err) {
     next(err);

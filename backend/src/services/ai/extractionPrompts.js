@@ -2,6 +2,7 @@
 
 const crypto = require('crypto');
 const { z } = require('zod');
+const { IMPORT_COLUMNS_BY_KIND } = require('../../constants/rentRollImportColumns');
 
 /**
  * Gemini extraction + classification prompts, keyed by `doc_type`.
@@ -43,7 +44,7 @@ const { z } = require('zod');
 
 // Bump whenever any prompt body or CLASSIFY_PROMPT changes. The format is
 // YYYY-MM-DD.<seq>; the seq lets us bump twice in one day if needed.
-const PROMPT_REGISTRY_VERSION = '2026-05-15.1';
+const PROMPT_REGISTRY_VERSION = '2026-07-16.1';
 
 const sha256 = (text) => crypto.createHash('sha256').update(text, 'utf8').digest('hex');
 
@@ -664,12 +665,45 @@ Return a JSON object with:
 Return ONLY the JSON. No commentary.`,
 };
 
+// Rent roll — a REPEATING lease/tenancy schedule (income deals). The field set
+// is DERIVED from the shared register import catalog (constants/
+// rentRollImportColumns.js) so every extracted key maps 1:1 onto the register's
+// lease columns — the same catalog drives the download template and the
+// deterministic importer, so template / import / extraction can never disagree
+// on a field name. Multi-row like the EC prompt's transactions[]; the register
+// bridge normalises + review-gates the result (verified:false), never silent.
+const buildRentRollExtractionPrompt = () => {
+  const fieldLines = IMPORT_COLUMNS_BY_KIND.lease.map((c) => {
+    const type = c.type === 'number' ? 'number or null'
+      : c.type === 'date' ? '"YYYY-MM-DD" or null'
+        : c.type === 'select' ? `one of [${c.options.join(', ')}] or null`
+          : 'string or null';
+    return `    "${c.key}": ${type},   // ${c.header}`;
+  }).join('\n');
+  return `You are a rent-roll extraction assistant specialised in Indian commercial real-estate leases.
+This document is a RENT ROLL / lease schedule / tenancy statement / rent register. Extract EVERY lease or tenancy row.
+Return a JSON object exactly of the form: { "records": [ ...one object per lease... ] }
+Each record object has these fields (fill a field ONLY if it is visible in the document; otherwise null):
+{
+${fieldLines}
+}
+Rules:
+- One record per lease/tenant row. Never merge two tenants, never invent a row, never split one lease into several.
+- Areas in sqft (convert if the document uses sq.m, sq.yd, or acres). Money in whole rupees, digits only — no symbols, no commas, no "Cr"/"L".
+- "rent_basis" is "per_sqft_month" unless the document clearly bills per unit or per acre.
+- Dates strictly as YYYY-MM-DD.
+- Do not compute or infer anything the document does not state (no derived totals, no assumed escalations).
+Return ONLY the JSON object. No commentary, no markdown fences.`;
+};
+
+GEMINI_EXTRACTION_PROMPTS.rent_roll = buildRentRollExtractionPrompt();
+
 const CLASSIFY_PROMPT = `You are a legal document classifier specialised in Indian real estate documents.
 Classify the document into exactly ONE of these types:
 title_deed, mother_deed, sale_deed, ec, rtc_pahani, mutation, conversion_certificate,
 khata, layout_approval, sanctioned_plan, jda_jv, broker_quote, comps_rate_sheet,
 ipc_report, guidance_value_report, igr_guidance_pdf, bbmp_uav_pdf, zoning_certificate,
-e_khata, rmp_table, kgis_extract, other
+e_khata, rmp_table, kgis_extract, rent_roll, other
 
 Pick "comps_rate_sheet" when the document is a broker's multi-property rate sheet, comp list,
 or a market-pricing email with several projects/units (each row a project or unit). Pick
@@ -684,6 +718,9 @@ listing many localities with per-sqft or per-acre guidance values. Use "guidance
 single-property valuation reports.
 Pick "bbmp_uav_pdf" when the document is BBMP Unit Area Value, UAV, property-tax zone classification,
 or ward/street property-tax area value material. Do not classify BBMP UAV/property-tax PDFs as IGR guidance.
+
+Pick "rent_roll" when the document is a RENT ROLL / lease schedule / tenancy statement / rent register —
+a table with multiple leases or tenants, each row carrying tenant/unit, area, rent, and lease dates.
 
 Return ONLY a JSON object: { "doc_type": "<type>", "confidence": <0-1>, "reason": "<brief reason>" }
 No other text.`;

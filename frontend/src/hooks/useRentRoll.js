@@ -63,6 +63,16 @@ export function useCommitImport() {
   });
 }
 
+export function useCommitExtract() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ dealId, extractionId }) =>
+      rentRollAPI.commitExtract(dealId, extractionId).then((r) => r.data),
+    onSuccess: (_res, { dealId }) => invalidate(qc, dealId),
+    onError: (err) => toast.error(err?.response?.data?.message || 'Could not add the extracted rows'),
+  });
+}
+
 export function useDeleteRecord() {
   const qc = useQueryClient();
   return useMutation({
