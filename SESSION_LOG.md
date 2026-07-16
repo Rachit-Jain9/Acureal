@@ -4,6 +4,26 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-16 (Rent-roll program — AI extraction, the final leg; PR-12) (PR #991)
+
+The rent-roll program is **complete**. A broker rent roll no longer has to be re-keyed: on a lease-income (rent roll) register there is now a **"Read with AI"** action that reads an already-uploaded PDF / scan into a **reviewable draft**, which the operator confirms before anything lands. This is the third load path beside the blank template and the template import. **Lease-income only for this leg** — sales / hotel / redevelopment still use template import (the server 422-gates them with a readable message).
+
+- **#991 PR-12 — AI extraction bridge.** New `backend/src/services/rentRollExtract.service.js` — a deliberately thin bridge over the EXISTING extraction pipeline. It owns no AI logic and no math:
+  - **Vision/OCR reuses `extraction.service#extractDocument`** with a new `rent_roll` doctype, so a rent roll is cost-metered (aiRouter), response-cached by file+prompt sha, Gemini→Claude-fallback'd, PII-redacted, and **persisted to `document_extractions`** exactly like every other doctype. `rent_roll` added to `DOC_TYPES`, the classifier prompt, the prompt registry (`PROMPT_REGISTRY_VERSION` → `2026-07-16.1`; the extraction prompt is **derived from the single-source column catalog** so it can never drift from the importer), and the Claude-normalization skip set (tabular; deterministic re-map covers it).
+  - **Deterministic re-validation**: every extracted field passes through a new **shared** `rentRollImport#normalizeRecord` — the SAME normaliser a template row uses. Bad enums / dates / numbers dropped with a warning; unknown keys discarded. A model can only ever propose a value the catalog would have accepted from a human (proven by a test that feeds a `'; DELETE FROM lease_records; --` junk key through and asserts it never reaches a row).
+  - **No-trust commit**: preview writes NO register rows; commit **re-reads the persisted extraction server-side** (never trusts client preview rows) and inserts via `bulkUpsertRecords(source:'extraction')` — unverified, provenance-tagged to the source document, audited.
+  - Two routes: POST `/rent-roll/extract/preview` `{documentId}` + `/rent-roll/extract/commit` `{extractionId}`.
+- **Frontend**: new self-contained `ExtractRegisterModal.jsx` (document picker → AI read → review → add), additive beside the template/import buttons in `LeaseRegisterView` (empty state + header). PDFs/scans pickable, other types greyed with a "use import" nudge. **Honest framing throughout**: the preview banner states the rows were *read by AI and are not verified* — check every unit/tenant/area/rent/date before relying on them. `useCommitExtract` invalidates register + workspace. Reading state is an honest indeterminate wait (up to a minute), `motion-safe:animate-spin`.
+- **Verify**: backend **3,806 tests / 238 suites** green (13 new mock-AI tests pin the mapper, the family/provider/404/422 gates, and the no-trust re-map on commit). Frontend build + theme-token guard clean. Auto-merged on green CI (squash, branch deleted). **OneDrive hazard bit hard on the local sync** (half-completed `checkout` under an index lock left a dirty tree); recovered non-destructively — proved every modified/untracked file byte-identical to `origin/master`, stashed, fast-forwarded to `d00efa0`, dropped the stash. The merge on GitHub was never at risk.
+- **Manual verification still needed (operator)**: live end-to-end (real broker PDF → AI read → review → add) needs a logged-in browser on a lease-income deal + a confirmed `GEMINI_API_KEY`. The deterministic bridge is fully unit-tested and the AI path reuses the already-live extraction pipeline, but the LLM read itself is best eyeballed on a real document.
+
+### The rent-roll program is COMPLETE
+In-app entry (4 families) + financial-engine bridge (Apply + staleness) + exports (XLSX/DOCX/PPTX) + template download + template import + **AI extraction (lease-income)**. Remaining is all future / operator-gated:
+- **AI extraction for the other 3 families** (sales / hotel / redevelopment) — same bridge, extend the prompt + gate; each needs a real sample document to tune.
+- **Kernel-native `leases[]`** (PR-13, consumes `toLeaseExtract`).
+
+---
+
 ## 2026-07-16 (Rent-roll program — EXPORTS leg: register in XLSX + DOCX + PPTX) (PRs #987, #988)
 
 The deal register (rent roll / sales & collections / operating roll / occupants) is now in **all three investor deliverables**. It has been evidence-grade in-app since #978–#986 but was invisible in the files IC actually opens; that gap is closed. All three formats render from the SAME server-recomputed slice `exportContext.rentRoll` (attached once in `getDealExportContext`) — one deterministic source, three formats. Exactly one family-adaptive register per deal, auto-hidden when the register is empty (mirrors Site Yield / Comps).
