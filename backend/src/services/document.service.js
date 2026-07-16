@@ -102,29 +102,19 @@ const uploadDocument = async (dealId, file, category, userId, description = '', 
   return doc;
 };
 
-const ALLOWED_EXTENSIONS = new Set(['.pdf', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.zip', '.csv']);
-const MAX_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50) * 1024 * 1024;
-
-// Server-derived content-type, keyed off the (allow-listed) file extension.
+// Upload allow-list + server-derived content types now come from the shared
+// document-format registry (constants/documentFormats.js), which the frontend
+// mirrors. Before this, three separate lists (here, the multer middleware, and
+// the Documents tab) drifted — the UI offered types presign then rejected.
+//
 // The DIRECT-upload path lets the browser PUT the object with any Content-Type
 // it likes, and the old confirm step trusted the client's `fileType` verbatim —
 // so a `report.pdf` could be recorded (and later served) as `text/html`. We
-// instead derive the stored file_type from the extension here, so the DB value
-// is always a benign, accurate type regardless of what the client claimed.
-const EXT_TO_MIME = {
-  '.pdf': 'application/pdf',
-  '.doc': 'application/msword',
-  '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  '.xls': 'application/vnd.ms-excel',
-  '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.gif': 'image/gif',
-  '.webp': 'image/webp',
-  '.zip': 'application/zip',
-  '.csv': 'text/csv',
-};
+// derive the stored file_type from the extension instead, so the DB value is
+// always a benign, accurate type regardless of what the client claimed.
+const { isAllowedExtension, mimeForFile } = require('../constants/documentFormats');
+
+const MAX_FILE_SIZE = (parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50) * 1024 * 1024;
 
 /**
  * Step 1 of direct upload: generate a presigned URL so the frontend can PUT
@@ -151,7 +141,7 @@ const getPresignedUploadUrl = async (dealId, fileName, fileSize, userId, organiz
 
   // Validate extension
   const ext = path.extname(fileName).toLowerCase();
-  if (!ALLOWED_EXTENSIONS.has(ext)) {
+  if (!isAllowedExtension(ext)) {
     throw createError(`File type ${ext} is not allowed.`, 400);
   }
 
@@ -235,10 +225,10 @@ const confirmDirectUpload = async (dealId, storagePath, originalName, fileType, 
   //     as an executable type (stored-XSS) or mislabel it;
   //   • verify the object's TRUE byte size from storage metadata rather than the
   //     size the client claimed at presign (a client can claim small, PUT large).
-  if (!ALLOWED_EXTENSIONS.has(fileExt)) {
+  if (!isAllowedExtension(fileExt)) {
     throw createError(`File type ${fileExt || '(none)'} is not allowed.`, 400);
   }
-  const derivedType = EXT_TO_MIME[fileExt] || 'application/octet-stream';
+  const derivedType = mimeForFile(fileExt);
 
   let verifiedSize = Number.isFinite(fileSize) ? fileSize : 0;
   try {

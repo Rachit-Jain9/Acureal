@@ -26,6 +26,13 @@ const {
 } = require('./ai/extractionPrompts');
 const { tryParseAndValidate } = require('./ai/aiRouter');
 const { detectLanguage } = require('./ai/languageDetect');
+const { parseDocumentToText } = require('./ai/documentTextExtractor');
+const {
+  formatFor,
+  extractionTierFor,
+  unsupportedExtractionMessage,
+  FALLBACK_MIME,
+} = require('../constants/documentFormats');
 const { redactText, redactFields } = require('./ai/promptRedaction');
 const embeddingsService = require('./embeddings.service');
 const { EVENTS, publish } = require('../lib/eventBus');
@@ -77,7 +84,7 @@ const KNOWN_DOC_TYPES = new Set(Object.keys(GEMINI_EXTRACTION_PROMPTS));
 // Helpers
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function fetchFileAsBase64(fileUrl) {
+async function fetchFileBuffer(fileUrl) {
   const downloadUrl = await getDownloadUrl(fileUrl, 3600);
   const response = await axios.get(downloadUrl, {
     responseType: 'arraybuffer',
@@ -102,28 +109,35 @@ async function fetchFileAsBase64(fileUrl) {
   const sha256 = crypto.createHash('sha256').update(buffer).digest('hex');
 
   return {
-    base64: buffer.toString('base64'),
+    buffer,
     mimeType: contentType.split(';')[0].trim(),
     sizeBytes: buffer.length,
     sha256,
   };
 }
 
+async function fetchFileAsBase64(fileUrl) {
+  const { buffer, mimeType, sizeBytes, sha256 } = await fetchFileBuffer(fileUrl);
+  return { base64: buffer.toString('base64'), mimeType, sizeBytes, sha256 };
+}
+
+/**
+ * Server-derived MIME, keyed off the extension via the shared format registry.
+ *
+ * Fails CLOSED (application/octet-stream) for unknown types. The old version
+ * defaulted unknown extensions to 'application/pdf', so any new format
+ * silently reached Gemini mislabelled as a PDF and failed there with an
+ * opaque provider error. A client-supplied type is only trusted when the
+ * registry has nothing to say — the browser PUTs straight to storage and can
+ * claim any type it likes.
+ */
 function inferMimeType(fileName, providedMimeType) {
+  const registryMime = formatFor(fileName)?.mime;
+  if (registryMime) return registryMime;
   if (providedMimeType && providedMimeType !== 'application/octet-stream') {
     return providedMimeType;
   }
-  const ext = (fileName || '').split('.').pop().toLowerCase();
-  const map = {
-    pdf: 'application/pdf',
-    jpg: 'image/jpeg',
-    jpeg: 'image/jpeg',
-    png: 'image/png',
-    tiff: 'image/tiff',
-    tif: 'image/tiff',
-    webp: 'image/webp',
-  };
-  return map[ext] || 'application/pdf';
+  return FALLBACK_MIME;
 }
 
 function cleanContextValue(value) {
@@ -203,6 +217,8 @@ async function callGemini(prompt, base64Data, mimeType, attach = {}, options = {
 // path serves the response immediately. The cache is opt-in: callers must
 // pass `cache` so we never accidentally cache calls whose inputs are not
 // fully reconstructable.
+const EXTRACTION_SYSTEM_PROMPT = 'You extract structured JSON for Indian real-estate regulatory documents. Return ONLY valid JSON matching the schema in the prompt. Do not invent facts; if unknown, set the field to null.';
+
 async function callExtractionWithFallback({ prompt, base64Data, mimeType, attach = {}, cache = null, metadata = null }) {
   let geminiError = null;
   try {
@@ -212,20 +228,34 @@ async function callExtractionWithFallback({ prompt, base64Data, mimeType, attach
     geminiError = error;
   }
 
-  // Gemini exhausted (router-level retries already happened) — try Claude
-  // with the document directly.
+  // Gemini exhausted (router-level retries already happened) — try Claude.
   if (getProviderAvailability().claude) {
     try {
-      const rawText = await runClaudeWithDocument({
-        task: 'document_extraction',
-        attach,
-        prompt,
-        base64Data,
-        mimeType,
-        systemPrompt: 'You extract structured JSON for Indian real-estate regulatory documents. Return ONLY valid JSON matching the schema in the prompt. Do not invent facts; if unknown, set the field to null.',
-        metadata: metadata ? { ...metadata, fallback_from: 'gemini' } : { fallback_from: 'gemini' },
-        cache,
-      });
+      const fallbackMetadata = metadata ? { ...metadata, fallback_from: 'gemini' } : { fallback_from: 'gemini' };
+      // Two shapes reach this fallback. A 'native'-tier file (PDF / image)
+      // travels as base64 and needs Claude's document content-block API. A
+      // 'parseable'-tier file was already transcribed to text upstream and is
+      // carried INSIDE the prompt — runClaudeWithDocument would reject it
+      // (non-PDF/image), so the text case routes to the reasoning entry point.
+      const rawText = base64Data
+        ? await runClaudeWithDocument({
+          task: 'document_extraction',
+          attach,
+          prompt,
+          base64Data,
+          mimeType,
+          systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+          metadata: fallbackMetadata,
+          cache,
+        })
+        : await runClaudeReasoning({
+          task: 'document_extraction',
+          attach,
+          prompt,
+          systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+          metadata: fallbackMetadata,
+          cache,
+        });
       return {
         rawText,
         provider: 'claude_fallback',
@@ -368,7 +398,13 @@ STRICT RULES:
 // ──────────────────────────────────────────────────────────────────────────────
 
 async function classifyDocumentContent(base64Data, mimeType, options = {}) {
-  const prompt = buildClassifyPrompt(options);
+  // 'parseable'-tier documents arrive already transcribed to text: there are
+  // no bytes any provider can read, so the text rides in the prompt and no
+  // inline attachment is sent (runGeminiInline handles a text-only call).
+  const documentText = options.documentText || null;
+  const prompt = documentText
+    ? `${buildClassifyPrompt(options)}\n\n--- DOCUMENT CONTENT (transcribed by REDIP) ---\n${documentText}`
+    : buildClassifyPrompt(options);
   const fileSha256 = options.fileSha256 || null;
 
   // The classify prompt is itself versioned; cache hits are keyed by the
@@ -493,7 +529,43 @@ async function extractStoredFileFields({
   }
 
   const effectiveMime = inferMimeType(fileName, mimeType);
-  const { base64, sha256: fileSha256 } = await fetchFileAsBase64(fileUrl);
+  const tier = extractionTierFor({ fileName, fileType: effectiveMime });
+
+  // Fail CLOSED on formats REDIP genuinely cannot read (CAD, BIM, SketchUp,
+  // Primavera, shapefiles, legacy binary Office). These upload and store
+  // fine; refusing here — with the same sentence the UI shows — is the honest
+  // alternative to shipping them to a provider that would garble or reject
+  // them and calling the result an extraction.
+  if (tier === 'stored_only') {
+    const err = new Error(unsupportedExtractionMessage(fileName));
+    err.statusCode = 422;
+    throw err;
+  }
+
+  const { buffer, sha256: fileSha256 } = await fetchFileBuffer(fileUrl);
+
+  // Two shapes from here on:
+  //  • native    → base64 bytes ride to the provider (PDF / image), as before.
+  //  • parseable → REDIP transcribes the file to text deterministically and
+  //                the TEXT rides in the prompt. Same prompts, same review
+  //                path; the model never sees bytes it cannot decode.
+  let base64 = null;
+  let documentText = null;
+  let parsedMeta = null;
+  if (tier === 'parseable') {
+    const parsed = await parseDocumentToText(buffer, fileName);
+    documentText = parsed.text;
+    parsedMeta = { kind: parsed.kind, ...parsed.meta };
+  } else {
+    base64 = buffer.toString('base64');
+  }
+
+  // Cache identity: the file's bytes for a native read; the PARSED TEXT's
+  // hash for a parseable one, so improving a parser naturally invalidates
+  // prior cached extractions of the same file.
+  const contentSha256 = documentText
+    ? crypto.createHash('sha256').update(documentText, 'utf8').digest('hex')
+    : fileSha256;
 
   const aiAttach = options.attach || {
     documentId: documentId || null,
@@ -508,7 +580,8 @@ async function extractStoredFileFields({
         fileName,
         context: options.context,
         attach: aiAttach,
-        fileSha256,
+        fileSha256: contentSha256,
+        documentText,
       });
     }
   } catch {
@@ -516,15 +589,18 @@ async function extractStoredFileFields({
   }
   docType = normalizeRequestedDocType(docType) || 'other';
 
-  const prompt = buildExtractionPrompt(docType, {
+  const basePrompt = buildExtractionPrompt(docType, {
     fileName,
     context: options.context,
   });
+  const prompt = documentText
+    ? `${basePrompt}\n\n--- DOCUMENT CONTENT (transcribed by REDIP from the uploaded ${formatFor(fileName)?.label || 'file'}) ---\n${documentText}`
+    : basePrompt;
   const promptInfo = getExtractionPromptVersion(docType);
   const extractionCache = {
     promptVersion: promptInfo.version,
     promptSha256: promptInfo.sha256,
-    inputSha256: responseCache.hashInputMaterial([prompt, fileSha256, effectiveMime]),
+    inputSha256: responseCache.hashInputMaterial([prompt, contentSha256, effectiveMime]),
   };
   const extractionMetadata = {
     prompt_kind: docType,
@@ -534,6 +610,8 @@ async function extractStoredFileFields({
     // (PR #155) so the AI usage dashboard's "By Doctype" breakdown
     // populates without metadata-JSON unpacking.
     doctype: docType,
+    source_tier: tier,
+    ...(parsedMeta ? { parsed_kind: parsedMeta.kind } : {}),
   };
   const extraction = await callExtractionWithFallback({
     prompt,
@@ -553,14 +631,16 @@ async function extractStoredFileFields({
     log.info('pii_redacted_raw_text', { doc_type: docType, redactions: rawRedactionCount });
   }
 
-  // Best-effort language detection on the extracted text. This populates
-  // the `ai_call_logs.language` column on the NEXT call (Claude
-  // normalization), not the extraction call itself — by then we have a
-  // representative text sample to read script blocks from. Errors here
-  // never block the extraction.
+  // Best-effort language detection. Populates `ai_call_logs.language` on the
+  // NEXT call (Claude normalization) and — since 2026-07-16 — the
+  // `document_extractions.language_detected` column the Documents tab reads,
+  // which no code path had ever written. For a parseable document the
+  // transcribed source text is the better sample than the model's JSON reply
+  // (the reply is mostly English keys); for a native PDF/image the reply is
+  // all we have. Errors here never block the extraction.
   let detectedLanguage = null;
   try {
-    detectedLanguage = detectLanguage(rawText || '');
+    detectedLanguage = detectLanguage(documentText || rawText || '');
   } catch (err) {
     log.warn('language_detect_failed', { error: err.message, doc_type: docType });
   }
@@ -636,6 +716,8 @@ async function extractStoredFileFields({
     confidenceScores: structuredFields ? computeConfidenceScores(structuredFields) : {},
     parseError,
     effectiveMime,
+    detectedLanguage,
+    sourceTier: tier,
   };
 }
 
@@ -648,6 +730,17 @@ async function extractDocument(
   userId = null,
   options = {}
 ) {
+  // Refuse unreadable formats BEFORE creating the extraction row: a CAD or
+  // Primavera file is not a failed extraction, it is a file REDIP was never
+  // able to read, and a 'failed' row would put a red error chip on a document
+  // that is behaving exactly as documented. The message is the same sentence
+  // the Documents tab shows on the disabled extract affordance.
+  if (extractionTierFor({ fileName, fileType: inferMimeType(fileName, mimeType) }) === 'stored_only') {
+    const err = new Error(unsupportedExtractionMessage(fileName));
+    err.statusCode = 422;
+    throw err;
+  }
+
   const providerLabel = getProviderAvailability().claude ? 'gemini_claude' : 'gemini';
   // Create extraction record in 'processing' state. extraction_started_at is
   // stamped here so the stuck-extraction reaper can reliably tell which
@@ -677,6 +770,7 @@ async function extractDocument(
       structuredFields,
       confidenceScores,
       parseError,
+      detectedLanguage,
     } = await extractStoredFileFields({
       fileUrl,
       fileName,
@@ -687,7 +781,10 @@ async function extractDocument(
       options,
     });
 
-    // Step 4: persist result
+    // Step 4: persist result. language_detected finally gets written here —
+    // getDealExtractions has always SELECTed it and the UI has always been
+    // ready to show it, but no code path populated the column (so every
+    // Kannada/Hindi document read as "unknown language").
     const updateResult = await query(
       `UPDATE document_extractions
        SET doc_type          = $1,
@@ -697,9 +794,10 @@ async function extractDocument(
            confidence_scores = $5,
            pages_processed   = $6,
            error_message     = $7,
+           language_detected = $8,
            extracted_at      = NOW(),
            updated_at        = NOW()
-       WHERE id = $8
+       WHERE id = $9
        RETURNING *`,
       [
         docType,
@@ -709,6 +807,7 @@ async function extractDocument(
         JSON.stringify(confidenceScores),
         null, // pages_processed not available from inline extraction
         parseError,
+        detectedLanguage && detectedLanguage !== 'und' ? detectedLanguage : null,
         extractionId,
       ],
     );
