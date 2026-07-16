@@ -684,11 +684,20 @@ async function extractStoredFileFields({
     }
   }
 
-  // Surface the fallback path in extraction_error so reviewers can see why a
-  // result came from Claude rather than Gemini. parseError still wins if the
-  // JSON itself was malformed.
-  if (!parseError && extraction.provider === 'claude_fallback') {
-    parseError = `Note: extracted via Claude fallback after Gemini failed (${extraction.fallbackReason || 'transient error'}).`;
+  // ── Notes vs errors ────────────────────────────────────────────────────────
+  // `parseError` means the DATA is incomplete — it degrades the row to
+  // 'partial', which tells the reviewer "some fields may be missing".
+  // `notes` are provenance/diagnostic context about HOW a complete extraction
+  // was produced. Conflating the two (as this code did until 2026-07-16)
+  // stamped "partially extracted — some fields may be missing" on extractions
+  // that were entirely complete, which is exactly the kind of untrue label
+  // CLAUDE.md forbids: it trains reviewers to distrust good extractions.
+  const notes = [];
+
+  if (extraction.provider === 'claude_fallback') {
+    // Gemini was down and Claude read the document instead. The output is a
+    // FULL extraction — worth recording, never a data-quality warning.
+    notes.push(`Extracted via Claude fallback after Gemini failed (${extraction.fallbackReason || 'transient error'}).`);
   }
 
   if (structuredFields) {
@@ -703,9 +712,17 @@ async function extractStoredFileFields({
         }))
       );
     } catch (normalizationError) {
-      parseError = parseError
-        ? `${parseError}; Claude normalization skipped: ${normalizationError.message}`
-        : `Claude normalization skipped: ${normalizationError.message}`;
+      // The normalization pass is an OPTIONAL formatting polish over an
+      // already-complete extraction (see normalizeStructuredFieldsWithClaude:
+      // skipping it is the documented, intended behaviour whenever it can't
+      // finish inside CLAUDE_NORMALIZATION_TIMEOUT_MS). Skipping it removes
+      // nothing from the payload, so it must not degrade the status. Recorded
+      // as a note + telemetry so the skip rate stays observable.
+      log.info('extraction_normalization_skipped', {
+        doc_type: docType,
+        reason: normalizationError.message,
+      });
+      notes.push(`Formatting-normalization pass skipped (${normalizationError.message}). Extracted values are unchanged.`);
     }
   }
 
@@ -715,6 +732,7 @@ async function extractStoredFileFields({
     structuredFields,
     confidenceScores: structuredFields ? computeConfidenceScores(structuredFields) : {},
     parseError,
+    notes,
     effectiveMime,
     detectedLanguage,
     sourceTier: tier,
@@ -770,6 +788,7 @@ async function extractDocument(
       structuredFields,
       confidenceScores,
       parseError,
+      notes,
       detectedLanguage,
     } = await extractStoredFileFields({
       fileUrl,
@@ -801,12 +820,19 @@ async function extractDocument(
        RETURNING *`,
       [
         docType,
+        // ONLY a genuine data problem degrades the status. Provenance notes
+        // (Claude fallback used, optional normalization skipped) describe a
+        // COMPLETE extraction and must not surface as "some fields may be
+        // missing" — see the notes-vs-errors block in extractStoredFileFields.
         parseError ? 'partial' : 'completed',
         JSON.stringify({ raw_text: rawText }),
         structuredFields ? JSON.stringify(structuredFields) : null,
         JSON.stringify(confidenceScores),
         null, // pages_processed not available from inline extraction
-        parseError,
+        // error_message carries the real error when there is one, else the
+        // notes (kept for diagnostics; no UI treats a 'completed' row's
+        // message as a failure).
+        parseError || (notes && notes.length ? notes.join(' ') : null),
         detectedLanguage && detectedLanguage !== 'und' ? detectedLanguage : null,
         extractionId,
       ],
