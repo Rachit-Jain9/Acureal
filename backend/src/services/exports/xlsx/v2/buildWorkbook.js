@@ -44,6 +44,7 @@ const palette = require('../../shared/palette');
 const financialKernel = require('../../../../../../packages/financial-kernel/dist');
 const { defaultsForAssetClass, benchmarkFor } = require('./assetClassDefaults');
 const { generateDealBriefing, buildTemplatedBriefing, buildNumericSnapshot } = require('./dealBriefing.service');
+const { buildRegisterSheets } = require('./rentRollSheets');
 
 const FONT = palette.FONTS.body;
 
@@ -87,14 +88,20 @@ const SHEETS = {
   cashFlowEngine: 'Cash Flow Engine',
   sourcesUses: 'Sources & Uses',
   monthlyCashFlow: 'Monthly Cash Flow',
-  leaseRoll: 'Lease Roll',
   constructionDrawdown: 'Construction Drawdown',
   sensitivity: 'Sensitivity',
   debtAndAmort: 'Debt Sizing & Amortization',
   waterfall: 'Sponsor LP Waterfall',
-  unitMix: 'Unit Mix',
   siteYield: 'Site Yield',
   marketComparables: 'Market Comparables',
+  // Deal-register worktabs (rent-roll program) — family-adaptive; exactly one
+  // per deal, rendered from the SERVER-recomputed register slice by
+  // rentRollSheets.js. Replaced the synthetic-data 'Lease Roll' / 'Unit Mix'
+  // orphans (which fabricated tenants from blended assumptions — deleted 2026-07-16).
+  registerLease: 'Rent Roll',
+  registerSales: 'Sales & Collections',
+  registerHotel: 'Operating Roll',
+  registerOccupants: 'Occupants & Sales',
   calculations: 'Calculations',
 };
 
@@ -3901,82 +3908,6 @@ const buildConstructionDrawdownSheet = (workbook, ctx) => {
     else totalCell.value = { formula: `=SUM($B$${rowSpec.row}:$${lastMonthCol}$${rowSpec.row})` };
     styleOutputCell(totalCell, rowSpec.format);
   });
-  return sheet;
-};
-
-const buildLeaseRollSheet = (workbook, ctx) => {
-  const sheet = workbook.addWorksheet(SHEETS.leaseRoll, {
-    views: [{ showGridLines: false, state: 'frozen', xSplit: 0, ySplit: 4 }],
-  });
-  sheet.columns = [
-    { width: 24 }, { width: 14 }, { width: 16 }, { width: 14 }, { width: 12 }, { width: 12 }, { width: 12 }, { width: 14 },
-    ...Array.from({ length: 10 }, () => ({ width: 14 })),
-  ];
-  sheet.mergeCells('A1:R1');
-  sheet.getCell('A1').value = `${ctx.brandName} | Lease Roll`;
-  styleSectionTitle(sheet.getCell('A1'));
-  sheet.mergeCells('A2:R2');
-  sheet.getCell('A2').value = ctx.dealFamily === 'income'
-    ? 'Tenant-level rent reset, WALE, and expiry concentration. Seeded rows are editable assumptions.'
-    : 'Development deals do not have a stabilised lease roll; keep this sheet for income-conversion scenarios only.';
-  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-
-  const headers = ['Tenant / use', 'Area sqft', 'Rent / sqft / mo', 'CAM / sqft / mo', 'Start mo', 'Term mo', 'Expiry mo', 'Renewal %'];
-  for (let y = 1; y <= 10; y += 1) headers.push(`Year ${y} rent`);
-  headers.forEach((h, idx) => { sheet.getCell(4, idx + 1).value = h; });
-  styleHeader(sheet.getRow(4));
-
-  const isRetail = ctx.assetClass === 'retail';
-  const camFormula = isRetail ? 'RetailCAMRecoveryPct' : '0';
-  const rows = ctx.dealFamily === 'income'
-    ? [
-        [isRetail ? 'Anchor tenant' : ctx.assetClass === 'hospitality' ? 'F&B lease' : 'Primary tenant', '=SaleableAreaSqft*0.40', '=BaseRentPerSqftMonth*0.85', `=IFERROR(BaseRentPerSqftMonth*${camFormula}*0.20,0)`, 1, 84, 84, 0.75],
-        [isRetail ? 'Vanilla inline' : ctx.assetClass === 'industrial_warehousing' ? 'Warehouse bay A' : 'Mid-size tenant A', '=SaleableAreaSqft*0.25', '=BaseRentPerSqftMonth*1.05', `=IFERROR(BaseRentPerSqftMonth*${camFormula}*0.18,0)`, 4, 60, 64, 0.65],
-        [isRetail ? 'F&B / kiosk' : ctx.assetClass === 'industrial_warehousing' ? 'Warehouse bay B' : 'Mid-size tenant B', '=SaleableAreaSqft*0.15', '=BaseRentPerSqftMonth*1.15', `=IFERROR(BaseRentPerSqftMonth*${camFormula}*0.16,0)`, 7, 48, 55, 0.60],
-        ['Vacant / rolling space', '=SaleableAreaSqft*0.20', '=BaseRentPerSqftMonth', `=IFERROR(BaseRentPerSqftMonth*${camFormula}*0.15,0)`, 13, 36, 49, 0.50],
-      ]
-    : [
-        ['Not applicable', 0, 0, 0, 0, 0, 0, 0],
-      ];
-
-  rows.forEach((row, idx) => {
-    const r = 5 + idx;
-    row.forEach((value, cIdx) => {
-      const cell = sheet.getCell(r, cIdx + 1);
-      cell.value = typeof value === 'string' && value.startsWith('=') ? { formula: value } : value;
-      if (cIdx <= 7) styleInputCell(cell);
-      else styleOutputCell(cell, NUMBER_FORMATS.currency);
-      if (cIdx === 1 || cIdx === 4 || cIdx === 5 || cIdx === 6) cell.numFmt = NUMBER_FORMATS.integer;
-      if (cIdx === 7) cell.numFmt = NUMBER_FORMATS.percent;
-    });
-    for (let y = 1; y <= 10; y += 1) {
-      const c = 8 + y;
-      const cell = sheet.getCell(r, c);
-      cell.value = ctx.dealFamily === 'income'
-        ? { formula: `=IF(AND(${y}*12>=E${r},(${y}-1)*12<G${r}),B${r}*C${r}*12*(1+RentEscalationPct)^(${y}-1)/10000000,0)` }
-        : 0;
-      styleOutputCell(cell, NUMBER_FORMATS.currency);
-    }
-  });
-
-  const summaryRow = 5 + rows.length + 2;
-  sheet.mergeCells(`A${summaryRow}:R${summaryRow}`);
-  sheet.getCell(`A${summaryRow}`).value = 'Lease Metrics';
-  styleSectionTitle(sheet.getCell(`A${summaryRow}`));
-  const metrics = [
-    ['WALE (years)', `=IFERROR(SUMPRODUCT(B5:B${4 + rows.length},G5:G${4 + rows.length})/SUM(B5:B${4 + rows.length})/12,0)`, NUMBER_FORMATS.multiple],
-    ['Occupied area', `=SUM(B5:B${4 + rows.length})`, NUMBER_FORMATS.integer],
-    ['Year 1 rent', `=SUM(I5:I${4 + rows.length})`, NUMBER_FORMATS.currency],
-    ['Expiry concentration <= 3 yrs', `=IFERROR(SUMIF(G5:G${4 + rows.length},"<=36",B5:B${4 + rows.length})/SUM(B5:B${4 + rows.length}),0)`, NUMBER_FORMATS.percent],
-  ];
-  metrics.forEach(([label, formula, format], idx) => {
-    const r = summaryRow + 1 + idx;
-    sheet.getCell(`A${r}`).value = label;
-    styleLabelCell(sheet.getCell(`A${r}`));
-    sheet.getCell(`B${r}`).value = { formula };
-    styleOutputCell(sheet.getCell(`B${r}`), format);
-  });
-
   return sheet;
 };
 
@@ -8117,233 +8048,6 @@ const appendWaterfallToDebtSheet = (workbook, ctx) => {
  * Defaults seeded with realistic Indian residential averages (Anarock /
  * JLL Bengaluru benchmarks). Operator can override every cell.
  */
-const buildUnitMixSheet = (workbook, ctx) => {
-  const sheet = workbook.addWorksheet(SHEETS.unitMix, {
-    views: [{ showGridLines: false }],
-  });
-  sheet.columns = [
-    { width: 22 }, // A: Unit type
-    { width: 14 }, // B: Count
-    { width: 16 }, // C: SF per unit
-    { width: 16 }, // D: Total SF
-    { width: 18 }, // E: Per-unit rate
-    { width: 22 }, // F: Total revenue
-  ];
-
-  // Title
-  sheet.mergeCells('A1:F1');
-  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Unit Mix`;
-  styleSectionTitle(sheet.getCell('A1'));
-  sheet.getRow(1).height = 26;
-
-  sheet.mergeCells('A2:F2');
-  sheet.getCell('A2').value =
-    'Unit-by-unit breakdown — worksheet, not flow-through. Edit Count + SF/unit + Per-Unit Rate to plan scenarios; '
-    + 'then update SaleableAreaSqft + SellingRatePerSqft on the Inputs sheet to reflect your final mix.';
-  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
-  sheet.getRow(2).height = 32;
-
-  // Determine which unit-mix table to render
-  const ac = String(ctx.assetClass || '').toLowerCase();
-
-  let unitRows; // array of [label, count, sfPerUnit, rate] seed defaults
-  let headers;  // column headers
-  let perUnitLabel;
-  let revenueLabel;
-
-  if (ac === 'residential_apartments' || ac === 'villas') {
-    // Indian residential: typical mix
-    headers = ['Unit Type', 'Count', 'SF / Unit', 'Total SF', 'Sell Rate (INR/sqft)', 'Total Revenue (INR Cr)'];
-    perUnitLabel = 'Per-sqft sell rate';
-    revenueLabel = 'Total revenue at base rate (INR Cr)';
-    unitRows = ac === 'villas'
-      ? [
-          ['3 BHK Villa',          25, 2200, 12000],
-          ['4 BHK Villa',          20, 2800, 12500],
-          ['5 BHK Villa',           8, 3500, 13000],
-          ['Penthouse',             2, 5000, 14000],
-        ]
-      : [
-          ['Studio',               40,  450,  9000],
-          ['1 BHK',                90,  650, 10000],
-          ['2 BHK',               150,  950,  9500],
-          ['3 BHK',                60, 1400,  9000],
-          ['4 BHK',                15, 2000,  8500],
-        ];
-  } else if (ac === 'hospitality') {
-    headers = ['Key Type', 'Keys', 'SF / Key', 'Total SF', 'ADR (INR / night)', 'Annual Revenue (INR Cr)'];
-    perUnitLabel = 'Average Daily Rate';
-    revenueLabel = 'Annualised revenue at 65% occupancy (INR Cr)';
-    unitRows = [
-      ['Standard',                100, 350,  8500],
-      ['Deluxe',                   60, 450, 11500],
-      ['Executive Suite',          20, 700, 18000],
-      ['Presidential Suite',        4, 1200, 35000],
-    ];
-  } else if (ac === 'plotted_development') {
-    headers = ['Plot Size', 'Plots', 'SF / Plot', 'Total SF', 'Sell Rate (INR/sqft)', 'Total Revenue (INR Cr)'];
-    perUnitLabel = 'Per-sqft sell rate';
-    revenueLabel = 'Total revenue at base rate (INR Cr)';
-    unitRows = [
-      ['Small (1,200 sqft)',      50, 1200,  4500],
-      ['Standard (1,800 sqft)',   80, 1800,  5000],
-      ['Premium (2,400 sqft)',    35, 2400,  5500],
-      ['Corner / Garden',         15, 3000,  6500],
-    ];
-  } else if (ac === 'commercial_office' || ac === 'retail' || ac === 'industrial_warehousing') {
-    const labelByClass = {
-      commercial_office: ['Ground Floor', 'Typical Office Floor', 'Premium / Top Floor'],
-      retail: ['Anchor (≥10k sqft)', 'In-line Mid (1k-5k sqft)', 'Kiosk / F&B'],
-      industrial_warehousing: ['Manufacturing Bay', 'Storage Bay', 'Office / Admin'],
-    }[ac];
-    headers = ['Floor / Use', 'Bays', 'SF / Bay', 'Total SF', 'Rent (INR/sqft/mo)', 'Annual Revenue (INR Cr)'];
-    perUnitLabel = 'Per-sqft monthly rent';
-    revenueLabel = 'Annualised revenue at base rent × 12 (INR Cr)';
-    unitRows = [
-      [labelByClass[0],            1, 25000, 95],
-      [labelByClass[1],           12, 18000, 110],
-      [labelByClass[2],            3, 12000, 145],
-    ];
-  } else {
-    // mixed_use / redevelopment / raw_land — render an empty-state note
-    sheet.mergeCells('A5:F12');
-    sheet.getCell('A5').value =
-      `Unit mix isn't cleanly applicable to ${ctx.assetClass || 'this asset class'} deals. `
-      + 'Mixed-use deals span multiple unit types per component (residential / office / retail); use separate component schedules. '
-      + 'Redevelopment + raw land are typically sized by area / FAR not by unit count. '
-      + 'Edit SaleableAreaSqft + SellingRatePerSqft on the Inputs sheet directly.';
-    sheet.getCell('A5').font = { name: FONT, size: 11, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-    sheet.getCell('A5').alignment = { vertical: 'top', wrapText: true };
-    return sheet;
-  }
-
-  // Header row at row 4
-  headers.forEach((label, idx) => {
-    const cell = sheet.getCell(4, idx + 1);
-    cell.value = label;
-    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('paperElevated') } };
-    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
-    cell.fill = FILL(palette.xlsx('inkDeep'));
-    cell.protection = { locked: true };
-  });
-  sheet.getRow(4).height = 28;
-
-  // Data rows — each is editable (yellow input cells)
-  unitRows.forEach(([label, count, sfPer, rate], idx) => {
-    const r = 5 + idx;
-    sheet.getCell(`A${r}`).value = label;
-    styleLabelCell(sheet.getCell(`A${r}`));
-
-    // Count (input)
-    const countCell = sheet.getCell(`B${r}`);
-    countCell.value = count;
-    styleInputCell(countCell);
-    countCell.numFmt = NUMBER_FORMATS.integer;
-
-    // SF / Unit (input)
-    const sfCell = sheet.getCell(`C${r}`);
-    sfCell.value = sfPer;
-    styleInputCell(sfCell);
-    sfCell.numFmt = NUMBER_FORMATS.integer;
-
-    // Total SF (computed)
-    const totalSfCell = sheet.getCell(`D${r}`);
-    totalSfCell.value = { formula: `=B${r}*C${r}` };
-    styleOutputCell(totalSfCell, NUMBER_FORMATS.integer);
-    totalSfCell.font = { name: FONT, size: 10, color: { argb: palette.xlsx('ink') } };
-
-    // Per-unit rate (input)
-    const rateCell = sheet.getCell(`E${r}`);
-    rateCell.value = rate;
-    styleInputCell(rateCell);
-    rateCell.numFmt = NUMBER_FORMATS.integer;
-
-    // Total Revenue (computed) — different math per asset class
-    const revCell = sheet.getCell(`F${r}`);
-    if (ac === 'hospitality') {
-      // ADR × 365 × 65% occupancy × Keys
-      revCell.value = { formula: `=B${r}*E${r}*365*0.65/10000000` };
-    } else if (ac === 'commercial_office' || ac === 'retail' || ac === 'industrial_warehousing') {
-      // monthly rent × 12 × total SF
-      revCell.value = { formula: `=D${r}*E${r}*12/10000000` };
-    } else {
-      // residential / villas / plotted: per-sqft sell rate × total SF
-      revCell.value = { formula: `=D${r}*E${r}/10000000` };
-    }
-    styleOutputCell(revCell, NUMBER_FORMATS.currency);
-    revCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
-  });
-
-  // Total row
-  const totalRow = 5 + unitRows.length;
-  sheet.getCell(`A${totalRow}`).value = 'TOTAL';
-  sheet.getCell(`A${totalRow}`).font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('paperElevated') } };
-  sheet.getCell(`A${totalRow}`).fill = FILL(palette.xlsx('inkDeep'));
-  sheet.getCell(`A${totalRow}`).alignment = { vertical: 'middle', horizontal: 'left' };
-
-  const totalCountCell = sheet.getCell(`B${totalRow}`);
-  totalCountCell.value = { formula: `=SUM(B5:B${5 + unitRows.length - 1})` };
-  styleOutputCell(totalCountCell, NUMBER_FORMATS.integer);
-  totalCountCell.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('paperElevated') } };
-  totalCountCell.fill = FILL(palette.xlsx('inkDeep'));
-
-  // SF / Unit total column is N/A (heterogeneous types) — leave blank with shading
-  sheet.getCell(`C${totalRow}`).fill = FILL(palette.xlsx('inkDeep'));
-
-  const totalSfRow = sheet.getCell(`D${totalRow}`);
-  totalSfRow.value = { formula: `=SUM(D5:D${5 + unitRows.length - 1})` };
-  styleOutputCell(totalSfRow, NUMBER_FORMATS.integer);
-  totalSfRow.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('paperElevated') } };
-  totalSfRow.fill = FILL(palette.xlsx('inkDeep'));
-
-  sheet.getCell(`E${totalRow}`).fill = FILL(palette.xlsx('inkDeep'));
-
-  const totalRevRow = sheet.getCell(`F${totalRow}`);
-  totalRevRow.value = { formula: `=SUM(F5:F${5 + unitRows.length - 1})` };
-  styleOutputCell(totalRevRow, NUMBER_FORMATS.currency);
-  totalRevRow.font = { name: FONT, size: 12, bold: true, color: { argb: palette.xlsx('dataPositive') } };
-  totalRevRow.fill = FILL(palette.xlsx('inkDeep'));
-  sheet.getRow(totalRow).height = 26;
-
-  // Summary block below the table — comparison vs Inputs sheet
-  const summaryRow = totalRow + 2;
-  sheet.mergeCells(`A${summaryRow}:F${summaryRow}`);
-  sheet.getCell(`A${summaryRow}`).value = 'Summary — Compare vs Inputs Sheet';
-  styleSectionTitle(sheet.getCell(`A${summaryRow}`));
-  sheet.getRow(summaryRow).height = 22;
-
-  const summaryRows = [
-    [`Unit-mix Total Saleable SF`,        `=D${totalRow}`,                  'From this sheet'],
-    [`Inputs SaleableAreaSqft`,           '=SaleableAreaSqft',              'From Inputs & Assumptions'],
-    [`Variance (sqft)`,                    `=D${totalRow}-SaleableAreaSqft`, 'Positive = unit mix exceeds Inputs'],
-    [`${revenueLabel}`,                    `=F${totalRow}`,                  'From this sheet'],
-  ];
-  summaryRows.forEach(([label, formula, note], idx) => {
-    const r = summaryRow + 1 + idx;
-    sheet.getCell(`A${r}`).value = label;
-    styleLabelCell(sheet.getCell(`A${r}`));
-    const cell = sheet.getCell(`B${r}`);
-    cell.value = { formula };
-    const fmt = label.includes('Revenue') || label.includes('revenue') ? NUMBER_FORMATS.currency : NUMBER_FORMATS.integer;
-    styleOutputCell(cell, fmt);
-    cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
-    sheet.getCell(`C${r}`).value = note;
-    sheet.getCell(`C${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  });
-
-  // Footer disclosure
-  const footerRow = summaryRow + 6;
-  sheet.mergeCells(`A${footerRow}:F${footerRow}`);
-  sheet.getCell(`A${footerRow}`).value =
-    `Unit-mix figures are operator-editable worksheet values, not flow-through inputs. After finalising the mix, manually update SaleableAreaSqft + SellingRatePerSqft on the Inputs sheet so the rest of the model (Phasing, Cash Flow, Dashboard) reflects the chosen mix. Per-unit rate column reads as ${perUnitLabel}.`;
-  sheet.getCell(`A${footerRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell(`A${footerRow}`).alignment = { vertical: 'top', wrapText: true };
-  sheet.getRow(footerRow).height = 40;
-
-  return sheet;
-};
-
 // Site Yield — the deterministic Yield Studio programme (recomputed server-side
 // from the saved study, or screening defaults from the parcel). Read-only
 // display tab — every figure is the kernel's; no AI. Renders an honest empty
@@ -8756,6 +8460,17 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   if (Array.isArray(ctx.exportContext?.market?.exportComps) && ctx.exportContext.market.exportComps.length > 0) {
     buildMarketComparablesSheet(workbook, ctx);
   }
+  // Deal register — the evidence-grade income substrate (rent roll / sales &
+  // collections / operating roll / occupants). Exactly one family-adaptive tab,
+  // only when the register has records (mirrors the Site Yield / Comps auto-hide).
+  // Sits with the other evidence sheets, before the model Inputs it grounds.
+  // Renders from the SERVER-recomputed slice; replaced the deleted synthetic
+  // Lease Roll / Unit Mix orphans. Style helpers are injected so the module
+  // shares the workbook look without growing this file.
+  buildRegisterSheets(workbook, ctx, {
+    SHEETS, FONT, FILL, palette, NUMBER_FORMATS, toPctDecimal,
+    styleSectionTitle, styleHeader, styleInputCell, styleOutputCell, styleLabelCell,
+  });
   const { definedNames } = buildInputsSheet(workbook, ctx);
   if (ctx.assetClass === 'hospitality') buildHospitalityUsaliSheet(workbook, ctx);
 
