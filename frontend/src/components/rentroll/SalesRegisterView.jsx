@@ -13,6 +13,7 @@ import ApplyToFinancialsModal from './ApplyToFinancialsModal';
 import {
   fmtPct, fmtCr, fmtCrOrL, fmtSignedPct,
   useSettingsAutosave, StaleModelBanner, RegisterSettingsRow, RegisterUnavailable,
+  TemplateDownloadButton,
 } from './registerShared';
 
 const SalesCharts = lazy(() => import('./SalesCharts'));
@@ -123,9 +124,12 @@ export default function SalesRegisterView({ dealId, assetClass, canEdit }) {
         {sales.length === 0 ? (
           <EmptyState
             title="No inventory recorded yet"
-            description="Add the first plot or unit with whatever is known — plot number, area, or price alone is enough at sourcing stage. Spreadsheet import and document extraction arrive in upcoming updates."
+            description="Add the first plot or unit with whatever is known — plot number, area, or price alone is enough at sourcing stage. Or download a blank template to prepare the inventory in Excel with the exact columns this register accepts."
             action={canEdit && (
-              <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setDrawer({ record: null })}>Add first plot</Button>
+              <div className="flex items-center gap-2">
+                <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setDrawer({ record: null })}>Add first plot</Button>
+                <TemplateDownloadButton dealId={dealId} />
+              </div>
             )}
           />
         ) : (

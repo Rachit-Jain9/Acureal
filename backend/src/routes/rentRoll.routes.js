@@ -9,8 +9,25 @@
 const express = require('express');
 const { authenticate, requireAdminOrAnalyst } = require('../middleware/auth');
 const rentRollService = require('../services/rentRoll.service');
+const rentRollTemplate = require('../services/rentRollTemplate.service');
 
 const router = express.Router();
+
+// GET /deals/:dealId/rent-roll/template → a schema-correct blank XLSX to fill
+// offline, adapted to the deal's register family. Available before any register
+// exists (resolves the family from the deal's asset class).
+router.get('/deals/:dealId/rent-roll/template', authenticate, async (req, res, next) => {
+  try {
+    const { dealName, family } = await rentRollService.getDealRegisterInfo(req.params.dealId);
+    const buffer = await rentRollTemplate.buildTemplateWorkbook(family, { dealName });
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${rentRollTemplate.templateFileName(family, dealName)}"`);
+    res.setHeader('Content-Length', buffer.length);
+    return res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /deals/:dealId/rent-roll → register + all live records (register: null = empty state)
 router.get('/deals/:dealId/rent-roll', authenticate, async (req, res, next) => {

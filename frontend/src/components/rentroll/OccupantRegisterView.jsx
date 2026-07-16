@@ -15,7 +15,7 @@ import ApplyToFinancialsModal from './ApplyToFinancialsModal';
 import { OCCUPANT_STATUS_CONFIG, OCCUPANT_STATUS_OPTIONS, DOC_RISK_TONE } from './rentRollColumns';
 import {
   fmtPct, fmtCr, fmtCrOrL, fmtInt,
-  useSettingsAutosave, StaleModelBanner, RegisterSettingsRow, RegisterUnavailable,
+  useSettingsAutosave, StaleModelBanner, RegisterSettingsRow, RegisterUnavailable, TemplateDownloadButton,
 } from './registerShared';
 
 const OccupantCharts = lazy(() => import('./OccupantCharts'));
@@ -201,10 +201,15 @@ export default function OccupantRegisterView({ dealId, assetClass, canEdit }) {
         <SectionHeader
           size="sm" icon={Users} eyebrow="Deal register" title="Occupants & Sales"
           sub="Existing occupiers and their rehousing obligations, plus the free-sale inventory. Figures are gross; the model nets any ownership share downstream."
-          action={canEdit && canApply && (
-            <Button variant="secondary" size="sm" rightIcon={<ArrowRight size={14} />} onClick={() => setApplyOpen(true)}>
-              Apply to Financials
-            </Button>
+          action={canEdit && (
+            <div className="flex items-center gap-2">
+              {canApply && (
+                <Button variant="secondary" size="sm" rightIcon={<ArrowRight size={14} />} onClick={() => setApplyOpen(true)}>
+                  Apply to Financials
+                </Button>
+              )}
+              <TemplateDownloadButton dealId={dealId} />
+            </div>
           )}
         />
         <RegisterSettingsRow form={form} setForm={setForm} canEdit={canEdit} showLeasableArea={false} />

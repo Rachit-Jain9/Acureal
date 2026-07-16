@@ -320,6 +320,8 @@ export const rentRollAPI = {
   bulkInsert: (dealId, body) => api.post(`/deals/${dealId}/rent-roll/records/bulk`, body),
   createSnapshot: (dealId, body) => api.post(`/deals/${dealId}/rent-roll/snapshots`, body),
   listSnapshots: (dealId) => api.get(`/deals/${dealId}/rent-roll/snapshots`),
+  // Schema-correct blank XLSX template (family-adaptive) to fill offline.
+  downloadTemplate: (dealId) => api.get(`/deals/${dealId}/rent-roll/template`, { responseType: 'blob' }),
 };
 
 // Properties

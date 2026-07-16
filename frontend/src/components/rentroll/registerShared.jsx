@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Field, Input, ErrorState } from '../../design-system';
+import { Download } from 'lucide-react';
+import { Field, Input, ErrorState, Button } from '../../design-system';
 import { useSaveRegisterSettings } from '../../hooks/useRentRoll';
+import { rentRollAPI } from '../../services/api';
+import { downloadAxiosResponse } from '../../utils/download';
+import { toast } from '../common/Toast';
 
 // Shared scaffolding for the per-family register views (lease / sales / hotel).
 // Keeping these in one place means all three families autosave, warn about
@@ -90,6 +94,33 @@ export function RegisterSettingsRow({ form, setForm, canEdit, showLeasableArea }
         </Field>
       )}
     </div>
+  );
+}
+
+// Downloads a schema-correct blank XLSX template for this deal's register
+// family — the exact columns (with Excel dropdowns) the register accepts, so a
+// user can prepare data offline. Server-generated; the filename comes from the
+// response's Content-Disposition.
+export function TemplateDownloadButton({ dealId, variant = 'secondary', size = 'sm' }) {
+  const [busy, setBusy] = useState(false);
+  const onClick = async () => {
+    setBusy(true);
+    try {
+      const res = await rentRollAPI.downloadTemplate(dealId);
+      const cd = res.headers?.['content-disposition'] || '';
+      const match = /filename="?([^";]+)"?/.exec(cd);
+      downloadAxiosResponse(res, (match && match[1]) || 'REDIP-register-template.xlsx');
+      toast.success('Template downloaded — fill one row per record in Excel, keeping the header row as-is.');
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Could not download the template.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Button variant={variant} size={size} leftIcon={<Download size={14} />} loading={busy} onClick={onClick}>
+      Download template
+    </Button>
   );
 }
 

@@ -13,7 +13,7 @@ import ApplyToFinancialsModal from './ApplyToFinancialsModal';
 import { HOTEL_CONTRACT_TYPE_LABELS } from './rentRollColumns';
 import {
   fmtPct, fmtCr, fmtCrOrL, fmtInt,
-  useSettingsAutosave, StaleModelBanner, RegisterSettingsRow, RegisterUnavailable,
+  useSettingsAutosave, StaleModelBanner, RegisterSettingsRow, RegisterUnavailable, TemplateDownloadButton,
 } from './registerShared';
 
 const HotelCharts = lazy(() => import('./HotelCharts'));
@@ -162,10 +162,15 @@ export default function HotelRegisterView({ dealId, assetClass, canEdit }) {
         <SectionHeader
           size="sm" icon={Hotel} eyebrow="Deal register" title="Operating Roll"
           sub="Room inventory, management contracts, and the actual monthly P&L. Trailing-twelve-month metrics summarise how the asset trades; the model forecasts forward."
-          action={canEdit && bridgeSupported && metrics.operating.monthsCovered > 0 && (
-            <Button variant="secondary" size="sm" rightIcon={<ArrowRight size={14} />} onClick={() => setApplyOpen(true)}>
-              Apply to Financials
-            </Button>
+          action={canEdit && (
+            <div className="flex items-center gap-2">
+              {bridgeSupported && metrics.operating.monthsCovered > 0 && (
+                <Button variant="secondary" size="sm" rightIcon={<ArrowRight size={14} />} onClick={() => setApplyOpen(true)}>
+                  Apply to Financials
+                </Button>
+              )}
+              <TemplateDownloadButton dealId={dealId} />
+            </div>
           )}
         />
         <RegisterSettingsRow form={form} setForm={setForm} canEdit={canEdit} showLeasableArea={false} />

@@ -12,7 +12,7 @@ import LeaseDrawer from './LeaseDrawer';
 import ApplyToFinancialsModal from './ApplyToFinancialsModal';
 import {
   fmtPct, fmtYears, fmtCr, fmtSignedPct,
-  useSettingsAutosave, StaleModelBanner, RegisterSettingsRow, RegisterUnavailable,
+  useSettingsAutosave, StaleModelBanner, RegisterSettingsRow, RegisterUnavailable, TemplateDownloadButton,
 } from './registerShared';
 
 function LeaseKpiStrip({ metrics }) {
@@ -117,9 +117,12 @@ export default function LeaseRegisterView({ dealId, assetClass, canEdit }) {
         {leases.length === 0 ? (
           <EmptyState
             title="No leases recorded yet"
-            description="Add the first lease with whatever is known — tenant, area, or rent alone is enough at sourcing stage. Spreadsheet import and document extraction arrive in upcoming updates."
+            description="Add the first lease with whatever is known — tenant, area, or rent alone is enough at sourcing stage. Or download a blank template to prepare the roll in Excel with the exact columns this register accepts."
             action={canEdit && (
-              <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setDrawer({ record: null })}>Add first lease</Button>
+              <div className="flex items-center gap-2">
+                <Button variant="primary" leftIcon={<Plus size={14} />} onClick={() => setDrawer({ record: null })}>Add first lease</Button>
+                <TemplateDownloadButton dealId={dealId} />
+              </div>
             )}
           />
         ) : (
