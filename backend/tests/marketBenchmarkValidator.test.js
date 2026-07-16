@@ -15,6 +15,7 @@ const {
   validateYocVsExitCapSpread,
   validateFundamentalEconomics,
   RBI_DSCR_FLOOR,
+  IRR_PLAUSIBILITY_CEILING_PCT,
 } = __internal;
 
 // Helper: capture addIssue calls into an array so each test can inspect.
@@ -517,6 +518,33 @@ describe('marketBenchmarkValidator', () => {
       validateFundamentalEconomics(buildCtx({ irr: NaN, equityMultiple: undefined }), {}, addIssue);
       validateFundamentalEconomics(buildCtx({}), {}, addIssue);
       validateFundamentalEconomics({ kernelKpis: undefined }, {}, addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    // ── Plausibility ceiling (2026-07-16) ──────────────────────────────────
+    // Mirrors frontend computeKernelWarnings. A plotted deal with front-loaded
+    // sales against a near-zero month-0 outflow annualises to an astronomic
+    // IRR; the persisted column may then be NULL (fit-or-NULL guard), so the
+    // workbook must explain the number rather than silently omit it.
+    test('implausibly high IRR (>1000%) → WARN on IRR', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateFundamentalEconomics(buildCtx({ irr: 1.6e9, equityMultiple: 4.8 }), {}, addIssue);
+      expect(issues).toHaveLength(1);
+      expect(issues[0].severity).toBe('warn');
+      expect(issues[0].field).toBe('IRR');
+      expect(issues[0].message).toMatch(/above any plausible underwriting range/);
+      expect(issues[0].action).toMatch(/equity multiple and absolute profit/);
+    });
+
+    test('IRR exactly at the 1000% ceiling → silent (boundary, not above)', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateFundamentalEconomics(buildCtx({ irr: IRR_PLAUSIBILITY_CEILING_PCT, equityMultiple: 3 }), {}, addIssue);
+      expect(issues).toHaveLength(0);
+    });
+
+    test('high-but-plausible IRR (180%) → silent', () => {
+      const { issues, addIssue } = makeIssueCollector();
+      validateFundamentalEconomics(buildCtx({ irr: 180, equityMultiple: 2.4 }), {}, addIssue);
       expect(issues).toHaveLength(0);
     });
   });

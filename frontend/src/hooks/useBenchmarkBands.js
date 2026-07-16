@@ -1,6 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { dealsAPI } from '../services/api';
 
+// Annualised-IRR plausibility ceiling (percent). Mirrors the export-QA
+// validator constant (backend marketBenchmarkValidator IRR_PLAUSIBILITY_
+// CEILING_PCT) — keep the two in lockstep.
+export const IRR_PLAUSIBILITY_CEILING_PCT = 1000;
+
 /**
  * Live market-benchmark bands fetch (PR-NX52 — 2026-05-19).
  *
@@ -217,6 +222,20 @@ export function computeKernelWarnings(kpis, inputs, thresholds) {
       severity: 'critical',
       label: `Negative IRR (${irrPct.toFixed(1)}%) — returns below capital invested`,
       detail: `The kernel's annualised return is negative (${irrPct.toFixed(2)}%): projected cash flows return less than the capital invested. Re-examine the cost, pricing, and timing inputs and stress-test the downside before taking this to IC.`,
+    });
+  }
+  // Plausibility ceiling — mirrors the export-QA validator (marketBenchmark-
+  // Validator IRR_PLAUSIBILITY_CEILING_PCT; keep in lockstep). An annualised
+  // IRR above 1,000% is real kernel output but almost always an input-shape
+  // artifact: a near-zero day-one outflow against front-loaded revenue makes
+  // the annualisation explode. Mutually exclusive with the negative-IRR flag,
+  // so reusing kind 'irr' is safe for keyed renders.
+  if (Number.isFinite(irrPct) && irrPct > IRR_PLAUSIBILITY_CEILING_PCT) {
+    warnings.push({
+      kind: 'irr',
+      severity: 'warn',
+      label: `IRR ${Math.round(irrPct).toLocaleString('en-IN')}% — above any plausible underwriting range`,
+      detail: `The computed IRR exceeds ${IRR_PLAUSIBILITY_CEILING_PCT.toLocaleString('en-IN')}%, which usually means the cash-flow shape — not the deal — is driving the number (a very small day-one outflow against heavily front-loaded revenue). Re-examine the land cost, equity outlay, phasing, and sales-pacing inputs; at this magnitude use equity multiple and absolute profit to judge the deal, not IRR.`,
     });
   }
   const equityMultiple = kpis.equityMultiple == null || kpis.equityMultiple === ''

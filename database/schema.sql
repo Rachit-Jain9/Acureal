@@ -255,23 +255,28 @@ CREATE TABLE financials (
     -- Revenue and profit
     total_revenue_cr DECIMAL(15, 4),
     gross_profit_cr DECIMAL(15, 4),
-    gross_margin_pct DECIMAL(7, 4),
+    -- Returns-ratio/percentage KPIs are NUMERIC(12,4): the deterministic
+    -- kernel emits raw, unclamped values, and extreme-return deals (tiny
+    -- month-0 outflow vs front-loaded sales) legitimately exceed narrower
+    -- widths (20260727 migration). Values beyond even this range persist as
+    -- NULL via backend/src/utils/numericColumnBounds.js — never clamped.
+    gross_margin_pct DECIMAL(12, 4),
     developer_profit_cr DECIMAL(15, 4),
     -- Asset class and model params (multi-class support)
     asset_class VARCHAR(50) NOT NULL DEFAULT 'residential_apartments',
     model_params JSONB,
     -- Income asset KPIs
     noi_cr DECIMAL(15, 4),
-    yield_on_cost_pct DECIMAL(8, 4),
+    yield_on_cost_pct DECIMAL(12, 4),
     exit_value_cr DECIMAL(15, 4),
     entry_value_cr DECIMAL(15, 4),
-    dscr DECIMAL(8, 4),
+    dscr DECIMAL(12, 4),
     stabilized_noi_cr DECIMAL(15, 4),
     -- Investment metrics
     npv_cr DECIMAL(15, 4),
-    irr_pct DECIMAL(8, 4),
+    irr_pct DECIMAL(12, 4),
     residual_land_value_cr DECIMAL(15, 4),
-    equity_multiple DECIMAL(8, 4),
+    equity_multiple DECIMAL(12, 4),
     -- Cash flows and sensitivity
     cash_flows JSONB,
     sensitivity_matrix JSONB,

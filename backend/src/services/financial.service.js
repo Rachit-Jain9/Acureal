@@ -12,6 +12,7 @@ const {
 const auditService = require('./audit.service');
 const dealAuditLog = require('./dealAuditLog.service');
 const { reconcileRentRollProvenance } = require('../utils/rentRollPrefill');
+const { getNumericColumnBounds, fitToColumn } = require('../utils/numericColumnBounds');
 
 // ─── SCENARIO PERSISTENCE ────────────────────────────────────────────────────
 
@@ -21,8 +22,15 @@ const SCENARIO_MULTIPLIERS = {
   bear: { revenue: 0.88, cost: 1.10, duration: 1.20 },
 };
 
-const persistScenarios = async (dealId, scenarios, exec = query) => {
+const persistScenarios = async (dealId, scenarios, exec = query, columnBounds = null) => {
   if (!scenarios || typeof scenarios !== 'object') return;
+
+  // Fit-or-NULL against the live financial_scenarios column widths: the kernel
+  // emits raw, unclamped KPIs (an extreme-return deal can annualise to an IRR
+  // that no NUMERIC(p,s) column holds), and a 22003 overflow here would abort
+  // the whole Calculate transaction. Raw values always survive in the kpis
+  // JSONB column, so nothing is fabricated or lost. (CLAUDE.md: never clamp.)
+  const fit = (column, value) => fitToColumn(columnBounds, 'financial_scenarios', column, value);
 
   // Collect every scenario row, then write them in ONE multi-row upsert instead
   // of a serial INSERT per scenario. On a high-latency serverless→Supabase hop,
@@ -40,12 +48,12 @@ const persistScenarios = async (dealId, scenarios, exec = query) => {
       m.revenue,
       m.cost,
       m.duration,
-      kpis.irr ?? null,
-      kpis.npv ?? null,
-      kpis.equityMultiple ?? null,
-      kpis.grossMarginPct ?? rev.grossMarginPct ?? null,
-      rev.totalRevenueCr ?? null,
-      rev.totalCostCr ?? null,
+      fit('irr_pct', kpis.irr),
+      fit('npv_cr', kpis.npv),
+      fit('equity_multiple', kpis.equityMultiple),
+      fit('gross_margin_pct', kpis.grossMarginPct ?? rev.grossMarginPct),
+      fit('total_revenue_cr', rev.totalRevenueCr),
+      fit('total_cost_cr', rev.totalCostCr),
       JSON.stringify(kpis),
       JSON.stringify(s.adjustments || {}),
     ]);
@@ -170,47 +178,58 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
     rentRollProvenance: resolvedProvenance,
   });
 
+  // Fit-or-NULL every NUMERIC(p,s) write against the LIVE column widths
+  // (introspected + cached; falls back to the narrowest shipped schema). The
+  // kernel intentionally emits raw values — an extreme-return deal (tiny
+  // month-0 outflow vs front-loaded sales) can annualise to an IRR beyond any
+  // column's range, which used to 500 the Calculate with a Postgres 22003
+  // overflow. Out-of-range values persist as NULL, never clamped: the raw KPI
+  // set survives in model_params.kpis above, in the signed audit record, and
+  // in the API response's `computed` payload.
+  const columnBounds = await getNumericColumnBounds();
+  const fit = (column, value) => fitToColumn(columnBounds, 'financials', column, value);
+
   const params = [
     assetClass,
     modelParams,
-    leg.land_cost_cr                   ?? null,
-    leg.plot_area_sqft                 ?? null,
-    leg.fsi                            ?? null,
-    leg.loading_factor                 ?? null,
-    leg.construction_cost_per_sqft     ?? null,
-    leg.selling_rate_per_sqft          ?? null,
-    leg.approval_cost_cr               ?? null,
-    leg.marketing_cost_pct             ?? null,
-    leg.finance_cost_pct               ?? null,
-    leg.developer_margin_pct           ?? null,
+    fit('land_cost_cr',               leg.land_cost_cr),
+    fit('plot_area_sqft',             leg.plot_area_sqft),
+    fit('fsi',                        leg.fsi),
+    fit('loading_factor',             leg.loading_factor),
+    fit('construction_cost_per_sqft', leg.construction_cost_per_sqft),
+    fit('selling_rate_per_sqft',      leg.selling_rate_per_sqft),
+    fit('approval_cost_cr',           leg.approval_cost_cr),
+    fit('marketing_cost_pct',         leg.marketing_cost_pct),
+    fit('finance_cost_pct',           leg.finance_cost_pct),
+    fit('developer_margin_pct',       leg.developer_margin_pct),
     leg.project_duration_months        ?? null,
-    areas.grossBuiltUp                 ?? null,
-    areas.saleable                     ?? null,
-    areas.carpet                       ?? null,
-    areas.superBuiltUp                 ?? null,
-    costs.construction                 ?? null,
-    costs.gst                          ?? null,
-    costs.stampDuty                    ?? null,
-    costs.marketing                    ?? null,
-    costs.finance                      ?? null,
-    costs.total                        ?? null,
-    leg.total_revenue_cr               ?? null,
-    leg.gross_profit_cr                ?? null,
-    leg.gross_margin_pct               ?? null,
-    leg.developer_profit_cr            ?? null,
-    kpis.npv                           ?? null,
-    kpis.irr                           ?? null,
-    kpis.rlv                           ?? null,
-    kpis.equityMultiple                ?? null,
-    kpis.noi                           ?? null,
-    kpis.yieldOnCost                   ?? null,
-    kpis.exitValue                     ?? null,
-    kpis.entryValue                    ?? null,
-    kpis.dscr                          ?? null,
-    kpis.noi                           ?? null,   // stabilized_noi_cr
+    fit('gross_area_sqft',            areas.grossBuiltUp),
+    fit('saleable_area_sqft',         areas.saleable),
+    fit('carpet_area_sqft',           areas.carpet),
+    fit('super_builtup_area_sqft',    areas.superBuiltUp),
+    fit('total_construction_cost_cr', costs.construction),
+    fit('gst_cost_cr',                costs.gst),
+    fit('stamp_duty_cr',              costs.stampDuty),
+    fit('marketing_cost_cr',          costs.marketing),
+    fit('finance_cost_cr',            costs.finance),
+    fit('total_cost_cr',              costs.total),
+    fit('total_revenue_cr',           leg.total_revenue_cr),
+    fit('gross_profit_cr',            leg.gross_profit_cr),
+    fit('gross_margin_pct',           leg.gross_margin_pct),
+    fit('developer_profit_cr',        leg.developer_profit_cr),
+    fit('npv_cr',                     kpis.npv),
+    fit('irr_pct',                    kpis.irr),
+    fit('residual_land_value_cr',     kpis.rlv),
+    fit('equity_multiple',            kpis.equityMultiple),
+    fit('noi_cr',                     kpis.noi),
+    fit('yield_on_cost_pct',          kpis.yieldOnCost),
+    fit('exit_value_cr',              kpis.exitValue),
+    fit('entry_value_cr',             kpis.entryValue),
+    fit('dscr',                       kpis.dscr),
+    fit('stabilized_noi_cr',          kpis.noi),
     JSON.stringify(computed.cashFlows),
     JSON.stringify(computed.sensitivityMatrix),
-    leg.discount_rate_pct              ?? null,
+    fit('discount_rate_pct',          leg.discount_rate_pct),
   ];
 
   // Persist scenarios + the financials row + the immutable HMAC-signed audit
@@ -224,7 +243,7 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
   const result = await transaction(async (client) => {
     const exec = (text, p) => client.query(text, p);
 
-    await persistScenarios(dealId, scenarios, exec);
+    await persistScenarios(dealId, scenarios, exec, columnBounds);
 
     const existing = await exec('SELECT id FROM financials WHERE deal_id = $1', [dealId]);
 
