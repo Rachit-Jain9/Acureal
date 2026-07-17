@@ -8,6 +8,7 @@ import {
   FileText,
   FilePlus,
   FileSearch,
+  FileStack,
   AlertCircle,
   CheckCircle2,
   Loader2,
@@ -55,7 +56,17 @@ const CATEGORIES = [
 
 const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.value, c]));
 
+// Two different limits, deliberately named apart (they were one number, which
+// is what let the UI imply that anything it accepts, it can read):
+//   MAX_SIZE_MB     what REDIP accepts and STORES. Ours to choose — a product
+//                   decision, not a platform ceiling.
+//   MAX_READ_MB     what the document READER accepts. Bounded by Gemini's PDF
+//                   ceiling (50 MB / 1,000 pages), which no paid plan raises.
+// They are equal today. When storage rises, this copy must keep telling the
+// truth about the gap rather than implying a bigger number means a bigger read.
 const MAX_SIZE_MB = 50;
+const MAX_READ_MB = 50;
+const MAX_READ_PAGES = 1000;
 
 function formatBytes(bytes) {
   if (!bytes) return '-';
@@ -81,6 +92,29 @@ function docLabel(doc) {
 
 function formatDocType(docType) {
   return docType ? docType.replace(/_/g, ' ') : 'extracted';
+}
+
+/**
+ * The coverage chip's label — how much of the document actually reached the
+ * reader.
+ *
+ * The word is "sent", never "read": a successful provider call is not evidence
+ * that a model attended to page 847, and REDIP does not claim what it cannot
+ * show. The backend receipt uses the same vocabulary (`submitted_pages`).
+ *
+ * Returns null — rendering nothing — when there is nothing true to say:
+ * documents extracted before receipts existed, and transcribed formats
+ * (spreadsheets, CSV) where "pages" are not a meaningful unit. Silence beats a
+ * guess.
+ */
+export function coverageLabel(extraction) {
+  const c = extraction?.coverage;
+  if (!c || c.method === 'parsed_text' || c.method === 'image') return null;
+  const { detected_pages: detected, submitted_pages: submitted } = c;
+  if (!Number.isInteger(detected) || !Number.isInteger(submitted) || detected < 1) return null;
+  return submitted === detected
+    ? `All ${detected.toLocaleString('en-IN')} pages sent`
+    : `${submitted.toLocaleString('en-IN')} of ${detected.toLocaleString('en-IN')} pages sent`;
 }
 
 export default function DocumentsTab() {
@@ -328,6 +362,15 @@ export default function DocumentsTab() {
               <label className="block text-xs font-medium text-content-secondary mb-1">
                 Files <span className="text-content-muted">(PDF, images, Office, CSV, JSON, KML/KMZ &amp; more · pick several · max {MAX_SIZE_MB} MB each)</span>
               </label>
+              {/* Storing and reading are different limits. Saying only "max
+                  50 MB" implies everything accepted can be read — the exact
+                  overclaim that makes a silently-unread pack look like a
+                  success. State both, and what happens when a file exceeds the
+                  reader: it is kept, not lost. */}
+              <p className="mt-1 text-[11px] text-content-tertiary">
+                PDFs are read up to {MAX_READ_MB} MB and {MAX_READ_PAGES.toLocaleString('en-IN')} pages.
+                Anything larger is still stored, versioned and downloadable — REDIP will tell you it could not read it rather than read part of it silently.
+              </p>
               <input
                 ref={fileRef}
                 type="file"
@@ -422,6 +465,23 @@ export default function DocumentsTab() {
                             <span className="ml-2 inline-flex items-center gap-1 rounded-full border border-hairline bg-pos-soft px-1.5 py-0.5 text-[10px] font-medium text-data-positive">
                               <CheckCircle2 size={10} />
                               {formatDocType(extraction.doc_type)}
+                            </span>
+                          )}
+                          {/* Coverage receipt — REDIP's account of what it did
+                              with every page. A doc-type chip says WHAT was
+                              found; this says HOW MUCH of the document was
+                              actually sent to the reader, which is the part a
+                              reviewer cannot otherwise know. Deliberately says
+                              "sent", never "read". Absent on documents
+                              extracted before the receipt existed — in which
+                              case we show nothing rather than guess. */}
+                          {coverageLabel(extraction) && (
+                            <span
+                              className="ml-2 inline-flex items-center gap-1 rounded-full border border-hairline bg-bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-content-secondary tabular-nums"
+                              title={extraction.coverage?.summary || undefined}
+                            >
+                              <FileStack size={10} />
+                              {coverageLabel(extraction)}
                             </span>
                           )}
                           {extraction && !extraction.has_data && (
