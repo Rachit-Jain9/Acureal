@@ -244,15 +244,16 @@ describe('AutoFillFromDocumentsModal', () => {
     expect(screen.getByText(/2 of 3 selected/i)).toBeInTheDocument();
   });
 
-  it('resets an edited value back to the AI-extracted value', () => {
+  it('resets an edited value back to the proposed value', () => {
     renderModal();
     const surveyInput = screen.getByLabelText('Proposed value for Survey Number');
     fireEvent.change(surveyInput, { target: { value: '78/9C' } });
     expect(surveyInput).toHaveValue('78/9C');
 
     fireEvent.click(
-      screen.getByRole('button', { name: 'Reset Survey Number to the AI-extracted value' }),
+      screen.getByRole('button', { name: 'Reset Survey Number to the proposed value' }),
     );
+    // No normalization on an identifier → the proposal IS the raw extraction.
     expect(surveyInput).toHaveValue('45/2A');
     expect(screen.queryByText(/·\s*edited/i)).not.toBeInTheDocument();
   });
@@ -297,6 +298,77 @@ describe('AutoFillFromDocumentsModal', () => {
     renderModal();
     expect(screen.getByText(/No mapped extractions on this deal/i)).toBeInTheDocument();
     mockExtractionData.field_map = orig;
+  });
+
+  describe('deterministic normalization proposals', () => {
+    // "34 Acres 32 Guntas" extracted into an acres field: without
+    // normalization this passes review and then silently lands in `skipped`
+    // at apply ("could not coerce to number").
+    const withNormalized = () => ({
+      land_area_acres: {
+        value: '34 Acres 32 Guntas',
+        raw_key: 'total_area_acres',
+        signal_score: 0.9,
+        signal: { status: 'source_verified', lane: null, grounded: true, reason: 'Found verbatim in the document text.' },
+        normalized: { value: 34.8, unit: 'acre', rule: 'area_acre_gunta_v1', status: 'exact', reason: '34 acre + 32 gunta = 34.8 acres (1 gunta = 1/40 acre).' },
+        document_id: 'doc-1', document_name: 'bda-letter.jpeg', doc_type: 'other', extraction_id: 'ext-2',
+      },
+    });
+
+    it('proposes the NORMALIZED value with the document\'s exact words beside it', () => {
+      const orig = mockExtractionData.field_map;
+      mockExtractionData.field_map = withNormalized();
+      renderModal();
+      expect(screen.getByLabelText('Proposed value for Land Area (acres)')).toHaveValue('34.8');
+      expect(screen.getByText(/from “34 Acres 32 Guntas”/)).toBeInTheDocument();
+      mockExtractionData.field_map = orig;
+    });
+
+    it('applies the normalized value and audits the raw + the versioned rule', async () => {
+      mockApply.mockResolvedValueOnce({ applied: [], skipped: [] });
+      const orig = mockExtractionData.field_map;
+      mockExtractionData.field_map = withNormalized();
+      renderModal();
+
+      // source_verified + non-legal → pre-ticked; apply directly.
+      fireEvent.click(screen.getByRole('button', { name: /Apply 1 field/i }));
+      await waitFor(() => expect(mockApply).toHaveBeenCalledTimes(1));
+      const [approved] = mockApply.mock.calls[0];
+      expect(approved[0].value).toBe(34.8);
+      expect(approved[0].source_raw_value).toBe('34 Acres 32 Guntas');
+      expect(approved[0].normalization_rule).toBe('area_acre_gunta_v1');
+      mockExtractionData.field_map = orig;
+    });
+
+    it('an operator edit beats the normalization; reset returns to the proposal', () => {
+      const orig = mockExtractionData.field_map;
+      mockExtractionData.field_map = withNormalized();
+      renderModal();
+
+      const input = screen.getByLabelText('Proposed value for Land Area (acres)');
+      fireEvent.change(input, { target: { value: '35' } });
+      expect(screen.getByText(/·\s*edited/i)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Reset Land Area (acres) to the proposed value' }));
+      expect(input).toHaveValue('34.8'); // back to the normalized proposal, not the raw string
+      mockExtractionData.field_map = orig;
+    });
+
+    it('an "assumed" date normalization carries its day-first caveat', () => {
+      const orig = mockExtractionData.field_map;
+      mockExtractionData.field_map = {
+        land_area_sqft: {
+          value: '06.02.2024', // deliberately a date-shaped value with an assumed reading
+          raw_key: 'total_land_area_sqft',
+          signal_score: 0.55,
+          signal: { status: 'unverified', lane: null, grounded: null, reason: 'Read by AI.' },
+          normalized: { value: '2024-02-06', unit: 'date', rule: 'date_in_v1', status: 'assumed', reason: 'Read day-first (Indian convention).' },
+          document_id: 'doc-1', document_name: 'x.pdf', doc_type: 'other', extraction_id: 'ext-3',
+        },
+      };
+      renderModal();
+      expect(screen.getByText(/day-first assumed/i)).toBeInTheDocument();
+      mockExtractionData.field_map = orig;
+    });
   });
 
   // Guard against the class of bug where a status-pill icon name does not exist

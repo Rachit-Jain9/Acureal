@@ -150,6 +150,12 @@ const applyExtractionsToDeal = async (dealId, approvedExtractions, userId = null
       // Recorded in the immutable audit trail so a later reviewer can see WHY
       // a value was trusted, not just that it was.
       verification_status: typeof item.verification_status === 'string' ? item.verification_status : null,
+      // When the applied value came from a deterministic normalization
+      // ("34 Acres 32 Guntas" → 34.8), the audit keeps the document's exact
+      // words AND the versioned rule that restated them — the pair a reviewer
+      // needs to replay the conversion.
+      source_raw_value: item.source_raw_value != null ? String(item.source_raw_value).slice(0, 500) : null,
+      normalization_rule: typeof item.normalization_rule === 'string' ? item.normalization_rule.slice(0, 40) : null,
     });
 
     if (srcExtractionId) sourceExtractionIds.add(srcExtractionId);

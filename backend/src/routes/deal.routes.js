@@ -336,6 +336,10 @@ router.post(
     // time — recorded in the audit trail (optional, bounded to the known set).
     body('approved.*.verification_status').optional({ nullable: true })
       .isIn(['source_verified', 'format_checked', 'unverified', 'not_in_source', 'format_mismatch', 'verify_legal', 'absent']),
+    // When the proposed value came from a deterministic normalization, the
+    // document's exact words + the versioned rule ride into the audit trail.
+    body('approved.*.source_raw_value').optional({ nullable: true }).isString().isLength({ max: 500 }),
+    body('approved.*.normalization_rule').optional({ nullable: true }).isString().isLength({ max: 40 }),
   ],
   handleValidation,
   async (req, res, next) => {
