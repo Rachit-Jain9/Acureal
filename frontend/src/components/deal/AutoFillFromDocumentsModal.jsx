@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Sparkles, FileText, CheckCircle2, AlertTriangle, Info, RotateCcw, ShieldCheck, ScanLine, HelpCircle, ShieldAlert } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useDealExtractions } from '../../hooks/useDealExtractions';
@@ -264,7 +265,17 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
   const totalCount = candidates.length;
   const isSubmitting = applyMutation.isPending;
 
-  return (
+  // Portaled to document.body, exactly like the design-system Modal (whose
+  // header comment names this hazard): a `position: fixed` overlay is
+  // positioned against the nearest TRANSFORMED ancestor, not the viewport.
+  // This modal used to render inline inside the deal tabpanel, whose
+  // `.redip-tab-fade` animation made it a containing block — so the "full
+  // screen" overlay was trapped inside the tab's content box, its centre sat
+  // below the fold, and the footer (with the Apply button) was unreachable
+  // with nothing to scroll. The CSS root cause is fixed in index.css; the
+  // portal makes this modal immune to ANY future transformed/filtered
+  // ancestor rather than depending on every wrapper staying transform-free.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6"
       role="dialog"
@@ -276,7 +287,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
     >
       <div ref={trapRef} className="w-full max-w-4xl max-h-[90vh] flex flex-col rounded-xl bg-paper shadow-2xl border border-hairline-strong overflow-hidden">
         {/* Header */}
-        <div className="flex items-start justify-between gap-4 px-6 py-4 border-b border-hairline">
+        <div className="shrink-0 flex items-start justify-between gap-4 px-6 py-4 border-b border-hairline">
           <div className="flex items-start gap-3 min-w-0">
             <div className="mt-0.5 w-9 h-9 rounded-lg bg-accent-50 flex items-center justify-center flex-shrink-0">
               <Sparkles size={18} className="text-accent" />
@@ -302,7 +313,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
         </div>
 
         {/* Mandatory AI disclosure (CLAUDE.md hard rule) */}
-        <div className="px-6 py-2.5 bg-premium-soft border-b border-hairline flex items-start gap-2 text-xs">
+        <div className="shrink-0 px-6 py-2.5 bg-premium-soft border-b border-hairline flex items-start gap-2 text-xs">
           <AlertTriangle size={14} className="text-premium mt-0.5 flex-shrink-0" />
           <p className="text-premium">
             <span className="font-semibold">AI-assisted — requires human review.</span>{' '}
@@ -528,7 +539,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-hairline bg-paper-200/50 flex items-center justify-between">
+        <div className="shrink-0 px-6 py-3 border-t border-hairline bg-paper-200/50 flex items-center justify-between">
           <div className="text-xs text-content-tertiary">
             {totalCount === 0
               ? 'Upload + extract documents to see auto-fill candidates here.'
@@ -555,6 +566,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

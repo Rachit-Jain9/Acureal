@@ -178,6 +178,132 @@ describe('refreshToken.service.rotate', () => {
   });
 });
 
+describe('rotation grace window — concurrent refresh is not theft', () => {
+  // THE production bug (2026-07-17): access tokens live 15 minutes, so every
+  // open tab 401s at the same moment and races POST /auth/refresh with the
+  // same rotating cookie. The zero-grace reuse detector treated the losing
+  // tab as an attacker and burned the whole family — signing the operator
+  // out several times a day and making "Remember me" look broken (a browser
+  // closed mid-rotation re-presents the old token on next launch). Within
+  // the grace window a rotated token now mints a sibling grant; beyond it,
+  // the theft reasoning stands (pinned by the 'detects reuse' test above,
+  // whose rotation is an hour old).
+  const futureTimestamp = () => new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+  const buildClient = (responses) => {
+    const calls = [];
+    return {
+      calls,
+      client: {
+        query: jest.fn().mockImplementation((sql, params) => {
+          calls.push({ sql, params });
+          return Promise.resolve(responses.shift());
+        }),
+      },
+    };
+  };
+
+  test('a token rotated SECONDS ago mints a sibling grant instead of burning the family', async () => {
+    const { client, calls } = buildClient([
+      {
+        rowCount: 1,
+        rows: [{
+          id: 41,
+          user_id: 'u1',
+          family_id: 'fam-9',
+          expires_at: futureTimestamp(),
+          revoked_at: new Date(Date.now() - 3_000).toISOString(), // 3s ago — a racing tab
+          revoked_reason: 'rotated',
+          remember_me: true,
+        }],
+      },
+      { rowCount: 1, rows: [{ id: 42 }] }, // INSERT sibling grant
+    ]);
+    transaction.mockImplementation(async (fn) => fn(client));
+
+    const result = await svc.rotate({ rawToken: 'a'.repeat(43) });
+
+    expect(result.userId).toBe('u1');
+    expect(result.familyId).toBe('fam-9');
+    expect(result.grantId).toBe(42);
+    expect(result.rememberMe).toBe(true);
+
+    // A NEW grant in the SAME family — and, critically, NO family-burn UPDATE.
+    expect(calls).toHaveLength(2);
+    expect(calls[1].sql).toMatch(/INSERT INTO public\.refresh_token_grants/i);
+    expect(calls[1].params[1]).toBe('fam-9');
+    expect(calls.some((c) => /revoked_reason\s*=\s*COALESCE\(revoked_reason,\s*'reuse'\)/i.test(c.sql))).toBe(false);
+  });
+
+  test('the persistence tier survives rotation — a session-only family stays session-only', async () => {
+    // Without carrying remember_me, the first silent refresh would upgrade a
+    // "sign me out when the browser closes" login to a 30-day session.
+    const { client, calls } = buildClient([
+      {
+        rowCount: 1,
+        rows: [{
+          id: 7,
+          user_id: 'u1',
+          family_id: 'fam-7',
+          expires_at: futureTimestamp(),
+          revoked_at: null,
+          revoked_reason: null,
+          remember_me: false,
+        }],
+      },
+      { rowCount: 1, rows: [{ id: 8 }] },
+      { rowCount: 1, rows: [] },
+    ]);
+    transaction.mockImplementation(async (fn) => fn(client));
+
+    const result = await svc.rotate({ rawToken: 'a'.repeat(43) });
+
+    expect(result.rememberMe).toBe(false);
+    // TTL param ($4) is the 24-hour session tier, not 30 days; remember_me
+    // ($7) rides into the new grant.
+    expect(calls[1].params[3]).toBe(24 * 60 * 60);
+    expect(calls[1].params[6]).toBe(false);
+  });
+
+  test('a legacy grant (no remember_me column value) rotates as persistent — the historical behaviour', async () => {
+    const { client, calls } = buildClient([
+      {
+        rowCount: 1,
+        rows: [{
+          id: 7, user_id: 'u1', family_id: 'fam-7',
+          expires_at: futureTimestamp(), revoked_at: null, revoked_reason: null,
+          remember_me: undefined, // pre-migration row shape
+        }],
+      },
+      { rowCount: 1, rows: [{ id: 8 }] },
+      { rowCount: 1, rows: [] },
+    ]);
+    transaction.mockImplementation(async (fn) => fn(client));
+
+    const result = await svc.rotate({ rawToken: 'a'.repeat(43) });
+    expect(result.rememberMe).toBe(true);
+    expect(calls[1].params[3]).toBe(30 * 24 * 60 * 60);
+  });
+});
+
+describe('issueFamily persistence tiers', () => {
+  test('remembered (default): 30-day grant, remember_me true', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+    const result = await svc.issueFamily({ userId: 'u1' });
+    expect(result.rememberMe).toBe(true);
+    expect(query.mock.calls[0][1][3]).toBe(30 * 24 * 60 * 60);
+    expect(query.mock.calls[0][1][6]).toBe(true);
+  });
+
+  test('session-only: 24-hour grant, remember_me false', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 1 }] });
+    const result = await svc.issueFamily({ userId: 'u1', rememberMe: false });
+    expect(result.rememberMe).toBe(false);
+    expect(query.mock.calls[0][1][3]).toBe(24 * 60 * 60);
+    expect(query.mock.calls[0][1][6]).toBe(false);
+  });
+});
+
 describe('refreshToken.service.revokeFamily', () => {
   test('marks every active grant in the family revoked', async () => {
     query.mockResolvedValueOnce({ rowCount: 2, rows: [] });

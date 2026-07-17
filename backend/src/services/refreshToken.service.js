@@ -21,9 +21,39 @@
 const crypto = require('crypto');
 const { query, transaction } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
-const { REFRESH_TTL_SECONDS } = require('../lib/cookies');
+const { REFRESH_TTL_SECONDS, SESSION_REFRESH_TTL_SECONDS } = require('../lib/cookies');
+const log = require('../lib/logger').child({ module: 'refreshToken' });
 
 const TOKEN_BYTES = 32;
+
+/**
+ * Concurrent-refresh grace window.
+ *
+ * Strict reuse detection treats EVERY re-presentation of a rotated token as
+ * theft and burns the whole family. In production that fired on the
+ * operator's own browser several times a day: access tokens live 15 minutes,
+ * so every open tab 401s at the same moment and races POST /auth/refresh with
+ * the same cookie — the in-flight dedupe is per-tab, so tab 2's request
+ * (sent before tab 1's Set-Cookie landed) presents the just-rotated token and
+ * the "attacker!" branch kills the session. Same story when the browser
+ * closes mid-rotation and the new cookie is never received: next launch
+ * presents the old token once, family burned, "remember me" apparently broken.
+ *
+ * Within this window, a rotated token re-presented is treated as what it
+ * overwhelmingly is — a concurrent refresh from the same client — and a new
+ * grant is minted in the same family. AFTER the window, re-presentation still
+ * burns the family (the industry-standard "reuse interval" pattern; Auth0
+ * ships the same trade-off). Grace rotations are logged distinctly so the
+ * audit trail shows every one.
+ */
+const ROTATION_GRACE_MS = Math.max(
+  5_000,
+  parseInt(process.env.REFRESH_ROTATION_GRACE_MS, 10) || 60_000,
+);
+
+/** Grant TTL by persistence tier: 30 days remembered, 24 h session-only. */
+const ttlSecondsFor = (rememberMe) =>
+  (rememberMe === false ? SESSION_REFRESH_TTL_SECONDS : REFRESH_TTL_SECONDS);
 
 const sha256Hex = (text) =>
   crypto.createHash('sha256').update(text, 'utf8').digest('hex');
@@ -37,7 +67,10 @@ const generateRawToken = () =>
  * exactly once — it goes into the httpOnly cookie and is never persisted
  * client-side beyond that.
  */
-const issueFamily = async ({ userId, ipAddress = null, userAgent = null }, client = null) => {
+const issueFamily = async (
+  { userId, ipAddress = null, userAgent = null, rememberMe = true },
+  client = null,
+) => {
   if (!userId) throw createError('userId required to issue refresh family.', 400);
 
   const exec = client ? client.query.bind(client) : query;
@@ -45,15 +78,20 @@ const issueFamily = async ({ userId, ipAddress = null, userAgent = null }, clien
   const tokenHash = sha256Hex(rawToken);
   const familyId = crypto.randomUUID();
 
+  // remember_me rides on the FAMILY (every grant carries it) so that /refresh
+  // can re-issue the cookie with the persistence the user chose at sign-in.
+  // Without this, the first silent refresh would convert a "sign me out when
+  // the browser closes" session into a 30-day persistent one — the exact
+  // broken promise the operator reported (in the mirror image).
   const result = await exec(
     `INSERT INTO public.refresh_token_grants
-       (user_id, family_id, token_hash, expires_at, ip_address, user_agent)
-     VALUES ($1, $2, $3, NOW() + ($4 || ' seconds')::INTERVAL, $5::inet, $6)
+       (user_id, family_id, token_hash, expires_at, ip_address, user_agent, remember_me)
+     VALUES ($1, $2, $3, NOW() + ($4 || ' seconds')::INTERVAL, $5::inet, $6, $7)
      RETURNING id`,
-    [userId, familyId, tokenHash, REFRESH_TTL_SECONDS, ipAddress, userAgent]
+    [userId, familyId, tokenHash, ttlSecondsFor(rememberMe), ipAddress, userAgent, rememberMe !== false]
   );
 
-  return { rawToken, familyId, grantId: result.rows[0].id };
+  return { rawToken, familyId, grantId: result.rows[0].id, rememberMe: rememberMe !== false };
 };
 
 /**
@@ -72,7 +110,7 @@ const rotate = async ({ rawToken, ipAddress = null, userAgent = null }) => {
 
   return transaction(async (client) => {
     const lookup = await client.query(
-      `SELECT id, user_id, family_id, expires_at, revoked_at, revoked_reason
+      `SELECT id, user_id, family_id, expires_at, revoked_at, revoked_reason, remember_me
          FROM public.refresh_token_grants
         WHERE token_hash = $1
         FOR UPDATE`,
@@ -86,14 +124,51 @@ const rotate = async ({ rawToken, ipAddress = null, userAgent = null }) => {
     }
 
     const grant = lookup.rows[0];
+    const rememberMe = grant.remember_me !== false;
 
-    // Reuse detection — the dangerous case.
-    // If a grant has already been rotated (`revoked_reason='rotated'`) and
-    // the same raw token is presented again, an attacker likely captured it
-    // between the legitimate rotate and this replay. Burn the entire family
-    // so neither side can keep going — legitimate user gets kicked to login,
-    // attacker loses access.
+    // Mints a fresh grant in this family, carrying the family's persistence
+    // tier. Shared by the normal rotation below and the grace branch.
+    const mintGrant = async () => {
+      const newRawToken = generateRawToken();
+      const inserted = await client.query(
+        `INSERT INTO public.refresh_token_grants
+           (user_id, family_id, token_hash, expires_at, ip_address, user_agent, remember_me)
+         VALUES ($1, $2, $3, NOW() + ($4 || ' seconds')::INTERVAL, $5::inet, $6, $7)
+         RETURNING id`,
+        [grant.user_id, grant.family_id, sha256Hex(newRawToken), ttlSecondsFor(rememberMe), ipAddress, userAgent, rememberMe]
+      );
+      return { newRawToken, newGrantId: inserted.rows[0].id };
+    };
+
+    // Re-presentation of an already-rotated token — two very different worlds.
     if (grant.revoked_at && grant.revoked_reason === 'rotated') {
+      const rotatedAgoMs = Date.now() - new Date(grant.revoked_at).getTime();
+
+      if (rotatedAgoMs >= 0 && rotatedAgoMs <= ROTATION_GRACE_MS) {
+        // CONCURRENT REFRESH, not theft: a second tab racing the same 401
+        // storm, or a client that never received the previous rotation's
+        // Set-Cookie (browser closed mid-refresh). Mint it a grant of its own
+        // in the same family instead of burning the session. Logged
+        // distinctly so the audit trail shows every grace rotation.
+        const { newRawToken, newGrantId } = await mintGrant();
+        log.info('refresh_rotation_grace', {
+          family_id: grant.family_id,
+          rotated_ago_ms: rotatedAgoMs,
+          grace_window_ms: ROTATION_GRACE_MS,
+        });
+        return {
+          rawToken: newRawToken,
+          userId: grant.user_id,
+          familyId: grant.family_id,
+          grantId: newGrantId,
+          rememberMe,
+        };
+      }
+
+      // OUTSIDE the window the original reasoning stands: a long-dead token
+      // re-presented is the replay signature. Burn the entire family so
+      // neither side can continue — the legitimate user re-authenticates,
+      // the holder of the stolen token loses access.
       await client.query(
         `UPDATE public.refresh_token_grants
             SET revoked_at = COALESCE(revoked_at, NOW()),
@@ -101,6 +176,10 @@ const rotate = async ({ rawToken, ipAddress = null, userAgent = null }) => {
           WHERE family_id = $1`,
         [grant.family_id]
       );
+      log.warn('refresh_reuse_family_burned', {
+        family_id: grant.family_id,
+        rotated_ago_ms: rotatedAgoMs,
+      });
       throw createError('Session expired. Please sign in again.', 401);
     }
 
@@ -113,33 +192,24 @@ const rotate = async ({ rawToken, ipAddress = null, userAgent = null }) => {
       throw createError('Invalid or expired refresh token.', 401);
     }
 
-    // Mint the new grant inside the same family.
-    const newRawToken = generateRawToken();
-    const newTokenHash = sha256Hex(newRawToken);
+    // Normal rotation: mint the successor, then retire the source.
+    const { newRawToken, newGrantId } = await mintGrant();
 
-    const inserted = await client.query(
-      `INSERT INTO public.refresh_token_grants
-         (user_id, family_id, token_hash, expires_at, ip_address, user_agent)
-       VALUES ($1, $2, $3, NOW() + ($4 || ' seconds')::INTERVAL, $5::inet, $6)
-       RETURNING id`,
-      [grant.user_id, grant.family_id, newTokenHash, REFRESH_TTL_SECONDS, ipAddress, userAgent]
-    );
-
-    // Revoke the source as 'rotated' and link replaced_by.
     await client.query(
       `UPDATE public.refresh_token_grants
           SET revoked_at = NOW(),
               revoked_reason = 'rotated',
               replaced_by = $2
         WHERE id = $1`,
-      [grant.id, inserted.rows[0].id]
+      [grant.id, newGrantId]
     );
 
     return {
       rawToken: newRawToken,
       userId: grant.user_id,
       familyId: grant.family_id,
-      grantId: inserted.rows[0].id,
+      grantId: newGrantId,
+      rememberMe,
     };
   });
 };

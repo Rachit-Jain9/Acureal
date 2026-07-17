@@ -70,11 +70,24 @@ let refreshInFlight = null;
 
 const performRefresh = async () => {
   if (refreshInFlight) return refreshInFlight;
-  refreshInFlight = api
-    .post('/auth/refresh')
-    .finally(() => {
-      refreshInFlight = null;
-    });
+  // Cross-TAB serialization via the Web Locks API. `refreshInFlight` dedupes
+  // within one tab, but access tokens expire in every tab at the same moment,
+  // so two tabs used to race POST /auth/refresh with the SAME rotating cookie
+  // — and the loser tripped the server's token-reuse detector, which burned
+  // the whole session ("Session expired. Please sign in again." several times
+  // a day for a multi-tab user). Holding an origin-scoped lock makes tab 2
+  // wait; by the time it runs, tab 1's rotated cookie is already in the jar
+  // and its refresh succeeds normally. The server keeps a rotation grace
+  // window as the backstop (locks don't cover a browser killed mid-rotation),
+  // and older browsers without navigator.locks simply keep today's behaviour.
+  const doRefresh = () => api.post('/auth/refresh');
+  refreshInFlight = (
+    typeof navigator !== 'undefined' && navigator.locks?.request
+      ? navigator.locks.request('redip:auth:refresh', doRefresh)
+      : doRefresh()
+  ).finally(() => {
+    refreshInFlight = null;
+  });
   return refreshInFlight;
 };
 
@@ -160,7 +173,7 @@ export const authAPI = {
   mfaVerifyEnrollment: (code) => api.post('/auth/me/mfa/verify-enrollment', { code }),
   mfaDisable: () => api.post('/auth/me/mfa/disable'),
   // Login completion when /auth/login returned mfaRequired: true
-  mfaVerify: (challenge, code) => api.post('/auth/mfa/verify', { challenge, code }),
+  mfaVerify: (challenge, code, rememberMe = false) => api.post('/auth/mfa/verify', { challenge, code, rememberMe }),
 };
 
 // Legal — Terms / Privacy / Cookie / DPA / AUP versioned-documents registry.

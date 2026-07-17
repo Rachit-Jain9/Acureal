@@ -69,10 +69,16 @@ const useAuthStore = create((set) => ({
   error: null,
   sessionPersistence: getSessionPersistence(),
 
+  // rememberMe rides in EVERY sign-in request body — the backend uses it to
+  // choose between a 30-day persistent refresh cookie and a browser-session
+  // one. Until 2026-07-17 it was stripped here on all four paths, which made
+  // the checkbox a pure frontend illusion (it only picked localStorage vs
+  // sessionStorage for the cached profile while a 30-day cookie was issued
+  // regardless).
   login: async (email, password, rememberMe = false) => {
     set({ loading: true, error: null });
     try {
-      const { data } = await authAPI.login({ email, password });
+      const { data } = await authAPI.login({ email, password, rememberMe });
 
       // MFA branch — backend returned a challenge, not a session. The login
       // form intercepts this shape and shows the 6-digit code prompt.
@@ -100,7 +106,7 @@ const useAuthStore = create((set) => ({
   completeMfaLogin: async (challenge, code, rememberMe = false) => {
     set({ loading: true, error: null });
     try {
-      const { data } = await authAPI.mfaVerify(challenge, code);
+      const { data } = await authAPI.mfaVerify(challenge, code, rememberMe);
       const { user } = data.data;
       saveSession(user, rememberMe);
       set({
@@ -120,7 +126,7 @@ const useAuthStore = create((set) => ({
   register: async (formData, rememberMe = false) => {
     set({ loading: true, error: null });
     try {
-      const { data } = await authAPI.register(formData);
+      const { data } = await authAPI.register({ ...formData, rememberMe });
       const { user } = data.data;
       saveSession(user, rememberMe);
       set({
@@ -149,6 +155,7 @@ const useAuthStore = create((set) => ({
         acceptedTermsVersion,
         acceptedPrivacyVersion,
         invitationToken,
+        rememberMe,
       });
       const { user } = data.data;
       saveSession(user, rememberMe);

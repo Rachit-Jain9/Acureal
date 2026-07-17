@@ -23,7 +23,13 @@ export default function LoginPage() {
     searchParams.get('mode') === 'register' || searchParams.get('register') === '1';
   const [isRegister, setIsRegister] = useState(initialRegisterMode);
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  // Defaults ON. This is a B2B work tool signed into daily from trusted
+  // machines; the operator's real-world report was "it doesn't remember
+  // anyone" — because with the old default-off, one-click Google sign-in
+  // (which never touches the checkbox, rendered below the button) silently
+  // meant "don't remember me". Unticking remains one click for shared
+  // machines, and now genuinely issues a browser-session cookie server-side.
+  const [rememberMe, setRememberMe] = useState(true);
   const [acceptTerms, setAcceptTerms] = useState(false);
   const [form, setForm] = useState({
     name: '',
@@ -224,6 +230,23 @@ export default function LoginPage() {
                   }
                   showDivider
                 />
+                {/* The remember-me choice governs the GOOGLE path too, so it
+                    must be visible next to the button — buried inside the
+                    password form below, one-click sign-in never surfaced it
+                    and the choice was made silently. */}
+                <div className="mt-3">
+                  <Checkbox
+                    id="rememberMeGoogle"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    label="Keep me signed in on this device"
+                  />
+                  <p className="mt-1 text-xs text-content-muted">
+                    Applies to Google and email sign-in. Untick on a shared
+                    machine — REDIP will then sign you out when the browser
+                    closes.
+                  </p>
+                </div>
               </div>
             )}
 
@@ -328,18 +351,10 @@ export default function LoginPage() {
                   </Field>
                 )}
 
-                <div className="rounded-md border border-hairline bg-bg-secondary px-3 py-3">
-                  <Checkbox
-                    id="rememberMe"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    label="Remember me across browser restarts"
-                  />
-                  <p className="mt-2 text-xs text-content-muted">
-                    Default session behaviour is privacy-first: if this stays unchecked, REDIP
-                    signs you out when the browser closes.
-                  </p>
-                </div>
+                {/* The remember-me choice lives ABOVE, beside the Google
+                    button, where it visibly governs every sign-in path —
+                    a second copy here would just be two checkboxes bound to
+                    one state. */}
 
                 {/* Required acceptance — register only */}
                 {isRegister && (
