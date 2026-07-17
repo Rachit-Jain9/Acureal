@@ -4,6 +4,36 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-17 (cont.) — Production error sweep: the deal audit trail was dead (PR #998 — merged, live)
+
+Instead of picking the next feature, read what production has actually been LOGGING. Four live errors; **two were the audit trail failing silently** — CLAUDE.md's "non-negotiable for investor-grade reporting". Method worth repeating: `get_runtime_errors` → group by frequency → reproduce against the live DB before writing code.
+
+### 1. 🔴 The automatic deal timeline had NEVER worked (2026-03-27 → 2026-07-17)
+`dealEvents.service.writeActivity` built `VALUES ($1,…,$4,…, CASE WHEN $6='completed' THEN $4 ELSE NULL END)`. `$4` sits in the `performed_by` slot (Postgres deduces **uuid**) AND inside a CASE whose arms are `$4` and `NULL` — **both untyped**. With no typed arm to anchor on, Postgres resolves the CASE to `text`, deduces `$4::text`, and rejects at PARSE time: `42P08 inconsistent types deduced for parameter $4`.
+
+**Hid for 4 months** because (a) the write is fail-soft (the originating mutation still succeeded) and (b) every test mocks `query`, which accepts SQL a real Postgres rejects. **Proof from prod:** `activities` held ONLY manual types (note/call/meeting/site_visit/email/loi_sent) and **ZERO** rows from any of the **11** subscribed events (stage changes, approvals, risk flags, DD items, uploads, extractions, financial scenarios, evidence links, parcel refresh, archive, create).
+
+**Fix:** derive `completed_at`/`completed_by` in JS (mirroring `activity.service.logActivity`, which always did it right) → no parameter reuse, every placeholder in exactly one type context. Errors still swallowed (a timeline row must never break the mutation) but logged at **error**, not warn.
+
+**Verified against the live DB, both halves:** PARSE — old form `✗ inconsistent types deduced for parameter $4`, new form `✓ parses cleanly` (untyped PREPARE = the driver's exact Parse path). EXECUTE — with real deal/actor + `set_config('app.current_organization_id')` replicating `database.js setRequestContext`: row written, `completed_by`=actor, `completed_at` stamped, `organization_id` default resolved. Proof row deleted. *(Harness notes for next time: plpgsql `EXECUTE…USING` binds KNOWN types so it can't reproduce the driver's untyped inference — use an untyped `PREPARE` for that; `activity_type` is an ENUM; `organization_id` defaults to `current_organization_id()` so any probe without request context hits a NOT-NULL violation.)*
+
+### 2. 🔴 The audit trail 404'd itself away (44×/day, one deal)
+`listDealEvents` gated on `getFinancials()` (INNER JOINs `financials`, throws 404). Wrong question: reading events is authorized by access to the **deal**, and "no financial model" is the NORMAL state. **Not just noise** — the feed MERGES `deal_events` (financial, legitimately empty) with `deal_audit_log` (stage/archive/reassign/update — **populated** for deals that never had a model). So it suppressed a real, readable trail and the Audit tab rendered *"Couldn't load the audit trail"*. **Fix:** new `assertDealVisible()` using the same `buildVisibleDealCondition` (grants nothing new; 404 still doesn't leak deal existence). Also fixed `dealAuditLog.listForDeal`'s docstring, which documented the bug as intentional.
+
+### 3. 🟠 Cache timeout — the INSERT was the VICTIM, not the culprit
+`dealWorkspaceCache.write` was called **un-awaited** (`.catch(()=>{})`). On Vercel that's not "backgrounded", it's **ORPHANED**: the instance freezes when the response is sent, and `query()` wraps everything in BEGIN→…→COMMIT, so it stranded an open txn holding the row's `ON CONFLICT` lock. The row is keyed per **(deal, ORG)**, so every teammate on that deal queued behind it until `statement_timeout` cancelled them. **Measurement settled it:** prod `statement_timeout` = **2 min**; largest payload **239 KB** (125 KB avg) → an uncontended insert is single-digit ms. 120 s is 12,000× that — only lock wait explains it. **So NO size guard was added** (the obvious "payload too big" theory is dead). **Fix:** `await` the write (CLAUDE.md: "no background assumptions in request handlers" — a dangling promise IS one) + `SET LOCAL lock_timeout=500ms` / `statement_timeout=3s` so an OPTIONAL write fails fast instead of becoming the blocker. Routed via `transaction()` so the SET LOCALs share the connection — deliberately did NOT touch the shared `query()` (tenant-context invariant, PR #951).
+
+### 4. 🟡 "PRODUCTION IS FULLY APPLIED" was false — and load-bearing
+`regulatory_data.district_localities` has thrown "relation does not exist" for ~1 month: migration `20260619` merged (PR #675), never run. Code fail-opens (documented + tested) so it degrades to address-token fuzz — **visible live** on the deal page: *"matched from address (address-token-fuzz) · 60% confidence"*. The gap was invisible because `current_schema.sql` asserted every migration was live and `TODO_OPERATOR.md` said the operator never needed to apply any. **Both now tell the truth** (current_schema is an INDEX of files, not a record of applied state — ask `information_schema`). Swept every table the backend references against the live DB: **this is the only one missing**.
+
+### Verified
+Backend **4,054** (+18), frontend **1,320**, build + guards clean. New tests pin the **defect classes**, since a mocked `query` can never catch a parse error: no placeholder may be reused; no CASE may decide a column value; placeholders must match the params array exactly; the events gate must query `deals` and never `financials`; the cache write must SET LOCAL its bounds BEFORE the INSERT.
+
+### What's left to do next
+- **Operator: apply `20260619_district_localities.sql`** (steps in `TODO_OPERATOR.md`, ~2 min). Nothing breaks without it. Flagged honestly: the seed derives from RMP 2031 (withdrawn 2020) — defensible because it only labels a Planning District, never feeds FAR/zoning/approval; see [[project_regulatory_intelligence]].
+- Not done (deliberate): the write-only index `deal_workspace_cache_by_computed_at` indexes a column that changes on every upsert (blocks HOT updates, serves no query). Dropping it needs a migration — bundle with the next one.
+- Unscheduled: Gemini `responseSchema` per doctype; Gemini File API for >20 MB scans; PPTX/DOCX image-OCR.
+
 ## 2026-07-17 — Deterministic normalizers: Indian dates, acres/guntas, lakh/crore (PR #997 — merged, live)
 
 The normalization foundation ("PR 2" of the extraction-trust program, deferred from #995 as an operator decision — now built). Gap it closes: extraction faithfully returns "34 Acres 32 Guntas" / "₹1.25 crore" / "06.02.2024", but `ontology.validateAndCoerce` only coerces plain numerics — so an operator could APPROVE such a value in the review modal and have it **silently land in `skipped`** ("Could not coerce to number").
