@@ -474,6 +474,12 @@ CREATE TABLE document_extractions (
     -- The assessment BEHIND each score {status, reason, lane, grounded,
     -- schemaValid} — what the review UI shows in place of a bare percentage.
     field_quality JSONB,
+    -- Coverage receipt (20260729): what REDIP did with every page —
+    -- {detected_pages, decoded_pages, submitted_pages, undecodable_pages,
+    -- reason, summary, limits}. Says "submitted", never "read": a provider 200
+    -- is not proof a model attended to a page. Produced by
+    -- utils/coverageReceipt.js from the deterministic pdfPreflight.
+    page_coverage JSONB,
     human_corrections JSONB,
     correction_history JSONB DEFAULT '[]'::jsonb,
     language_detected VARCHAR(20),

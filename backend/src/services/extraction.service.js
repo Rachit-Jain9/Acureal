@@ -34,6 +34,15 @@ const {
   FALLBACK_MIME,
 } = require('../constants/documentFormats');
 const { assessExtractionFields } = require('../utils/extractionFieldQuality');
+const {
+  preflightPdf,
+  extractPageRange,
+  assessProviderFit,
+  looksLikePdf,
+  PROVIDER_PDF_PAGE_CAP,
+  PROVIDER_PDF_BYTE_CAP,
+} = require('./ai/pdfPreflight');
+const { buildCoverageReceipt, pagesProcessedFromReceipt } = require('../utils/coverageReceipt');
 const { redactText, redactFields } = require('./ai/promptRedaction');
 const embeddingsService = require('./embeddings.service');
 const { EVENTS, publish } = require('../lib/eventBus');
@@ -43,17 +52,55 @@ const log = require('../lib/logger').child({ module: 'extraction' });
 // Gemini client (lazy init so tests don't crash without API key)
 // ──────────────────────────────────────────────────────────────────────────────
 
+// ── Two limits, deliberately independent ──────────────────────────────────────
+//
+// STORAGE and READING are different questions and were previously one number.
+//   MAX_FILE_SIZE_MB                     — what REDIP will accept and store.
+//                                          Ours to choose (Supabase Pro allows
+//                                          far more); a product decision.
+//   DOCUMENT_EXTRACTION_MAX_FILE_SIZE_MB — what the document READER can take.
+//                                          Bounded by Gemini's PDF ceiling
+//                                          (50 MB), which no paid plan raises.
+//
+// The old code CLAMPED extraction to the upload limit (`Math.min`), which
+// silently welded the two together: raising the upload cap would have raised
+// the reader's cap past what the provider accepts, and every large file would
+// have failed at Gemini with an opaque error instead of an honest refusal.
+// They are now independent, and the reader's cap additionally never exceeds
+// the provider's real ceiling — a limit we cannot buy our way past.
 const MAX_UPLOAD_FILE_SIZE_MB = parseInt(process.env.MAX_FILE_SIZE_MB, 10) || 50;
+const PROVIDER_PDF_BYTE_CAP_MB = Math.floor(PROVIDER_PDF_BYTE_CAP / (1024 * 1024));
 const MAX_EXTRACTION_FILE_SIZE_MB = Math.max(
   1,
   Math.min(
-    parseInt(process.env.DOCUMENT_EXTRACTION_MAX_FILE_SIZE_MB, 10) || MAX_UPLOAD_FILE_SIZE_MB,
-    MAX_UPLOAD_FILE_SIZE_MB,
+    parseInt(process.env.DOCUMENT_EXTRACTION_MAX_FILE_SIZE_MB, 10) || PROVIDER_PDF_BYTE_CAP_MB,
+    PROVIDER_PDF_BYTE_CAP_MB,
   ),
 );
 const MAX_FILE_BYTES = MAX_EXTRACTION_FILE_SIZE_MB * 1024 * 1024;
+
+// Download budget. The old fixed 30 s applied to the WHOLE body: a 50 MB file
+// needed a sustained 1.7 MB/s just to arrive, so raising the upload cap would
+// have killed large files during download — before extraction even began.
+// Scale the allowance to the largest file we would accept, assuming a
+// deliberately pessimistic floor, and cap it well inside the 300 s function
+// budget so a stalled download still fails fast enough to report cleanly.
+const DOWNLOAD_ASSUMED_BYTES_PER_SEC = 2 * 1024 * 1024;
+const DOWNLOAD_TIMEOUT_MS = Math.min(
+  120_000,
+  Math.max(30_000, 30_000 + (MAX_FILE_BYTES / DOWNLOAD_ASSUMED_BYTES_PER_SEC) * 1000),
+);
+
+// Classifying "what type of document is this?" needs the first page, not all
+// 500. Below this threshold the slice costs a pdf-lib round-trip and saves
+// nothing, so small documents keep going whole (which also avoids misreading a
+// short deed from its cover page alone).
+const CLASSIFY_SLICE_THRESHOLD_PAGES = 6;
+const CLASSIFY_SLICE_PAGES = 2;
+
 let documentsDocTypeColumnAvailable = null;
 let fieldQualityColumnAvailable = null;
+let pageCoverageColumnAvailable = null;
 // Same feature-detect cache for document_extractions.extraction_started_at —
 // lets the pipeline run whether or not the reaper migration has been applied
 // yet, so a code deploy that lands before the DB update never breaks
@@ -70,7 +117,10 @@ async function fetchFileBuffer(fileUrl) {
   const downloadUrl = await getDownloadUrl(fileUrl, 3600);
   const response = await axios.get(downloadUrl, {
     responseType: 'arraybuffer',
-    timeout: 30000,
+    // Scaled to the largest file we would accept (see DOWNLOAD_TIMEOUT_MS).
+    // The old fixed 30 s silently made ~1.7 MB/s a hidden precondition of
+    // reading a 50 MB document.
+    timeout: DOWNLOAD_TIMEOUT_MS,
     maxContentLength: MAX_FILE_BYTES,
   });
 
@@ -78,9 +128,17 @@ async function fetchFileBuffer(fileUrl) {
   const buffer = Buffer.from(response.data);
 
   if (buffer.length > MAX_FILE_BYTES) {
-    throw new Error(
-      `File size ${buffer.length} bytes exceeds the AI extraction limit of ${MAX_EXTRACTION_FILE_SIZE_MB} MB`
+    // An oversize file is not a failure — it is a document REDIP stores but
+    // cannot read. Carry the machine reason so the caller writes an honest
+    // coverage receipt instead of a red "extraction failed".
+    const err = new Error(
+      `This document is ${(buffer.length / (1024 * 1024)).toFixed(1)} MB — larger than the ${MAX_EXTRACTION_FILE_SIZE_MB} MB the document reader accepts.`,
     );
+    err.statusCode = 422;
+    err.code = 'EXTRACTION_TOO_LARGE';
+    err.coverageReason = 'too_large_to_read';
+    err.sizeBytes = buffer.length;
+    throw err;
   }
 
   // Hash the raw bytes once so the response cache can key on the file
@@ -469,6 +527,29 @@ async function canStoreFieldQuality() {
   return fieldQualityColumnAvailable;
 }
 
+// Feature-detect document_extractions.page_coverage (migration 20260729).
+// Holds the coverage receipt — REDIP's account of what it did with every page.
+// Same pre-migration-safe pattern as doc_type / extraction_started_at /
+// field_quality: absent column → omitted, and the receipt still reaches the API
+// response from the in-memory result.
+async function canStorePageCoverage() {
+  if (pageCoverageColumnAvailable !== null) return pageCoverageColumnAvailable;
+  try {
+    const result = await query(
+      `SELECT EXISTS (
+         SELECT 1 FROM information_schema.columns
+         WHERE table_schema = 'public'
+           AND table_name = 'document_extractions'
+           AND column_name = 'page_coverage'
+       ) AS exists`
+    );
+    pageCoverageColumnAvailable = Boolean(result.rows[0]?.exists);
+  } catch {
+    pageCoverageColumnAvailable = false;
+  }
+  return pageCoverageColumnAvailable;
+}
+
 async function updateDocumentDocType(documentId, docType) {
   if (!(await canStoreDocumentDocType())) {
     return;
@@ -504,10 +585,53 @@ async function extractStoredFileFields({
   if (tier === 'stored_only') {
     const err = new Error(unsupportedExtractionMessage(fileName));
     err.statusCode = 422;
+    err.coverageReason = 'unsupported_format';
     throw err;
   }
 
-  const { buffer, sha256: fileSha256 } = await fetchFileBuffer(fileUrl);
+  const { buffer, sizeBytes, sha256: fileSha256 } = await fetchFileBuffer(fileUrl);
+
+  // ── PDF preflight: look at the document BEFORE spending a token ───────────
+  //
+  // A PDF is accepted by the provider only within BOTH 50 MB and 1,000 pages,
+  // and those fail independently — a 60 MB 50-page scan is byte-bound; a
+  // 25 MB 1,200-page pack is page-bound. Judging on bytes alone (as this code
+  // did) cannot tell an operator which applies, or that a file is simply
+  // password-protected. Everything below is mechanical: pdf-lib either opened
+  // the file or it did not.
+  let preflight = null;
+  if (tier === 'native' && looksLikePdf(buffer)) {
+    preflight = await preflightPdf(buffer);
+
+    if (!preflight.readable) {
+      // Encrypted or corrupt. Both are honest, actionable states — not
+      // "extraction failed".
+      const err = new Error(
+        preflight.reason === 'password_protected'
+          ? 'This PDF is password-protected, so REDIP could not open it. Upload an unlocked copy to have it read.'
+          : `REDIP could not open this PDF${preflight.detail ? ` (${preflight.detail})` : ''}. It is stored as uploaded.`,
+      );
+      err.statusCode = 422;
+      err.code = 'EXTRACTION_UNREADABLE_PDF';
+      err.coverageReason = preflight.reason;
+      err.preflight = preflight;
+      throw err;
+    }
+
+    // Page-bound refusal. The byte-bound case is caught earlier, in
+    // fetchFileBuffer, against the reader's own cap.
+    const fit = assessProviderFit({ pageCount: preflight.pageCount, sizeBytes });
+    if (!fit.fits) {
+      const err = new Error(
+        `This document has ${preflight.pageCount.toLocaleString('en-IN')} pages — more than the ${PROVIDER_PDF_PAGE_CAP.toLocaleString('en-IN')}-page limit of the document reader. It is stored in full, but no page was sent for reading.`,
+      );
+      err.statusCode = 422;
+      err.code = 'EXTRACTION_TOO_MANY_PAGES';
+      err.coverageReason = fit.reason;
+      err.preflight = preflight;
+      throw err;
+    }
+  }
 
   // Two shapes from here on:
   //  • native    → base64 bytes ride to the provider (PDF / image), as before.
@@ -538,14 +662,48 @@ async function extractStoredFileFields({
     userId: userId || null,
   };
 
+  // ── Classification: pay for the first pages, not the whole document ───────
+  //
+  // A document's TYPE is legible from its opening pages — a sale deed
+  // announces itself on page 1. Shipping all 500 pages to answer "is this a
+  // sale deed?" and then shipping them AGAIN to extract was the single
+  // largest avoidable cost in this pipeline. Below the threshold the slice
+  // saves nothing and risks reading a short deed from its cover sheet alone,
+  // so small documents still travel whole. If slicing fails for any reason we
+  // fall back to the full document — a cost optimisation must never cost
+  // accuracy.
+  let classifyBase64 = base64;
+  let classifySlicedPages = null;
+  if (
+    base64
+    && preflight?.readable
+    && Number.isInteger(preflight.pageCount)
+    && preflight.pageCount > CLASSIFY_SLICE_THRESHOLD_PAGES
+  ) {
+    const slice = await extractPageRange(buffer, 0, CLASSIFY_SLICE_PAGES);
+    if (slice) {
+      classifyBase64 = slice.toString('base64');
+      classifySlicedPages = Math.min(CLASSIFY_SLICE_PAGES, preflight.pageCount);
+      log.info('classify_page_slice', {
+        doc_pages: preflight.pageCount,
+        classified_on_pages: classifySlicedPages,
+        bytes_saved: buffer.length - slice.length,
+      });
+    }
+  }
+
   let docType = normalizeRequestedDocType(options.docType || options.requestedDocType);
   try {
     if (!docType) {
-      docType = await classifyDocumentContent(base64, effectiveMime, {
+      docType = await classifyDocumentContent(classifyBase64, effectiveMime, {
         fileName,
         context: options.context,
         attach: aiAttach,
-        fileSha256: contentSha256,
+        // The cache key must follow what was actually SENT: a slice and the
+        // whole file are different inputs and must not share a cached answer.
+        fileSha256: classifySlicedPages
+          ? crypto.createHash('sha256').update(classifyBase64).digest('hex')
+          : contentSha256,
         documentText,
       });
     }
@@ -680,12 +838,39 @@ async function extractStoredFileFields({
     sourceText: documentText,
   });
 
+  // ── The coverage receipt ──────────────────────────────────────────────────
+  // What REDIP did with every page — stated in terms it can PROVE. Note the
+  // vocabulary: `submitted_pages`, never "read". A 200 from the provider is
+  // not evidence that a model attended to page 847, and this product does not
+  // claim what it cannot show.
+  const coverage = buildCoverageReceipt({
+    method: documentText ? 'parsed_text' : (preflight ? 'native_pdf' : 'image'),
+    detectedPages: preflight?.pageCount ?? (documentText ? null : 1),
+    decodedPages: preflight?.decodedPages ?? (documentText ? null : 1),
+    // Extraction always receives the WHOLE document; only classification is
+    // sliced. So every decoded page was submitted for reading.
+    submittedPages: preflight?.decodedPages ?? (documentText ? null : 1),
+    sizeBytes,
+    maxExtractionMb: MAX_EXTRACTION_FILE_SIZE_MB,
+    providerPageCap: PROVIDER_PDF_PAGE_CAP,
+    detail: preflight?.detail || null,
+    notes: [
+      classifySlicedPages
+        ? `Document type was identified from the first ${classifySlicedPages} page(s); all pages were sent for field extraction.`
+        : null,
+      parsedMeta?.rowLimited
+        ? 'Some sheets exceeded the row limit and were cut off — see the transcription notice.'
+        : null,
+    ],
+  });
+
   return {
     docType,
     rawText,
     structuredFields,
     confidenceScores: fieldQuality.scores,
     fieldQuality: fieldQuality.assessments,
+    coverage,
     parseError,
     notes,
     effectiveMime,
@@ -743,6 +928,7 @@ async function extractDocument(
       structuredFields,
       confidenceScores,
       fieldQuality,
+      coverage,
       parseError,
       notes,
       detectedLanguage,
@@ -756,52 +942,47 @@ async function extractDocument(
       options,
     });
 
-    // Step 4: persist result. language_detected finally gets written here —
-    // getDealExtractions has always SELECTed it and the UI has always been
-    // ready to show it, but no code path populated the column (so every
-    // Kannada/Hindi document read as "unknown language").
-    //
-    // field_quality carries the per-field verification assessment (the WHY
-    // behind each score). Feature-detected so this code is safe to deploy
-    // before migration 20260728 lands: without the column the scores still
-    // persist honestly, only the per-field reason is unavailable.
-    const storeFieldQuality = await canStoreFieldQuality();
-    const persistParams = [
-      docType,
-      // ONLY a genuine data problem degrades the status. Provenance notes
-      // (Claude fallback used) describe a COMPLETE extraction and must not
-      // surface as "some fields may be missing" — see the notes-vs-errors
-      // block in extractStoredFileFields.
-      parseError ? 'partial' : 'completed',
-      JSON.stringify({ raw_text: rawText }),
-      structuredFields ? JSON.stringify(structuredFields) : null,
-      JSON.stringify(confidenceScores),
-      null, // pages_processed not available from inline extraction
-      // error_message carries the real error when there is one, else the
-      // notes (kept for diagnostics; no UI treats a 'completed' row's
-      // message as a failure).
-      parseError || (notes && notes.length ? notes.join(' ') : null),
-      detectedLanguage && detectedLanguage !== 'und' ? detectedLanguage : null,
-    ];
-    if (storeFieldQuality) persistParams.push(JSON.stringify(fieldQuality || {}));
-    persistParams.push(extractionId);
+    // Step 4: persist. Two columns are feature-detected (field_quality,
+    // page_coverage) because their migrations may not have run yet, so the
+    // SET clause is ASSEMBLED rather than written with nested conditionals —
+    // the previous inline-ternary form silently coupled every placeholder
+    // number to one boolean and would not survive a second optional column.
+    const sets = [];
+    const values = [];
+    const set = (col, value) => { values.push(value); sets.push(`${col} = $${values.length}`); };
 
+    set('doc_type', docType);
+    // ONLY a genuine data problem degrades the status. Provenance notes
+    // (Claude fallback used) describe a COMPLETE extraction and must not
+    // surface as "some fields may be missing" — see the notes-vs-errors block
+    // in extractStoredFileFields.
+    set('extraction_status', parseError ? 'partial' : 'completed');
+    set('raw_extraction', JSON.stringify({ raw_text: rawText }));
+    set('structured_fields', structuredFields ? JSON.stringify(structuredFields) : null);
+    set('confidence_scores', JSON.stringify(confidenceScores));
+    // pages_processed has been NULL on every row ever written ("not available
+    // from inline extraction"). The coverage receipt can finally fill it — with
+    // the only number this column can honestly hold: pages SUBMITTED to the
+    // reader. Not pages "read": a 200 from the provider is not evidence a model
+    // attended to a page.
+    set('pages_processed', pagesProcessedFromReceipt(coverage));
+    // error_message carries the real error when there is one, else the notes
+    // (kept for diagnostics; no UI treats a 'completed' row's message as a
+    // failure).
+    set('error_message', parseError || (notes && notes.length ? notes.join(' ') : null));
+    set('language_detected', detectedLanguage && detectedLanguage !== 'und' ? detectedLanguage : null);
+    if (await canStoreFieldQuality()) set('field_quality', JSON.stringify(fieldQuality || {}));
+    if (await canStorePageCoverage()) set('page_coverage', JSON.stringify(coverage || {}));
+
+    values.push(extractionId);
     const updateResult = await query(
       `UPDATE document_extractions
-       SET doc_type          = $1,
-           extraction_status = $2,
-           raw_extraction    = $3,
-           structured_fields = $4,
-           confidence_scores = $5,
-           pages_processed   = $6,
-           error_message     = $7,
-           language_detected = $8,
-           ${storeFieldQuality ? 'field_quality     = $9,' : ''}
-           extracted_at      = NOW(),
-           updated_at        = NOW()
-       WHERE id = $${storeFieldQuality ? 10 : 9}
-       RETURNING *`,
-      persistParams,
+          SET ${sets.join(',\n              ')},
+              extracted_at = NOW(),
+              updated_at   = NOW()
+        WHERE id = $${values.length}
+        RETURNING *`,
+      values,
     );
 
     // Also update document table with doc_type if column exists
@@ -843,6 +1024,40 @@ async function extractDocument(
 
     return updatedExtraction;
   } catch (err) {
+    // ── Refusal is not failure ────────────────────────────────────────────
+    // A document REDIP DECLINES to read — too large, too many pages,
+    // password-protected, an unreadable format — behaved exactly as
+    // documented. It is not a failed extraction, and a red "failed" chip on a
+    // perfectly good 61 MB deed tells the operator nothing about what to do.
+    //
+    // These refusals therefore leave NO ROW AT ALL, exactly as the
+    // stored_only (CAD/BIM/Primavera) refusal does above — the pattern this
+    // codebase already established. That choice is load-bearing, not
+    // stylistic: a bespoke status like 'not_readable' would be INVISIBLE,
+    // because getDealExtractions lists only ('completed','partial','reviewed')
+    // and the failures query lists only ('failed','processing') — and worse,
+    // evidenceIngestion coerces `status !== 'failed'` to 'completed', so an
+    // unread document would have been recorded as successfully extracted. The
+    // 422 carries the honest sentence and its coverage receipt to the caller.
+    //
+    // Genuine faults (provider down, malformed response) still fail loudly.
+    if (err.coverageReason) {
+      err.coverage = buildCoverageReceipt({
+        method: 'not_submitted',
+        reason: err.coverageReason,
+        detectedPages: err.preflight?.pageCount ?? null,
+        decodedPages: err.preflight?.decodedPages ?? null,
+        submittedPages: 0,
+        sizeBytes: err.sizeBytes ?? null,
+        maxExtractionMb: MAX_EXTRACTION_FILE_SIZE_MB,
+        providerPageCap: PROVIDER_PDF_PAGE_CAP,
+        detail: err.preflight?.detail || null,
+      });
+      err.statusCode = err.statusCode || 422;
+      await query('DELETE FROM document_extractions WHERE id = $1', [extractionId]);
+      throw err;
+    }
+
     // Mark extraction as failed
     const failResult = await query(
       `UPDATE document_extractions
@@ -985,10 +1200,12 @@ async function getDealExtractions(dealId) {
   // they surface in `failures` instead of silently vanishing. Best-effort.
   await reapStuckExtractions(dealId);
 
-  // field_quality is feature-detected: SELECTing a column that does not exist
-  // yet would 42703 the whole read, so the projection adapts. Pre-migration
-  // the UI simply has no per-field reason to show.
+  // field_quality + page_coverage are feature-detected: SELECTing a column
+  // that does not exist yet would 42703 the whole read, so the projection
+  // adapts. Pre-migration the UI simply has no per-field reason / no coverage
+  // receipt to show.
   const hasFieldQuality = await canStoreFieldQuality();
+  const hasPageCoverage = await canStorePageCoverage();
 
   const result = await query(
     `SELECT DISTINCT ON (de.document_id)
@@ -999,6 +1216,8 @@ async function getDealExtractions(dealId) {
             de.structured_fields,
             de.confidence_scores,
             ${hasFieldQuality ? 'de.field_quality,' : ''}
+            ${hasPageCoverage ? 'de.page_coverage,' : ''}
+            de.pages_processed,
             de.human_corrections,
             de.correction_history,
             de.language_detected,
@@ -1050,6 +1269,11 @@ async function getDealExtractions(dealId) {
       // schemaValid}) — the WHY the review UI shows instead of a bare
       // percentage. Empty object pre-migration.
       field_quality: row.field_quality || {},
+      // Coverage receipt — what REDIP did with every page. Null pre-migration
+      // (and on rows extracted before it existed), which the UI states rather
+      // than guessing at.
+      coverage: row.page_coverage || null,
+      pages_processed: row.pages_processed ?? null,
       has_corrections: Object.keys(corrections).length > 0,
       applied_canonical_fields: Array.from(appliedCanonicalFields),
       // "no data" vs "has data": a completed extraction with no non-empty
