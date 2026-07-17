@@ -29,8 +29,10 @@ Instead of picking the next feature, read what production has actually been LOGG
 ### Verified
 Backend **4,054** (+18), frontend **1,320**, build + guards clean. New tests pin the **defect classes**, since a mocked `query` can never catch a parse error: no placeholder may be reused; no CASE may decide a column value; placeholders must match the params array exactly; the events gate must query `deals` and never `financials`; the cache write must SET LOCAL its bounds BEFORE the INSERT.
 
+### ✅ Migration applied same-day (2026-07-17) — error #4 CLOSED
+Operator ran `20260619_district_localities.sql` in the Supabase SQL editor ("Success. No rows returned"). **Verified live:** 480 localities / all 42 PDs / 3 indexes / RLS on with its read policy. The resolver query that had thrown "relation does not exist" since mid-June now returns `high` confidence for every probe — Ejipura + Jakkasandra → PD-03, Bellandur → PD-12, Jarakabandekaval → PD-19, Yelahanka → PD-20, Whitefield → PD-11. **Visible on the Jaraka Bande deal page**: Planning context went from *"matched from address (address-token-fuzz) · 60% confidence"* → *"(locality-index) · 85% confidence"*, and the label tightened from a 23-village blob to **PD-42 — Rajanakunte**. The "verify against the parcel" caveat correctly remains (address-level match, not a boundary intersection). Provenance is on the record in TODO_OPERATOR: seed derives from RMP 2031 (withdrawn 2020) — acceptable because it only labels a PD, never feeds FAR/zoning/approval; see [[project_regulatory_intelligence]].
+
 ### What's left to do next
-- **Operator: apply `20260619_district_localities.sql`** (steps in `TODO_OPERATOR.md`, ~2 min). Nothing breaks without it. Flagged honestly: the seed derives from RMP 2031 (withdrawn 2020) — defensible because it only labels a Planning District, never feeds FAR/zoning/approval; see [[project_regulatory_intelligence]].
 - Not done (deliberate): the write-only index `deal_workspace_cache_by_computed_at` indexes a column that changes on every upsert (blocks HOT updates, serves no query). Dropping it needs a migration — bundle with the next one.
 - Unscheduled: Gemini `responseSchema` per doctype; Gemini File API for >20 MB scans; PPTX/DOCX image-OCR.
 
