@@ -4,6 +4,18 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-17 (cont.) — Erasure phantom column (PR #1000 — merged)
+
+Considered building `responseSchema` structured output next (it IS supported by `@google/generative-ai@0.21` — verified). **Dropped it on evidence:** 24 extractions, **0 JSON parse failures** ever. The fence-stripping `parseJsonResponse` has never once failed; building 23 doctype schemas to fix a non-problem — while risking quality by over-constraining the model — is the exact trap I warned the operator about with >50 MB chunking. Verifying shipped work beats gold-plating.
+
+Instead audited the production error log (18 h view, not 6 h) and found a NEW one I hadn't seen: `column "email_normalized" of relation "users" does not exist`, thrown by the account-erasure cron. **`users.email_normalized` exists NOWHERE** — no migration creates it, nothing reads it (login normalises `email.toLowerCase()` inline against plain `email`; DSAR export never selects it). Its only refs were one write + one stale comment. The write threw 42703 on **every erasure run since the service shipped**, logged a red error + burned a doomed txn, before a try/catch fallback re-ran the correct query. **No DPDP obligation was missed** (fallback completed erasure; 0 users currently closed/erased), but the primary path was dead on arrival.
+
+Fix: removed the phantom column; the "fallback" WAS the correct query, so promoted it to the only query, deleted the dead branch. Verified live: the shipped UPDATE parses cleanly against the production `users` schema. The old test literally pinned the bug as intended ("falls back without email_normalized") — rewritten to assert the column is never referenced + erasure runs in ONE query. **Lesson: a try/catch that swallows a schema error and retries can hide a permanently-broken primary path for months — the same shape as the 4-month-dead audit trail (#998).**
+
+**The production error backlog is now empty.** All four DB errors fixed in code + verified: activities 42P08 (#998, clean 9-param INSERT), email_normalized (#1000, column removed), district_localities (migration applied, 480 rows live), deal_workspace_cache timeout (#998, SET LOCAL lock_timeout guard). 18 h error window otherwise clean (traffic low — operator logged out).
+
+**Verified:** backend 4,096 tests green; live schema parse-check passes.
+
 ## 2026-07-17 — Coverage receipts: page preflight, honest limits, cheap classify (PR #999 — merged, migration applied)
 
 Tier 0 of the large-document programme, arrived at through three rounds of adversarial plan review with the operator (my plan 7/10 → ChatGPT's 8/10 → my reframe 8.5/10 → ChatGPT's 9.5/10 → synthesis). **The reframe that survived every round: the goal is not bigger uploads — it is provable processing coverage with page-level evidence and explicit failures.**
