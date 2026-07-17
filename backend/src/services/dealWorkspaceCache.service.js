@@ -23,7 +23,8 @@
  */
 
 const crypto = require('crypto');
-const { query } = require('../config/database');
+const { query, transaction } = require('../config/database');
+const log = require('../lib/logger').child({ module: 'dealWorkspaceCache' });
 
 // Per-deal tables that (a) feed the deterministic workspace payload and (b)
 // carry an `updated_at` we can fingerprint. count(*) catches inserts/deletes;
@@ -112,25 +113,66 @@ async function read(dealId, versionKey) {
   }
 }
 
+// The cache write is OPTIONAL work. It must never queue behind a lock: if the
+// row is busy, the right answer is to skip this write and let the next reader
+// recompute — not to wait. These bound the write's transaction so it fails
+// fast instead of burning the caller's request time.
+//
+// Sizing: production `statement_timeout` is 2 MINUTES and the largest observed
+// payload is 239 KB (125 KB avg), which inserts in single-digit milliseconds.
+// A 2-minute timeout on this INSERT was therefore never about payload size —
+// it could only ever be lock wait. 500 ms is ~50× the honest write cost.
+const WRITE_LOCK_TIMEOUT_MS = 500;
+const WRITE_STATEMENT_TIMEOUT_MS = 3000;
+
 /**
  * Upserts the deterministic payload for (deal_id, current org). organization_id
  * is filled by the DB from current_organization_id() so it always matches the
- * RLS context. Fire-and-forget: a failed write never affects the response.
+ * RLS context.
+ *
+ * Errors are swallowed — a failed cache write must never affect the response.
+ * But the CALL IS AWAITED by the caller (see dealWorkspace.service): on Vercel
+ * an un-awaited promise is not "backgrounded", it is ORPHANED. The instance
+ * freezes the moment the response is sent, and `query()` wraps every statement
+ * in BEGIN→…→COMMIT, so a frozen instance strands an open transaction holding
+ * this row's ON CONFLICT lock. Because the row is keyed per (deal, ORG) — not
+ * per user — every teammate viewing that deal then blocks on it, and their
+ * upsert is cancelled by `statement_timeout`. The INSERT named in those
+ * production errors was the VICTIM of a previous request's orphaned lock, not
+ * the cause. Awaiting guarantees COMMIT/ROLLBACK inside the invocation; the
+ * SET LOCALs guarantee we never become the thing that blocks someone else.
  */
 async function write(dealId, versionKey, payload) {
   if (!isEnabled() || !dealId || !versionKey || !payload) return;
   try {
-    await query(
-      `INSERT INTO deal_workspace_cache (deal_id, organization_id, version_key, payload, computed_at)
-       VALUES ($1, current_organization_id(), $2, $3::jsonb, NOW())
-       ON CONFLICT (deal_id, organization_id)
-       DO UPDATE SET version_key = EXCLUDED.version_key,
-                     payload     = EXCLUDED.payload,
-                     computed_at = EXCLUDED.computed_at`,
-      [dealId, versionKey, JSON.stringify(payload)],
-    );
-  } catch {
-    // fire-and-forget
+    // Routed through transaction() rather than query() so the SET LOCALs land
+    // on the SAME connection as the INSERT. SET LOCAL is required (not plain
+    // SET): the Supabase pooler runs in transaction mode, so session-level
+    // settings would not reliably carry — the same invariant that governs the
+    // tenant context in database.js. Deliberately NOT changing the shared
+    // query() helper, which every call in the app funnels through.
+    await transaction(async (client) => {
+      await client.query(`SET LOCAL lock_timeout = '${WRITE_LOCK_TIMEOUT_MS}ms'`);
+      await client.query(`SET LOCAL statement_timeout = '${WRITE_STATEMENT_TIMEOUT_MS}ms'`);
+      await client.query(
+        `INSERT INTO deal_workspace_cache (deal_id, organization_id, version_key, payload, computed_at)
+         VALUES ($1, current_organization_id(), $2, $3::jsonb, NOW())
+         ON CONFLICT (deal_id, organization_id)
+         DO UPDATE SET version_key = EXCLUDED.version_key,
+                       payload     = EXCLUDED.payload,
+                       computed_at = EXCLUDED.computed_at`,
+        [dealId, versionKey, JSON.stringify(payload)],
+      );
+    });
+  } catch (err) {
+    // Swallowed by design, but logged with a distinguishable code: before this,
+    // every cache failure was indistinguishable from "table not migrated yet"
+    // and surfaced only as a raw console.error from the db layer.
+    log.warn('deal_workspace_cache_write_skipped', {
+      deal_id: dealId,
+      reason: err?.code === '55P03' ? 'row_locked_by_another_request' : (err?.message || 'unknown'),
+      pg_code: err?.code || null,
+    });
   }
 }
 

@@ -587,11 +587,29 @@ async function getDealWorkspace(dealId, options = {}) {
   };
 
   // Populate the deterministic cache for the next reader (lite path only).
-  // Fire-and-forget — a cache write never blocks or fails the response. The
-  // version key was already computed for the read attempt above, so this adds
-  // no extra version query.
+  // The version key was already computed for the read attempt above, so this
+  // adds no extra version query.
+  //
+  // AWAITED, deliberately. This was `.catch(() => {})` fire-and-forget, which
+  // reads as the safe choice and is the opposite: on Vercel the instance
+  // FREEZES when the response is sent, so an un-awaited promise is orphaned
+  // mid-flight, not backgrounded. `query()` wraps every statement in
+  // BEGIN→…→COMMIT, so freezing between the INSERT and the COMMIT stranded an
+  // open transaction holding this row's ON CONFLICT lock. The row is keyed per
+  // (deal, ORG), so every teammate opening that deal then queued behind it
+  // until `statement_timeout` (2 min) cancelled them — which is exactly the
+  // "canceling statement due to statement timeout" seen in production. Those
+  // errors named the INSERT as the victim of an EARLIER request's orphan.
+  //
+  // Awaiting guarantees COMMIT or ROLLBACK happens inside the invocation, so
+  // the lock is always released. It costs only the upsert latency (single-digit
+  // ms for a ~125 KB payload) and only on cache MISSES — hits return earlier
+  // and never write. write() bounds itself with SET LOCAL lock_timeout and
+  // swallows its own errors, so awaiting can neither block nor fail this
+  // response. CLAUDE.md: "No long-lived workers or background assumptions in
+  // request handlers" — a dangling promise is a background assumption.
   if (lite && liteVersionKey) {
-    dealWorkspaceCache.write(dealId, liteVersionKey, payload).catch(() => {});
+    await dealWorkspaceCache.write(dealId, liteVersionKey, payload);
   }
 
   return payload;

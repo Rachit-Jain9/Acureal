@@ -10,11 +10,26 @@
 --   (guarded IF NOT EXISTS / DROP ... IF EXISTS / guarded DO blocks), so re-runs
 --   are safe no-ops.
 --
--- PRODUCTION IS FULLY APPLIED
---   All migrations below are live on the production Supabase project
---   (niamgjbxxgmmffggumvj, ap-south-1). They are applied MANUALLY via the
---   Supabase SQL editor (paste + Run) - there is no auto-runner. Do not expect a
---   re-run to change anything on prod; the guards make re-runs no-ops.
+-- THIS FILE IS AN INDEX, NOT A RECORD OF WHAT IS APPLIED
+--   Migrations are applied MANUALLY to the production Supabase project
+--   (niamgjbxxgmmffggumvj, ap-south-1) via the SQL editor (paste + Run) - there
+--   is no auto-runner and nothing reconciles this list against the live
+--   database. A file appearing below therefore means "this migration EXISTS",
+--   NOT "this migration is live on production".
+--
+--   This header used to assert "PRODUCTION IS FULLY APPLIED - all migrations
+--   below are live". That was false, and the falsehood was load-bearing:
+--   20260619_district_localities.sql sat unapplied for ~1 month while listed
+--   here as live, so `regulatory_data.district_localities` threw
+--   "relation does not exist" in production every time a parcel address was
+--   resolved. The claim is what made the gap invisible - anyone checking
+--   "is it applied?" read this file and got a confident wrong answer.
+--
+--   To find out what is ACTUALLY applied, ask the database, never this file:
+--     SELECT table_schema, table_name FROM information_schema.tables
+--      WHERE table_schema IN ('public','regulatory_data') ORDER BY 1, 2;
+--   Re-running any migration here is safe (the guards make re-runs no-ops), so
+--   when in doubt, re-run it.
 --
 -- THE OTHER FILES IN database/
 --   - schema.sql   Base schema (extensions, functions, enums, core tables).

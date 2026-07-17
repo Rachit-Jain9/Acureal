@@ -325,6 +325,28 @@ const calculateAndSave = async (dealId, inputData, options = {}) => {
 
 // ─── GET FINANCIALS ───────────────────────────────────────────────────────────
 
+/**
+ * Authorization gate: throw 404 unless the caller may read this deal.
+ *
+ * Deliberately separate from `getFinancials`. Reading a deal's *events* is
+ * authorized by access to the DEAL; whether a financial model exists is a
+ * different question entirely, and answering it as though it were the
+ * authorization check is what 404'd real audit rows away (see listDealEvents).
+ *
+ * Same visibility policy as every other deal read — `buildVisibleDealCondition`
+ * covers org ownership, explicit deal shares, archived and dead deals — so this
+ * grants nothing `getFinancials` did not already grant. 404 (not 403) matches
+ * the codebase's existing posture: an invisible deal is indistinguishable from
+ * a non-existent one, which avoids leaking that a deal id exists at all.
+ */
+const assertDealVisible = async (dealId) => {
+  const result = await query(
+    `SELECT 1 FROM deals d WHERE d.id = $1 AND ${buildVisibleDealCondition('d')}`,
+    [dealId],
+  );
+  if (result.rows.length === 0) throw createError('Deal not found.', 404);
+};
+
 const getFinancials = async (dealId) => {
   const result = await query(
     `SELECT f.*
@@ -493,10 +515,15 @@ const getFinancialGraph = async (dealId, { financialsRow } = {}) => {
 // ─── AUDIT EVENTS ─────────────────────────────────────────────────────────────
 
 /**
- * Return the signed audit trail for a deal. Verifies each row in-memory so
- * the UI can render a pass/fail indicator per event without a second round
- * trip. `getFinancials` is called first to enforce the deal visibility
- * policy — if the caller can't read the deal, they can't read its events.
+ * Return the audit trail for a deal: HMAC-signed financial computations merged
+ * with the deal's mutation log (stage transitions, archive/restore, reassign,
+ * update). Each signed row is verified in-memory so the UI can render a
+ * pass/fail indicator per event without a second round trip.
+ *
+ * `assertDealVisible` enforces the gate — if the caller can't read the deal,
+ * they can't read its events. It deliberately does NOT require a financial
+ * model to exist: most deals have none, and the mutation half of this feed is
+ * populated regardless.
  *
  * When `includeOutputsSummary` is true (default for the Audit tab on the
  * deal page), each row includes a `outputs_summary` projection of
@@ -505,15 +532,32 @@ const getFinancialGraph = async (dealId, { financialsRow } = {}) => {
  * single bulk users lookup.
  */
 const listDealEvents = async (dealId, { limit = 50, includeOutputsSummary = false, financialsRow } = {}) => {
-  // Visibility gate. The composer threads the already-fetched (already-
-  // authorized) financials row to skip a redundant deal re-check; standalone
-  // callers omit it and we fetch + gate exactly as before. A null row when one
-  // was supplied means the deal has no financials → same 404 as getFinancials.
+  // Gate on DEAL VISIBILITY — not on whether a financial model happens to exist.
+  //
+  // This used to call getFinancials(), whose query INNER JOINs financials and
+  // 404s "Financials not found for this deal." That conflated two unrelated
+  // questions: "may the caller read this deal?" (the real authorization gate,
+  // and what the docstring above always claimed) and "does this deal have a
+  // financial model?" (irrelevant here). A deal with no model is the NORMAL
+  // state — CLAUDE.md requires sourcing-stage deals to work with minimal data —
+  // so the endpoint 404'd constantly (44 hits/day in production).
+  //
+  // The bug was not merely noise: this feed MERGES two independent sources.
+  // `deal_events` is financial and legitimately empty without a model, but
+  // `deal_audit_log` carries stage transitions, archive/restore, reassignment
+  // and updates — rows that exist for deals that never had a model. The gate
+  // therefore suppressed a populated, readable audit trail and made the Audit
+  // tab render "Couldn't load the audit trail". That inverts CLAUDE.md's
+  // non-negotiable: an immutable audit trail for every material change.
+  //
+  // With the gate asking the right question, "no financial model" resolves
+  // naturally to "no financial events" — and the mutation timeline, which was
+  // always there, becomes reachable.
   if (financialsRow === undefined) {
-    await getFinancials(dealId);
-  } else if (!financialsRow) {
-    throw createError('Financials not found for this deal.', 404);
+    await assertDealVisible(dealId);
   }
+  // A caller that threaded a financials row already authorized the deal; a null
+  // row simply means "no model yet", which is not an authorization failure.
 
   // Pull both feeds in parallel — financial computations (HMAC-signed)
   // and mutation log (stage transitions / archive / reassign / bulk).

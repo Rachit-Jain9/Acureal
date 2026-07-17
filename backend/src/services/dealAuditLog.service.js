@@ -168,8 +168,13 @@ const recordAudit = async ({
 /**
  * List the mutation audit rows for a deal, newest first. The caller is
  * responsible for the deal-visibility check; this service just reads
- * `deal_audit_log` directly. The financial.service `listDealEvents`
- * already gates on `getFinancials(dealId)` so callers go through that.
+ * `deal_audit_log` directly. The financial.service `listDealEvents` gates on
+ * `assertDealVisible(dealId)` so callers go through that.
+ *
+ * NB: this docstring used to say the gate was `getFinancials(dealId)`, and that
+ * was the bug written down — these rows exist for deals that never had a
+ * financial model, so gating them on one 404'd a populated audit trail away.
+ * The gate must be about DEAL ACCESS, never about financials existence.
  */
 const listForDeal = async (dealId, { limit = 50 } = {}) => {
   const clampedLimit = Math.max(1, Math.min(Number(limit) || 50, 500));

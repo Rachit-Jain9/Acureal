@@ -4,7 +4,7 @@ jest.mock('../src/config/database', () => ({
 }));
 
 const crypto = require('crypto');
-const { query } = require('../src/config/database');
+const { query, transaction } = require('../src/config/database');
 const cache = require('../src/services/dealWorkspaceCache.service');
 
 const sha1 = (s) => crypto.createHash('sha1').update(s).digest('hex');
@@ -96,13 +96,23 @@ describe('dealWorkspaceCache.read', () => {
 });
 
 describe('dealWorkspaceCache.write', () => {
+  // The write runs inside transaction() (not query()) so its SET LOCAL bounds
+  // land on the SAME connection as the INSERT. Drive the real callback.
+  const runTransaction = () => {
+    const client = { query: jest.fn().mockResolvedValue({ rows: [] }) };
+    transaction.mockImplementationOnce(async (cb) => cb(client));
+    return client;
+  };
+  const sqlOf = (client) => client.query.mock.calls.map(([s]) => String(s));
+
   test('upserts via INSERT ... ON CONFLICT with org from current_organization_id()', async () => {
-    query.mockResolvedValueOnce({ rows: [] });
+    const client = runTransaction();
     const payload = { deal: { id: 'd' } };
     await cache.write('d', 'vk', payload);
-    expect(query).toHaveBeenCalledTimes(1);
-    const [sql, params] = query.mock.calls[0];
-    expect(sql).toContain('INSERT INTO deal_workspace_cache');
+
+    const insert = client.query.mock.calls.find(([s]) => /INSERT INTO deal_workspace_cache/.test(String(s)));
+    expect(insert).toBeTruthy();
+    const [sql, params] = insert;
     expect(sql).toContain('current_organization_id()');
     expect(sql).toContain('ON CONFLICT (deal_id, organization_id)');
     expect(params[0]).toBe('d');
@@ -110,8 +120,49 @@ describe('dealWorkspaceCache.write', () => {
     expect(params[2]).toBe(JSON.stringify(payload));
   });
 
-  test('never throws when the write fails (fire-and-forget)', async () => {
-    query.mockRejectedValueOnce(new Error('write failed'));
+  // The production failure: an orphaned transaction from a frozen Vercel
+  // instance held this row's per-ORG lock, and the next reader's upsert was
+  // cancelled by the 2-minute statement_timeout. An OPTIONAL write must fail
+  // fast rather than queue — it must never become the thing that blocks a
+  // teammate.
+  test('bounds itself with SET LOCAL lock_timeout + statement_timeout', async () => {
+    const client = runTransaction();
+    await cache.write('d', 'vk', { a: 1 });
+    const sql = sqlOf(client).join('\n');
+    expect(sql).toMatch(/SET LOCAL lock_timeout/i);
+    expect(sql).toMatch(/SET LOCAL statement_timeout/i);
+  });
+
+  test('the bounds are set BEFORE the insert (else they do not apply to it)', async () => {
+    const client = runTransaction();
+    await cache.write('d', 'vk', { a: 1 });
+    const sql = sqlOf(client);
+    const lastBound = Math.max(
+      sql.findIndex((s) => /SET LOCAL lock_timeout/i.test(s)),
+      sql.findIndex((s) => /SET LOCAL statement_timeout/i.test(s)),
+    );
+    const insertAt = sql.findIndex((s) => /INSERT INTO deal_workspace_cache/.test(s));
+    expect(lastBound).toBeGreaterThanOrEqual(0);
+    expect(insertAt).toBeGreaterThan(lastBound);
+  });
+
+  test('SET LOCAL — not plain SET (the pooler runs in transaction mode)', async () => {
+    const client = runTransaction();
+    await cache.write('d', 'vk', { a: 1 });
+    for (const s of sqlOf(client).filter((x) => /timeout/i.test(x))) {
+      expect(s).toMatch(/SET LOCAL/i);
+    }
+  });
+
+  test('never throws when the write fails — the response is never affected', async () => {
+    transaction.mockRejectedValueOnce(new Error('write failed'));
+    await expect(cache.write('d', 'vk', { a: 1 })).resolves.toBeUndefined();
+  });
+
+  test('a lock timeout is swallowed and logged, not propagated', async () => {
+    const err = new Error('canceling statement due to lock timeout');
+    err.code = '55P03';
+    transaction.mockRejectedValueOnce(err);
     await expect(cache.write('d', 'vk', { a: 1 })).resolves.toBeUndefined();
   });
 
@@ -122,5 +173,6 @@ describe('dealWorkspaceCache.write', () => {
     await cache.write('d', 'vk', null);
     await cache.write('d', null, { a: 1 });
     expect(query).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
   });
 });
