@@ -421,17 +421,23 @@ html[data-theme='light'] {
     }
   }
 
-  /* Scroll-reveal — landing page sections */
+  /* Scroll-reveal — landing page sections.
+     Containment discipline (see the fade-wrapper note below): the revealed
+     end-state is `transform: none` — NOT `translateY(0)` — because any
+     non-none transform, identity included, permanently makes the section a
+     containing block for fixed descendants; and will-change lists only
+     opacity for the same reason. `none` interpolates as the identity matrix
+     (css-transforms §interpolation), so the 700ms rise is unchanged. */
   .redip-reveal {
     opacity: 0;
     transform: translateY(18px);
     transition: opacity 700ms cubic-bezier(0.22, 1, 0.36, 1),
                 transform 700ms cubic-bezier(0.22, 1, 0.36, 1);
-    will-change: opacity, transform;
+    will-change: opacity;
   }
   .redip-revealed {
     opacity: 1;
-    transform: translateY(0);
+    transform: none;
   }
 
   /* Hero backdrop animations — slow, translucent, non-distracting */
@@ -485,7 +491,7 @@ html[data-theme='light'] {
 
   /* Empty-state entrance — a gentle 4px rise + fade so a "no data yet"
      panel resolves softly instead of popping in. Used by <EmptyState/>. */
-  .redip-empty-in { animation: fadeInUp 260ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+   { animation: fadeInUp 260ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
 
   /* New-list-item entrance (FRONTEND_GUIDELINES §2) — a row slides down from
      -6px + fades over 220ms on a decelerate curve, so an item added to a list
@@ -495,7 +501,7 @@ html[data-theme='light'] {
     0%   { opacity: 0; transform: translateY(-6px); }
     100% { opacity: 1; transform: translateY(0); }
   }
-  .redip-slide-in-top { animation: redip-slide-in-top 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+   { animation: redip-slide-in-top 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
 
   /* Toast enter/exit — a short 16px slide from the right + fade so notifications
      arrive and leave decisively instead of popping. Enter 220ms ease-out
@@ -508,7 +514,7 @@ html[data-theme='light'] {
     0%   { opacity: 1; transform: translateX(0); }
     100% { opacity: 0; transform: translateX(16px); }
   }
-  .redip-toast-in  { animation: redip-toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+    { animation: redip-toast-in 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
   .redip-toast-out { animation: redip-toast-out 200ms ease-in both; }
 
   /* Skeleton shimmer — gentle 1.6s left-to-right wash across a muted base.
@@ -568,13 +574,30 @@ html[data-theme='light'] {
 
   /* Route + tab content cross-fade (FRONTEND_GUIDELINES §8) — short, decisive,
      reduced-motion gated above. A wrapper keyed by route/tab replays it on change;
-     the shell (sidebar, header, tab strip) never animates. */
+     the shell (sidebar, header, tab strip) never animates.
+
+     ⚠ CONTAINING-BLOCK HAZARD (bug fixed 2026-07-17, introduced by #884):
+     these wrappers enclose ENTIRE pages, so they must never become a
+     containing block for `position: fixed` descendants — that traps every
+     non-portaled modal/drawer inside the content box instead of the viewport
+     (the AutoFill modal rendered with its footer below the fold and nothing
+     scrollable). Two things each cause exactly that, permanently:
+       • `will-change: transform` — per spec, listing transform makes the
+         element a fixed-position containing block even while idle;
+       • `animation-fill-mode: both/forwards` — retains the 100% keyframe's
+         `transform: translateY(0)` forever, and ANY non-none transform (even
+         the identity) also creates a containing block.
+     Hence: fill-mode `backwards` (keeps the pre-start frame → no flash, but
+     reverts transform to `none` at animationend) and will-change limited to
+     `opacity`. During the 180ms fade a fixed overlay would still misposition,
+     but modals open on click after the fade completes. A vitest guard
+     (fixedOverlayContainment.test.js) pins both properties. */
   @keyframes redip-content-fade {
     0%   { opacity: 0; transform: translateY(4px); }
     100% { opacity: 1; transform: translateY(0); }
   }
   .redip-tab-fade,
-  .redip-route-fade { animation: redip-content-fade 180ms ease-out both; will-change: opacity, transform; }
+  .redip-route-fade { animation: redip-content-fade 180ms ease-out backwards; will-change: opacity; }
 
   /* Thin, themed scrollbars */
   * { scrollbar-width: thin; scrollbar-color: var(--color-border-strong) transparent; }

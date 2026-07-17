@@ -33,6 +33,12 @@ const REFRESH_COOKIE_PATH = '/api/auth/refresh';
 
 const ACCESS_TTL_SECONDS = 15 * 60;          // 15 minutes
 const REFRESH_TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
+// Server-side grant TTL for a session-only ("don't remember me") sign-in.
+// The COOKIE for that tier is a true browser-session cookie (no Max-Age), but
+// cookie lifetime is client-enforced only — browsers with "continue where you
+// left off" resurrect session cookies. This caps the grant server-side so the
+// promise holds regardless of client behaviour.
+const SESSION_REFRESH_TTL_SECONDS = 24 * 60 * 60; // 24 hours
 
 const isProd = () => process.env.NODE_ENV === 'production';
 
@@ -40,7 +46,7 @@ const baseAttrs = (maxAgeSec) => ({
   httpOnly: true,
   secure: isProd(),
   sameSite: 'lax',
-  maxAge: maxAgeSec * 1000, // express-cookie maxAge is in ms
+  ...(maxAgeSec != null ? { maxAge: maxAgeSec * 1000 } : {}), // ms; absent → session cookie
 });
 
 const setAccessCookie = (res, token) => {
@@ -50,9 +56,22 @@ const setAccessCookie = (res, token) => {
   });
 };
 
-const setRefreshCookie = (res, token) => {
+/**
+ * `persistent` is the "Remember me" tier, and this is where the checkbox
+ * finally becomes REAL. Until 2026-07-17 the refresh cookie was
+ * unconditionally Max-Age 30 days — the login page promised "REDIP signs you
+ * out when the browser closes" while a month-long httpOnly cookie sat in the
+ * jar regardless. Now:
+ *   persistent  → Max-Age 30 days (survives restarts, the ticked-box promise)
+ *   !persistent → NO Max-Age: a browser-session cookie that dies with the
+ *                 browser, backed by a 24 h server-side grant TTL
+ *                 (SESSION_REFRESH_TTL_SECONDS) as the hard stop.
+ * The /refresh rotation MUST pass the grant's stored tier back in here, or
+ * the first silent refresh would upgrade a session login to persistent.
+ */
+const setRefreshCookie = (res, token, { persistent = true } = {}) => {
   res.cookie(REFRESH_COOKIE_NAME, token, {
-    ...baseAttrs(REFRESH_TTL_SECONDS),
+    ...baseAttrs(persistent ? REFRESH_TTL_SECONDS : null),
     path: REFRESH_COOKIE_PATH,
   });
 };
@@ -83,6 +102,7 @@ module.exports = {
   REFRESH_COOKIE_PATH,
   ACCESS_TTL_SECONDS,
   REFRESH_TTL_SECONDS,
+  SESSION_REFRESH_TTL_SECONDS,
   setAccessCookie,
   setRefreshCookie,
   clearAuthCookies,

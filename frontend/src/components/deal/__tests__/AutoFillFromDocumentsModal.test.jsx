@@ -396,14 +396,16 @@ describe('AutoFillFromDocumentsModal', () => {
         document_id: 'doc-1', document_name: 'x.pdf', doc_type: 'sale_deed', extraction_id: 'ext-1',
       }]),
     );
-    const { container } = renderModal();
+    renderModal();
     // Every rendered row must carry exactly one status pill with a real <svg>.
     // A nonexistent lucide icon renders `undefined` (nothing) in jsdom but
     // FAILS the production build — so pills === rows proves each status maps to
-    // a real icon.
+    // a real icon. Queried on `document`, not the RTL container: the modal
+    // PORTALS to document.body (the fix for the trapped-overlay bug), so the
+    // container holds only the empty mount point.
     const rows = screen.getAllByRole('checkbox').length;
     expect(rows).toBeGreaterThanOrEqual(5); // most keys route via the ontology
-    const pills = container.querySelectorAll('.rounded-full svg');
+    const pills = document.querySelectorAll('.rounded-full svg');
     expect(pills.length).toBe(rows);
     mockExtractionData.field_map = orig;
   });

@@ -23,12 +23,18 @@ const router = express.Router();
 // (and therefore no XSS payload) can read it.
 const issueSessionCookies = async (res, { user, token }, requestContext = {}) => {
   setAccessCookie(res, token);
+  // rememberMe governs BOTH the grant's server-side TTL (30 d vs 24 h) and
+  // the cookie's persistence (Max-Age vs browser-session). Defaults to true
+  // when a client omits it — the historical behaviour, so existing sessions
+  // and any non-browser client are unaffected.
+  const rememberMe = requestContext.rememberMe !== false;
   const { rawToken: refreshToken } = await refreshTokenService.issueFamily({
     userId: user.id,
     ipAddress: requestContext.ipAddress || null,
     userAgent: requestContext.userAgent || null,
+    rememberMe,
   });
-  setRefreshCookie(res, refreshToken);
+  setRefreshCookie(res, refreshToken, { persistent: rememberMe });
 };
 
 // Response body for a successful auth. Carries the user profile (and, for
@@ -130,6 +136,9 @@ router.post(
       await issueSessionCookies(res, result, {
         ipAddress: req.ip || null,
         userAgent: req.headers['user-agent'] || null,
+        // Only an explicit boolean false selects the session-only tier;
+        // anything else (absent, junk) keeps the historical persistent tier.
+        rememberMe: req.body?.rememberMe === false ? false : true,
       });
 
       res.status(201).json({
@@ -247,6 +256,9 @@ router.post(
       await issueSessionCookies(res, result, {
         ipAddress: req.ip || null,
         userAgent: req.headers['user-agent'] || null,
+        // Only an explicit boolean false selects the session-only tier;
+        // anything else (absent, junk) keeps the historical persistent tier.
+        rememberMe: req.body?.rememberMe === false ? false : true,
       });
 
       res.status(status).json({ success: true, message, data: sessionResponseData(result) });
@@ -297,6 +309,9 @@ router.post(
       await issueSessionCookies(res, result, {
         ipAddress: req.ip || null,
         userAgent: req.headers['user-agent'] || null,
+        // Only an explicit boolean false selects the session-only tier;
+        // anything else (absent, junk) keeps the historical persistent tier.
+        rememberMe: req.body?.rememberMe === false ? false : true,
       });
 
       return res.json({
@@ -329,6 +344,9 @@ router.post(
       await issueSessionCookies(res, result, {
         ipAddress: req.ip || null,
         userAgent: req.headers['user-agent'] || null,
+        // Only an explicit boolean false selects the session-only tier;
+        // anything else (absent, junk) keeps the historical persistent tier.
+        rememberMe: req.body?.rememberMe === false ? false : true,
       });
       return res.json({ success: true, message: 'MFA verified.', data: sessionResponseData(result) });
     } catch (error) {
@@ -443,7 +461,11 @@ router.post('/refresh', async (req, res, next) => {
     );
 
     setAccessCookie(res, accessToken);
-    setRefreshCookie(res, rotation.rawToken);
+    // Re-issue with the persistence tier the user chose at SIGN-IN, carried on
+    // the grant. Without this, the first silent refresh would upgrade a
+    // session-only login to a 30-day persistent cookie — quietly breaking the
+    // "signs you out when the browser closes" promise.
+    setRefreshCookie(res, rotation.rawToken, { persistent: rotation.rememberMe !== false });
 
     res.json({
       success: true,
