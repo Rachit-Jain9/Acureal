@@ -4,6 +4,23 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-17 — Deterministic normalizers: Indian dates, acres/guntas, lakh/crore (PR #997 — merged, live)
+
+The normalization foundation ("PR 2" of the extraction-trust program, deferred from #995 as an operator decision — now built). Gap it closes: extraction faithfully returns "34 Acres 32 Guntas" / "₹1.25 crore" / "06.02.2024", but `ontology.validateAndCoerce` only coerces plain numerics — so an operator could APPROVE such a value in the review modal and have it **silently land in `skipped`** ("Could not coerce to number").
+
+### Built
+- **`backend/src/utils/extractionNormalizers.js`** — pure, versioned, three families routed by field NAME (first-match, same discipline as the schema rules): `date_in_v1` (D-M-Y numeric; day>12 → 'exact', both ≤12 → **'assumed'** under the documented Indian day-first convention WITH the other reading spelled out; named months → 'exact'; two-digit years REFUSE), `area_acre_gunta_v1`/`area_sqft_v1`/`area_sqm_v1` (guntas=1/40 acre, cents=1/100; sqm stays sqm — cross-unit conversion remains the ontology transform's job), `money_in_v1` (crore/lakh/lacs compounds, ₹/Rs./"/-" registrar style, "Cr" shorthand).
+- **The contract** (all test-pinned): raw immutable · never populates a blank · never touches identifiers/names/addresses/boundaries (`72/1`≠`72-1`≠`72/1A`; hard exclusion pattern; `registration_number` excluded while `registration_date` normalizes) · ambiguity flagged not hidden · 'failed' carries NO value (proposal falls back to raw) · every result names its versioned rule.
+- **Integration:** `assessExtractionFields` attaches `normalized` ORTHOGONALLY to the verification status (assessment judges the RAW; the proposal is a standard spelling of the same fact); rides inside existing `field_quality` JSONB — **no migration**; `buildFieldMap` → modal (Proposed input pre-fills the normalized value; «from "34 Acres 32 Guntas"» keeps the document's words visible; 'assumed' dates carry a "day-first assumed" caveat; reset returns to the proposal) → apply payload records `source_raw_value` + `normalization_rule` in the audit trail (route-validated). Legal-lane dates still normalize for FORMAT while staying verify_legal/never pre-ticked.
+
+### Verified
+Backend 4,032 (+41 — goldens are the REAL production strings from the BDA letter), frontend 1,320 (+5), build + all guards clean. **Live:** re-extracted the production sale deed → signal v2 with normalization integrated, and **zero normalizations — correctly**: Gemini returned that document already canonical (8.2 / 120000000 / "2023-04-12"), and the contract says bare numbers + ISO dates get no opinion. The honest no-op is the live proof; the conversions are pinned by the goldens.
+
+### Notes / next
+- v1 normalizes TOP-LEVEL scalars only — container leaves (e.g. the BDA letter's `property_details.area` inside doc_type 'other') are untouched by design. If container-heavy doctypes start mattering for auto-fill, extend FIELD_MAP + normalization into leaves deliberately.
+- Cross-doc analysis copy on the deal now reads properly hedged ("total area varies: broker notes 30 acres, while an official correspondence references 34 acres 32 guntas") — no statutory conclusion asserted.
+- Remaining from the program (unscheduled): Gemini `responseSchema` structured output per doctype (~23 schemas incl. `_original` multilingual keys); Gemini File API for >20 MB scans; PPTX/DOCX image-OCR.
+
 ## 2026-07-16 (cont.) — Extraction trust rebuild: honest verification signal + dead-AI removal (PRs #995, #996 — merged, migration applied, live-verified)
 
 Follows the extraction-status fix (#994) and an external ChatGPT critique the operator relayed. The critique was ~70% right (its best point: "architecture must not depend on an AI obediently following prose") but aimed its biggest gun at dead code; a 4-agent recon (confidence consumers / legal-lane / field inventory / autofill UI) found the LIVE defect it under-called. Two coupled fixes shipped as one PR (#995) + a live-verification refinement (#996).
