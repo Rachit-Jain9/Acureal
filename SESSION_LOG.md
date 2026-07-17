@@ -4,6 +4,39 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-17 — Coverage receipts: page preflight, honest limits, cheap classify (PR #999 — merged, migration applied)
+
+Tier 0 of the large-document programme, arrived at through three rounds of adversarial plan review with the operator (my plan 7/10 → ChatGPT's 8/10 → my reframe 8.5/10 → ChatGPT's 9.5/10 → synthesis). **The reframe that survived every round: the goal is not bigger uploads — it is provable processing coverage with page-level evidence and explicit failures.**
+
+### The 50 MB question, answered honestly
+Operator asked whether Vercel Pro + Supabase Pro ($30 each) should allow >50 MB uploads. **Verified against live docs:** Supabase Pro configures up to **500 GB** (my earlier "50 GB" was wrong; ChatGPT's correction was right) — but **Gemini caps PDFs at 50 MB / 1,000 pages, and no paid plan raises it.** So REDIP's 50 MB limit sits exactly on the provider's PDF ceiling by coincidence. Raising uploads alone = files that store fine and cannot be read. **Storage and reading are different questions and were one number.**
+
+### The technical crux nobody had separated
+Gemini accepts a PDF only within **BOTH** 50 MB **and** 1,000 pages — and those fail independently: a 50-page deed at 600 DPI is **byte-bound** (60 MB, 5% of the page budget); a 1,200-page pack of native text is **page-bound** (25 MB, half the byte budget). One number could never say which applied, or that a file was merely password-protected.
+
+### Shipped (#999)
+- **`services/ai/pdfPreflight.js`** — deterministic inspection via pdf-lib (**already a dep, no new dependency**): page count, decode probe per page, encryption, corruption; `assessProviderFit` names the failure mode; `extractPageRange` slices pages **without mutating the source** (the upload is evidence).
+- **`utils/coverageReceipt.js` + `page_coverage` JSONB** (migration `20260729`, **applied via MCP**). Says **`submitted_pages`, NEVER "read"** — a 200 from the provider is not proof a model attended to page 847. **`evidence_pages` is `null` WITH its reason**, not approximated (approximating an unmeasurable signal is precisely how the fill-rate "confidence" score came to lie, #995).
+- **`pages_processed` finally populated** — INTEGER column, NULL on *every row ever written* since it was added.
+- **Limits unwelded.** Extraction was `Math.min`-clamped to the upload limit; now independent, and additionally never exceeds the provider's real ceiling.
+- **The 30-second download timeout — a real bug** (ChatGPT caught it; I'd walked past it). Applied to the whole body → a sustained ~1.7 MB/s was a hidden precondition of reading a 50 MB file. Now scales to the largest acceptable file, capped inside the 300 s budget.
+- **Classification stopped paying for the whole document.** Sale deeds announce themselves on page 1; we shipped all 500 pages to ask "what is this?", then shipped them **again** to extract. Now a 2-page slice (>6 pages only — below that the slice saves nothing and risks reading a short deed from its cover sheet); falls back to the full document if slicing fails; extraction still gets every page; the receipt discloses the slice.
+- **Refusals are not failures** — too large / too many pages / password-protected / unreadable leave **NO ROW** (the existing `stored_only` pattern) + 422 carrying the receipt.
+- **UI**: coverage chip ("All 327 pages sent") that is **silent when there is nothing true to say** (legacy rows, transcribed formats where pages aren't a unit); upload copy separates storing from reading and says an oversized file is kept, not lost.
+
+### Two design decisions worth keeping
+- **I designed a `not_readable` status, then rejected my own design.** `getDealExtractions` lists only `('completed','partial','reviewed')` and failures only `('failed','processing')` → the row would have been **invisible**; worse, `evidenceIngestion:149` coerces `status !== 'failed'` → `'completed'`, recording an unread document as successfully extracted. **Never add an extraction status without checking both filters + that coercion.**
+- **`media_resolution` was CUT.** Gemini 3 exposes it (PDF: low 280 / medium 560 / high 1120 tokens; Google says *"quality saturates at medium"*, *"high rarely improves OCR"*) — but it does **not exist in `@google/generative-ai@0.21`'s GenerationConfig** (0 hits). Shipping it unverified could 400 every extraction. **Bonus finding: `responseSchema` IS supported by this SDK version** — the structured-output roadmap item needs no SDK upgrade.
+
+**Verified:** backend **4,096** (+42), frontend **1,328** (+8), build + theme/hover/bundle guards clean; production live on 8202f75; migration confirmed in the live DB. Live browser walk-through NOT done — operator's session expired (I don't authenticate on their behalf).
+
+### What's left to do next
+- **Operator: log in and re-extract any PDF** to see the coverage chip on real data.
+- **Experiment C is now unblocked and needs no corpus** — the receipt IS the ruler. Run it on the existing 15 documents before anything else.
+- Experiments A (resolution ladder: lossless → recompress → adaptive downsample → media_resolution variants; **signed PDFs never normalise** — a downsampled derivative must never be cited as the signed original) and B (pack decomposition) are **blocked on a test corpus that does not exist**: REDIP has 15 documents, largest 10 MB, **zero combined packs**. Sourcing that corpus is the real prerequisite.
+- The agreed architecture when evidence arrives: **immutable package → logical documents → invisible processing segments → page-linked evidence → restricted candidate ledger (evidence retention + deterministic conflict flags, NEVER automatic legal resolution) → human verification → coverage receipt.**
+- Durable/async processing is required when a job produces multiple documents/segments/retries — **not** merely when p95 > 120 s. If Vercel Queues are used, messages carry **opaque IDs only** (24 h retention, no strict regional residency on failover).
+
 ## 2026-07-17 (cont.) — Production error sweep: the deal audit trail was dead (PR #998 — merged, live)
 
 Instead of picking the next feature, read what production has actually been LOGGING. Four live errors; **two were the audit trail failing silently** — CLAUDE.md's "non-negotiable for investor-grade reporting". Method worth repeating: `get_runtime_errors` → group by frequency → reproduce against the live DB before writing code.
