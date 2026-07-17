@@ -93,13 +93,23 @@ const closeAccount = async (userId) => {
 // authenticate even if the closure block is bypassed somehow.
 const eraseClosedAccounts = async () => {
   try {
+    // NOTE (2026-07-17): `email_normalized` was removed from this UPDATE. That
+    // column exists NOWHERE — no migration creates it, no code path reads it
+    // (login normalises `email.toLowerCase()` inline against the plain `email`
+    // column; DSAR export never touches it). The write therefore threw
+    // "column email_normalized does not exist" on EVERY run since this service
+    // shipped, logging a red Database-query-error to the dashboard and burning
+    // a doomed transaction before the try/catch fallback re-ran the correct
+    // query. Erasure still completed via that fallback, so no obligation was
+    // missed — but the primary path was dead on arrival. This IS that
+    // fallback, promoted to the only query. If a normalized-email column is
+    // ever introduced, add it back here AND ship the migration in the same PR.
     const result = await query(
       `UPDATE users
           SET email = 'erased+' || id::text || '@redip.local',
               name = 'Erased User',
               phone = NULL,
               password_hash = NULL,
-              email_normalized = 'erased+' || id::text || '@redip.local',
               erased_at = NOW()
         WHERE account_closed_at IS NOT NULL
           AND erased_at IS NULL
@@ -117,31 +127,8 @@ const eraseClosedAccounts = async () => {
     }
     return { rows_erased: rowsErased, grace_days: GRACE_DAYS };
   } catch (err) {
-    // Some installations may not have email_normalized as a column. Try
-    // again without it as a fallback so the cron doesn't permanently fail
-    // because of a schema-version mismatch.
-    if (/column .*email_normalized.* does not exist/i.test(err.message || '')) {
-      log.warn('email_normalized_column_missing_fallback');
-      try {
-        const result = await query(
-          `UPDATE users
-              SET email = 'erased+' || id::text || '@redip.local',
-                  name = 'Erased User',
-                  phone = NULL,
-                  password_hash = NULL,
-                  erased_at = NOW()
-            WHERE account_closed_at IS NOT NULL
-              AND erased_at IS NULL
-              AND account_closed_at < NOW() - ($1 || ' days')::interval
-            RETURNING id`,
-          [GRACE_DAYS],
-        );
-        return { rows_erased: result.rowCount || 0, grace_days: GRACE_DAYS };
-      } catch (innerErr) {
-        log.warn('account_erasure_failed', { error: innerErr.message });
-        return { rows_erased: 0, error: innerErr.message };
-      }
-    }
+    // A real erasure failure (not the phantom column) must be loud but must
+    // not crash the retention cron — it retries on the next run.
     log.warn('account_erasure_failed', { error: err.message });
     return { rows_erased: 0, error: err.message };
   }

@@ -88,8 +88,8 @@ const accountStatus = (row) => {
   return row.is_active ? 'active' : 'inactive';
 };
 
-// Profile fields safe to surface to the data subject. password_hash,
-// email_normalized, MFA secrets and the raw OAuth subject id are excluded.
+// Profile fields safe to surface to the data subject. password_hash, MFA
+// secrets and the raw OAuth subject id are excluded.
 const getProfile = async (userId) => {
   const result = await query(
     `SELECT id, email, name, phone, role, is_active, password_set,
