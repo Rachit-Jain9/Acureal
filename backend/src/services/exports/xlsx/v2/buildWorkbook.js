@@ -86,11 +86,19 @@ const SHEETS = {
   inputs: 'Inputs & Assumptions',
   usali: 'USALI Pro Forma',
   cashFlowEngine: 'Cash Flow Engine',
-  sourcesUses: 'Sources & Uses',
   monthlyCashFlow: 'Monthly Cash Flow',
-  constructionDrawdown: 'Construction Drawdown',
-  sensitivity: 'Sensitivity',
+  // Residual Land Value (2026-07-17, workbook Batch 3) — development-family
+  // deals with a booked land cost. DCF residual at a hurdle ladder off the
+  // Monthly Cash Flow's land-excluded row + the kernel's committed
+  // margin-standard residual, closing with a live TEXT() verdict.
+  residualLandValue: 'Residual Land Value',
   debtAndAmort: 'Debt Sizing & Amortization',
+  // Model Integrity (2026-07-17, workbook Batch 3) — live formula tie-outs
+  // (Actual / Expected / Difference / Tolerance / Status) with a COUNTIF
+  // roll-up, plus a deliberately separate hardcoded "Input validation:
+  // REVIEW" status. Machine-checkable arithmetic integrity is NOT the same
+  // claim as validated real-world inputs; the sheet states both honestly.
+  modelIntegrity: 'Model Integrity',
   waterfall: 'Sponsor LP Waterfall',
   siteYield: 'Site Yield',
   marketComparables: 'Market Comparables',
@@ -2065,6 +2073,17 @@ const buildInputsSheet = (workbook, ctx) => {
   // The Phasing sheet implements a quarterly escrow ledger (balance,
   // additions, drawdowns matched to construction) and feeds the Cash
   // Flow sheet a "Net developer cash from sales" row that nets escrow.
+  // 2026-07-17 FIX: this section must render for EVERY development-family
+  // deal, because the Cash Flow Engine escrow ledger + Monthly Cash Flow
+  // rows reference RERAEscrowPct unconditionally. It was previously skipped
+  // for plotted_development / raw_land, so those workbooks shipped with an
+  // undefined name → #NAME? on every cash-flow row downstream of customer
+  // collections (the PR-NX15 hospitality-Dashboard failure class).
+  // Domain note: K-RERA DOES cover plotted developments (>500 sqm or >8
+  // plots) — registration and the 70% collection escrow apply to plot
+  // sales too, so 70% is the correct plotted default, not an approximation.
+  // Raw land has no customer collections pre-development → default 0%,
+  // which collapses the escrow ledger cleanly (To Escrow = 0, Free = Gross).
   const reraSection = {
     title: 'RERA Compliance & Escrow',
     rows: [
@@ -2072,7 +2091,7 @@ const buildInputsSheet = (workbook, ctx) => {
         toPctDecimal(firstNumber(
           ctx.inputs.reraEscrowPct,
           ctx.inputs.escrowPct,
-          0.70,
+          ctx.assetClass === 'raw_land' ? 0 : 0.70,
         )),
         '% of customer collection', NUMBER_FORMATS.percent],
     ],
@@ -2891,12 +2910,14 @@ const buildInputsSheet = (workbook, ctx) => {
     costSection,
     detailedSoftCostsSection,
     indiaStatutoryLeviesSection,
-    // RERA Escrow only meaningful for development-family deals that have
-    // customer construction-milestone collections (residential, villas,
-    // mixed-use, redevelopment). Plotted / raw_land deals have land
-    // economics — no construction milestones, so no escrow regime
-    // applies. Income family doesn't have customer collection at all.
-    ...(ctx.dealFamily === 'development' && !isRawLand && !isPlotted ? [reraSection] : []),
+    // RERA Escrow renders for EVERY development-family deal — the Cash Flow
+    // Engine + Monthly Cash Flow reference RERAEscrowPct unconditionally, so
+    // skipping the section leaves an undefined name (#NAME? cascade; see the
+    // 2026-07-17 fix note on reraSection). K-RERA covers plotted layouts too;
+    // raw_land defaults the input to 0% (no customer collections), which
+    // collapses the escrow ledger cleanly. Income family never reaches the
+    // dev rows, so it still skips the section.
+    ...(ctx.dealFamily === 'development' ? [reraSection] : []),
     // Deal Structure (PR-I3) — JDA / Outright / DM. Only meaningful for
     // development family — income family acquisitions don't have a
     // landowner-share concept (the seller takes the full sale price).
@@ -3631,115 +3652,6 @@ const buildHospitalityUsaliSheet = (workbook, ctx) => {
   return sheet;
 };
 
-const buildSourcesUsesSheet = (workbook, ctx) => {
-  const sheet = workbook.addWorksheet(SHEETS.sourcesUses, {
-    views: [{ showGridLines: false, state: 'frozen', xSplit: 0, ySplit: 5 }],
-  });
-  sheet.columns = [
-    { width: 34 },
-    { width: 18 },
-    { width: 20 },
-    { width: 54 },
-  ];
-
-  sheet.mergeCells('A1:D1');
-  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Sources & Uses`;
-  styleSectionTitle(sheet.getCell('A1'));
-  sheet.getRow(1).height = 28;
-
-  sheet.mergeCells('A2:D2');
-  sheet.getCell('A2').value = 'Dedicated capital stack view. Sources must equal uses before the model is circulated.';
-  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
-
-  ['Line item', 'INR Cr', 'INR / sqft', 'Source / note'].forEach((label, idx) => {
-    sheet.getCell(4, idx + 1).value = label;
-  });
-  styleHeader(sheet.getRow(4));
-
-  const landownerContributionFormula = ctx.dealFamily === 'development'
-    ? '=IF(DealStructureLabel="outright_purchase",0,LandCostCr)'
-    : '=0';
-  const genericRows = [
-    ['Sources', '', '', ''],
-    ['Sponsor / LP equity', '=MAX(0,TotalProjectCostCr*(1-DebtLTV))', '=IFERROR(B6*10000000/SaleableAreaSqft,0)', 'Residual source after senior debt.'],
-    ['Senior debt', '=TotalProjectCostCr*DebtLTV', '=IFERROR(B7*10000000/SaleableAreaSqft,0)', 'Uses DebtLTV from Inputs; Debt Sizing sheet gives lender-constrained amount.'],
-    ['Landowner contribution / JDA land', landownerContributionFormula, '=IFERROR(B8*10000000/SaleableAreaSqft,0)', 'Reference only; cash land cost remains driven by LandCostCr.'],
-    ['Total sources', '=SUM(B6:B8)', '=IFERROR(B9*10000000/SaleableAreaSqft,0)', 'Should reconcile to total uses.'],
-    ['', '', '', ''],
-    ['Uses', '', '', ''],
-    ['Land acquisition', '=LandCostCr', '=IFERROR(B12*10000000/SaleableAreaSqft,0)', 'From Inputs.'],
-    ['Stamp duty + registration', '=LandCostCr*StampRegPct', '=IFERROR(B13*10000000/SaleableAreaSqft,0)', 'India statutory levy on acquisition.'],
-    ['Construction hard cost', '=ConstructionCostPerSqft*SaleableAreaSqft/10000000', '=ConstructionCostPerSqft', 'Built area x hard cost.'],
-    ['GST on construction', '=B14*GstPct', '=IFERROR(B15*10000000/SaleableAreaSqft,0)', 'Net-of-ITC model input by asset class.'],
-    ['Approvals + premium FSI / TDR', '=ApprovalCostCr+PremiumFSICostCr', '=IFERROR(B16*10000000/SaleableAreaSqft,0)', 'Approval cost plus optional premium FAR/TDR.'],
-    ['Detailed soft costs', `='${SHEETS.calculations}'!$B$24`, '=IFERROR(B17*10000000/SaleableAreaSqft,0)', 'A&E, legal, appraisal, insurance, property tax during construction, overhead, marketing, finance.'],
-    ['Total uses', '=SUM(B12:B17)', '=IFERROR(B18*10000000/SaleableAreaSqft,0)', 'Matches TotalProjectCostCr when inputs are complete.'],
-    ['Source / use gap', '=B9-B18', '=IFERROR(B19*10000000/SaleableAreaSqft,0)', 'Zero means the capital stack balances.'],
-  ];
-  const b = (row) => `'${SHEETS.usali}'!$B$${row}`;
-  const hospitalityRows = [
-    ['Sources', '', '', ''],
-    ['Sponsor / LP equity', '=MAX(0,TotalProjectCostCr*(1-HospitalityConstLoanLTC))', '=IFERROR(B6*10000000/SaleableAreaSqft,0)', 'Residual equity after construction debt.'],
-    ['Construction debt', '=TotalProjectCostCr*HospitalityConstLoanLTC', '=IFERROR(B7*10000000/SaleableAreaSqft,0)', 'Uses hotel construction-loan LTC from the engine drivers.'],
-    ['Landowner contribution / JDA land', '=0', '=IFERROR(B8*10000000/SaleableAreaSqft,0)', 'Reference only for income-producing hotel acquisitions.'],
-    ['Total sources', '=SUM(B6:B8)', '=IFERROR(B9*10000000/SaleableAreaSqft,0)', 'Should reconcile to total hotel development uses.'],
-    ['', '', '', ''],
-    ['Uses', '', '', ''],
-    ['Land + stamp / betterment', `=${b(HOSPITALITY_BUDGET_ROW.land)}+${b(HOSPITALITY_BUDGET_ROW.stamp)}`, '=IFERROR(B12*10000000/SaleableAreaSqft,0)', 'Linked to the USALI hotel budget.'],
-    ['Hard construction + GST', `=${b(HOSPITALITY_BUDGET_ROW.hardConstruction)}+${b(HOSPITALITY_BUDGET_ROW.gst)}`, '=IFERROR(B13*10000000/SaleableAreaSqft,0)', 'Keys x cost/key plus construction GST.'],
-    ['Soft design + approvals', `=${b(HOSPITALITY_BUDGET_ROW.softDesign)}+${b(HOSPITALITY_BUDGET_ROW.approvals)}`, '=IFERROR(B14*10000000/SaleableAreaSqft,0)', 'Design, PMC, consultants, approvals.'],
-    ['FF&E + OS&E', `=${b(HOSPITALITY_BUDGET_ROW.ffe)}+${b(HOSPITALITY_BUDGET_ROW.ose)}`, '=IFERROR(B15*10000000/SaleableAreaSqft,0)', 'Keys x FF&E/OS&E per-key assumptions.'],
-    ['Pre-opening + working capital + contingency + IDC', `=${b(HOSPITALITY_BUDGET_ROW.preOpening)}+${b(HOSPITALITY_BUDGET_ROW.workingCapital)}+${b(HOSPITALITY_BUDGET_ROW.contingency)}+${b(HOSPITALITY_BUDGET_ROW.idc)}`, '=IFERROR(B16*10000000/SaleableAreaSqft,0)', 'Opening capital, contingency, and construction financing cost.'],
-    ['Total uses', '=SUM(B12:B16)', '=IFERROR(B17*10000000/SaleableAreaSqft,0)', 'Matches TotalProjectCostCr for hotel deals.'],
-    ['Source / use gap', '=B9-B17', '=IFERROR(B18*10000000/SaleableAreaSqft,0)', 'Zero means the capital stack balances.'],
-  ];
-  const rows = ctx.assetClass === 'hospitality' ? hospitalityRows : genericRows;
-
-  rows.forEach(([label, amount, perSqft, note], idx) => {
-    const r = 5 + idx;
-    const isSection = label === 'Sources' || label === 'Uses';
-    if (isSection) {
-      sheet.mergeCells(`A${r}:D${r}`);
-      sheet.getCell(`A${r}`).value = label;
-      styleSectionTitle(sheet.getCell(`A${r}`));
-      sheet.getRow(r).height = 22;
-      return;
-    }
-    if (!label) {
-      sheet.getRow(r).height = 8;
-      return;
-    }
-    sheet.getCell(`A${r}`).value = label;
-    styleLabelCell(sheet.getCell(`A${r}`));
-    const amountCell = sheet.getCell(`B${r}`);
-    amountCell.value = { formula: amount };
-    styleOutputCell(amountCell, NUMBER_FORMATS.currency);
-    const perSqftCell = sheet.getCell(`C${r}`);
-    perSqftCell.value = { formula: perSqft };
-    styleOutputCell(perSqftCell, NUMBER_FORMATS.integer);
-    sheet.getCell(`D${r}`).value = note;
-    styleLabelCell(sheet.getCell(`D${r}`));
-    sheet.getCell(`D${r}`).font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-    if (label.startsWith('Total') || label.includes('gap')) {
-      ['A', 'B', 'C', 'D'].forEach((col) => {
-        sheet.getCell(`${col}${r}`).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
-        sheet.getCell(`${col}${r}`).fill = FILL(palette.xlsx('paperSubtle'));
-      });
-    }
-  });
-
-  sheet.addConditionalFormatting({
-    ref: ctx.assetClass === 'hospitality' ? 'B18:B18' : 'B19:B19',
-    rules: [
-      { type: 'cellIs', operator: 'notBetween', formulae: [-0.01, 0.01], style: { fill: FILL(palette.xlsx('dataNegative')), font: { color: { argb: palette.xlsx('paperElevated') }, bold: true } }, priority: 1 },
-      { type: 'cellIs', operator: 'between', formulae: [-0.01, 0.01], style: { fill: FILL(palette.xlsx('dataPositive')), font: { color: { argb: palette.xlsx('paperElevated') }, bold: true } }, priority: 2 },
-    ],
-  });
-
-  return sheet;
-};
-
 const buildMonthlyCashFlowSheet = (workbook, ctx) => {
   const months = getWorkbookModelMonths(ctx);
   const totalCol = excelCol(months + 2);
@@ -3796,6 +3708,13 @@ const buildMonthlyCashFlowSheet = (workbook, ctx) => {
     { label: 'Principal repayment', row: 20, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=IF(${col}17-${col}10+${col}19>0,-MIN(${col}17-${col}10+${col}19,SUM($B$18:${col}$18)+ABS(SUM($B$19:${col}$19))+${m === 1 ? '0' : `SUM($B$20:${prevCol}$20)`}),0)` },
     { label: 'Equity cash flow', row: 21, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}17-${col}10+${col}18+${col}19+${col}20`, bold: true },
     { label: 'Cumulative equity cash flow', row: 22, format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}21` : `=${prevCol}22+${col}21`, total: 'final' },
+    // Land-excluded, pre-finance project cash flow — receipts less every
+    // use EXCEPT the land + stamp outlay (adding col6 back cancels it out
+    // of col10). This is the row the Residual Land Value sheet discounts:
+    // its PV at a hurdle = the maximum all-in land outlay the project can
+    // support at that return. Debt rows are deliberately excluded (the
+    // residual question is asked pre-financing, as a lender would).
+    { label: 'Project CF excl land (pre-finance)', row: 23, format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}17-${col}10+${col}6` },
   ];
 
   const incomeRentDriver = ctx.assetClass === 'hospitality'
@@ -3856,129 +3775,380 @@ const buildMonthlyCashFlowSheet = (workbook, ctx) => {
     totalCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
   });
 
+  // ── Date-based returns (development family) ─────────────────────────
+  // XIRR / XNPV over the ACTUAL month-end date spine (row 3) rather than
+  // period-index approximations — the convention institutional DCF models
+  // use. Development only: the dev grid is a complete cash cycle (land →
+  // build → sell → collect → repay), so XIRR on the equity row is
+  // meaningful. The income grid carries no terminal-value row, so a
+  // date-based XIRR there would misread as a catastrophic return; income
+  // date-based returns land with the refinance/exit-row programme.
+  if (ctx.dealFamily !== 'income') {
+    const eqRange = `$B$21:$${lastMonthCol}$21`;
+    const dateRange = `$B$3:$${lastMonthCol}$3`;
+    const xirrRows = [
+      { row: 25, label: 'Equity XIRR (date-based)', formula: `=IFERROR(XIRR(${eqRange},${dateRange}),"–")`, format: NUMBER_FORMATS.percent, note: 'Annualised IRR on the monthly equity cash-flow row against real month-end dates.' },
+      { row: 26, label: 'Equity XNPV @ Discount Rate (INR Cr)', formula: `=IFERROR(XNPV(DiscountRatePct,${eqRange},${dateRange}),"–")`, format: NUMBER_FORMATS.currency, note: 'Present value as of the first model month, discounted at the Inputs-sheet Discount Rate.' },
+    ];
+    xirrRows.forEach(({ row, label, formula, format, note }) => {
+      const labelCell = sheet.getCell(row, 1);
+      labelCell.value = label;
+      styleLabelCell(labelCell);
+      labelCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+      const valueCell = sheet.getCell(row, 2);
+      valueCell.value = { formula };
+      styleOutputCell(valueCell, format);
+      valueCell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+      if (months >= 6) {
+        sheet.mergeCells(row, 3, row, Math.min(months + 1, 12));
+        const noteCell = sheet.getCell(row, 3);
+        noteCell.value = note;
+        noteCell.font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+        noteCell.alignment = { vertical: 'middle', horizontal: 'left' };
+        noteCell.protection = { locked: true };
+      }
+    });
+  }
+
   return sheet;
 };
 
-const buildConstructionDrawdownSheet = (workbook, ctx) => {
-  const months = Math.min(getWorkbookModelMonths(ctx), Math.max(12, ctx.projectMonths || 36));
-  const totalCol = excelCol(months + 2);
+// ──────────────────────────────────────────────────────────────────────────
+// Residual Land Value sheet (2026-07-17, workbook Batch 3)
+// ──────────────────────────────────────────────────────────────────────────
+// The land-negotiation sheet: what is the MAXIMUM the project can afford to
+// pay for land at a target return, independent of what the seller quotes?
+// Two methods, deliberately different, bracket the answer:
+//   1. DCF residual — XNPV of the Monthly Cash Flow's land-excluded row
+//      (row 23) at a re-centering hurdle ladder around the Discount Rate
+//      input. Time-value-aware; the institutional method.
+//   2. Kernel residual (committed) — the deterministic kernel's
+//      margin-standard residual ((revenue − costs excl land) ÷ (1+margin)),
+//      undiscounted, exactly as stored on the deal record.
+// Closes with a live TEXT() verdict — every number in the sentence is a
+// cell reference, so the verdict re-writes itself when Inputs change
+// (never a stale hardcoded caption). Verdict verbs stay inside the closed
+// dictionary (re-examine / stress-test / consider); no absolute verbs.
+// Gated: development family with a booked land cost > 0 (JDA / DM deals
+// with no land purchase skip it — the residual question doesn't apply).
+const buildResidualLandValueSheet = (workbook, ctx) => {
+  const months = getWorkbookModelMonths(ctx);
   const lastMonthCol = excelCol(months + 1);
-  const sheet = workbook.addWorksheet(SHEETS.constructionDrawdown, {
-    views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
-  });
-  sheet.columns = [{ width: 34 }, ...Array.from({ length: months }, () => ({ width: 12 })), { width: 16 }];
-  sheet.mergeCells(1, 1, 1, months + 2);
-  sheet.getCell(1, 1).value = `${ctx.brandName} | Construction Drawdown`;
-  styleSectionTitle(sheet.getCell(1, 1));
-  sheet.mergeCells(2, 1, 2, months + 2);
-  sheet.getCell(2, 1).value = 'Monthly S-curve draw schedule with equity-first funding, debt draws, and capitalised interest during construction.';
-  sheet.getCell(2, 1).font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
-  sheet.getCell(4, 1).value = 'Line item';
-  for (let m = 1; m <= months; m += 1) sheet.getCell(4, m + 1).value = `M${m}`;
-  sheet.getCell(4, months + 2).value = 'Total / Final';
-  styleHeader(sheet.getRow(4));
+  const monthlyRef = `'${SHEETS.monthlyCashFlow}'`;
+  const cfRange = `${monthlyRef}!$B$23:$${lastMonthCol}$23`;
+  const dateRange = `${monthlyRef}!$B$3:$${lastMonthCol}$3`;
+  const FMT_CR = '"₹"#,##0.0" cr";[Red]("₹"#,##0.0" cr");"–"';
+  const FMT_CR_ACRE = '"₹"#,##0.00" cr/ac";[Red]("₹"#,##0.00" cr/ac");"–"';
+  const FMT_SIGNED_PCT = '+0.0%;-0.0%;"–"';
 
-  const rows = [
-    { row: 5, label: 'Raw S-curve weight', format: NUMBER_FORMATS.percent, formula: (m) => `=IF(${m}<=ConstructionLagQ*3,0,MAX(0.01,SIN(PI()*(${m}-ConstructionLagQ*3)/MAX(ProjectMonths-ConstructionLagQ*3,1))))`, total: 'blank' },
-    { row: 6, label: 'Normalised draw %', format: NUMBER_FORMATS.percent, formula: (m, col) => `=IFERROR(${col}5/SUM($B$5:$${lastMonthCol}$5),0)` },
-    { row: 7, label: 'Hard-cost draw', format: NUMBER_FORMATS.currency, formula: (m, col) => `=(ConstructionCostPerSqft*SaleableAreaSqft/10000000)*${col}6` },
-    { row: 8, label: 'Soft/statutory draw', format: NUMBER_FORMATS.currency, formula: (m, col) => `=(${`'${SHEETS.calculations}'!$B$24`}+${`'${SHEETS.calculations}'!$B$27`}+ApprovalCostCr+PremiumFSICostCr)*${col}6` },
-    { row: 9, label: 'Total monthly draw need', format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}7+${col}8`, bold: true },
-    { row: 10, label: 'Cumulative draw need', format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}9` : `=${prevCol}10+${col}9`, total: 'final' },
-    { row: 11, label: 'Equity contribution', format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}9*(1-DebtLTV)` },
-    { row: 12, label: 'Debt draw', format: NUMBER_FORMATS.currency, formula: (m, col) => `=${col}9*DebtLTV` },
-    { row: 13, label: 'Interest capitalised', format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => `=(${m === 1 ? '0' : `${prevCol}14`}+${col}12)*DebtRatePct/12` },
-    { row: 14, label: 'Debt balance', format: NUMBER_FORMATS.currency, formula: (m, col, prevCol) => m === 1 ? `=${col}12+${col}13` : `=${prevCol}14+${col}12+${col}13`, total: 'final' },
-  ];
-
-  rows.forEach((rowSpec) => {
-    sheet.getCell(rowSpec.row, 1).value = rowSpec.label;
-    styleLabelCell(sheet.getCell(rowSpec.row, 1));
-    if (rowSpec.bold) sheet.getCell(rowSpec.row, 1).font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
-    for (let m = 1; m <= months; m += 1) {
-      const col = excelCol(m + 1);
-      const prevCol = excelCol(m);
-      const cell = sheet.getCell(rowSpec.row, m + 1);
-      cell.value = { formula: rowSpec.formula(m, col, prevCol) };
-      styleOutputCell(cell, rowSpec.format);
-    }
-    const totalCell = sheet.getCell(rowSpec.row, months + 2);
-    if (rowSpec.total === 'blank') totalCell.value = '';
-    else if (rowSpec.total === 'final') totalCell.value = { formula: `=${lastMonthCol}${rowSpec.row}` };
-    else totalCell.value = { formula: `=SUM($B$${rowSpec.row}:$${lastMonthCol}$${rowSpec.row})` };
-    styleOutputCell(totalCell, rowSpec.format);
-  });
-  return sheet;
-};
-
-const buildSensitivitySheet = (workbook, ctx) => {
-  const sheet = workbook.addWorksheet(SHEETS.sensitivity, {
-    views: [{ showGridLines: false, state: 'frozen', xSplit: 1, ySplit: 4 }],
+  const sheet = workbook.addWorksheet(SHEETS.residualLandValue, {
+    views: [{ showGridLines: false, state: 'normal' }],
   });
   sheet.columns = [
-    { width: 26 }, ...Array.from({ length: 9 }, () => ({ width: 14 })),
+    { width: 30 }, { width: 20 }, { width: 22 }, { width: 16 }, { width: 16 }, { width: 58 },
   ];
-  sheet.mergeCells('A1:J1');
-  sheet.getCell('A1').value = `${ctx.brandName} | Sensitivity`;
+
+  sheet.mergeCells('A1:F1');
+  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Residual Land Value`;
   styleSectionTitle(sheet.getCell('A1'));
-  sheet.mergeCells('A2:J2');
-  sheet.getCell('A2').value = ctx.dealFamily === 'income'
-    ? '2D cap-rate x occupancy sensitivity for income assets.'
-    : '2D sale-rate x absorption-speed sensitivity for development deals.';
+  sheet.getRow(1).height = 26;
+  sheet.mergeCells('A2:F2');
+  sheet.getCell('A2').value =
+    'Maximum supportable land outlay implied by the development cash flow — the ceiling the project can pay for land at a target return, independent of the quoted price. Recalculates live with the Inputs sheet.';
   sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
+  sheet.getRow(2).height = 24;
+  sheet.getRow(3).height = 8;
 
-  const isIncome = ctx.dealFamily === 'income';
-  sheet.mergeCells('A4:H4');
-  sheet.getCell('A4').value = isIncome ? '2D Sensitivity - Exit Cap Rate x Occupancy' : '2D Sensitivity - Sale Rate x Absorption Speed';
+  sheet.mergeCells('A4:F4');
+  sheet.getCell('A4').value = 'DCF Residual — land-excluded cash flow discounted at target hurdles';
   styleSectionTitle(sheet.getCell('A4'));
-  const cols = isIncome ? [0.06, 0.07, 0.08, 0.09, 0.10, 0.11, 0.12] : [-0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15];
-  const rows = isIncome ? [-0.15, -0.10, -0.05, 0, 0.05, 0.10, 0.15] : [0.60, 0.75, 0.90, 1.00, 1.10, 1.25, 1.40];
-  sheet.getCell('A5').value = isIncome ? 'Occupancy \\ Cap rate' : 'Absorption speed \\ Sale rate';
+  sheet.getRow(4).height = 22;
+
+  ['Target IRR (hurdle)', 'PV of land-excluded CF', 'Supportable land (ex-stamp)', 'Per acre', 'vs booked cost', 'Reading'].forEach((h, i) => {
+    sheet.getCell(5, i + 1).value = h;
+  });
   styleHeader(sheet.getRow(5));
-  cols.forEach((v, idx) => {
-    const cell = sheet.getCell(5, idx + 2);
-    cell.value = v;
-    cell.numFmt = isIncome ? NUMBER_FORMATS.percent : '+0%;-0%;"base"';
-    cell.fill = FILL(palette.xlsx('inkDeep'));
-    cell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
-    cell.alignment = { horizontal: 'center' };
-  });
 
-  const incomeMetric = (occShock, capRate) => {
-    const occ = `MAX(0,MIN(1,OccupancyPct*(1+${occShock})))`;
-    const annualNoi = `(SaleableAreaSqft*BaseRentPerSqftMonth*12*${occ}*(1-VacancyPct)*(1-(InsurancePct+PropMgmtPct+UtilitiesPct+MaintenancePct+CapExReservePct))/10000000)`;
-    return `=IFERROR((${annualNoi}/${capRate}*(1-TotalExitCostPct)-TotalProjectCostCr)/TotalProjectCostCr,0)`;
-  };
-  const devMetric = (speed, rateShock) => {
-    const revenue = `(SaleableAreaSqft*SellRatePerSqft*(1+${rateShock})*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)`;
-    const carry = `(1+MAX(0,1-${speed})*FinanceCostPct*TotalQuarters/4)`;
-    return `=IFERROR((${revenue}*CollectionPct*(1-LandownerSharePct)-TotalProjectCostCr*${carry})/${revenue},0)`;
-  };
-
-  rows.forEach((rowVal, rIdx) => {
-    const r = 6 + rIdx;
-    const labelCell = sheet.getCell(r, 1);
-    labelCell.value = rowVal;
-    labelCell.numFmt = isIncome ? '+0%;-0%;"base"' : '0.00"x"';
-    labelCell.fill = FILL(palette.xlsx('inkDeep'));
-    labelCell.font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('paperElevated') } };
-    labelCell.alignment = { horizontal: 'center' };
-    cols.forEach((colVal, cIdx) => {
-      const cell = sheet.getCell(r, cIdx + 2);
-      cell.value = { formula: isIncome ? incomeMetric(rowVal, colVal) : devMetric(rowVal, colVal) };
-      styleOutputCell(cell, NUMBER_FORMATS.percent);
-      cell.alignment = { horizontal: 'center' };
+  // Hurdle ladder re-centers on the Discount Rate input (the wb-standard
+  // trick: axis cells DERIVE from the base so the table never goes stale
+  // when the operator changes the hurdle).
+  const HURDLE_OFFSETS = [-0.04, -0.02, 0, 0.02, 0.04];
+  const baseRow = 8; // offset 0 lands here (6 + index 2)
+  HURDLE_OFFSETS.forEach((off, idx) => {
+    const r = 6 + idx;
+    const isBase = off === 0;
+    const hurdleFormula = isBase ? '=DiscountRatePct' : `=DiscountRatePct${off > 0 ? '+' : '-'}${Math.abs(off)}`;
+    const cells = [
+      [1, hurdleFormula, NUMBER_FORMATS.percent],
+      [2, `=IFERROR(XNPV($A$${r},${cfRange},${dateRange}),"–")`, FMT_CR],
+      [3, `=IFERROR($B$${r}/(1+StampRegPct),"–")`, FMT_CR],
+      [4, `=IF(LandAreaSqft>0,IFERROR($C$${r}*43560/LandAreaSqft,"–"),"–")`, FMT_CR_ACRE],
+      [5, `=IF(LandCostCr>0,IFERROR($C$${r}/LandCostCr-1,"–"),"–")`, FMT_SIGNED_PCT],
+    ];
+    cells.forEach(([col, formula, fmt]) => {
+      const cell = sheet.getCell(r, col);
+      cell.value = { formula };
+      styleOutputCell(cell, fmt);
+      if (isBase) {
+        cell.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+        cell.fill = FILL(palette.xlsx('paperSubtle'));
+      }
     });
+    const reading = sheet.getCell(r, 6);
+    reading.value = isBase ? '← base hurdle (Discount Rate input)' : '';
+    reading.font = { name: FONT, size: 8.5, italic: true, bold: isBase, color: { argb: palette.xlsx(isBase ? 'inkDeep' : 'mutedHigh') } };
+    reading.alignment = { vertical: 'middle', horizontal: 'left' };
+    reading.protection = { locked: true };
   });
+
+  sheet.getRow(11).height = 8;
+  sheet.mergeCells('A12:F12');
+  sheet.getCell('A12').value = 'Booked Land Reference';
+  styleSectionTitle(sheet.getCell('A12'));
+  sheet.getRow(12).height = 22;
+  [
+    ['Booked land cost (Inputs)', '=LandCostCr', FMT_CR, 'The price currently underwritten — the number the DCF residual tests.'],
+    ['Booked cost per acre', '=IF(LandAreaSqft>0,IFERROR(LandCostCr*43560/LandAreaSqft,"–"),"–")', FMT_CR_ACRE, 'Booked cost ÷ land extent. Requires Land Area on the Inputs sheet.'],
+    ['Stamp duty + registration', '=StampRegPct', NUMBER_FORMATS.percent, 'Acquisition friction stripped from the supportable-value column via ÷(1+StampRegPct).'],
+  ].forEach(([label, formula, fmt, note], idx) => {
+    const r = 13 + idx;
+    sheet.getCell(r, 1).value = label;
+    styleLabelCell(sheet.getCell(r, 1));
+    const v = sheet.getCell(r, 2);
+    v.value = { formula };
+    styleOutputCell(v, fmt);
+    sheet.mergeCells(r, 3, r, 6);
+    const n = sheet.getCell(r, 3);
+    n.value = note;
+    n.font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    n.alignment = { vertical: 'middle', horizontal: 'left' };
+    n.protection = { locked: true };
+  });
+
+  sheet.getRow(16).height = 8;
+  sheet.mergeCells('A17:F17');
+  sheet.getCell('A17').value = 'Kernel Residual (committed)';
+  styleSectionTitle(sheet.getCell('A17'));
+  sheet.getRow(17).height = 22;
+  sheet.getCell('A18').value = 'Residual land value (kernel)';
+  styleLabelCell(sheet.getCell('A18'));
+  const kernelRlv = Number(ctx.kernelKpis?.residualLandValue);
+  const kernelCell = sheet.getCell('B18');
+  kernelCell.value = Number.isFinite(kernelRlv) ? kernelRlv : '–';
+  styleOutputCell(kernelCell, FMT_CR);
+  sheet.mergeCells('C18:F18');
+  sheet.getCell('C18').value =
+    'Margin-standard residual stored on the deal record by the deterministic kernel: (revenue − all costs excl land) ÷ (1 + developer margin target). Undiscounted — pairs with the DCF residual above; the two methods bracket the supportable range.';
+  sheet.getCell('C18').font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('C18').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+  sheet.getCell('C18').protection = { locked: true };
+  sheet.getRow(18).height = 40;
+
+  sheet.getRow(19).height = 8;
+  sheet.mergeCells('A20:F20');
+  sheet.getCell('A20').value = 'Verdict (recalculates live)';
+  styleSectionTitle(sheet.getCell('A20'));
+  sheet.getRow(20).height = 22;
+  sheet.mergeCells('A21:F21');
+  const verdict = sheet.getCell('A21');
+  // Every number in the sentence is a live cell reference via TEXT() —
+  // the wb-reference pattern, minus its one flaw (a hardcoded caption that
+  // went stale when the quote moved). Verbs: closed dictionary only.
+  verdict.value = {
+    formula:
+      '=IF(OR(NOT(ISNUMBER($C$8)),LandCostCr<=0),"Insufficient inputs for a verdict — set Land Cost (and Land Area for per-acre readings) on the Inputs sheet.",' +
+      '"At the booked land cost of ₹"&TEXT(LandCostCr,"#,##0.0")&" cr, the maximum supportable land value at the "&TEXT(DiscountRatePct,"0.0%")&" target IRR is ₹"&TEXT($C$8,"#,##0.0")&" cr ("&TEXT($C$8/LandCostCr-1,"+0.0%;-0.0%")&" vs booked). "&' +
+      'IF($C$8<LandCostCr,"The booked cost exceeds this ceiling — re-examine the land price or the revenue and cost assumptions before IC.","The booked cost sits inside this ceiling — stress-test revenue and cost assumptions to confirm the headroom holds."))',
+  };
+  verdict.font = { name: FONT, size: 10.5, color: { argb: palette.xlsx('inkDeep') } };
+  verdict.fill = FILL(palette.xlsx('paperSubtle'));
+  verdict.alignment = { vertical: 'top', horizontal: 'left', wrapText: true, indent: 1 };
+  verdict.protection = { locked: true };
+  sheet.getRow(21).height = 60;
+
+  [
+    'Pre-tax basis. The land-excluded cash-flow row nets the landowner share where a JDA / DM structure applies.',
+    'PV is as of the first model month; the supportable column strips stamp duty + registration so it compares to a quoted land price.',
+    'An affordability ceiling implied by the model inputs — not a legal opinion, a market valuation, or an offer price. Verify every input against source documents.',
+  ].forEach((note, idx) => {
+    const r = 23 + idx;
+    sheet.mergeCells(r, 1, r, 6);
+    const cell = sheet.getCell(r, 1);
+    cell.value = `· ${note}`;
+    cell.font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedLow') } };
+    cell.alignment = { vertical: 'middle', horizontal: 'left' };
+    cell.protection = { locked: true };
+  });
+
+  return sheet;
+};
+
+// ──────────────────────────────────────────────────────────────────────────
+// Model Integrity sheet (2026-07-17, workbook Batch 3)
+// ──────────────────────────────────────────────────────────────────────────
+// Live, formula-driven tie-outs in the institutional Checks-sheet idiom:
+// Check | Actual | Expected | Difference | Tolerance | Status | Note, with
+// a COUNTIF roll-up to one "Model integrity status" cell. Every Actual is
+// an Excel formula over the live model, so the statuses re-verify when the
+// operator edits Inputs — not a generation-time snapshot.
+//
+// Two statuses, deliberately separate (the single most important honesty
+// device in reference checks sheets):
+//   - Model integrity status  = live COUNTIF over the tie-outs. OK means
+//     the ARITHMETIC ties internally. Nothing more.
+//   - Input validation status = hardcoded "REVIEW". The inputs themselves
+//     (land price, rates, areas, approvals) remain underwriting assumptions
+//     until verified against source documents. No formula can clear this.
+const buildModelIntegritySheet = (workbook, ctx) => {
+  const months = getWorkbookModelMonths(ctx);
+  const lastMonthCol = excelCol(months + 1);
+  const monthlyRef = `'${SHEETS.monthlyCashFlow}'`;
+  const dashRef = `'${SHEETS.dashboard}'`;
+  const isIncome = ctx.dealFamily === 'income';
+  // Quarterly levered-equity row — MUST mirror the Dashboard's cfShift math
+  // (buildCashFlowSheet: cashFlowStartRow = phasingLastRow + 4; legacy row 12).
+  const quarterlyEquityRow = isIncome ? 32 : 38;
+  const lastQuarterCol = excelCol(ctx.totalQuarters + 1);
+  const engineRef = `'${SHEETS.cashFlowEngine}'`;
+
+  const sheet = workbook.addWorksheet(SHEETS.modelIntegrity, {
+    views: [{ showGridLines: false, state: 'frozen', xSplit: 0, ySplit: 7 }],
+  });
+  sheet.columns = [
+    { width: 40 }, { width: 15 }, { width: 13 }, { width: 13 }, { width: 11 }, { width: 11 }, { width: 72 },
+  ];
+
+  sheet.mergeCells('A1:G1');
+  sheet.getCell('A1').value = `${ctx.brandName} | ${ctx.deal.name || ctx.property.property_name || 'Deal'} | Model Integrity`;
+  styleSectionTitle(sheet.getCell('A1'));
+  sheet.getRow(1).height = 26;
+  sheet.mergeCells('A2:G2');
+  sheet.getCell('A2').value =
+    'Automated tie-outs recomputed live by Excel. OK means the arithmetic ties internally — it does not validate the inputs, the market, or any legal / statutory position.';
+  sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
+  sheet.getRow(2).height = 24;
+  sheet.getRow(3).height = 8;
+
+  // Check catalogue. mode: 'diff' → |Actual−Expected| ≤ Tolerance;
+  // 'gte' → Actual ≥ Expected; 'lte' → Actual ≤ Expected + Tolerance;
+  // 'advisory' → REVIEW (never CHECK) — excluded from the roll-up by verb.
+  const devChecks = [
+    { label: 'Sales absorption fully allocated', actual: `=SUM(${monthlyRef}!$B$11:$${lastMonthCol}$11)`, expected: 1, tol: 0.005, mode: 'diff', fmt: NUMBER_FORMATS.percent, note: 'Monthly absorption must reach 100% of stock. CHECK = unsold inventory remains at model end — extend the sales window or raise Sales Velocity.' },
+    { label: 'Collections foot to booked sales', actual: `=SUM(${monthlyRef}!$B$13:$${lastMonthCol}$13)-SUM(${monthlyRef}!$B$12:$${lastMonthCol}$12)`, expected: 0, tol: 0.005, mode: 'diff', fmt: NUMBER_FORMATS.currency, note: 'Construction-linked collections plus the possession true-up must equal every rupee of booked sales.' },
+    { label: 'RERA escrow fully released', actual: `=${monthlyRef}!$${lastMonthCol}$16`, expected: 0, tol: 0.005, mode: 'diff', fmt: NUMBER_FORMATS.currency, note: 'Escrow balance must return to zero at completion — no customer money left trapped in the ledger.' },
+    { label: 'Construction cost fully drawn', actual: `=SUM(${monthlyRef}!$B$7:$${lastMonthCol}$7)-ConstructionCostPerSqft*SaleableAreaSqft/10000000`, expected: 0, tol: 0.01, mode: 'diff', fmt: NUMBER_FORMATS.currency, note: 'S-curve draws must sum to the full hard-cost budget — nothing over- or under-drawn.' },
+    { label: 'Construction debt retired', actual: `=SUM(${monthlyRef}!$B$18:$${lastMonthCol}$18)+ABS(SUM(${monthlyRef}!$B$19:$${lastMonthCol}$19))+SUM(${monthlyRef}!$B$20:$${lastMonthCol}$20)`, expected: 0, tol: 0.01, mode: 'diff', fmt: NUMBER_FORMATS.currency, note: 'Draws + capitalised interest less repayments must return to zero. CHECK = sales cash cannot retire the facility inside the model window.' },
+    { label: 'Equity cash flow valid for IRR', actual: `=COUNTIF(${monthlyRef}!$B$21:$${lastMonthCol}$21,">0")*COUNTIF(${monthlyRef}!$B$21:$${lastMonthCol}$21,"<0")`, expected: 1, tol: 0, mode: 'gte', fmt: NUMBER_FORMATS.integer, note: 'IRR / XIRR need at least one outflow and one inflow. CHECK = the equity row never changes sign — returns are not computable.' },
+    { label: 'Sources equal uses', actual: `=${dashRef}!$B$12+${dashRef}!$B$13-SUM(${dashRef}!$B$14:$B$18)`, expected: 0, tol: 0.01, mode: 'diff', fmt: NUMBER_FORMATS.currency, note: 'Equity + debt on the Dashboard must fund exactly the summed uses.' },
+    { label: 'Kernel vs modeled IRR divergence', actual: `=IFERROR(ABS(${dashRef}!$B$21-${dashRef}!$B$20),"n/a")`, expected: 0, tol: 0.05, mode: 'advisory', fmt: NUMBER_FORMATS.percent, note: 'Advisory only. Divergence is expected once Inputs are edited; a large at-rest gap merits a review of the committed kernel inputs.' },
+  ];
+  const incomeChecks = [
+    { label: 'Sources equal uses', actual: `=${dashRef}!$B$12+${dashRef}!$B$13-SUM(${dashRef}!$B$14:$B$18)`, expected: 0, tol: 0.01, mode: 'diff', fmt: NUMBER_FORMATS.currency, note: 'Equity + debt on the Dashboard must fund exactly the summed uses.' },
+    { label: 'Equity cash flow valid for IRR', actual: `=COUNTIF(${engineRef}!$B$${quarterlyEquityRow}:$${lastQuarterCol}$${quarterlyEquityRow},">0")*COUNTIF(${engineRef}!$B$${quarterlyEquityRow}:$${lastQuarterCol}$${quarterlyEquityRow},"<0")`, expected: 1, tol: 0, mode: 'gte', fmt: NUMBER_FORMATS.integer, note: 'IRR / XIRR need at least one outflow and one inflow on the FCFE row. CHECK = returns are not computable.' },
+    { label: 'Occupancy within stabilised cap', actual: `=MAX(${monthlyRef}!$B$5:$${lastMonthCol}$5)`, expected: '=OccupancyPct', tol: 0.001, mode: 'lte', fmt: NUMBER_FORMATS.percent, note: 'The lease-up ramp must never exceed the stabilised occupancy input.' },
+    { label: 'NOI never exceeds revenue', actual: `=SUMPRODUCT(--(${monthlyRef}!$B$19:$${lastMonthCol}$19>${monthlyRef}!$B$12:$${lastMonthCol}$12))`, expected: 0, tol: 0, mode: 'diff', fmt: NUMBER_FORMATS.integer, note: 'Counts months where NOI exceeds effective gross revenue — must be zero (operating expenses cannot be negative).' },
+    { label: 'Kernel vs modeled IRR divergence', actual: `=IFERROR(ABS(${dashRef}!$B$21-${dashRef}!$B$20),"n/a")`, expected: 0, tol: 0.05, mode: 'advisory', fmt: NUMBER_FORMATS.percent, note: 'Advisory only. Divergence is expected once Inputs are edited; a large at-rest gap merits a review of the committed kernel inputs.' },
+  ];
+  const checks = isIncome ? incomeChecks : devChecks;
+  const firstCheckRow = 8;
+  const lastCheckRow = firstCheckRow + checks.length - 1;
+
+  // Status strip (rows 4-5) ABOVE the table so it survives the frozen pane.
+  sheet.getCell('A4').value = 'Model integrity status';
+  styleLabelCell(sheet.getCell('A4'));
+  sheet.getCell('A4').font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+  const rollup = sheet.getCell('B4');
+  rollup.value = { formula: `=IF(COUNTIF($F$${firstCheckRow}:$F$${lastCheckRow},"CHECK")=0,"OK","CHECK")` };
+  styleOutputCell(rollup, '@');
+  rollup.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+  rollup.alignment = { vertical: 'middle', horizontal: 'center' };
+  sheet.mergeCells('C4:G4');
+  sheet.getCell('C4').value = 'Live COUNTIF over the tie-outs below. Advisory REVIEW rows do not fail the roll-up.';
+  sheet.getCell('C4').font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('C4').alignment = { vertical: 'middle' };
+  sheet.getCell('C4').protection = { locked: true };
+
+  sheet.getCell('A5').value = 'Input validation status';
+  styleLabelCell(sheet.getCell('A5'));
+  sheet.getCell('A5').font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+  const inputStatus = sheet.getCell('B5');
+  inputStatus.value = 'REVIEW'; // deliberately hardcoded — no formula can clear it
+  styleOutputCell(inputStatus, '@');
+  inputStatus.font = { name: FONT, size: 11, bold: true, color: { argb: palette.xlsx('dataWarning') } };
+  inputStatus.alignment = { vertical: 'middle', horizontal: 'center' };
+  sheet.mergeCells('C5:G5');
+  sheet.getCell('C5').value =
+    'Deliberately hardcoded. Land price, rates, areas, approvals and every other input remain underwriting assumptions until verified against source documents (sale deed, RERA registration, EC, sanction plans).';
+  sheet.getCell('C5').font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell('C5').alignment = { vertical: 'middle', wrapText: true };
+  sheet.getCell('C5').protection = { locked: true };
+  sheet.getRow(5).height = 30;
+  sheet.getRow(6).height = 8;
+
+  ['Check', 'Actual', 'Expected', 'Difference', 'Tolerance', 'Status', 'What this verifies'].forEach((h, i) => {
+    sheet.getCell(7, i + 1).value = h;
+  });
+  styleHeader(sheet.getRow(7));
+
+  checks.forEach((check, idx) => {
+    const r = firstCheckRow + idx;
+    sheet.getCell(r, 1).value = check.label;
+    styleLabelCell(sheet.getCell(r, 1));
+    const actual = sheet.getCell(r, 2);
+    actual.value = { formula: check.actual };
+    styleOutputCell(actual, check.fmt);
+    const expected = sheet.getCell(r, 3);
+    expected.value = typeof check.expected === 'string' ? { formula: check.expected } : check.expected;
+    styleOutputCell(expected, check.fmt);
+    const diff = sheet.getCell(r, 4);
+    diff.value = { formula: `=IF(ISNUMBER($B$${r}),$B$${r}-$C$${r},"–")` };
+    styleOutputCell(diff, check.fmt);
+    const tol = sheet.getCell(r, 5);
+    tol.value = check.tol;
+    styleOutputCell(tol, check.fmt);
+    const status = sheet.getCell(r, 6);
+    const statusFormula = check.mode === 'gte'
+      ? `=IF($B$${r}>=$C$${r},"OK","CHECK")`
+      : check.mode === 'lte'
+        ? `=IF($B$${r}<=$C$${r}+$E$${r},"OK","CHECK")`
+        : check.mode === 'advisory'
+          ? `=IF(ISNUMBER($B$${r}),IF($B$${r}<=$E$${r},"OK","REVIEW"),"n/a")`
+          : `=IF(ABS($B$${r}-$C$${r})<=$E$${r},"OK","CHECK")`;
+    status.value = { formula: statusFormula };
+    styleOutputCell(status, '@');
+    status.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+    status.alignment = { vertical: 'middle', horizontal: 'center' };
+    const note = sheet.getCell(r, 7);
+    note.value = check.note;
+    note.font = { name: FONT, size: 8.5, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
+    note.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+    note.protection = { locked: true };
+    sheet.getRow(r).height = 28;
+  });
+
+  // Status colour semantics — data colours only, per the frontend/exports
+  // restraint rule: emerald OK, red CHECK, amber REVIEW.
+  const statusStyle = (token) => ({ fill: FILL(palette.xlsx(token)), font: { color: { argb: palette.xlsx('paperElevated') }, bold: true } });
   sheet.addConditionalFormatting({
-    ref: 'B6:H12',
-    rules: [{
-      type: 'colorScale',
-      cfvo: [{ type: 'num', value: -0.10 }, { type: 'num', value: 0.10 }, { type: 'num', value: 0.30 }],
-      color: [{ argb: palette.xlsx('dataNegative') }, { argb: palette.xlsx('dataWarning') }, { argb: palette.xlsx('dataPositive') }],
-      priority: 1,
-    }],
+    ref: `F${firstCheckRow}:F${lastCheckRow} B4:B4`,
+    rules: [
+      { type: 'containsText', operator: 'containsText', text: 'CHECK', style: statusStyle('dataNegative'), priority: 1 },
+      { type: 'containsText', operator: 'containsText', text: 'REVIEW', style: statusStyle('dataWarning'), priority: 2 },
+      { type: 'containsText', operator: 'containsText', text: 'OK', style: statusStyle('dataPositive'), priority: 3 },
+    ],
   });
+
+  const footerRow = lastCheckRow + 2;
+  sheet.mergeCells(footerRow, 1, footerRow, 7);
+  const footer = sheet.getCell(footerRow, 1);
+  footer.value =
+    'OK verifies internal arithmetic only. It is not a verification of title, encumbrance, RERA registration, statutory approvals, market values, or any other real-world fact — those require human review of source documents.';
+  footer.font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedLow') } };
+  footer.alignment = { vertical: 'top', horizontal: 'left', wrapText: true };
+  footer.protection = { locked: true };
+  sheet.getRow(footerRow).height = 28;
 
   return sheet;
 };
@@ -5335,6 +5505,45 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
     cell.protection = { locked: true };
     pbRow += 1;
   });
+
+  // ── Model integrity strip (2026-07-17, workbook Batch 3) ──────────────
+  // Live references into the Model Integrity sheet's two status cells so
+  // the IC landing tab answers "does this model tie out?" without hunting.
+  // The pair is deliberately asymmetric: model checks are live formulas,
+  // input validation is hardcoded REVIEW (inputs stay unverified until a
+  // human checks source documents).
+  const miRow = pbRow + 1;
+  sheet.getCell(`A${miRow}`).value = 'Model checks (live)';
+  sheet.getCell(`A${miRow}`).font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`A${miRow}`).alignment = { horizontal: 'right', vertical: 'middle' };
+  sheet.getCell(`A${miRow}`).protection = { locked: true };
+  const miStatus = sheet.getCell(`B${miRow}`);
+  miStatus.value = { formula: `='${SHEETS.modelIntegrity}'!$B$4` };
+  miStatus.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('inkDeep') } };
+  miStatus.alignment = { horizontal: 'center', vertical: 'middle' };
+  miStatus.protection = { locked: true };
+  sheet.getCell(`C${miRow}`).value = 'Input validation';
+  sheet.getCell(`C${miRow}`).font = { name: FONT, size: 9, bold: true, color: { argb: palette.xlsx('mutedHigh') } };
+  sheet.getCell(`C${miRow}`).alignment = { horizontal: 'right', vertical: 'middle' };
+  sheet.getCell(`C${miRow}`).protection = { locked: true };
+  const ivStatus = sheet.getCell(`D${miRow}`);
+  ivStatus.value = { formula: `='${SHEETS.modelIntegrity}'!$B$5` };
+  ivStatus.font = { name: FONT, size: 10, bold: true, color: { argb: palette.xlsx('dataWarning') } };
+  ivStatus.alignment = { horizontal: 'center', vertical: 'middle' };
+  ivStatus.protection = { locked: true };
+  sheet.mergeCells(`E${miRow}:H${miRow}`);
+  sheet.getCell(`E${miRow}`).value = 'Live arithmetic tie-outs — full table on the Model Integrity sheet. REVIEW = inputs await verification against source documents.';
+  sheet.getCell(`E${miRow}`).font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedLow') } };
+  sheet.getCell(`E${miRow}`).alignment = { horizontal: 'left', vertical: 'middle', wrapText: true };
+  sheet.getCell(`E${miRow}`).protection = { locked: true };
+  sheet.addConditionalFormatting({
+    ref: `B${miRow}:B${miRow}`,
+    rules: [
+      { type: 'containsText', operator: 'containsText', text: 'CHECK', style: { fill: FILL(palette.xlsx('dataNegative')), font: { color: { argb: palette.xlsx('paperElevated') }, bold: true } }, priority: 1 },
+      { type: 'containsText', operator: 'containsText', text: 'OK', style: { fill: FILL(palette.xlsx('dataPositive')), font: { color: { argb: palette.xlsx('paperElevated') }, bold: true } }, priority: 2 },
+    ],
+  });
+  sheet.getRow(miRow).height = 22;
 
   return sheet;
 };
@@ -8481,11 +8690,21 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   const { lastRow: phasingLastRow } = buildPhasingSheet(workbook, ctx);
   buildCashFlowSheet(workbook, ctx, { phasingLastRow });
   buildMonthlyCashFlowSheet(workbook, ctx);
+  // Residual Land Value — the land-negotiation sheet. Development family
+  // with a booked land cost only (JDA / DM with no land purchase skip it;
+  // income deals don't ask the residual question). Sits directly after the
+  // Monthly Cash Flow sheet whose land-excluded row it discounts.
+  if (ctx.dealFamily !== 'income' && (getCoreInputSnapshot(ctx).landCostCr || 0) > 0) {
+    buildResidualLandValueSheet(workbook, ctx);
+  }
 
   buildDebtSizingSheet(workbook, ctx);
   buildAmortizationSheet(workbook, ctx);
   appendWaterfallToDebtSheet(workbook, ctx);
   buildCalculationsSheet(workbook, ctx); // hidden audit trail
+  // Model Integrity — live tie-outs; always last so it reads as the
+  // closing control sheet (the institutional checks-sheet position).
+  buildModelIntegritySheet(workbook, ctx);
 
   // Register defined names AFTER all sheets exist so the references resolve.
   definedNames.forEach(({ name, ref }) => {
