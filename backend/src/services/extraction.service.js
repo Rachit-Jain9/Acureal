@@ -1218,6 +1218,12 @@ function buildFieldMap(extractions) {
               lane: assessment.lane || null,
               grounded: assessment.grounded ?? null,
             },
+            // Deterministic normalization proposal (raw stays immutable in
+            // structured_fields). Only successful readings travel — a 'failed'
+            // normalization carries no value, so the UI proposes the raw.
+            normalized: assessment?.normalized && assessment.normalized.value !== undefined
+              ? assessment.normalized
+              : null,
             from_corrections: ext.has_corrections && ext.fields?.[sourceKey] !== undefined,
             document_id: ext.document_id,
             document_name: ext.document_name,

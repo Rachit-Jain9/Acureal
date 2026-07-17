@@ -55,6 +55,7 @@
  */
 
 const { legalFourLaneForField, legalFourLabelForLane } = require('../constants/legalFourFields');
+const { normalizeField } = require('./extractionNormalizers');
 
 /**
  * Bumped whenever the scoring semantics change. v1 (implicit, absent) was the
@@ -301,7 +302,18 @@ const assessField = (fieldName, value, ctx) => {
     reason = REASONS[status];
   }
 
-  return { present: true, lane, grounded, schemaValid, status, reason, score: STATUS_SCORE[status] };
+  // Deterministic normalization proposal ("34 Acres 32 Guntas" → 34.8 acre,
+  // "06.02.2024" → 2024-02-06, "₹1.25 crore" → 12500000). ORTHOGONAL to the
+  // verification status above — the assessment judges the RAW value; the
+  // proposal is a standard spelling of the same fact, raw immutable beside
+  // it. null when nothing applies (bare numbers, identifiers, names, blanks).
+  const normalized = normalizeField(fieldName, value);
+
+  return {
+    present: true, lane, grounded, schemaValid, status, reason,
+    score: STATUS_SCORE[status],
+    ...(normalized ? { normalized } : {}),
+  };
 };
 
 /**

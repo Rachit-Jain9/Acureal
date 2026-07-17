@@ -115,6 +115,16 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
 
         const { display, reason } = displayForSignal(source.signal);
 
+        // Deterministic normalization ("34 Acres 32 Guntas" → 34.8,
+        // "06.02.2024" → 2024-02-06). When present, the PROPOSED value is the
+        // normalized one — the document's exact words stay visible beside it
+        // and ride into the audit trail. Without it, such values would pass
+        // review and then be silently skipped at apply ("could not coerce").
+        const normalized = source.normalized && source.normalized.value !== undefined
+          ? source.normalized
+          : null;
+        const proposedValue = normalized ? normalized.value : source.value;
+
         return {
           canonicalKey,
           spec,
@@ -122,6 +132,8 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
           currentValue,
           display,
           reason,
+          normalized,
+          proposedValue,
           isLegal: Boolean(source.signal?.lane),
           autoFillable: display.autoFill,
         };
@@ -188,17 +200,19 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
   const clearAll = () => setApprovedKeys(new Set());
 
   // The value that will actually be applied for a row: the operator's
-  // correction if they made one, otherwise the AI's extracted value.
+  // correction if they made one, otherwise the PROPOSED value (the
+  // deterministic normalization when one exists, else the raw extraction).
   const effectiveValueOf = (c) =>
     Object.prototype.hasOwnProperty.call(editedValues, c.canonicalKey)
       ? editedValues[c.canonicalKey]
-      : c.source.value;
+      : c.proposedValue;
 
-  // True only when the operator's typed value genuinely differs from the AI's
-  // — typing the AI value back, character for character, is not an edit.
+  // True only when the operator's typed value genuinely differs from the
+  // proposal — typing the proposed value back, character for character, is
+  // not an edit.
   const isEditedRow = (c) =>
     Object.prototype.hasOwnProperty.call(editedValues, c.canonicalKey) &&
-    String(editedValues[c.canonicalKey] ?? '') !== String(c.source.value ?? '');
+    String(editedValues[c.canonicalKey] ?? '') !== String(c.proposedValue ?? '');
 
   const setEditedValue = (key, value) => {
     setEditedValues((prev) => ({ ...prev, [key]: value }));
@@ -228,6 +242,12 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
         // percentage. `confidence` stays for backward-compatible audit shape.
         verification_status: c.source.signal?.status || null,
         confidence: c.source.signal_score != null ? Number(c.source.signal_score) : null,
+        // When the applied value came from a normalization, keep the
+        // document's exact words + the versioned rule in the audit trail.
+        ...(c.normalized ? {
+          source_raw_value: String(c.source.value ?? ''),
+          normalization_rule: c.normalized.rule,
+        } : {}),
       }));
 
     if (approved.length === 0) return;
@@ -364,7 +384,7 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                   const edited = isEditedRow(c);
                   const proposedDisplay = Object.prototype.hasOwnProperty.call(editedValues, c.canonicalKey)
                     ? editedValues[c.canonicalKey]
-                    : (c.source.value == null ? '' : String(c.source.value));
+                    : (c.proposedValue == null ? '' : String(c.proposedValue));
                   const willOverwrite = c.currentValue != null && c.currentValue !== '' && String(c.currentValue) !== String(effectiveValueOf(c));
                   return (
                     <li
@@ -451,14 +471,28 @@ export default function AutoFillFromDocumentsModal({ dealId, open, onClose, deal
                               type="button"
                               onClick={() => resetEditedValue(c.canonicalKey)}
                               disabled={isSubmitting}
-                              title="Reset to the AI-extracted value"
-                              aria-label={`Reset ${c.spec.label} to the AI-extracted value`}
+                              title="Reset to the proposed value"
+                              aria-label={`Reset ${c.spec.label} to the proposed value`}
                               className="p-0.5 text-content-tertiary hover:text-content-primary rounded transition-colors disabled:opacity-50 flex-shrink-0"
                             >
                               <RotateCcw size={12} />
                             </button>
                           )}
                         </div>
+                        {/* Normalization provenance: the document's exact words
+                            stay visible beside the standardised proposal — the
+                            operator always sees what was converted from what. */}
+                        {c.normalized && !edited && (
+                          <p
+                            className="mt-0.5 text-[10px] text-content-tertiary break-words"
+                            title={c.normalized.reason}
+                          >
+                            from “{String(c.source.value)}”
+                            {c.normalized.status === 'assumed' && (
+                              <span className="text-premium font-medium"> · day-first assumed</span>
+                            )}
+                          </p>
+                        )}
                       </div>
 
                       {/* Verification basis + source document. The pill is the
