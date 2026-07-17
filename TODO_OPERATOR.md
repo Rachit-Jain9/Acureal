@@ -12,12 +12,43 @@ _Last updated: 2026-06-09._
 
 ---
 
+## 🟠 One database update is waiting (2 minutes)
+
+**What it is:** a lookup table that maps Bengaluru localities (Ejipura, Bellandur,
+Jakkasandra…) to their BDA Planning District. REDIP has been asking the database
+for this table since mid-June and getting an error back every time, because the
+update was written but never actually run.
+
+**What's broken without it:** nothing crashes — REDIP quietly falls back to
+guessing the district from the address text, so some localities just don't resolve
+and you're asked to pick the district by hand on the Parcel/Zoning tab.
+
+**Do this:**
+
+1. 🌐 Open this exact link: https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new
+2. 📋 Open this file: `database/migrations/20260619_district_localities.sql` — click
+   inside it, select everything (**Ctrl+A**), copy (**Ctrl+C**).
+3. Paste it into the big text box on the Supabase page (**Ctrl+V**).
+4. Click the green **Run** button (bottom-right).
+5. ✅ You'll see **"Success. No rows returned"**. Send **"done"**.
+
+Safe to run, and safe to run twice — it only *adds* a new reference table and
+touches none of your deal data.
+
+> Heads-up on where this data comes from: the locality list is taken from the BDA's
+> RMP 2031 draft, which was withdrawn in 2020. That's fine here because it's only
+> used to put a **district name label** on an address — it is never used to decide
+> FAR, zoning, or any approval. If you'd rather not load withdrawn-plan data at all,
+> say so and I'll remove the feature instead; nothing depends on it.
+
 ## ✅ Already handled — nothing for you to do here
 
-- **Database is fully up to date and secure.** Verified live on 2026-06-09: every
-  database update (including the important security fix) is already applied, and
-  Supabase's own security scanner found nothing that needs action. You do **not**
-  need to apply any database updates.
+- **Database security** verified live on 2026-06-09: the important security fix is
+  applied and Supabase's own security scanner found nothing needing action.
+  (This section used to claim the database was *fully* up to date and that you
+  never needed to apply updates — that was wrong, and it's why the update above sat
+  unnoticed for a month. Migrations are applied by hand here, so "written" never
+  means "live" until someone runs it.)
 - **The website features** (large-number helpers, charts, exports, deal workspace,
   K-RERA tracking, etc.) are built and live.
 - **AI + file uploads** are working in production, so those keys are set. (If

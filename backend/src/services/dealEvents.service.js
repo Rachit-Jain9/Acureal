@@ -38,15 +38,42 @@ const writeActivity = async ({
   priority = 'low',
 }) => {
   if (!dealId || !type || !description) return null;
+
+  // Derive the completion columns in JS rather than with SQL CASE expressions.
+  //
+  // This is not a style choice — the CASE form was BROKEN from the day it
+  // shipped (2026-03-27 → 2026-07-17), and silently: it wrote
+  //     VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7,
+  //             CASE WHEN $6 = 'completed' THEN NOW() ELSE NULL END,
+  //             CASE WHEN $6 = 'completed' THEN $4 ELSE NULL END)
+  // `$4` sits in the `performed_by` slot, so Postgres deduces uuid — but it
+  // ALSO appears inside a CASE whose arms are `$4` and `NULL`, i.e. both
+  // untyped. With no typed arm to anchor on, Postgres resolves that CASE to
+  // `text` and deduces `$4::text`, which contradicts the uuid. Every call
+  // therefore died at PARSE time with `42P08 inconsistent types deduced for
+  // parameter $4` — reproduced verbatim against the production database.
+  //
+  // Because the write is fail-soft (see the catch below), the originating
+  // mutation still succeeded and nobody noticed: the deal timeline simply
+  // never gained a single automatic row. All ELEVEN event types this sink
+  // subscribes to — stage changes, approvals, risk flags, DD items, uploads,
+  // extractions, financial scenarios — were lost. CLAUDE.md calls that audit
+  // trail "non-negotiable for investor-grade reporting".
+  //
+  // Computing these in JS mirrors what activity.service.logActivity already
+  // does (see its `completedAt` / `completedBy`), removes the parameter reuse
+  // entirely, and leaves every placeholder in exactly one type context.
+  const isCompleted = status === 'completed';
+  const completedAt = isCompleted ? new Date() : null;
+  const completedBy = isCompleted ? performedBy : null;
+
   try {
     const result = await query(
       `INSERT INTO activities (
          deal_id, activity_type, description, performed_by, activity_date,
          is_important, status, priority, completed_at, completed_by
        )
-       VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7,
-               CASE WHEN $6 = 'completed' THEN NOW() ELSE NULL END,
-               CASE WHEN $6 = 'completed' THEN $4 ELSE NULL END)
+       VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8, $9)
        RETURNING id`,
       [
         dealId,
@@ -56,12 +83,17 @@ const writeActivity = async ({
         isImportant,
         status,
         priority,
+        completedAt,
+        completedBy,
       ]
     );
     return result.rows[0]?.id || null;
   } catch (err) {
-    log.warn('auto_activity_write_failed', {
-      error: err.message,
+    // Fail-soft is deliberate: a timeline row must never break the mutation
+    // that triggered it. But log at ERROR — a permanently-failing audit write
+    // is exactly the thing that must reach the error dashboard, not sit in
+    // warnings where it hid for four months.
+    log.error('auto_activity_write_failed', err, {
       deal_id: dealId,
       type,
     });
