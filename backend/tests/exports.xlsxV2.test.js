@@ -143,20 +143,24 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
       expect(buffer.slice(0, 2).toString('ascii')).toBe('PK');
     });
 
-    test('produced workbook stays editable and within the 8-worksheet structure', async () => {
+    test('produced workbook stays editable and within the 10-worksheet structure', async () => {
       // PR-NX7 (2026-05-15): Executive Briefing added as the FIRST tab.
       // PR-NX57 (2026-05-19): AI Synthesis added as the SECOND tab (after
       // Executive Briefing, before Dashboard) — cross-product parity with
       // DOCX + PPTX Risk / Sensitivity / Document-Insights narratives.
-      // Total now 8 sheets:
-      //   1. Executive Briefing (FIRST — AI-assisted IC summary)
-      //   2. Analysis Notes (NEW — renamed from "AI Synthesis" per PR-NX74)
+      // 2026-07-17 (workbook Batch 3): Residual Land Value (development
+      // family with a booked land cost) + Model Integrity (always, last).
+      // Total now 10 sheets for a dev deal with land cost:
+      //   1. Executive Briefing (FIRST — IC summary)
+      //   2. Analysis Notes (renamed from "AI Synthesis" per PR-NX74)
       //   3. Dashboard
       //   4. Inputs & Assumptions
       //   5. Cash Flow Engine        (combined: Phasing + Cash Flow + Debt)
       //   6. Monthly Cash Flow
-      //   7. Debt Sizing & Amortization
-      //   8. Calculations            (hidden audit trail)
+      //   7. Residual Land Value     (dev family + landCostCr > 0 only)
+      //   8. Debt Sizing & Amortization
+      //   9. Calculations            (hidden audit trail)
+      //  10. Model Integrity         (live tie-outs; closing control sheet)
       const buffer = await buildDealWorkbookV2(minimalContext());
       const wb = new ExcelJS.Workbook();
       await wb.xlsx.load(buffer);
@@ -168,10 +172,12 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         'Inputs & Assumptions',
         'Cash Flow Engine',
         'Monthly Cash Flow',
+        'Residual Land Value',
         'Debt Sizing & Amortization',
         'Calculations',
+        'Model Integrity',
       ]);
-      expect(names.length).toBeLessThanOrEqual(8);
+      expect(names.length).toBeLessThanOrEqual(10);
       expect(names).not.toContain('Export QA & Sources');
       // Site Yield + Market Comparables tabs are conditional — absent here.
       expect(names).not.toContain('Site Yield');
@@ -3184,20 +3190,44 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         expect(labels.find((l) => l.startsWith('Carpet Area'))).toBeUndefined();
       });
 
-      test('Raw land + Plotted skip the RERA Escrow section (no customer construction milestones)', async () => {
+      test('Raw land + Plotted render the RERA Escrow section (name is engine-referenced; K-RERA covers plotted)', async () => {
+        // 2026-07-17 FIX (inverts the previous policy): the Cash Flow
+        // Engine escrow ledger + Monthly Cash Flow rows reference
+        // RERAEscrowPct unconditionally, so skipping the section for
+        // plotted / raw_land shipped an undefined name → #NAME? on every
+        // cash-flow row downstream of collections (the PR-NX15
+        // hospitality-Dashboard failure class). Domain-wise, K-RERA DOES
+        // cover plotted developments (>500 sqm or >8 plots), so 70% is
+        // the correct plotted default; raw land has no customer
+        // collections → 0%, which collapses the escrow ledger cleanly.
+        const escrowValue = (ws) => {
+          let value = null;
+          ws.eachRow((row) => {
+            if (String(row.getCell(1).value || '') === 'RERA Escrow Allocation') value = row.getCell(2).value;
+          });
+          return value;
+        };
+        const definedNamesOf = (wb) => new Set(
+          ((wb.definedNames && wb.definedNames.model) || []).map((e) => e && e.name).filter(Boolean),
+        );
+
         const rawBuf = await buildDealWorkbookV2(rawLandCtx());
         const wbRaw = new ExcelJS.Workbook();
         await wbRaw.xlsx.load(rawBuf);
         const rawLabels = collectInputLabels(wbRaw.getWorksheet('Inputs & Assumptions'));
-        expect(rawLabels.find((l) => l.includes('RERA Compliance'))).toBeUndefined();
+        expect(rawLabels).toContain('RERA Compliance & Escrow');
+        expect(escrowValue(wbRaw.getWorksheet('Inputs & Assumptions'))).toBe(0);
+        expect(definedNamesOf(wbRaw).has('RERAEscrowPct')).toBe(true);
 
         const plottedBuf = await buildDealWorkbookV2(plottedCtx());
         const wbPlotted = new ExcelJS.Workbook();
         await wbPlotted.xlsx.load(plottedBuf);
         const plottedLabels = collectInputLabels(wbPlotted.getWorksheet('Inputs & Assumptions'));
-        expect(plottedLabels.find((l) => l.includes('RERA Compliance'))).toBeUndefined();
+        expect(plottedLabels).toContain('RERA Compliance & Escrow');
+        expect(escrowValue(wbPlotted.getWorksheet('Inputs & Assumptions'))).toBe(0.7);
+        expect(definedNamesOf(wbPlotted).has('RERAEscrowPct')).toBe(true);
 
-        // But standard residential (development family) DOES still see RERA
+        // Standard residential (development family) keeps the section too.
         const residentialBuf = await buildDealWorkbookV2(minimalContext());
         const wbRes = new ExcelJS.Workbook();
         await wbRes.xlsx.load(residentialBuf);
@@ -5460,10 +5490,22 @@ describe('No circular references in any generated formula (2026-07-13)', () => {
       for (const cm of xml.matchAll(/<c r="([A-Z]+\d+)"[^>]*>(?:<f[^>]*>([^<]*)<\/f>)?/g)) {
         const addr = cm[1]; const formula = cm[2];
         if (!formula) continue;
+        // Decode XML entities FIRST — serialized formulas carry &apos; /
+        // &quot; / &amp;, so the cross-sheet-ref stripper below never
+        // matched quoted sheet names ('Dashboard'!$B$14) and a same-row
+        // address inside a cross-sheet RANGE false-positived as circular
+        // (found 2026-07-17 via Model Integrity's Sources-equal-uses check).
+        const decoded = formula
+          .replace(/&apos;/g, "'")
+          .replace(/&quot;/g, '"')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&amp;/g, '&');
         // Strip strings + cross-sheet refs, drop $ anchors, then token-match.
-        const clean = formula
+        const clean = decoded
           .replace(/"[^"]*"/g, '')
           .replace(/'[^']*'![A-Z$]+\d+(:[A-Z$]+\d+)?/g, '')
+          .replace(/[A-Za-z_][A-Za-z0-9_.]*![A-Z$]+\d+(:[A-Z$]+\d+)?/g, '')
           .replace(/\$/g, '');
         if (clean.split(/[^A-Z0-9]+/).includes(addr)) {
           offenders.push(`${f.name}!${addr} = ${formula.slice(0, 80)}`);
@@ -5471,5 +5513,131 @@ describe('No circular references in any generated formula (2026-07-13)', () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe('Residual Land Value + Model Integrity sheets (2026-07-17, workbook Batch 3)', () => {
+  const incomeContext = () => {
+    const ctx = minimalContext();
+    ctx.deal.asset_class = 'commercial_office';
+    ctx.property.property_type = 'commercial_office';
+    ctx.deal.model_params.inputs.baseRentPerSqftMonth = 95;
+    ctx.deal.model_params.inputs.occupancyPct = 0.9;
+    ctx.deal.model_params.inputs.exitCapRate = 0.08;
+    return ctx;
+  };
+  const loadWb = async (ctx) => {
+    const buffer = await buildDealWorkbookV2(ctx);
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(buffer);
+    return wb;
+  };
+  const formulaOf = (cell) => {
+    const v = cell.value;
+    return v && typeof v === 'object' && typeof v.formula === 'string' ? v.formula : null;
+  };
+
+  test('Monthly Cash Flow (dev) gains the land-excluded CF row + date-based XIRR/XNPV block', async () => {
+    const wb = await loadWb(minimalContext());
+    const monthly = wb.getWorksheet('Monthly Cash Flow');
+    expect(monthly.getCell('A23').value).toBe('Project CF excl land (pre-finance)');
+    // receipts − uses + land (adding land back cancels it out of uses)
+    expect(formulaOf(monthly.getCell('B23'))).toBe('B17-B10+B6');
+    expect(monthly.getCell('A25').value).toBe('Equity XIRR (date-based)');
+    expect(formulaOf(monthly.getCell('B25'))).toContain('XIRR($B$21:');
+    expect(formulaOf(monthly.getCell('B25'))).toContain('$B$3:');
+    expect(monthly.getCell('A26').value).toBe('Equity XNPV @ Discount Rate (INR Cr)');
+    expect(formulaOf(monthly.getCell('B26'))).toContain('XNPV(');
+  });
+
+  test('income Monthly sheet does NOT get the XIRR block (no terminal-value row — XIRR would misread)', async () => {
+    const wb = await loadWb(incomeContext());
+    const monthly = wb.getWorksheet('Monthly Cash Flow');
+    // Income rows 23-27 belong to the operating grid; no XIRR labels anywhere.
+    let hasXirrLabel = false;
+    monthly.eachRow((row) => {
+      if (String(row.getCell(1).value || '').includes('XIRR')) hasXirrLabel = true;
+    });
+    expect(hasXirrLabel).toBe(false);
+  });
+
+  test('Residual Land Value sheet renders for dev deals with a booked land cost', async () => {
+    const wb = await loadWb(minimalContext());
+    const rlv = wb.getWorksheet('Residual Land Value');
+    expect(rlv).toBeDefined();
+    // Hurdle ladder discounts the Monthly land-excluded row on real dates.
+    const pv = formulaOf(rlv.getCell('B8'));
+    expect(pv).toContain('XNPV($A$8');
+    expect(pv).toContain("'Monthly Cash Flow'!$B$23:");
+    expect(pv).toContain("'Monthly Cash Flow'!$B$3:");
+    // The hurdle axis DERIVES from the Discount Rate input (re-centering
+    // ladder — never a stale hardcoded axis). After the inline-refs
+    // rewrite the named range resolves to its Inputs-sheet cell.
+    expect(formulaOf(rlv.getCell('A6'))).toMatch(/(DiscountRatePct|Inputs & Assumptions).*-0\.04/);
+    // Per-acre + vs-booked columns.
+    expect(formulaOf(rlv.getCell('D8'))).toContain('43560');
+    expect(formulaOf(rlv.getCell('E8'))).toContain('-1');
+    // Live TEXT() verdict — closed verb dictionary, no absolute verbs.
+    const verdict = formulaOf(rlv.getCell('A21'));
+    expect(verdict).toContain('TEXT(');
+    expect(verdict).toContain('supportable land value');
+    expect(verdict).toContain('re-examine');
+    expect(verdict).toContain('stress-test');
+    expect(verdict).not.toMatch(/"[^"]*\b(Buy|Reject|Approve|Decline)\b[^"]*"/);
+    // Kernel residual row is a literal (committed) value or an honest dash.
+    const kernelCell = rlv.getCell('B18').value;
+    expect(typeof kernelCell === 'number' || kernelCell === '–').toBe(true);
+  });
+
+  test('Residual Land Value sheet is absent for income deals and zero-land (JDA-style) deals', async () => {
+    const incomeWb = await loadWb(incomeContext());
+    expect(incomeWb.getWorksheet('Residual Land Value')).toBeUndefined();
+
+    const jdaCtx = minimalContext();
+    jdaCtx.deal.deal_structure = 'jda_revenue_share';
+    jdaCtx.deal.model_params.inputs.landCostCr = 0;
+    jdaCtx.deal.model_params.inputs.landownerSharePct = 0.35;
+    const jdaWb = await loadWb(jdaCtx);
+    expect(jdaWb.getWorksheet('Residual Land Value')).toBeUndefined();
+  });
+
+  test('Model Integrity sheet renders for both families with live statuses + hardcoded input-validation REVIEW', async () => {
+    for (const [ctx, family] of [[minimalContext(), 'development'], [incomeContext(), 'income']]) {
+      const wb = await loadWb(ctx);
+      const mi = wb.getWorksheet('Model Integrity');
+      expect(mi).toBeDefined();
+      // Roll-up is a live COUNTIF, not a generation-time literal.
+      expect(formulaOf(mi.getCell('B4'))).toContain('COUNTIF($F$8:');
+      // Input validation is deliberately hardcoded — no formula can clear it.
+      expect(mi.getCell('B5').value).toBe('REVIEW');
+      // Every check row has a live status formula referencing its own row.
+      let statusRows = 0;
+      for (let r = 8; r <= 20; r += 1) {
+        const f = formulaOf(mi.getCell(r, 6));
+        if (f) {
+          statusRows += 1;
+          expect(f).toContain(`$B$${r}`);
+        }
+      }
+      expect(statusRows).toBeGreaterThanOrEqual(family === 'development' ? 8 : 5);
+      // Honesty footer: OK ≠ verified inputs / legal facts.
+      let footerFound = false;
+      mi.eachRow((row) => {
+        if (String(row.getCell(1).value || '').includes('OK verifies internal arithmetic only')) footerFound = true;
+      });
+      expect(footerFound).toBe(true);
+    }
+  });
+
+  test('Executive Briefing surfaces both integrity statuses as live references', async () => {
+    const wb = await loadWb(minimalContext());
+    const brief = wb.getWorksheet('Executive Briefing');
+    let stripRow = null;
+    brief.eachRow((row, rn) => {
+      if (String(row.getCell(1).value || '').includes('Model checks')) stripRow = rn;
+    });
+    expect(stripRow).not.toBeNull();
+    expect(formulaOf(brief.getCell(`B${stripRow}`))).toContain("'Model Integrity'!$B$4");
+    expect(formulaOf(brief.getCell(`D${stripRow}`))).toContain("'Model Integrity'!$B$5");
   });
 });
