@@ -86,17 +86,18 @@ describe('accountClosure.eraseClosedAccounts', () => {
     expect(sql).toMatch(/password_hash = NULL/);
   });
 
-  test('falls back without email_normalized when column is missing', async () => {
-    query
-      .mockRejectedValueOnce(new Error('column "email_normalized" does not exist'))
-      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'u-9' }] });
+  test('never references email_normalized — a column that exists nowhere', async () => {
+    // Regression for the production error "column email_normalized does not
+    // exist", which threw on EVERY erasure run since this service shipped. No
+    // migration creates that column and nothing reads it; the write was dead.
+    // Erasure ran in ONE query now, not a doomed primary + a fallback retry.
+    query.mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'u-9' }] });
 
     const result = await accountClosure.eraseClosedAccounts();
 
     expect(result.rows_erased).toBe(1);
-    expect(query).toHaveBeenCalledTimes(2);
-    // Second attempt does NOT touch email_normalized
-    expect(query.mock.calls[1][0]).not.toMatch(/email_normalized/);
+    expect(query).toHaveBeenCalledTimes(1); // no wasted doomed attempt
+    expect(query.mock.calls[0][0]).not.toMatch(/email_normalized/);
   });
 
   test('returns zero on transient DB error (fail-open)', async () => {
