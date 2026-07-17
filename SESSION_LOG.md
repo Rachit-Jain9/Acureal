@@ -78,7 +78,7 @@ Follows the extraction-status fix (#994) and an external ChatGPT critique the op
 
 ### What's left to do next
 - **Operator decision, deferred (deterministic normalizers).** ChatGPT's Stage-2 proposal — versioned per-field normalizers (Indian dates, lakh/crore, acres-guntas) with immutable raw values — was scoped but NOT built. It's a real subsystem (schemas, provenance, ambiguity handling, golden corpus), not "an hour". Worth doing when there's document volume; the current signal already flags format issues honestly without rewriting anything.
-- **Follow-up on the real finding:** the AI-surfaced 34 acres 32 guntas (BDA letter, total Survey No. 72 extent) vs 8.2 acres (sale deed, conveyed) — a genuine extent question to confirm with the survey authority (likely benign: total-vs-conveyed, not a title defect).
+- ~~Survey No. 72 extent question~~ — **CLOSED 2026-07-17, do not re-raise.** The landlord supplied a sale deed for one PORTION of the land only, so 8.2 acres (that deed) and 34a32g (total survey extent) are different scopes, both correct. Not a discrepancy. See [[decisions_permanently_skipped]].
 - Legacy extractions keep fill-rate confidence + NULL field_quality until re-run; the UI degrades them to "Review" (never pre-ticked). No backfill by design.
 
 ## 2026-07-16 (cont.) — Three production bugs fixed + AI extraction opened to many formats/languages/multi-file (PRs #992, #993 — merged, live-deployed)
@@ -123,12 +123,12 @@ Fix: separated `parseError` (data genuinely incomplete → `partial`) from `note
 - **A .docx was AI-read for the first time** — "New Microsoft Word Document.docx" → doctype `broker_quote`, **19 fields**, `completed`, lang `en`. The mammoth→text→Gemini parseable path working end-to-end in production. That format was unreadable before this session.
 - **Images now extract** — 5 JPEGs classified: 4 × `rtc_pahani` (24 fields, Kannada land records), `sale_deed`, `other` (9 fields, lang **`mul`** = mixed-script detected). `language_detected` is populated for the first time ever.
 - **Every row reads green, zero orange warnings**; "Auto-fill from documents" 5 → 6.
-- Cross-document analysis now does real work off the wider corpus: flagged *"RTC document lists 34.32 acres, whereas sale deeds document 8.2 acres for survey number 72"* — a genuine title discrepancy surfaced by comparing a Word doc against scans.
+- Cross-document analysis now does real work off the wider corpus: it compared a Word doc against scans and raised an area-mismatch card. (Operator resolved it 2026-07-17: NOT a discrepancy — the sale deed covers one portion only, vs the total survey extent. Kept here only as evidence the cross-doc reader functions; do not re-raise it. See [[decisions_permanently_skipped]].)
 
 ### What's left to do next
 - **Operator decision on the normalization cost leak** (see #994 note above) — recommend routing it to a fast model or dropping it.
 - Operator: try a mixed multi-file upload (XLSX + photo + DWG) to see per-file progress + the "stored, not AI-readable" chip on the DWG.
-- Follow up on the real finding the AI just surfaced: the 34.32 vs 8.2 acre discrepancy on survey number 72.
+- ~~34.32 vs 8.2 acre on survey number 72~~ — **NOT a discrepancy; closed 2026-07-17.** Sale deed covers one portion only; 34a32g is the total survey extent. Do not re-raise. See [[decisions_permanently_skipped]].
 - Future (not in scope): Gemini File API for >20 MB scans; PPTX/DOCX image-OCR (currently text-only); optional docType-override select on the deal extract action (plumbing already exists).
 
 ## 2026-07-16 (Rent-roll program — AI extraction, the final leg; PR-12) (PR #991)
