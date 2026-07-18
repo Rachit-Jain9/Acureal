@@ -939,6 +939,12 @@ export const adminAPI = {
   // Filters: days (1-365), eventType (string), dealId (UUID), limit (1-200).
   getAuditTrail: (params = {}) =>
     api.get('/admin/audit-trail', { params }),
+  // Liveness watchdog snapshot — the same four subsystem checks the hourly
+  // cron runs (AI provider error share, audit-write liveness, stuck
+  // extractions, tenant-isolation fail-closed canary), on demand and without
+  // raising Sentry alerts. Returns { overall, checks{...}, unhealthy_count,
+  // window_hours, generated_at }. Platform-admin only.
+  getSystemHealth: () => api.get('/admin/system-health'),
 };
 
 // Deal events — investor-grade audit trail backed by the `deal_events`

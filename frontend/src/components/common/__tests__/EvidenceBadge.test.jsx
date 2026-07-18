@@ -147,7 +147,10 @@ describe('EvidenceBadge', () => {
             source_count: 0,
             manual_count: 1,
             max_confidence: null,
-            bucket: 'inferred',
+            // A manual verification is a human sign-off → the bucket is now
+            // 'verified' (it was wrongly downgraded to 'inferred' before).
+            human_approved: true,
+            bucket: 'verified',
           },
         },
       },

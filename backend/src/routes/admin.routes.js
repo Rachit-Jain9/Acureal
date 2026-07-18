@@ -31,6 +31,7 @@ const routingConfigService = require('../services/ai/routingConfig');
 const abEvalPersistence = require('../services/ai/abEvalPersistence.service');
 // E7-PR1 (2026-05-27) — admin view of the learning-loop telemetry.
 const learningSignalsAdminReport = require('../services/learningSignals.adminReport.service');
+const { runHealthCheck } = require('../services/healthCheck.service');
 const { query } = require('../config/database');
 
 const router = express.Router();
@@ -217,6 +218,26 @@ router.get('/ai-health', authenticate, requirePlatformAdmin, async (req, res, ne
   try {
     const snapshot = await aiHealthService.getHealthSnapshot();
     res.json({ success: true, data: snapshot });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/admin/system-health
+//
+// On-demand liveness snapshot for the operator System Health page. Runs the
+// SAME four subsystem checks as the hourly `/api/cron/health-check/hourly`
+// watchdog (AI provider error share, audit-write liveness, stuck extractions,
+// tenant-isolation fail-closed canary) but does NOT raise Sentry alerts — the
+// cron owns alerting; a human viewing the page must not mint duplicate issues.
+//
+// Platform-admin only. Read-only. The checks are UNSCOPED (platform-wide
+// aggregate health) and return only counts / statuses — no tenant-identifying
+// data — so cross-org aggregation is safe for the operator surface.
+router.get('/system-health', authenticate, requirePlatformAdmin, async (req, res, next) => {
+  try {
+    const data = await runHealthCheck({ raiseAlerts: false });
+    res.json({ success: true, data });
   } catch (error) {
     next(error);
   }

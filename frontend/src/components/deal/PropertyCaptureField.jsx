@@ -387,12 +387,12 @@ function AiExtractionPanel({ ai, suggestedFields }) {
       <dl className="space-y-1">
         {rows.map((r, i) => (
           <div key={i} className="flex items-start gap-2">
-            <dt className="text-violet-700/80 min-w-[100px] flex-shrink-0">{r.label}</dt>
+            <dt className="text-accent min-w-[100px] flex-shrink-0">{r.label}</dt>
             <dd className="text-content-primary flex-1">{r.value}</dd>
           </div>
         ))}
       </dl>
-      <p className="text-[10px] text-violet-700/70 italic mt-1">
+      <p className="text-[10px] text-content-muted italic mt-1">
         Will be saved as the property's initial pricing/area. Review and edit on the deal page if anything is off.
       </p>
     </div>

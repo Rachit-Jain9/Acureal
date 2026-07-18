@@ -119,17 +119,17 @@ export default function BuildabilitySummary({
                 <div className="mt-0.5 leading-relaxed">
                   {data?.buildability?.message || 'A reviewed master-plan zone, the plot’s land area in sqft, and the road width in metres must be matched against the backend FAR matrix.'}
                 </div>
-                <ul className="mt-2 space-y-0.5 text-[11px] text-amber-900/90 leading-relaxed">
+                <ul className="mt-2 space-y-0.5 text-[11px] text-premium leading-relaxed">
                   <li className="flex items-start gap-1.5">
-                    <span className="text-amber-900/60 select-none">·</span>
+                    <span className="text-content-muted select-none">·</span>
                     <span>A reviewed master-plan zone for this parcel</span>
                   </li>
                   <li className="flex items-start gap-1.5">
-                    <span className="text-amber-900/60 select-none">·</span>
+                    <span className="text-content-muted select-none">·</span>
                     <span>Land area in sqft</span>
                   </li>
                   <li className="flex items-start gap-1.5">
-                    <span className="text-amber-900/60 select-none">·</span>
+                    <span className="text-content-muted select-none">·</span>
                     <span>Road width in metres (drives the additional/TDR FAR band)</span>
                   </li>
                 </ul>

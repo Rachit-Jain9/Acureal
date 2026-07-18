@@ -14,8 +14,8 @@
   },
   "crons": [
     {
-      "path": "/api/fx/refresh/daily",
-      "schedule": "5 3 * * *"
+      "path": "/api/cron/health-check/hourly",
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/parcel-cache-sweep/daily",
