@@ -10395,6 +10395,23 @@ The deterministic-math review found **no** front-end/back-end numeric divergence
 
 ---
 
+## 2026-07-18 (cont.) — Parcel Evidence Room: the gazette-cited BBMP street register, finally customer-facing (branch feat/parcel-evidence-room)
+
+**What was worked on (plain English):** Chose the next move via a 4-agent code-grounded review of three candidates (A Parcel Evidence Room · B a cinematic financial-viz elevation · C chain-of-custody export stamping). The review surfaced a big finding: REDIP's single most proprietary deal-less asset — the 18,743-street BBMP Guidance-Value gazette index — was FULLY built, cited, and safe, but buried inside `BengaluruStreetLookupPanel.jsx` under `admin/master-plan` (`RequirePlatformAdmin`), so no customer could see it. The underlying endpoint (`GET /api/master-plan/intelligence/street-lookup` → `searchBbmpStreets`) is already `authenticate`-only (not admin-gated), so surfacing it is a UI-gating change, not a privilege change. Picked A over the safer B because it's the strategic GTM wedge and unlocks the unique data moat to customers — with bounded risk (reuse of proven, cited, already-authenticated components).
+
+**#TBD — the build (frontend-only, zero backend):** new `frontend/src/pages/ParcelEvidenceRoomPage.jsx` — a customer-facing "Parcel Evidence Room" at `/dashboard/parcel-evidence` (authenticated, NOT admin), reusing the existing `useStreetLookup` hook. A premium search hero + a corpus-proof stat strip (streets indexed / wards / zone-enriched % / registers), a results list, and the cinematic centerpiece: an **evidence-chain spine** for the focused street that draws in top-to-bottom (a growing accent rail + staggered node fade, reduced-motion snaps to full) — Street → BBMP ward → gazette register → BBMP-UAV zone → guidance-value band (count-up) → source-of-record citation (exact PDF page + gazette document). Then an honest, visually-separated **deal-gated terminal node**: "FAR & indicative buildable — resolved deterministically inside a deal, from an analyst-verified RMP-2015 zone" + a "Start a deal" conversion CTA. The FAR/buildable auto-resolution from a raw street was deliberately CUT per the review (the real engine `composeParcelIntelligence` is hard-bound to a propertyId + analyst-assigned zone_id; auto-asserting a zone from a street would manufacture a statutory claim the guardrails forbid). Carries the Kaveri "verify-live" CTA + the verbatim gazette disclaimer verbatim. `?q=` deep-link support (shareable + landing-hero handoff). New sidebar primary-nav item "Parcel Evidence" (MapPinned) + route in App.jsx.
+
+**Guardrails honored:** reference-only, cited, "representational NOT legally valid" (verbatim disclaimer), no AI prose (pure deterministic reference display — clear of aiLegalProseGuard), no new legal assertion (re-presents already-`approved` gazette rows), semantic CSS-var tokens only (theme-token guard green), CSS/rAF only (no framer-motion), reduced-motion respected.
+
+**Verified:** frontend 1,341 tests (164 files, +4 new page tests incl. the honest zone-not-enriched + deal-gated-FAR + verbatim-disclaimer cases), theme-token + css-integrity guards green, clean production build. Live Chrome verification on the real gazette data done post-deploy.
+
+### What's left to do next
+- The deferred FAR/buildable-from-a-street tail (a guarded point-in-polygon resolver over the partial reference geometry, or refactoring composeParcelIntelligence to accept an ad-hoc parcel) — a later, guardrail-careful PR.
+- The landing hero (`HeroParcelResolve`) can now deep-link its CTA to `/dashboard/parcel-evidence?q=…` to make its promise real.
+- Still: M1 (DB role), M5 export half, M6 (Excel-recalc CI), M8/M9. Candidate B (JV/JDA waterfall bridge) is a clean, safe next cinematic PR.
+
+---
+
 ## 2026-07-18 (cont.) — Open-to-all beta: fix misleading "Request access", capture company/role/city, operator signup notifications + in-app Signups roster (PR #1006, merged)
 
 **Trigger (operator, plain English):** "People are requesting access but I get no email/notification. Keep it open for beta — give access to everyone, collect info about them, make the site open to all."

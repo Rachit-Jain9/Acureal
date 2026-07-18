@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, Brain, BarChart3,
   FileBarChart2, Settings, LogOut, ChevronLeft, ChevronRight, X,
-  Shield, Map, Database, Inbox, Activity, Beaker, Sparkles, ShieldCheck, Gauge, Users,
+  Shield, Map, MapPinned, Database, Inbox, Activity, Beaker, Sparkles, ShieldCheck, Gauge, Users,
 } from 'lucide-react';
 import { useState } from 'react';
 import { clsx } from 'clsx';
@@ -19,6 +19,7 @@ const primaryNavItems = [
   { to: '/dashboard/deals',        icon: Briefcase,        label: 'Deals',               tourId: 'nav-deals' },
   { to: '/dashboard/intelligence', icon: Brain,            label: 'Market Intelligence', tourId: 'nav-intelligence' },
   { to: '/dashboard/master-plan',  icon: Map,              label: 'Master Plan',         tourId: 'nav-master-plan-explorer' },
+  { to: '/dashboard/parcel-evidence', icon: MapPinned,     label: 'Parcel Evidence',     tourId: 'nav-parcel-evidence' },
   { to: '/dashboard/comps',        icon: BarChart3,        label: 'Comps',               tourId: 'nav-comps' },
   { to: '/dashboard/reports',      icon: FileBarChart2,    label: 'Reports / Exports',   tourId: 'nav-reports' },
 ];

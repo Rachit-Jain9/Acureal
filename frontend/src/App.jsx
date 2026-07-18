@@ -50,6 +50,8 @@ const PrivacyCentrePage = lazy(() => import('./pages/PrivacyCentrePage'));
 const IntelligencePage = lazy(() => import('./pages/IntelligencePage'));
 const MasterPlanAdminPage = lazy(() => import('./pages/MasterPlanAdminPage'));
 const MasterPlanExplorerPage = lazy(() => import('./pages/MasterPlanExplorerPage'));
+// Customer-facing front door to the gazette-cited BBMP street register.
+const ParcelEvidenceRoomPage = lazy(() => import('./pages/ParcelEvidenceRoomPage'));
 const ParcelIntelligenceAdminPage = lazy(() => import('./pages/ParcelIntelligenceAdminPage'));
 const CompsQueuePage = lazy(() => import('./pages/CompsQueuePage'));
 const CompsQueueDetailPage = lazy(() => import('./pages/CompsQueueDetailPage'));
@@ -168,6 +170,8 @@ export default function App() {
           <Route path="map" element={withSuspense(<MapPage />)} />
           {/* Master Plan Explorer — analyst-visible, read-only RMP 2015 reference map */}
           <Route path="master-plan" element={withSuspense(<MasterPlanExplorerPage />)} />
+          {/* Parcel Evidence Room — customer-facing, cited BBMP street register lookup */}
+          <Route path="parcel-evidence" element={withSuspense(<ParcelEvidenceRoomPage />)} />
           <Route path="financials/:dealId" element={withSuspense(<FinancialsPage />)} />
           <Route path="comps" element={withSuspense(<CompsPage />)} />
           <Route path="intelligence" element={withSuspense(<IntelligencePage />)} />
