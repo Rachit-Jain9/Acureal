@@ -6,6 +6,7 @@ import { GitFork, ChevronRight } from 'lucide-react';
 import { calculateJDAWaterfall } from '../../utils/waterfall';
 import Badge from '../common/Badge';
 import { StatTile } from '../../design-system';
+import WaterfallBridge, { jdaSegments } from './WaterfallBridge';
 
 const JDA_STRUCTURE_LABELS = {
   area_share: 'Area Share',
@@ -61,6 +62,8 @@ export default function JDAWaterfallPanel({ financials, deal }) {
       }),
     [inputs]
   );
+
+  const jdaSegs = useMemo(() => jdaSegments(result), [result]);
 
   const fmtCr = (v) => (v != null ? `₹${v.toFixed(2)} Cr` : '—');
   const fmtPct = (v) => (v != null ? `${v.toFixed(1)}%` : '—');
@@ -178,6 +181,11 @@ export default function JDAWaterfallPanel({ financials, deal }) {
                 <h4 className="text-xs font-semibold text-content-secondary uppercase tracking-wider mb-2">
                   Distribution Waterfall
                 </h4>
+                {jdaSegs.length > 0 && (
+                  <div className="bg-bg-secondary/40 border border-hairline rounded-lg px-4 pt-4 pb-3 mb-3">
+                    <WaterfallBridge segments={jdaSegs} fmtCr={fmtCr} />
+                  </div>
+                )}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>

@@ -6,6 +6,7 @@ import { Users, ChevronRight } from 'lucide-react';
 import { calculateJVWaterfall } from '../../utils/waterfall';
 import Badge from '../common/Badge';
 import { StatTile } from '../../design-system';
+import WaterfallBridge, { jvSegments } from './WaterfallBridge';
 
 export default function JVWaterfallPanel({ financials, deal }) {
   const mp = financials;
@@ -55,6 +56,8 @@ export default function JVWaterfallPanel({ financials, deal }) {
       }),
     [inputs]
   );
+
+  const jvSegs = useMemo(() => jvSegments(result), [result]);
 
   const fmtCr = (v) => (v != null ? `₹${v.toFixed(2)} Cr` : '—');
 
@@ -190,6 +193,11 @@ export default function JVWaterfallPanel({ financials, deal }) {
                 <h4 className="text-xs font-semibold text-content-secondary uppercase tracking-wider mb-2">
                   Profit Distribution Waterfall
                 </h4>
+                {jvSegs.length > 0 && (
+                  <div className="bg-bg-secondary/40 border border-hairline rounded-lg px-4 pt-4 pb-3 mb-3">
+                    <WaterfallBridge segments={jvSegs} fmtCr={fmtCr} />
+                  </div>
+                )}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
