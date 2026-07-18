@@ -10427,6 +10427,8 @@ Two exported normalizers re-key each kernel result into the shared `segments` sh
 ### What's left to do next
 - Still: M1 (DB role), M5 export half (stamp the signed snapshot onto exports), M6 (headless Excel-recalc CI), M8/M9 (durable jobs + de-founder), and wiring the landing hero CTA to the Parcel Evidence Room (`?q=`).
 
+**Follow-up polish (branch feat/css-var-guard):** live Chrome verification of the waterfall bridge caught the "Costs" bar rendering invisible (white) in light mode. Root cause: `var(--color-content-muted)` doesn't exist — the Tailwind `content.muted` token maps to `--color-text-muted`. Same mistyped var had also slipped into the System Health "unknown" status stripe. Fixed both (→ `--color-text-muted`) and added `check-css-vars.cjs` + a vitest guard that fails on ANY `var(--color-*)` reference not defined in index.css — closing the "invisible element" bug class the theme-token guard can't see (it only scans Tailwind classes, not inline `style` CSS vars). Re-verified the cost bar now renders. Frontend 1,350 tests green.
+
 ---
 
 ## 2026-07-18 (cont.) — Open-to-all beta: fix misleading "Request access", capture company/role/city, operator signup notifications + in-app Signups roster (PR #1006, merged)

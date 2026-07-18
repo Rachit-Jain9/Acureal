@@ -44,7 +44,7 @@ const STATUS_META = {
     tone: 'neutral',
     label: 'No signal',
     Icon: HelpCircle,
-    stripe: 'var(--color-content-muted)',
+    stripe: 'var(--color-text-muted)',
   },
 };
 
