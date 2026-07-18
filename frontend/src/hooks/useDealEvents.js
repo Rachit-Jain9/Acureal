@@ -33,6 +33,17 @@ export function useVerifyDealEvent() {
   });
 }
 
+// Whole-deal integrity — verify EVERY signed computation in one call
+// (re-hash + re-check the HMAC signature per event) and re-run the kernel
+// on the latest one. Backs the Audit tab's "Verify Deal Integrity" panel.
+// A mutation, not a query: it runs only when the operator clicks Verify.
+export function useVerifyDealChain() {
+  return useMutation({
+    mutationFn: (dealId) => dealEventsAPI.verifyChain(dealId).then((r) => r.data.data),
+    onError: (err) => toast.error(errMessage(err, 'Integrity check failed')),
+  });
+}
+
 // Replay an event — runs the deterministic kernel against the stored
 // inputs and diffs the result against the stored outputs. The "prove
 // the number on the pitch deck" primitive. Admin/analyst only.

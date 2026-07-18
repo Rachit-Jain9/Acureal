@@ -671,6 +671,18 @@ const replayDealEvent = async (dealId, eventId) => {
   return { event, verification, replay };
 };
 
+/**
+ * Verify a deal's ENTIRE signed computation history in one call — backs the
+ * Audit tab's one-click "Verify Deal Integrity" panel. Gated on deal
+ * visibility (not on a financial model existing — a deal can have signed
+ * events without a current model). Delegates the cryptographic work to
+ * auditService.verifyChain; this wrapper only enforces authorization.
+ */
+const verifyDealChain = async (dealId, { replayLatest = true } = {}) => {
+  await assertDealVisible(dealId); // visibility gate — same as listDealEvents
+  return auditService.verifyChain(dealId, { replayLatest });
+};
+
 // ─── CSV EXPORT ───────────────────────────────────────────────────────────────
 
 const exportFinancialCSV = async (dealId) => {
@@ -793,5 +805,6 @@ module.exports = {
   listDealEvents,
   verifyDealEvent,
   replayDealEvent,
+  verifyDealChain,
   listDealsForBulkBatch,
 };
