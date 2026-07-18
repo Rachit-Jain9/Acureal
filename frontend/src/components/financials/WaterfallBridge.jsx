@@ -30,7 +30,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
 const TONE_VAR = {
   landowner: 'var(--color-brand-accent)',
   developer: 'var(--color-data-highlight)',
-  cost: 'var(--color-content-muted)',
+  cost: 'var(--color-text-muted)',
   capital: 'var(--color-brand-accent-soft)',
 };
 const TONE_LABEL = {
@@ -150,7 +150,7 @@ export default function WaterfallBridge({ segments = [], fmtCr = (v) => `₹${(v
                   {s.parts.map((pt, j) => (
                     <div
                       key={pt.tone + j}
-                      style={{ flex: Math.max(0.0001, Number(pt.cr) || 0), backgroundColor: TONE_VAR[pt.tone] || 'var(--color-content-muted)' }}
+                      style={{ flex: Math.max(0.0001, Number(pt.cr) || 0), backgroundColor: TONE_VAR[pt.tone] || 'var(--color-text-muted)' }}
                     />
                   ))}
                 </div>
@@ -173,7 +173,7 @@ export default function WaterfallBridge({ segments = [], fmtCr = (v) => `₹${(v
               y1={c.y}
               x2={c.x2}
               y2={c.y}
-              stroke="var(--color-content-muted)"
+              stroke="var(--color-text-muted)"
               strokeWidth="1"
               strokeDasharray="2 2"
               vectorEffect="non-scaling-stroke"
