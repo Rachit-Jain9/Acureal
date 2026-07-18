@@ -63,6 +63,8 @@ const AdminAuditTrailPage = lazy(() => import('./pages/AdminAuditTrailPage'));
 const AdminHomePage = lazy(() => import('./pages/AdminHomePage'));
 // Reliability — the liveness watchdog's operator-facing vitals board.
 const AdminSystemHealthPage = lazy(() => import('./pages/AdminSystemHealthPage'));
+// Growth — open-beta signup roster (who has joined the platform).
+const AdminSignupsPage = lazy(() => import('./pages/AdminSignupsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 const TermsPage = lazy(() => import('./pages/legal/TermsPage'));
 const PrivacyPage = lazy(() => import('./pages/legal/PrivacyPage'));
@@ -191,6 +193,7 @@ export default function App() {
           <Route path="admin/learning-signals" element={<RequirePlatformAdmin>{withSuspense(<AdminLearningSignalsPage />)}</RequirePlatformAdmin>} />
           <Route path="admin/audit-trail" element={<RequirePlatformAdmin>{withSuspense(<AdminAuditTrailPage />)}</RequirePlatformAdmin>} />
           <Route path="admin/system-health" element={<RequirePlatformAdmin>{withSuspense(<AdminSystemHealthPage />)}</RequirePlatformAdmin>} />
+          <Route path="admin/signups" element={<RequirePlatformAdmin>{withSuspense(<AdminSignupsPage />)}</RequirePlatformAdmin>} />
           <Route path="settings/master-plan" element={<Navigate to="/dashboard/admin/master-plan" replace />} />
           <Route path="settings/parcel-intelligence" element={<Navigate to="/dashboard/admin/parcel-intelligence" replace />} />
           {/* Legacy routes: redirect to deals */}

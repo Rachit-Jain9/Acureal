@@ -945,6 +945,11 @@ export const adminAPI = {
   // raising Sentry alerts. Returns { overall, checks{...}, unhealthy_count,
   // window_hours, generated_at }. Platform-admin only.
   getSystemHealth: () => api.get('/admin/system-health'),
+  // Open-beta signup roster — platform-wide list of everyone who has joined,
+  // with the profile detail they volunteered (company / role / city) plus
+  // account timestamps. Platform-admin only. Returns
+  // { signups[], summary{ total, last_7_days, last_30_days, verified, via_google }, limit, search }.
+  getSignups: (params = {}) => api.get('/admin/signups', { params }),
 };
 
 // Deal events — investor-grade audit trail backed by the `deal_events`

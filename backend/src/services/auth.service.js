@@ -65,6 +65,23 @@ const clearLoginAttempts = async (email) => {
   await query(`DELETE FROM login_attempts WHERE email = $1`, [email]);
 };
 
+// Optional signup-profile fields (company / job_title / city). Trim, cap to
+// the column width, and collapse blanks to NULL so the DB never stores an
+// empty string masquerading as a value. Kept deliberately permissive — these
+// are descriptive, never gate signup.
+const normalizeProfileField = (value, maxLength) => {
+  if (value === undefined || value === null) return null;
+  const trimmed = String(value).trim();
+  if (!trimmed) return null;
+  return trimmed.slice(0, maxLength);
+};
+
+const extractSignupProfile = (options = {}) => ({
+  company: normalizeProfileField(options.company, 255),
+  jobTitle: normalizeProfileField(options.jobTitle, 255),
+  city: normalizeProfileField(options.city, 120),
+});
+
 const getJwtSecret = () => {
   const configuredSecret = process.env.JWT_SECRET;
 
@@ -160,6 +177,7 @@ const register = async (name, email, password, phone = null, options = {}) => {
   }
 
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
+  const profile = extractSignupProfile(options);
 
   return transaction(async (client) => {
     const defaultLegacyRole = options.invitationToken
@@ -167,10 +185,11 @@ const register = async (name, email, password, phone = null, options = {}) => {
       : 'admin';
 
     const userResult = await client.query(
-      `INSERT INTO users (email, password_hash, name, role, phone)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (email, password_hash, name, role, phone, company, job_title, city)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, email, name, phone, is_active, default_organization_id`,
-      [normalizedEmail, passwordHash, name, defaultLegacyRole, phone]
+      [normalizedEmail, passwordHash, name, defaultLegacyRole, phone,
+       profile.company, profile.jobTitle, profile.city]
     );
 
     const user = userResult.rows[0];
@@ -548,6 +567,7 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
 
   const passwordHash = await generateUnusablePasswordHash();
   const displayName = (claims.name || normalizedEmail.split('@')[0] || 'User').slice(0, 200);
+  const profile = extractSignupProfile(options);
 
   return transaction(async (client) => {
     const defaultLegacyRole = options.invitationToken
@@ -557,8 +577,8 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
     const userResult = await client.query(
       `INSERT INTO users
          (email, password_hash, name, role, oauth_provider, oauth_subject,
-          email_verified_at, password_set)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW(), FALSE)
+          email_verified_at, password_set, company, job_title, city)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW(), FALSE, $7, $8, $9)
        RETURNING id, email, name, phone, is_active, default_organization_id`,
       [
         normalizedEmail,
@@ -567,6 +587,9 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
         defaultLegacyRole,
         claims.provider,
         claims.subject,
+        profile.company,
+        profile.jobTitle,
+        profile.city,
       ]
     );
 

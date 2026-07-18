@@ -290,11 +290,11 @@ export default function TheDecisionCommittee() {
               }}
             >
               <a
-                href="#request-access"
+                href="/login?mode=register"
                 className="group inline-flex items-center gap-2 border border-[#1F4A3D] px-7 py-3 text-[14px] tracking-[0.01em] text-[#1F4A3D] outline-none transition-colors duration-[120ms] ease-out hover:bg-[#1F4A3D] hover:text-[#FCFAF4] focus-visible:ring-2 focus-visible:ring-[#1F4A3D] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F5F1E8] active:translate-y-px"
                 style={{ fontFamily: "'Inter', sans-serif", borderRadius: 0 }}
               >
-                <span>Request access</span>
+                <span>Get started</span>
                 <ArrowUpRight
                   size={16}
                   strokeWidth={1.8}
@@ -303,7 +303,7 @@ export default function TheDecisionCommittee() {
               </a>
 
               <a
-                href="#sign-in"
+                href="/login"
                 className="text-[14px] text-[#57514A] underline decoration-[#CFC5B2] decoration-1 underline-offset-[5px] outline-none transition-colors duration-[120ms] ease-out hover:text-[#1C1A16] hover:decoration-[#1F4A3D] focus-visible:rounded-[2px] focus-visible:ring-2 focus-visible:ring-[#1F4A3D] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F5F1E8]"
                 style={{ fontFamily: "'Inter', sans-serif" }}
               >

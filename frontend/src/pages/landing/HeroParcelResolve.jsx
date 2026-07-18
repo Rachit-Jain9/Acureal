@@ -658,7 +658,7 @@ function RequestAccess() {
   const [hover, setHover] = useState(false);
   return (
     <a
-      href="#request-access"
+      href="/login?mode=register"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{
@@ -685,7 +685,7 @@ function RequestAccess() {
         e.currentTarget.style.outline = 'none';
       }}
     >
-      Request access
+      Get started
       <ArrowRight size={16} strokeWidth={1.75} />
     </a>
   );
@@ -695,7 +695,7 @@ function SignIn() {
   const [hover, setHover] = useState(false);
   return (
     <a
-      href="#sign-in"
+      href="/login"
       onMouseEnter={() => setHover(true)}
       onMouseLeave={() => setHover(false)}
       style={{

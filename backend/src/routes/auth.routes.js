@@ -3,6 +3,7 @@ const express = require('express');
 const { body } = require('express-validator');
 const authService = require('../services/auth.service');
 const emailVerificationService = require('../services/emailVerification.service');
+const signupNotificationService = require('../services/signupNotification.service');
 const refreshTokenService = require('../services/refreshToken.service');
 const { authenticate } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
@@ -65,6 +66,21 @@ const dispatchVerificationEmailAsync = ({ userId, email, name, ipAddress, userAg
   });
 };
 
+// Fire-and-forget: tell the platform operator(s) a new user just signed up.
+// Best-effort — the service itself never throws — but we also guard here so a
+// synchronous scheduling hiccup can't bubble into the signup response. Runs
+// only for genuinely NEW accounts (register / Google cold-signup), never for
+// a returning Google login.
+const dispatchSignupNotificationAsync = (signup) => {
+  setImmediate(async () => {
+    try {
+      await signupNotificationService.sendNewSignupNotification(signup);
+    } catch (error) {
+      log.warn('signup_notification_dispatch_failed', { error: error.message });
+    }
+  });
+};
+
 // POST /auth/register
 router.post(
   '/register',
@@ -84,6 +100,13 @@ router.post(
       .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
       .withMessage('Password must contain uppercase, lowercase and a number'),
     body('phone').optional().trim(),
+    // Optional open-beta profile capture — never gates signup. Deliberately NO
+    // isLength here: an oversized paste must not 400 the whole registration.
+    // The service truncates to the column widths gracefully (auth.service.js
+    // normalizeProfileField → 255/255/120), which is the single source of the cap.
+    body('company').optional().trim(),
+    body('jobTitle').optional().trim(),
+    body('city').optional().trim(),
     body('organizationName').optional().trim().isLength({ min: 2, max: 255 }),
     body('invitationToken').optional().trim().isLength({ min: 16, max: 255 }),
     body('acceptedTermsVersion')
@@ -104,13 +127,19 @@ router.post(
         email,
         password,
         phone,
+        company,
+        city,
         organizationName,
         invitationToken,
         acceptedTermsVersion,
         acceptedPrivacyVersion,
       } = req.body;
+      const jobTitle = req.body.jobTitle || req.body.job_title;
       const name = req.body.name || req.body.fullName;
       const result = await authService.register(name, email, password, phone, {
+        company,
+        jobTitle,
+        city,
         organizationName,
         invitationToken,
         acceptedTermsVersion,
@@ -130,6 +159,16 @@ router.post(
           name: result.user.name,
           ipAddress: req.ip || null,
           userAgent: req.headers['user-agent'] || null,
+        });
+        dispatchSignupNotificationAsync({
+          name: result.user.name,
+          email: result.user.email,
+          phone: phone || null,
+          company: company || null,
+          jobTitle: jobTitle || null,
+          city: city || null,
+          method: 'email',
+          workspace: result.user.organization_name || null,
         });
       }
 
@@ -252,6 +291,21 @@ router.post(
           : result.mode === 'bound'
           ? 'Google sign-in linked to your existing account.'
           : 'Login successful.';
+
+      // Only a genuinely new account triggers the operator notification —
+      // a returning Google login (mode 'login'/'bound') must not.
+      if (result.mode === 'register' && result?.user?.email) {
+        dispatchSignupNotificationAsync({
+          name: result.user.name,
+          email: result.user.email,
+          phone: result.user.phone || null,
+          company: null,
+          jobTitle: null,
+          city: null,
+          method: 'google',
+          workspace: result.user.organization_name || null,
+        });
+      }
 
       await issueSessionCookies(res, result, {
         ipAddress: req.ip || null,

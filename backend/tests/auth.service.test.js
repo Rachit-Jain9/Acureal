@@ -101,6 +101,73 @@ describe('auth.service register', () => {
 
     expect(consumeInvitation).toHaveBeenCalled();
   });
+
+  test('persists optional open-beta profile fields (company / job_title / city)', async () => {
+    query.mockResolvedValueOnce({ rows: [] }); // no existing user
+    bcrypt.hash.mockResolvedValue('hashed');
+
+    const { transaction } = require('../src/config/database');
+    let capturedClient;
+    transaction.mockImplementation(async (fn) => {
+      capturedClient = {
+        query: jest.fn().mockResolvedValueOnce({
+          rows: [{
+            id: 'profile-user',
+            email: 'profile@example.com',
+            name: 'Profile User',
+            phone: '9876543210',
+            is_active: true,
+            default_organization_id: null,
+          }],
+        }),
+      };
+      hydrateUserAuthContext.mockResolvedValue({ user: { id: 'profile-user', role: 'owner' } });
+      return fn(capturedClient);
+    });
+
+    await authService.register(
+      'Profile User', 'profile@example.com', 'Password123', '9876543210',
+      { company: '  Acme Realty ', jobTitle: 'Investment Manager', city: 'Bengaluru' },
+    );
+
+    const [sql, params] = capturedClient.query.mock.calls[0];
+    expect(sql).toMatch(/company,\s*job_title,\s*city/);
+    // Trimmed, in company/job_title/city order after the base columns.
+    expect(params).toEqual(expect.arrayContaining(['Acme Realty', 'Investment Manager', 'Bengaluru']));
+  });
+
+  test('collapses blank profile fields to NULL', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    bcrypt.hash.mockResolvedValue('hashed');
+
+    const { transaction } = require('../src/config/database');
+    let capturedClient;
+    transaction.mockImplementation(async (fn) => {
+      capturedClient = {
+        query: jest.fn().mockResolvedValueOnce({
+          rows: [{
+            id: 'blank-user',
+            email: 'blank@example.com',
+            name: 'Blank User',
+            phone: null,
+            is_active: true,
+            default_organization_id: null,
+          }],
+        }),
+      };
+      hydrateUserAuthContext.mockResolvedValue({ user: { id: 'blank-user', role: 'owner' } });
+      return fn(capturedClient);
+    });
+
+    await authService.register(
+      'Blank User', 'blank@example.com', 'Password123', null,
+      { company: '   ', jobTitle: '', city: undefined },
+    );
+
+    const [, params] = capturedClient.query.mock.calls[0];
+    // The last three bound params (company, job_title, city) must all be null.
+    expect(params.slice(-3)).toEqual([null, null, null]);
+  });
 });
 
 describe('auth.service login', () => {

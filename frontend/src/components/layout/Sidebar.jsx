@@ -2,7 +2,7 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Briefcase, Brain, BarChart3,
   FileBarChart2, Settings, LogOut, ChevronLeft, ChevronRight, X,
-  Shield, Map, Database, Inbox, Activity, Beaker, Sparkles, ShieldCheck, Gauge,
+  Shield, Map, Database, Inbox, Activity, Beaker, Sparkles, ShieldCheck, Gauge, Users,
 } from 'lucide-react';
 import { useState } from 'react';
 import { clsx } from 'clsx';
@@ -28,6 +28,7 @@ const primaryNavItems = [
 // don't approve zones or evidence facts.
 const adminNavItems = [
   { to: '/dashboard/admin/system-health',        icon: Gauge,    label: 'System Health',       tourId: 'nav-system-health' },
+  { to: '/dashboard/admin/signups',              icon: Users,    label: 'Signups',             tourId: 'nav-signups' },
   { to: '/dashboard/admin/master-plan',          icon: Map,      label: 'Master Plan Studio',  tourId: 'nav-master-plan' },
   { to: '/dashboard/admin/parcel-intelligence',  icon: Database, label: 'Parcel Intelligence', tourId: 'nav-parcel-intel' },
   { to: '/dashboard/admin/comps-queue',          icon: Inbox,    label: 'Comps Review Queue',  tourId: 'nav-comps-queue' },
