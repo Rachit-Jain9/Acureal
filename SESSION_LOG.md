@@ -10392,3 +10392,29 @@ The deterministic-math review found **no** front-end/back-end numeric divergence
 ### What's left to do next
 - Deeper tamper-evidence (M7): a hash-chain column + WORM triggers on deal_events (deferred here because deal hard-deletion may cascade to deal_events — a DELETE-blocking trigger needs FK/cascade analysis first). The verify-chain endpoint is ready to also report chain-linkage once that lands.
 - Still: M1 (non-owner DB role), M5 (one signed snapshot stamped app→export→memo — verify-chain is the in-app half), M8/M9 (durable jobs + de-founder).
+
+---
+
+## 2026-07-18 (cont.) — Open-to-all beta: fix misleading "Request access", capture company/role/city, operator signup notifications + in-app Signups roster (PR #1006, merged)
+
+**Trigger (operator, plain English):** "People are requesting access but I get no email/notification. Keep it open for beta — give access to everyone, collect info about them, make the site open to all."
+
+**Diagnosis (code-grounded):** Sign-up has been fully OPEN since PR #507 (invite gate removed; email + Google both create a fresh workspace). The confusion was UX, not access: the landing page still marketed **"Request access"**, and two of those CTAs (hero `<RequestAccess>` + the closing `TheDecisionCommittee` CTA) pointed at a **dead `#request-access` anchor** — clicking did nothing, so visitors thought they'd "requested access" and nothing reached the operator. The "Sign in" links were dead too (`#sign-in`). There was **no operator notification on signup at all** (only the verify-email to the user), and only name/email/phone were captured. Confirmed `joinByVerifiedDomain` only auto-joins explicitly `verified=TRUE` non-public domains, so opening signup can't leak a random Gmail user into someone's org.
+
+**Operator decisions (AskUserQuestion):** notify = email + in-app list; capture = company/role/city (optional); landing = switch to open-to-all wording + fix dead buttons.
+
+**Shipped.**
+- **Landing CTAs** (`LandingPage`, `landing/HeroParcelResolve`, `landing/TheDecisionCommittee`): "Request access" → "Get started"; dead `#request-access` / `#sign-in` anchors → real `/login?mode=register` and `/login`.
+- **Signup capture:** migration `20260730_user_signup_profile_fields.sql` adds nullable `company` / `job_title` (NOT `role` — that's the user_role enum) / `city` + `idx_users_created_at`. `auth.service.register` + Google cold-signup persist them via new `normalizeProfileField`/`extractSignupProfile` (trim, blank→null, width-cap). LoginPage adds 3 optional register-only fields. Route validators are `.optional().trim()` with **no `isLength`** deliberately — the service truncates gracefully so an oversized paste can never 400 a signup.
+- **Operator email:** new `signupNotification.service.js` — best-effort, fire-and-forget (setImmediate in auth.routes, service swallows all errors) so a mailer failure never breaks a real signup. Recipients = `getPlatformAdminEmails()` (`PLATFORM_ADMIN_EMAILS`, fallback founder email); delivery reuses the existing Resend mailer; HTML-escaped. Google path notifies **only** on `mode==='register'` (never returning login/bind).
+- **In-app roster:** `GET /api/admin/signups` (`requirePlatformAdmin`, **cross-org by design**, parameterised search, no secrets) + `AdminSignupsPage.jsx` (summary tiles w/ count-up, searchable table, verified/method badges) wired into App routes + the ADMIN sidebar group ("Signups", Users icon) + `adminAPI.getSignups` + `useSignups` hook.
+- Corrected the stale `ALLOW_COLD_SIGNUP` note in `.env.example` (gate removed in #507) + documented that signup emails reuse Resend + `PLATFORM_ADMIN_EMAILS`.
+
+**Adversarial multi-agent review** (3 lenses → verify) found + fixed 2 low-sev issues before commit: (1) route-level `isLength` on the optional fields could 400 a signup — removed; (2) `AdminSignupsPage` passed `ErrorState` a `detail` prop it doesn't render — switched to children + `tone="danger"`. (Same `detail` bug pre-exists on `AdminAuditTrailPage` — spawned a separate background task to fix it.)
+
+**Verified:** targeted backend suites pass (signupNotification/auth.service/auth.signup/auth.googleOAuth/rbac.routeGuards/mailer.security + new tests), frontend build clean, theme-token + hover-state + LoginPage guards pass, migration lint clean. Browser-verified the new fields render and landing CTAs route. Full CI green on #1006. **Migration was applied to the PROD DB by the operator via the Supabase SQL editor BEFORE merge** (auto-applying to prod is blocked by the permission classifier — human-in-the-loop; do not work around it), so no deploy-order break.
+
+### What's left to do next
+- **Email delivery depends on Resend being configured in prod** (`RESEND_API_KEY` + `MAIL_FROM`). If the operator doesn't receive a "New REDIP signup" email on a test account, walk them through Resend setup (sign up → verify sender domain DNS → set Vercel env). The in-app Signups page works regardless.
+- Google signups can't collect company/role/city (one-click, no form) — those land NULL; acceptable.
+- Optional future: use `company` to name a new personal workspace; capture UTM/referrer; "use-case / how-heard" fields (operator deferred these this round).
