@@ -10412,6 +10412,23 @@ The deterministic-math review found **no** front-end/back-end numeric divergence
 
 ---
 
+## 2026-07-18 (cont.) — JV/JDA Profit-Distribution Waterfall bridge: the signature institutional viz (branch feat/waterfall-bridge)
+
+**What was worked on (plain English):** Built the earlier review's decision-synthesizer top pick (Candidate B): a hand-built profit-distribution "waterfall bridge" on the Financials page. The JV and JDA panels showed their profit distribution only as a flat HTML `<table>` while all seven of their neighbours in the visualization layer draw in — so the one chart an LP/IC actually leans in for was the least alive. Now each panel gets an at-a-glance animated waterfall above the (retained) table.
+
+**#TBD — the build (frontend-only, zero backend, zero new math):** new `frontend/src/components/financials/WaterfallBridge.jsx` — a dependency-free CSS + inline-SVG floating-bar waterfall. Deliberately NO recharts: both panels are statically imported and render on the pre-DCF input view, so pulling the lazy recharts chunk in would drag it onto first paint of every financials page. It renders a NORMALIZED `segments` prop and computes ONLY geometry (cumulative offsets, bar heights as % of max) — never a financial value (UI-never-re-derives-math rule). A single rAF drives one `p` 0→1 for the draw-in: bars rise from their cumulative baseline left-to-right (staggered) and value labels count up; SVG dashed step-connectors fade in; `prefers-reduced-motion` snaps to full. Re-animates only on a STRUCTURAL change (a tranche appears/disappears), not on every value tweak. Semantic CSS-var tokens only (Landowner=accent, Developer=data-highlight, Costs=content-muted, Returned-capital=accent-soft).
+
+Two exported normalizers re-key each kernel result into the shared `segments` shape: `jvSegments` (the cumulative tranche cascade — Return-of-Capital soft base → Preferred → [Catch-Up] → [Promote] → Residual → closing Total-Distributed bar) and `jdaSegments` (the revenue split — Landowner allocation → Dev costs → Dev profit → Total-Revenue bar). Both TIE OUT: the floating bars always sum to the closing total (cumulative conserved). `jdaSegments` falls back to table-only (`[]`) on a developer loss so the additive story never lies. Inserted above the existing tables in `JVWaterfallPanel.jsx` + `JDAWaterfallPanel.jsx`; tables retained as the precise numeric/audit detail.
+
+**Guardrails honored:** squarely in the permitted financial-presentation lane (none of the legal four; no AI narration — pure deterministic-result rendering, clear of aiLegalProseGuard); labels come verbatim from the kernel's own `tranche`/party strings; semantic tokens only; no framer-motion (CSS/rAF); reduced-motion respected; the UI computes zero financial values.
+
+**Verified:** frontend 1,349 tests (165 files, +8 — incl. cumulative-tie-out, parts-sum-to-amount "no invented money", and the developer-loss fallback), theme-token + css-integrity guards green, clean production build (FinancialsPage +5.6 kB gzip, vendor-recharts chunk UNCHANGED — the static-import bundle trap avoided). Live Chrome verification (open deal → Financials → JV/JDA panel, move sliders, watch the bridge re-animate on promote toggle) done post-deploy.
+
+### What's left to do next
+- Still: M1 (DB role), M5 export half (stamp the signed snapshot onto exports), M6 (headless Excel-recalc CI), M8/M9 (durable jobs + de-founder), and wiring the landing hero CTA to the Parcel Evidence Room (`?q=`).
+
+---
+
 ## 2026-07-18 (cont.) — Open-to-all beta: fix misleading "Request access", capture company/role/city, operator signup notifications + in-app Signups roster (PR #1006, merged)
 
 **Trigger (operator, plain English):** "People are requesting access but I get no email/notification. Keep it open for beta — give access to everyone, collect info about them, make the site open to all."
