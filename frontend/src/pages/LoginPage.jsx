@@ -36,6 +36,9 @@ export default function LoginPage() {
     email: '',
     password: '',
     phone: '',
+    company: '',
+    jobTitle: '',
+    city: '',
   });
   const [validationErrors, setValidationErrors] = useState({});
 
@@ -103,6 +106,9 @@ export default function LoginPage() {
           email: form.email,
           password: form.password,
           phone: form.phone || undefined,
+          company: form.company || undefined,
+          jobTitle: form.jobTitle || undefined,
+          city: form.city || undefined,
           acceptedTermsVersion: legalDocs?.terms_of_service?.version,
           acceptedPrivacyVersion: legalDocs?.privacy_policy?.version,
         },
@@ -349,6 +355,45 @@ export default function LoginPage() {
                       autoComplete="tel"
                     />
                   </Field>
+                )}
+
+                {isRegister && (
+                  <>
+                    <Field label="Company / firm" helper="Optional">
+                      <Input
+                        name="company"
+                        type="text"
+                        value={form.company}
+                        onChange={handleChange}
+                        placeholder="e.g. Prestige Group, or independent"
+                        autoComplete="organization"
+                      />
+                    </Field>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <Field label="Role / title" helper="Optional">
+                        <Input
+                          name="jobTitle"
+                          type="text"
+                          value={form.jobTitle}
+                          onChange={handleChange}
+                          placeholder="e.g. Investment Manager"
+                          autoComplete="organization-title"
+                        />
+                      </Field>
+
+                      <Field label="City" helper="Optional">
+                        <Input
+                          name="city"
+                          type="text"
+                          value={form.city}
+                          onChange={handleChange}
+                          placeholder="e.g. Bengaluru"
+                          autoComplete="address-level2"
+                        />
+                      </Field>
+                    </div>
+                  </>
                 )}
 
                 {/* The remember-me choice lives ABOVE, beside the Google

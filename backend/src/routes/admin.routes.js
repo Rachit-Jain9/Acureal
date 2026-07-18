@@ -59,6 +59,70 @@ router.get('/users', authenticate, requireRole('admin', 'analyst'), async (req, 
   }
 });
 
+// GET /api/admin/signups?limit=200&search=
+//
+// Platform-wide roster of everyone who has signed up — the operator's
+// "who has joined the open beta" view. Deliberately CROSS-ORG (unlike
+// `/users` above, which is org-scoped for the assignee picker): this is the
+// sole platform operator's oversight surface, gated by `requirePlatformAdmin`
+// (the email allowlist — NOT reachable by an ordinary org admin). Because the
+// pooled DB role bypasses RLS, the ABSENCE of an org filter here is the
+// intended behaviour and `requirePlatformAdmin` is the only access boundary.
+//
+// Returns descriptive profile fields + account timestamps only — never
+// password hashes, tokens, or any secret. Read-only.
+router.get('/signups', authenticate, requirePlatformAdmin, async (req, res, next) => {
+  try {
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 1000);
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+
+    const params = [];
+    let whereSql = '';
+    if (search) {
+      params.push(`%${search}%`);
+      whereSql = 'WHERE (u.name ILIKE $1 OR u.email ILIKE $1 OR u.company ILIKE $1 OR u.city ILIKE $1)';
+    }
+    params.push(limit);
+
+    const [rowsResult, summaryResult] = await Promise.all([
+      query(
+        `SELECT u.id, u.name, u.email, u.phone, u.company, u.job_title, u.city,
+                u.created_at, u.last_login_at, u.email_verified_at,
+                u.oauth_provider, u.is_active, u.account_closed_at,
+                o.name AS workspace_name
+           FROM users u
+           LEFT JOIN organizations o ON o.id = u.default_organization_id
+           ${whereSql}
+          ORDER BY u.created_at DESC
+          LIMIT $${params.length}`,
+        params,
+      ),
+      query(
+        `SELECT
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int  AS last_7_days,
+           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS last_30_days,
+           COUNT(*) FILTER (WHERE email_verified_at IS NOT NULL)::int           AS verified,
+           COUNT(*) FILTER (WHERE oauth_provider IS NOT NULL)::int              AS via_google
+         FROM users`,
+        [],
+      ),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        signups: rowsResult.rows,
+        summary: summaryResult.rows[0],
+        limit,
+        search,
+      },
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // GET /api/admin/recent-events?limit=10
 //
 // Org-scoped tail of `deal_events` (the HMAC-signed financial-computation

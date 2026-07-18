@@ -223,7 +223,7 @@ export default function LandingPage() {
                 e.currentTarget.style.backgroundColor = '#1F4A3D';
               }}
             >
-              Request access
+              Get started
             </button>
           </nav>
         </div>
