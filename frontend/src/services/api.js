@@ -955,6 +955,11 @@ export const dealEventsAPI = {
   list:    (dealId, params)            => api.get(`/financials/${dealId}/events`, { params }),
   verify:  (dealId, eventId)           => api.get(`/financials/${dealId}/events/${eventId}/verify`),
   replay:  (dealId, eventId)           => api.post(`/financials/${dealId}/events/${eventId}/replay`),
+  // Whole-deal integrity: re-hash + re-verify the HMAC signature on EVERY
+  // signed computation and re-run the kernel on the latest. Returns
+  // { total_events, verified, failed, all_verified, key_available,
+  //   engine_versions[], first_at, last_at, events[], replay }.
+  verifyChain: (dealId)                => api.get(`/financials/${dealId}/events/verify-chain`),
 };
 
 // Document Extraction

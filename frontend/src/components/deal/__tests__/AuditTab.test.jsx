@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 let eventsState;
 const verifyMutate = vi.fn();
 const replayMutate = vi.fn();
+const chainMutate = vi.fn();
 const bulkBatchMock = vi.fn();
 
 vi.mock('../../../hooks/useDealContext', () => ({
@@ -19,6 +20,7 @@ vi.mock('../../../hooks/useDealEvents', () => ({
   useDealEvents: () => eventsState,
   useVerifyDealEvent: () => ({ mutate: verifyMutate, mutateAsync: verifyMutate, isPending: false }),
   useReplayDealEvent: () => ({ mutate: replayMutate, isPending: false }),
+  useVerifyDealChain: () => ({ mutate: chainMutate, mutateAsync: chainMutate, isPending: false }),
 }));
 
 vi.mock('../../../services/api', () => ({
@@ -37,8 +39,67 @@ const renderWithClient = (ui) => {
 beforeEach(() => {
   verifyMutate.mockReset();
   replayMutate.mockReset();
+  chainMutate.mockReset();
   bulkBatchMock.mockReset();
   eventsState = { data: [], isLoading: false, isError: false };
+});
+
+const oneSignedEvent = () => ({
+  data: [
+    {
+      id: 'e1',
+      event_type: 'calculate_and_save',
+      engine_version: 'kernel-v2',
+      actor: { id: 'u1', name: 'Rachit Jain' },
+      inputs_hash: 'a'.repeat(64),
+      outputs_hash: 'b'.repeat(64),
+      signature: 'c'.repeat(64),
+      created_at: new Date().toISOString(),
+      outputs_summary: { irr_pct: 20 },
+    },
+  ],
+  isLoading: false,
+});
+
+describe('AuditTab — computation integrity panel', () => {
+  it('runs whole-deal verification and shows the verified verdict', async () => {
+    eventsState = oneSignedEvent();
+    chainMutate.mockResolvedValueOnce({
+      total_events: 1, verified: 1, failed: 0, all_verified: true, key_available: true,
+      engine_versions: ['kernel-v2'],
+      first_at: '2026-01-01T00:00:00.000Z', last_at: '2026-01-01T00:00:00.000Z',
+      events: [{ id: 'e1', event_type: 'calculate_and_save', ok: true, checks: {} }],
+      replay: { attempted: true, ok: true },
+    });
+    renderWithClient(<AuditTab />);
+    fireEvent.click(screen.getByRole('button', { name: /Verify integrity/i }));
+    expect(await screen.findByText(/1 computation verified/i)).toBeInTheDocument();
+    expect(screen.getByText(/cryptographically authentic/i)).toBeInTheDocument();
+    expect(screen.getByText(/re-runs to the same numbers/i)).toBeInTheDocument();
+  });
+
+  it('surfaces an integrity issue when an event fails verification', async () => {
+    eventsState = oneSignedEvent();
+    chainMutate.mockResolvedValueOnce({
+      total_events: 2, verified: 1, failed: 1, all_verified: false, key_available: true,
+      engine_versions: ['kernel-v2'],
+      first_at: '2026-01-01T00:00:00.000Z', last_at: '2026-01-02T00:00:00.000Z',
+      events: [{ id: 'e1', ok: true, checks: {} }, { id: 'e2', ok: false, checks: {} }],
+      replay: null,
+    });
+    renderWithClient(<AuditTab />);
+    fireEvent.click(screen.getByRole('button', { name: /Verify integrity/i }));
+    expect(await screen.findByText(/Integrity issue on 1 of 2/i)).toBeInTheDocument();
+  });
+
+  it('is hidden when the deal has no signed computations', () => {
+    eventsState = {
+      data: [{ id: 'm1', kind: 'mutation', event_type: 'stage_changed', before: {}, after: {}, metadata: {}, created_at: new Date().toISOString() }],
+      isLoading: false,
+    };
+    renderWithClient(<AuditTab />);
+    expect(screen.queryByRole('button', { name: /Verify integrity/i })).not.toBeInTheDocument();
+  });
 });
 
 describe('AuditTab', () => {
@@ -160,8 +221,10 @@ describe('AuditTab', () => {
     const provenanceMatches = screen.getAllByText(/cryptographic provenance/i);
     expect(provenanceMatches.length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText(/Outputs snapshot/i)).toBeInTheDocument();
-    // Verify + Replay buttons are exposed
-    expect(screen.getByRole('button', { name: /Verify/i })).toBeInTheDocument();
+    // Verify + Replay buttons are exposed on the expanded row. Use the exact
+    // name 'Verify' so this targets the per-row button, not the panel's
+    // "Verify integrity" button.
+    expect(screen.getByRole('button', { name: 'Verify' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Replay/i })).toBeInTheDocument();
   });
 });

@@ -32,6 +32,7 @@ import {
   useDealEvents,
   useVerifyDealEvent,
   useReplayDealEvent,
+  useVerifyDealChain,
 } from '../../hooks/useDealEvents';
 import { financialsAPI } from '../../services/api';
 
@@ -774,6 +775,233 @@ const matchesFilter = (event, filterId) => {
   return event.kind !== 'mutation';
 };
 
+// ── Computation Integrity ────────────────────────────────────────────────────
+//
+// One-click, whole-deal cryptographic verification — the "verify our numbers
+// yourself" trust artifact. Re-hashes every signed computation, re-checks each
+// HMAC signature, and re-runs the kernel on the latest one. The per-event
+// results are REAL; the staggered reveal below is purely presentational (it
+// snaps to the verdict under prefers-reduced-motion).
+
+const REDUCE_MOTION =
+  typeof window !== 'undefined' && window.matchMedia
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false;
+
+const fmtDateOnly = (iso) => {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return '';
+  }
+};
+
+// A compact per-event reveal: one cell per signed computation, flipping to a
+// green check (or red alert) as it's "checked". For dense chains (>28) it
+// degrades to a slim progress bar so we never render a wall of dots.
+function IntegrityTicks({ events, revealed }) {
+  const total = events.length;
+  if (total === 0) return null;
+  if (total > 28) {
+    const pct = Math.round((revealed / total) * 100);
+    return (
+      <div className="mt-3 h-1.5 rounded-full bg-bg-secondary overflow-hidden" aria-hidden="true">
+        <div
+          className="h-full bg-data-positive transition-[width] duration-100 ease-out"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    );
+  }
+  return (
+    <div className="mt-3 flex flex-wrap gap-1.5" aria-hidden="true">
+      {events.map((e, i) => {
+        const shown = i < revealed;
+        return (
+          <span
+            key={e.id}
+            title={`${e.event_type} · ${e.ok ? 'verified' : 'failed'}`}
+            className={clsx(
+              'inline-flex items-center justify-center w-5 h-5 rounded-[5px] border transition-all duration-150 ease-out',
+              !shown && 'bg-bg-secondary border-hairline scale-90 opacity-40',
+              shown && e.ok && 'bg-pos-soft border-transparent text-data-positive scale-100 opacity-100',
+              shown && !e.ok && 'bg-neg-soft border-transparent text-data-negative scale-100 opacity-100',
+            )}
+          >
+            {shown ? (e.ok ? <Check size={11} /> : <AlertTriangle size={11} />) : null}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function IntegrityPanel({ dealId, signedCount }) {
+  const verify = useVerifyDealChain();
+  const [phase, setPhase] = useState('idle'); // idle | verifying | done
+  const [report, setReport] = useState(null);
+  const [revealed, setRevealed] = useState(0);
+
+  // Drive the staggered reveal once the report lands. Reduced-motion (or an
+  // empty chain) snaps straight to the verdict.
+  useEffect(() => {
+    if (phase !== 'verifying' || !report) return undefined;
+    const total = report.events.length;
+    if (REDUCE_MOTION || total === 0) {
+      setRevealed(total);
+      setPhase('done');
+      return undefined;
+    }
+    const per = Math.max(28, Math.min(80, Math.floor(900 / total)));
+    let i = 0;
+    let timer = setTimeout(function tick() {
+      i += 1;
+      setRevealed(i);
+      if (i >= total) {
+        setPhase('done');
+        return;
+      }
+      timer = setTimeout(tick, per);
+    }, per);
+    return () => clearTimeout(timer);
+  }, [phase, report]);
+
+  const run = async () => {
+    setReport(null);
+    setRevealed(0);
+    setPhase('verifying');
+    try {
+      const r = await verify.mutateAsync(dealId);
+      setReport(r); // the effect above runs the reveal cascade
+    } catch {
+      setPhase('idle'); // hook surfaces a toast
+    }
+  };
+
+  const cascading = phase === 'verifying' && report && revealed < report.events.length;
+  const busy = phase === 'verifying' && (!report || cascading);
+
+  const allOk = report && report.all_verified && report.key_available;
+  const anyFail = report && report.failed > 0;
+
+  return (
+    <Card elevated className="p-4">
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="shrink-0 w-9 h-9 rounded-lg bg-accent-soft text-accent flex items-center justify-center">
+            <ShieldCheck size={18} />
+          </div>
+          <div className="min-w-0">
+            <div className="font-display text-sm font-semibold text-content-primary">
+              Computation integrity
+            </div>
+            <div className="text-xs text-content-secondary mt-0.5 max-w-[52ch]">
+              Every number in this deal came from a signed, replayable computation.
+              Verify it yourself — REDIP re-hashes each record, re-checks its signature,
+              and re-runs the kernel. Nothing is taken on trust.
+            </div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={run}
+          disabled={busy}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md bg-accent text-white hover:bg-accent-hover transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-60 shrink-0"
+        >
+          <RotateCcw size={13} className={busy ? 'animate-spin' : ''} />
+          {busy ? 'Verifying…' : phase === 'done' ? 'Re-verify' : 'Verify integrity'}
+          {phase === 'idle' && signedCount > 0 && (
+            <span className="text-white/80 tabular-nums">· {signedCount}</span>
+          )}
+        </button>
+      </div>
+
+      {/* Reveal cascade while verifying */}
+      {phase === 'verifying' && report && (
+        <div>
+          <IntegrityTicks events={report.events} revealed={revealed} />
+          <div className="mt-2 text-[11px] text-content-muted tabular-nums">
+            Checking {Math.min(revealed, report.events.length)} of {report.events.length} signed computation
+            {report.events.length === 1 ? '' : 's'}…
+          </div>
+        </div>
+      )}
+
+      {/* Verdict */}
+      {phase === 'done' && report && (
+        <div className={clsx(
+          'mt-3 flex items-start gap-3 rounded-editorial border p-3',
+          allOk && 'bg-pos-soft border-transparent',
+          anyFail && 'bg-neg-soft border-transparent',
+          !allOk && !anyFail && 'bg-bg-secondary border-hairline',
+        )}>
+          <div className="shrink-0 mt-0.5">
+            {allOk ? (
+              <ShieldCheck size={20} className="text-data-positive" />
+            ) : anyFail ? (
+              <AlertTriangle size={20} className="text-data-negative" />
+            ) : (
+              <ShieldCheck size={20} className="text-content-muted" />
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold text-content-primary">
+              {report.total_events === 0
+                ? 'No signed computations yet'
+                : allOk
+                  ? `${report.verified} computation${report.verified === 1 ? '' : 's'} verified`
+                  : anyFail
+                    ? `Integrity issue on ${report.failed} of ${report.total_events}`
+                    : 'Signatures could not be checked'}
+            </div>
+            <div className="text-xs text-content-secondary mt-0.5">
+              {report.total_events === 0
+                ? 'Run the financial model to start a signed, verifiable computation trail.'
+                : allOk
+                  ? 'Every stored number is cryptographically authentic and untampered — re-hashed and signature-checked just now.'
+                  : anyFail
+                    ? 'One or more signed records no longer match their signature. Expand the timeline below to inspect the affected events.'
+                    : 'The server signing key is unavailable, so HMAC signatures can’t be verified right now. Stored content hashes were still checked.'}
+            </div>
+
+            {report.total_events > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-content-muted">
+                {report.engine_versions?.length > 0 && (
+                  <span className="inline-flex items-center gap-1">
+                    <span className="text-content-muted">engine</span>
+                    <span className="font-mono text-content-secondary">{report.engine_versions.join(', ')}</span>
+                  </span>
+                )}
+                {report.first_at && report.last_at && (
+                  <span className="tabular-nums">
+                    signed {fmtDateOnly(report.first_at)}
+                    {report.total_events > 1 ? ` – ${fmtDateOnly(report.last_at)}` : ''}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {report.replay?.attempted && (
+              <div className={clsx(
+                'mt-2 inline-flex items-start gap-1.5 text-[11px]',
+                report.replay.ok ? 'text-data-positive' : 'text-content-muted',
+              )}>
+                <RotateCcw size={11} className="mt-0.5 shrink-0" />
+                <span>
+                  {report.replay.ok
+                    ? 'The latest computation re-runs to the same numbers under today’s engine.'
+                    : 'The latest computation was signed under an earlier engine build — its numbers are authentic, but today’s engine yields a slightly different result.'}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export default function AuditTab() {
   const { dealId } = useDealContext();
   const { data, isLoading, isError, error, refetch } = useDealEvents(dealId);
@@ -854,6 +1082,12 @@ export default function AuditTab() {
         title="Audit trail"
         sub={`${breakdown}. Newest first. Click a financial row to inspect cryptographic provenance, verify the signature, or replay the kernel.`}
       />
+
+      {/* One-click whole-deal integrity — the "verify our numbers yourself"
+          artifact. Only shown when there's at least one signed computation. */}
+      {financialCount > 0 && (
+        <IntegrityPanel dealId={dealId} signedCount={financialCount} />
+      )}
 
       {/* Filter chips */}
       <div className="flex items-center gap-1.5" role="tablist" aria-label="Filter audit feed">

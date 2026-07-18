@@ -275,6 +275,24 @@ const getEvent = async (eventId) => {
   return result.rows[0];
 };
 
+/**
+ * Load every signed financial event for a deal, oldest→newest, WITH the stored
+ * input/output JSON needed to re-verify each signature. Chronological order so
+ * the chain reads first-computation → latest.
+ */
+const listEventsForVerification = async (dealId) => {
+  const result = await query(
+    `SELECT id, deal_id, actor_id, event_type, engine_version, asset_class,
+            inputs_hash, outputs_hash, signature, inputs_json, outputs_json,
+            created_at
+       FROM deal_events
+      WHERE deal_id = $1
+      ORDER BY created_at ASC, id ASC`,
+    [dealId],
+  );
+  return result.rows;
+};
+
 // ── Verification + replay ────────────────────────────────────────────────────
 
 /**
@@ -421,12 +439,115 @@ const flattenOutputsForAudit = (computed) => ({
   engineVersion: computed.engineVersion || 'kernel-v2',
 });
 
+// ── Whole-deal chain verification ────────────────────────────────────────────
+
+/**
+ * Is the HMAC signing key resolvable? In production this is false only when
+ * DEAL_EVENTS_HMAC_KEY is unset — in which case signatures can't be checked and
+ * the UI must say so honestly ("key unavailable") rather than reporting every
+ * row as tampered. In dev/test a stable fallback key is always available.
+ */
+const isSignatureKeyAvailable = () => {
+  try {
+    getHmacKey();
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+// The event types that carry replayable kernel inputs (a computation, not a
+// pure snapshot/export). Used to pick the latest event worth re-running.
+const REPLAYABLE_EVENT_TYPES = new Set([
+  'calculate_and_save',
+  'scenario_recompute',
+  'sensitivity_run',
+  'manual_replay',
+]);
+
+/**
+ * Verify a deal's ENTIRE signed computation history in one pass — the "verify
+ * our numbers yourself" primitive behind the Audit tab's Integrity panel.
+ *
+ * For every signed financial event it re-hashes the stored inputs/outputs and
+ * re-checks the HMAC signature (via verifyEvent), then optionally re-runs the
+ * deterministic kernel against the most recent computation to prove the current
+ * numbers still reproduce from first principles.
+ *
+ * Pure read-side; never throws on a verification miss — a tampered or
+ * key-rotated row is reported as `ok:false`, not an exception. Returns a
+ * compact per-event result list (for the UI's cascade) plus roll-ups.
+ *
+ * @param {string} dealId
+ * @param {{ replayLatest?: boolean }} opts
+ */
+const verifyChain = async (dealId, { replayLatest = true } = {}) => {
+  const rows = await listEventsForVerification(dealId);
+  const keyAvailable = isSignatureKeyAvailable();
+
+  const events = rows.map((row) => {
+    const v = verifyEvent(row);
+    return {
+      id: row.id,
+      event_type: row.event_type,
+      engine_version: row.engine_version,
+      created_at: row.created_at,
+      ok: v.ok,
+      checks: v.checks,
+    };
+  });
+
+  const total = events.length;
+  const verified = events.filter((e) => e.ok).length;
+  const failed = total - verified;
+  const engineVersions = [...new Set(rows.map((r) => r.engine_version).filter(Boolean))];
+
+  // Re-run the kernel on the most recent replayable event so the panel can
+  // claim more than "the signature is intact" — it can claim "the numbers
+  // themselves reproduce". Walk newest→oldest (rows are oldest→newest).
+  let replay = null;
+  if (replayLatest) {
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+      if (REPLAYABLE_EVENT_TYPES.has(rows[i].event_type)) {
+        const r = replayEvent(rows[i]);
+        replay = {
+          attempted: true,
+          ok: r.ok === true,
+          event_id: rows[i].id,
+          event_type: rows[i].event_type,
+          created_at: rows[i].created_at,
+          reason: r.reason || null,
+        };
+        break;
+      }
+    }
+  }
+
+  return {
+    deal_id: dealId,
+    generated_at: new Date().toISOString(),
+    total_events: total,
+    verified,
+    failed,
+    all_verified: total > 0 && failed === 0,
+    key_available: keyAvailable,
+    engine_versions: engineVersions,
+    first_at: rows.length ? rows[0].created_at : null,
+    last_at: rows.length ? rows[rows.length - 1].created_at : null,
+    events,
+    replay,
+  };
+};
+
 module.exports = {
   recordEvent,
   listEvents,
+  listEventsForVerification,
   getEvent,
   verifyEvent,
   replayEvent,
+  verifyChain,
+  isSignatureKeyAvailable,
   flattenOutputsForAudit,
   summarizeEventOutputs,
   // Exported for unit tests + other services that need identical hashing.

@@ -462,8 +462,9 @@ router.get('/:dealId/model-confidence', authenticate, async (req, res, next) => 
 // Investor-grade audit trail.
 //
 // GET    /financials/:dealId/events                   — list signed events
-// GET    /financials/:dealId/events/:eventId/verify   — hash + HMAC check
-// POST   /financials/:dealId/events/:eventId/replay   — re-run kernel, diff
+// GET    /financials/:dealId/events/verify-chain       — verify the WHOLE deal
+// GET    /financials/:dealId/events/:eventId/verify    — hash + HMAC check
+// POST   /financials/:dealId/events/:eventId/replay    — re-run kernel, diff
 //
 // Rows come from `deal_events` (HMAC-signed on write, append-only via RLS).
 // The verify endpoint performs the cryptographic check; replay additionally
@@ -485,6 +486,21 @@ router.get('/:dealId/events', authenticate, async (req, res, next) => {
       includeOutputsSummary,
     });
     res.json({ success: true, data: events });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /financials/:dealId/events/verify-chain
+// One-click whole-deal integrity check — re-hashes and re-verifies the HMAC
+// signature on EVERY signed computation, and re-runs the kernel on the latest
+// one to prove the numbers still reproduce. Backs the Audit tab's "Verify Deal
+// Integrity" panel. Fixed path segment, so it must be declared BEFORE the
+// `/:eventId/verify` route to avoid `verify-chain` being read as an eventId.
+router.get('/:dealId/events/verify-chain', authenticate, async (req, res, next) => {
+  try {
+    const result = await financialService.verifyDealChain(req.params.dealId);
+    res.json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
