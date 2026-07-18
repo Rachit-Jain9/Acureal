@@ -367,7 +367,7 @@ function CoordinatesGateExplainer({ gate, kgisHierarchy, onSwitchToCoords }) {
               Switch to coordinate input
             </button>
           )}
-          <span className="text-[10px] text-red-800/80">
+          <span className="text-[10px] text-data-negative">
             Tip: open the address in Google Maps, right-click the parcel pin, copy the lat/lng, paste here.
           </span>
         </div>

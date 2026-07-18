@@ -9,7 +9,7 @@ describe('deriveEvidenceChip', () => {
     });
   });
 
-  it('returns the verified pill for the verified bucket', () => {
+  it('returns the verified pill for the verified bucket (human-reviewed)', () => {
     const chip = deriveEvidenceChip({
       bucket: 'verified',
       source_count: 2,
@@ -18,15 +18,22 @@ describe('deriveEvidenceChip', () => {
     });
     expect(chip.tone).toBe('success');
     expect(chip.label).toBe('Verified');
-    expect(chip.sublabel).toBe('2 sources');
+    expect(chip.sublabel).toBe('2 sources · human-reviewed');
   });
 
   it('uses singular "source" when count is exactly one', () => {
     const chip = deriveEvidenceChip({ bucket: 'verified', source_count: 1, manual_count: 0 });
-    expect(chip.sublabel).toBe('1 source');
+    expect(chip.sublabel).toBe('1 source · human-reviewed');
   });
 
-  it('returns the inferred pill with reference count when only sources present', () => {
+  it('labels a manual-only verification as human-verified', () => {
+    const chip = deriveEvidenceChip({ bucket: 'verified', source_count: 0, manual_count: 2 });
+    expect(chip.tone).toBe('success');
+    expect(chip.label).toBe('Verified');
+    expect(chip.sublabel).toBe('Human-verified');
+  });
+
+  it('returns the inferred pill, honestly marked unverified, for extracted-but-unreviewed sources', () => {
     const chip = deriveEvidenceChip({
       bucket: 'inferred',
       source_count: 3,
@@ -35,18 +42,19 @@ describe('deriveEvidenceChip', () => {
     });
     expect(chip.tone).toBe('warning');
     expect(chip.label).toBe('Inferred');
-    expect(chip.sublabel).toBe('3 references');
+    expect(chip.sublabel).toBe('3 references · unverified');
   });
 
-  it('returns inferred with manual count when only manual checks present', () => {
+  it('a HIGH-confidence extraction is still honestly "unverified" until a human signs off', () => {
     const chip = deriveEvidenceChip({
       bucket: 'inferred',
-      source_count: 0,
-      manual_count: 2,
-      max_confidence: null,
+      source_count: 1,
+      manual_count: 0,
+      max_confidence: 0.95,
     });
     expect(chip.tone).toBe('warning');
-    expect(chip.sublabel).toBe('2 manual');
+    expect(chip.label).toBe('Inferred');
+    expect(chip.sublabel).toBe('High-confidence extraction · unverified');
   });
 
   it('returns the unverified pill for the needs_verification bucket', () => {

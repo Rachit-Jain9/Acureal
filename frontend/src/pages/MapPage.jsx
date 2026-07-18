@@ -314,7 +314,7 @@ export default function MapPage() {
                   <Link
                     key={property.id}
                     to={`/dashboard/properties/${property.id}`}
-                    className="flex items-center justify-between rounded-xl border border-hairline bg-bg-elevated px-3 py-3 transition hover:border-hairline-strong hover:bg-amber-100/40"
+                    className="flex items-center justify-between rounded-xl border border-hairline bg-bg-elevated px-3 py-3 transition hover:border-hairline-strong hover:bg-premium-soft"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-content-primary">{property.name}</p>

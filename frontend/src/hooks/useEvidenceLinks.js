@@ -20,6 +20,7 @@ const summaryDefault = {
   manual_count: 0,
   max_confidence: null,
   avg_confidence: null,
+  human_approved: false,
   bucket: 'needs_verification',
 };
 
@@ -78,8 +79,12 @@ export function useDetachEvidenceLink(ownerKind, ownerId) {
  * UI helper: derive the chip tone + label from a summary row, matching the
  * tones used by the parcel verdict so DD/approvals/risk feel consistent.
  *
- *   verified            → green pill, "Verified"
- *   inferred            → amber pill, "Inferred"
+ * "Verified" means a HUMAN approved the evidence (a manual verification, or an
+ * approved regulatory source) — never "the AI was confident." A high-confidence
+ * but unreviewed extraction is honestly labelled "Inferred · unverified".
+ *
+ *   verified            → green pill, "Verified" (human-reviewed)
+ *   inferred            → amber pill, "Inferred" (extracted, not yet reviewed)
  *   needs_verification  → grey pill, "Unverified"
  */
 export const deriveEvidenceChip = (summary = summaryDefault) => {
@@ -88,16 +93,23 @@ export const deriveEvidenceChip = (summary = summaryDefault) => {
     return {
       tone: 'success',
       label: 'Verified',
-      sublabel: summary.source_count ? `${summary.source_count} source${summary.source_count > 1 ? 's' : ''}` : '',
+      sublabel: summary.source_count
+        ? `${summary.source_count} source${summary.source_count > 1 ? 's' : ''} · human-reviewed`
+        : 'Human-verified',
     };
   }
   if (bucket === 'inferred') {
+    // Has evidence, but no human has approved it. Say so plainly — a
+    // high-confidence extraction is still unverified until a person signs off.
+    const highConfidence = (summary.max_confidence ?? 0) >= 0.8;
     return {
       tone: 'warning',
       label: 'Inferred',
-      sublabel: summary.source_count
-        ? `${summary.source_count} reference${summary.source_count > 1 ? 's' : ''}`
-        : `${summary.manual_count} manual`,
+      sublabel: highConfidence
+        ? 'High-confidence extraction · unverified'
+        : summary.source_count
+          ? `${summary.source_count} reference${summary.source_count > 1 ? 's' : ''} · unverified`
+          : 'Unverified',
     };
   }
   return {

@@ -32,6 +32,24 @@ const RE = new RegExp(
   'g',
 );
 
+// Opacity-suffixed forms that STILL break the theme flip. The primary RE
+// deliberately skips ALL `/opacity` forms because mid-shade tints
+// (bg-*-500/10, ring-*-400/40) read correctly on both themes — those stay
+// blessed (see docs/THEMING_TOKENS.md). But two families of opacity utility
+// are genuinely broken and must be caught:
+//   • LIGHT backgrounds/borders/rings (shades 50/100/200) stay near-white even
+//     at low alpha → a glaring wash on the near-black dark workspace;
+//   • DARK text shades (700/800/900) stay near-black → invisible ink on dark.
+// These two narrow arms flag exactly those, leaving every mid-tint alone.
+const BG_PROPS = 'bg|border|ring|divide|from|to|via|fill|outline|ring-offset';
+const TEXT_PROPS = 'text|placeholder|decoration|caret|stroke';
+const BOUND = `(?:^|[\\s"'\\\`{(\\[])`;
+const RE_WASH = new RegExp(
+  `${BOUND}((?:[a-z-]+:)*(?:${BG_PROPS})-(?:${FAMILIES})-(?:50|100|200)/\\d{1,3})`
+  + `|${BOUND}((?:[a-z-]+:)*(?:${TEXT_PROPS})-(?:${FAMILIES})-(?:700|800|900)/\\d{1,3})`,
+  'g',
+);
+
 // Allowlisted paths (relative to src/) — intentional exceptions.
 const ALLOW = [
   /^pages[\\/]+landing[\\/]/,                     // art-directed marketing surface
@@ -70,6 +88,10 @@ function scan() {
       let m;
       while ((m = RE.exec(code)) !== null) {
         violations.push({ file: rel, line: i + 1, match: m[1] });
+      }
+      RE_WASH.lastIndex = 0;
+      while ((m = RE_WASH.exec(code)) !== null) {
+        violations.push({ file: rel, line: i + 1, match: m[1] || m[2] });
       }
     });
   }

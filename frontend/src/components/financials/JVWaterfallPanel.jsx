@@ -203,7 +203,7 @@ export default function JVWaterfallPanel({ financials, deal }) {
                     </thead>
                     <tbody>
                       {result.waterfall.map((row, i) => (
-                        <tr key={i} className={`border-b last:border-0 hover:bg-bg-secondary transition-colors ${!row.fromProfit ? 'bg-blue-50/40' : ''}`}>
+                        <tr key={i} className={`border-b last:border-0 hover:bg-bg-secondary transition-colors ${!row.fromProfit ? 'bg-accent-soft' : ''}`}>
                           <td className="px-3 py-2.5 font-medium text-content-primary">{row.tranche}</td>
                           <td className="px-3 py-2.5 text-right text-accent">{fmtCr(row.landownerCr)}</td>
                           <td className="px-3 py-2.5 text-right text-data-highlight">{fmtCr(row.developerCr)}</td>

@@ -7,6 +7,7 @@ import {
   Beaker,
   Sparkles,
   ShieldCheck,
+  Gauge,
   ArrowRight,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -15,6 +16,7 @@ import { Card, SectionHeader } from '../design-system';
 import { useAiUsage } from '../hooks/useAiUsage';
 import { useLearningSignals } from '../hooks/useLearningSignals';
 import { useAuditTrail } from '../hooks/useAuditTrail';
+import { useSystemHealth } from '../hooks/useSystemHealth';
 
 /**
  * E7-PR3 — Admin Home / landing
@@ -98,6 +100,7 @@ export default function AdminHomePage() {
   const { data: aiUsage } = useAiUsage(1);
   const { data: learningSignals } = useLearningSignals(7);
   const { data: auditTrail } = useAuditTrail({ days: 1, limit: 10 });
+  const { data: systemHealth } = useSystemHealth();
 
   const aiSummary = aiUsage?.summary;
   const lsSummary = learningSignals?.summary;
@@ -122,6 +125,27 @@ export default function AdminHomePage() {
       />
 
       <div className="grid md:grid-cols-2 gap-3">
+        {/* System Health — the liveness watchdog */}
+        <AdminTile
+          to="/dashboard/admin/system-health"
+          icon={Gauge}
+          eyebrow="Reliability"
+          title="System Health"
+          sub="Hourly liveness watchdog: AI providers, audit trail, extractions, tenant isolation."
+          kpis={[
+            {
+              label: 'Status',
+              value: systemHealth ? (systemHealth.overall === 'unhealthy' ? 'Degraded' : 'Healthy') : '—',
+              tone: systemHealth ? (systemHealth.overall === 'unhealthy' ? 'danger' : 'success') : 'neutral',
+            },
+            {
+              label: 'Needs attention',
+              value: systemHealth ? fmt(systemHealth.unhealthy_count) : '—',
+              tone: systemHealth?.unhealthy_count > 0 ? 'danger' : 'success',
+            },
+          ]}
+        />
+
         {/* AI Usage */}
         <AdminTile
           to="/dashboard/admin/ai-usage"

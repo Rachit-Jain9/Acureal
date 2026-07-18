@@ -12,6 +12,7 @@ const { runSweep: runRetentionSweep } = require('../services/retentionSweep.serv
 const { runSweep: runEntityPurge } = require('../services/entityPurge.service');
 const queueService = require('../services/compsReviewQueue.service');
 const abEvalPersistence = require('../services/ai/abEvalPersistence.service');
+const { runHealthCheck } = require('../services/healthCheck.service');
 
 const router = express.Router();
 
@@ -88,6 +89,23 @@ router.get('/quality-baseline/daily', requireCronAuth, async (req, res, next) =>
   try {
     const summary = await abEvalPersistence.runScheduledBaselines();
     res.json({ success: true, ...summary });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// GET /api/cron/health-check/hourly
+// The liveness watchdog — the one thing that watches everything else. Reads
+// (UNSCOPED, across all orgs) the four subsystems that have failed SILENTLY
+// before: AI provider error share, audit-write liveness, stuck extractions, and
+// the tenant-isolation fail-closed canary. Raises a fingerprinted Sentry alert
+// per unhealthy subsystem (the endpoint stays 200 — unhealthy is data, not an
+// HTTP error — so alerting must be explicit; Sentry only auto-reports >=500).
+// Replaces the retired `/api/fx/refresh/daily` cron slot (net-zero cron count).
+router.get('/health-check/hourly', requireCronAuth, async (req, res, next) => {
+  try {
+    const summary = await runHealthCheck({ raiseAlerts: true });
+    res.json({ success: true, scheduled: true, ...summary });
   } catch (error) {
     next(error);
   }

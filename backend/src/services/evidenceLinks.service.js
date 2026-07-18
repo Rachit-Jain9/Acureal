@@ -358,21 +358,40 @@ const listForOwner = async (ownerKind, ownerId) => {
 };
 
 /**
- * Roll-up: highest confidence + count of distinct sources for an owner.
+ * Roll-up: is this owner's evidence HUMAN-VERIFIED, merely inferred, or bare?
  * Drives the "Verified / Inferred / Needs Verification" pill across DD,
  * approvals, risk, comps.
+ *
+ * "Verified" means a HUMAN approved the evidence — never "the AI was confident."
+ * A high-confidence AI extraction that no one has reviewed is `inferred`, not
+ * `verified`; and a genuine manual verification is `verified` even with zero
+ * AI-extracted sources. (The prior logic did the opposite on both counts:
+ * confidence >= 0.8 minted "Verified" on unreviewed AI, while a real manual
+ * verification — excluded from source_count — was downgraded to "Inferred".)
+ *
+ * The single source of truth for "a human approved this":
+ *   • a `manual_verification` link exists (a person clicked "Mark verified"), OR
+ *   • a linked evidence_source / evidence_fact has review_status = 'approved'.
+ * Confidence is surfaced for display but NEVER promotes the bucket.
  */
 const summariseForOwner = async (ownerKind, ownerId) => {
   const result = await query(
     `SELECT
-       COUNT(*) FILTER (WHERE link_kind <> 'manual_verification')         AS source_count,
-       COUNT(*) FILTER (WHERE link_kind = 'manual_verification')          AS manual_count,
-       MAX(confidence_score)                                              AS max_confidence,
-       AVG(confidence_score) FILTER (WHERE confidence_score IS NOT NULL)  AS avg_confidence
-     FROM evidence_links
-     WHERE organization_id = current_organization_id()
-       AND owner_kind = $1
-       AND owner_id   = $2`,
+       COUNT(*) FILTER (WHERE el.link_kind <> 'manual_verification')          AS source_count,
+       COUNT(*) FILTER (WHERE el.link_kind = 'manual_verification')           AS manual_count,
+       MAX(el.confidence_score)                                               AS max_confidence,
+       AVG(el.confidence_score) FILTER (WHERE el.confidence_score IS NOT NULL) AS avg_confidence,
+       BOOL_OR(
+         el.link_kind = 'manual_verification'
+         OR es.review_status = 'approved'
+         OR ef.review_status = 'approved'
+       )                                                                      AS human_approved
+     FROM evidence_links el
+     LEFT JOIN regulatory_data.evidence_sources es ON es.id = el.evidence_source_id
+     LEFT JOIN regulatory_data.evidence_facts   ef ON ef.id = el.evidence_fact_id
+     WHERE el.organization_id = current_organization_id()
+       AND el.owner_kind = $1
+       AND el.owner_id   = $2`,
     [ownerKind, ownerId]
   );
 
@@ -381,11 +400,12 @@ const summariseForOwner = async (ownerKind, ownerId) => {
   const manualCount = Number(row.manual_count || 0);
   const maxConfidence = row.max_confidence != null ? Number(row.max_confidence) : null;
   const avgConfidence = row.avg_confidence != null ? Number(row.avg_confidence) : null;
+  const humanApproved = row.human_approved === true;
 
   // Verdict mirrors the parcel three-bucket language so DD / approvals / risk
-  // chip states match what the parcel panel uses.
+  // chip states match what the parcel panel uses. Gated on human review only.
   let bucket = 'needs_verification';
-  if (sourceCount > 0 && (maxConfidence ?? 0) >= 0.8) bucket = 'verified';
+  if (humanApproved) bucket = 'verified';
   else if (sourceCount > 0 || manualCount > 0) bucket = 'inferred';
 
   return {
@@ -393,6 +413,7 @@ const summariseForOwner = async (ownerKind, ownerId) => {
     manual_count: manualCount,
     max_confidence: maxConfidence,
     avg_confidence: avgConfidence,
+    human_approved: humanApproved,
     bucket,
   };
 };
