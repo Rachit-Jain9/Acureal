@@ -87,4 +87,14 @@ describe('ProvenanceTab', () => {
     render(<ProvenanceTab />);
     expect(screen.getByText(/No provenance to trace yet/i)).toBeInTheDocument();
   });
+
+  it('embedded: drops the redundant section header (the modal supplies it) but keeps the ledger', () => {
+    render(<ProvenanceTab embedded />);
+    // The "Chain of custody" eyebrow + the standalone header sub are gone…
+    expect(screen.queryByText('Chain of custody')).not.toBeInTheDocument();
+    // …but the traced ledger and its groups still render.
+    expect(screen.getByText(/every one traced/i)).toBeInTheDocument();
+    expect(screen.getByText('Returns')).toBeInTheDocument();
+    expect(screen.getByText('Project IRR')).toBeInTheDocument();
+  });
 });

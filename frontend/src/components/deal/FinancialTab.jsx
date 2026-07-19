@@ -7,6 +7,7 @@ import { formatCrores, formatPct, formatArea } from '../../utils/format';
 import { useScrollOnMount } from '../../hooks/useEvidenceNavigate';
 import ProvenanceGraphView from '../financials/ProvenanceGraphView';
 import AuditTrailChip from '../financials/AuditTrailChip';
+import ProvenanceLedgerChip from '../financials/ProvenanceLedgerChip';
 // Workstream A (Provenance Spine) — the model-trust verdict, carried from
 // the DCF page to the deal workspace so it travels with the numbers.
 import ModelTrustSummary from '../financials/ModelTrustSummary';
@@ -256,12 +257,15 @@ export default function FinancialTab() {
         hasCovenants={f.dscr != null}
       />
 
-      {/* Footer — last-updated stamp + the signed audit trail chip.
-          The chip is the credibility signal for diligence partners; the
-          full HMAC timeline (Verify + Replay primitives) opens in a modal
-          on click instead of always rendering a ~80px collapsed card. */}
+      {/* Footer — last-updated stamp + two credibility one-liners: the signed
+          audit trail and the provenance ledger. Both open their full detail in
+          a modal on click (the provenance one replaced a top-level deal tab on
+          2026-07-19) instead of always rendering a card. */}
       <div className="flex items-center justify-between gap-3 flex-wrap pt-2">
-        <AuditTrailChip dealId={dealId} />
+        <div className="flex items-center gap-2 flex-wrap">
+          <AuditTrailChip dealId={dealId} />
+          <ProvenanceLedgerChip dealId={dealId} />
+        </div>
         {f.updated_at && (
           <p className="text-xs text-content-muted">
             Model last updated:{' '}
