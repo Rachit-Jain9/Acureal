@@ -10431,6 +10431,22 @@ Two exported normalizers re-key each kernel result into the shared `segments` sh
 
 ---
 
+## 2026-07-18/19 — Provenance tab: the deal's chain of custody, made visible (branch feat/provenance-tab)
+
+**What was worked on (plain English):** Ran a 3-candidate code-grounded review (in-app Provenance surface vs export provenance-stamp vs durability/founder infra). The review surfaced a striking finding: `icEvidence.service.getEvidenceLedger` — a DETERMINISTIC composer that traces every material IC figure to a typed source (kernel / analyst-set / REDIP benchmark / deal-records / verified-feed) — is fully built, unit-tested, and exposed at `GET /intelligence/ic-memo/:dealId/evidence` (and the frontend API method `intelligenceAPI.getIcMemoEvidence` already exists), with ZERO consumers. A built, tested, deployed "numbers→source" ledger sitting dark. Picked it (over the export stamp, which touches the riskiest file, and the durability infra, which is operator-only/low-cinematic) and gave it a cinematic in-app home.
+
+**#TBD — the build (frontend-only, ZERO backend changes):** new deal **Provenance** tab (`frontend/src/components/deal/ProvenanceTab.jsx`, `?tab=provenance`) that consumes the dormant ledger + the shipped verify-chain. It renders: a summary strip (N figures · every one traced, + a source-type breakdown of chips); a **Cryptographic seal** (one-click whole-deal verify reusing `useVerifyDealChain` from #1005 → compact verdict "N computations verified — authentic & untampered"; hidden when no kernel-signed figures); and the **ledger** — grouped claim rows (Returns / Capital / Key assumptions / Risk & diligence / Market / Site facts), each row = label · count-up value (unit-formatted) · a typed-source pill with the honest origin + a detail tooltip. Cinematic staggered top-to-bottom reveal (rAF), count-ups, semantic tokens (`--color-text-muted`, guarded), reduced-motion snaps. No AI on the surface (pure deterministic composer); legal-four out of scope by construction (it asserts numbers, never statutory conclusions). New `useProvenance.js` hook + tab wiring in DealDetailPage (lazy import, TABS entry between Comps and Audit, render branch). Deliberately did NOT touch the shipped AuditTab (reused the shared `useVerifyDealChain` hook only); the facts→sources rail was deferred (a risky polymorphic evidence-links join).
+
+**Validated against the LIVE prod DB before shipping:** drove `getEvidenceLedger` on the Jaraka Bande deal (via `runWithRequestContext` with the deal's org) → **24 traced figures** across 6 groups (`byType`: kernel 9, analyst 6, benchmark 2, deterministic 3, feed 1, deal-record 3) — 9 kernel-signed and seal-verifiable. Confirms real deals produce a rich, populated ledger.
+
+**Verified:** frontend 1,354 tests (167 files, +4 — ledger render, the seal verify, seal-hidden-when-no-signed-figures, and the honest empty state), theme-token + css-integrity + css-var guards green, clean production build. Live Chrome verification on Jaraka Bande's Provenance tab done post-deploy.
+
+### What's left to do next
+- Provenance v2: the facts→sources rail (a deal-level `evidence_links` aggregation — needs a guarded polymorphic owner→deal join) so "every FACT is cited" joins "every NUMBER is signed."
+- Still: M1 (DB role), M5 export provenance-stamp half (Candidate B — stamp the signed-computation ref onto DOCX/XLSX/memo), M6 (Excel-recalc CI), the durability C2 slice (auto-recover orphaned extractions + a Processing board), landing-hero → Parcel Evidence `?q=` handoff.
+
+---
+
 ## 2026-07-18 (cont.) — Open-to-all beta: fix misleading "Request access", capture company/role/city, operator signup notifications + in-app Signups roster (PR #1006, merged)
 
 **Trigger (operator, plain English):** "People are requesting access but I get no email/notification. Keep it open for beta — give access to everyone, collect info about them, make the site open to all."
