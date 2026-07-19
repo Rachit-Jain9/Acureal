@@ -10470,3 +10470,27 @@ Two exported normalizers re-key each kernel result into the shared `segments` sh
 - **Email delivery depends on Resend being configured in prod** (`RESEND_API_KEY` + `MAIL_FROM`). If the operator doesn't receive a "New REDIP signup" email on a test account, walk them through Resend setup (sign up → verify sender domain DNS → set Vercel env). The in-app Signups page works regardless.
 - Google signups can't collect company/role/city (one-click, no form) — those land NULL; acceptable.
 - Optional future: use `company` to name a new personal workspace; capture UTM/referrer; "use-case / how-heard" fields (operator deferred these this round).
+
+---
+
+## 2026-07-19 — M1 Phase 1: database-enforced tenant isolation readiness (#1011)
+
+**Context:** Operator asked to "take M1 next" — the deep-dive's highest-trust move: move the app off the `postgres` role (which is allowed to BYPASS Row-Level Security) onto a non-privileged role so PostgreSQL itself, not just application-code WHERE clauses, enforces per-customer isolation. This is the diligence question a serious institutional buyer asks.
+
+**Deep-audit finding (the reason this shipped as a staged plan, not a flip):** M1 is bigger and riskier than the roadmap implied. Proven empirically on the production DB (non-destructive, rolled-back `BEGIN … SET LOCAL ROLE authenticated … ROLLBACK`): a blind role flip returns **0 rows on every read** (memberships, users, deals, refresh-tokens) → **breaks login for every user**, because `login()` and the per-request `hydrateUserAuthContext` read `users` + `organization_members` *before* the request's user/org context is set. A blind flip would have locked the operator out of his own live app.
+
+**Shipped (safe, additive, behavior-neutral under today's BYPASSRLS role — validated on prod, rolled back):**
+- **Migration `20260731_rls_flip_readiness.sql`** — six additive RLS policies:
+  - Permissive `FOR ALL USING(true)` on the five RLS-enabled-but-policy-less system tables (`ai_response_cache`, `email_verification_tokens`, `login_attempts`, `mfa_challenges`, `refresh_token_grants`) — non-org-scoped; boundary is a per-token/per-email/per-hash application WHERE, several read pre-auth.
+  - `organization_members_self_read (user_id = current_user_id())` — self-membership read across orgs; the login/hydrate bootstrap enabler and the enabler for the `organizations_member_access` EXISTS subquery. Validated: recovers self reads with NO cross-org leak (`count(*) users` = 1, self only).
+  - These do NOTHING under the current `postgres` role (RLS is bypassed), so they change no behavior today; they only engage after the role flip. Reversible.
+- **`docs/M1_RLS_ROLLOUT.md`** — the complete staged runbook: empirical proof; Phase 1 (this migration); Phase 2 (auth-bootstrap — SECURITY DEFINER helpers for the pre-identity ops [login-by-email, register dup-check + `users` INSERT (no INSERT policy exists), Google identity/email lookups, post-MFA re-read] + set request context the instant identity is known); Phase 3 (`redip_app` LOGIN NOBYPASSRLS role + grants); Phase 4 (mandatory Supabase-branch rehearsal of the whole auth matrix); Phase 5 (flip one Vercel `DATABASE_URL` env var → canary shows `bypasses_rls:false`); Phase 6 (instant rollback = revert the env var). Non-technical operator steps for the live-config parts.
+- **`docs/SECURITY.md` §6** — removed the diligence landmine: it no longer claims DB-enforced isolation is already live. It now states the honest two-layer posture (application-layer org-scoping is the live boundary; RLS policies are defined + FORCE-enabled defense-in-depth; the role migration is staged + monitored by the System Health liveness canary). +§16 roadmap row; status date bumped to 2026-07-19.
+- **`docs/RLS_AUDIT.md`** — deny-all-tables section updated to reflect the fix + point to the runbook.
+
+**Verified:** `scripts/audit_rls.py` (CI migration-lint) green — 0 org-scoped tables missing RLS, 0 build-failing permissive tenant policies (the 5 new system-table policies correctly classified non-tenant). No JS changed. Full CI green on #1011 (Backend, Frontend, Financial kernel, Audit & migration lint, Vercel). Squash-merged.
+
+### What's left to do next
+- **Operator can apply Phase 1 to prod any time** (safe; changes nothing visible) via the Supabase SQL editor — steps in the runbook. Not a blocker for anything.
+- **Phase 2 (auth-bootstrap code + SECURITY DEFINER migration)** is the next engineering slice — every op enumerated in the runbook; all behavior-neutral under bypass, so shippable on a normal deploy and testable by the existing auth suite. It is the prerequisite for the flip.
+- **Phases 3–5 are operator-gated + must be branch-rehearsed** (create `redip_app`, verify the Supavisor pooler accepts the custom role, flip `DATABASE_URL`). Do NOT flip production without the Phase-4 green.
