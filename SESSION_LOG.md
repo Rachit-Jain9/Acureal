@@ -10494,3 +10494,19 @@ Two exported normalizers re-key each kernel result into the shared `segments` sh
 - **Operator can apply Phase 1 to prod any time** (safe; changes nothing visible) via the Supabase SQL editor — steps in the runbook. Not a blocker for anything.
 - **Phase 2 (auth-bootstrap code + SECURITY DEFINER migration)** is the next engineering slice — every op enumerated in the runbook; all behavior-neutral under bypass, so shippable on a normal deploy and testable by the existing auth suite. It is the prerequisite for the flip.
 - **Phases 3–5 are operator-gated + must be branch-rehearsed** (create `redip_app`, verify the Supavisor pooler accepts the custom role, flip `DATABASE_URL`). Do NOT flip production without the Phase-4 green.
+
+---
+
+## 2026-07-19 — Provenance: full deal tab → Financial-tab one-liner (#1012)
+
+**Context:** Operator flagged the Provenance tab as not worth a dedicated slot on an already-overflowing deal tab strip, and asked to demote it to a one-liner "like we already have" (pointing at the `Audit signed` footer chip). First established honestly that the tab wasn't a performance cost (it was already lazy) — the win here is decluttering, not speed.
+
+**Shipped (verified live on prod, Jaraka Bande deal):**
+- New `financials/ProvenanceLedgerChip.jsx` — a compact "Provenance · every figure traced →" one-liner in the Financial-tab footer, grouped beside the existing `AuditTrailChip`. Opens the full `ProvenanceTab` ledger in a `Modal` on click. `React.lazy` + gated on `open`, so the ProvenanceTab bundle (its own 3.7 kB-gzip chunk) and the evidence-ledger fetch cost nothing until clicked. Named `...LedgerChip` to avoid colliding with the pre-existing field-level `common/ProvenanceChip` popover (different component — caught during the change).
+- `ProvenanceTab` gained an `embedded` prop that drops its redundant section header when shown inside the modal (the modal title/description carry it); every other usage unchanged.
+- `DealDetailPage` — removed the Provenance tab (lazy import, tab entry, render branch). A stale `?tab=provenance` deep link now resolves to the Financial tab and tidies the URL, instead of a blank panel.
+
+**Verified:** frontend build clean (ProvenanceTab confirmed as its own lazy chunk); all four guards green (css-var / theme-token / hover-state / css-integrity); 13 tests pass incl. new chip + embedded-mode coverage. Full CI green on #1012, squash-merged. Live on prod in the operator's Chrome: tab gone from the strip, the chip renders next to Audit signed, clicking opens the full ledger modal with real data (24 traced figures, seal, kernel tags), `?tab=provenance` redirects to Financial, zero console errors.
+
+### What's left to do next
+- Nothing outstanding for this change. (If the operator later wants a literal side-drawer instead of the centered modal, it's a small swap — the modal was chosen to match the adjacent Audit chip.)
