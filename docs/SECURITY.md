@@ -1,6 +1,6 @@
 # REDIP — Security & Privacy Overview
 
-**Status date:** 2026-05-20
+**Status date:** 2026-07-19
 **Audience:** prospective customers, institutional investors, and their security / privacy reviewers
 **Owner:** REDIP engineering
 
@@ -85,11 +85,22 @@ this during contracting.
 
 ## 6. Tenant isolation
 
-Multi-tenant separation is enforced **at the database layer** with PostgreSQL
-Row-Level Security, not only in application code. Tenant-scoped tables carry an
-`organization_id` and RLS policies restrict every read and write to the caller's
-current organization. Audit tables additionally have no UPDATE or DELETE policy,
-making them append-only even under the application's database role.
+Every tenant-scoped table carries an `organization_id`, and each such table has
+PostgreSQL Row-Level Security (RLS) **policies defined and FORCE-enabled** that
+restrict every read and write to the caller's current organization. Audit tables
+additionally have no UPDATE or DELETE policy under these policies, so they are
+append-only.
+
+Tenant separation is enforced in **two layers**: (1) the application scopes every
+database query to the authenticated user's organization, and (2) the RLS policies
+above. Today the application connects using a database role that is exempt from
+RLS, so layer (1) is the active enforcement boundary and the RLS policies are a
+prepared, force-enabled defense-in-depth layer. Migrating the application to a
+non-privileged database role — so PostgreSQL itself rejects any cross-organization
+access independent of application code — is a staged, monitored hardening item
+(see section 16). An internal liveness check continuously reports the database
+role's RLS posture so any regression or completion of this migration is observed,
+not assumed.
 
 ## 7. Data protection
 
@@ -210,6 +221,7 @@ items are tracked; status is current as of the date above:
 | Granular, per-purpose consent (separate from bundled Terms/Privacy acceptance) | In place |
 | Self-service "see / export my data" (DPDP access & portability) | In place — Privacy Centre |
 | Public sub-processor disclosure page | In place |
+| Database-enforced tenant isolation (application connects via a non-RLS-exempt role) | In progress — policies defined & FORCE-enabled; role migration staged and monitored by a liveness check |
 | Backup & disaster-recovery posture and recovery procedure | Documented — restore drill pending |
 | India-resident security-log retention for the CERT-In 180-day requirement | In progress |
 | Published Data Processing Agreement (DPA) | Planned — pending legal counsel |

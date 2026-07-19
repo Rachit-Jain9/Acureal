@@ -72,10 +72,15 @@ The platform-admin-union pattern (every workspace sees the platform admin's cura
 
 ## Tables with RLS enabled but no migration-defined policy
 
-A table can have RLS enabled but no policy — Postgres treats it as **deny by default**. The following tables show that pattern; for each, the policy is either added via the Supabase dashboard (look in the SQL editor history) or the table is intentionally read-only via the service role:
+A table can have RLS enabled but no policy — Postgres treats it as **deny by default**. Under the current `postgres` (BYPASSRLS) connection role this is invisible, but it would break the moment the app moves to a non-bypass role (M1). Five such system tables were found on a 2026-07-19 production sweep and are closed by migration `20260731_rls_flip_readiness.sql` with permissive `FOR ALL` policies (none are org-scoped; their boundary is a per-token/per-email/per-hash application WHERE clause, and several are touched pre-authentication):
 
-- `public.ai_response_cache` — service-role write, anonymous read disabled
-- `public.mfa_challenges` — service-role only
+- `public.ai_response_cache` — global response cache, keyed by prompt hash
+- `public.email_verification_tokens` — keyed by token
+- `public.login_attempts` — per-email throttle, read before auth context exists
+- `public.mfa_challenges` — issued mid-login, before full auth
+- `public.refresh_token_grants` — session tokens, refreshed before auth context exists
+
+That same migration also adds `organization_members_self_read` (self-membership read across orgs) to unblock the login/hydrate bootstrap under RLS. See [`M1_RLS_ROLLOUT.md`](M1_RLS_ROLLOUT.md) for the full staged role-flip plan (the auth-bootstrap SECURITY DEFINER work, the `redip_app` role, the branch rehearsal, and the monitored flip).
 
 If your migration is adding a new table, define the policy in the same migration. Don't rely on dashboard-only policies.
 
