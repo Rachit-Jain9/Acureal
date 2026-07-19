@@ -50,7 +50,6 @@ const RiskTab      = lazy(() => import('../components/deal/RiskTab'));
 const CompsTab     = lazy(() => import('../components/deal/CompsTab'));
 const ZoningTab    = lazy(() => import('../components/deal/ZoningTab'));
 const AuditTab     = lazy(() => import('../components/deal/AuditTab'));
-const ProvenanceTab = lazy(() => import('../components/deal/ProvenanceTab'));
 const RentRollTab  = lazy(() => import('../components/rentroll/RentRollTab'));
 import ShareDealPanel from '../components/deal/ShareDealPanel';
 import DealWorkspaceTour from '../components/onboarding/DealWorkspaceTour';
@@ -79,7 +78,6 @@ const TABS = [
   { id: 'dd',         label: 'DD & Approvals' },
   { id: 'risk',       label: 'Risk' },
   { id: 'comps',      label: 'Market / Comps' },
-  { id: 'provenance', label: 'Provenance' },
   { id: 'audit',      label: 'Audit' },
 ];
 
@@ -202,7 +200,10 @@ export default function DealDetailPage() {
   const deleteDeal = useDeleteDeal();
   const updateDeal = useUpdateDeal();
 
-  const activeTab = searchParams.get('tab') || 'overview';
+  // Provenance was folded into a one-liner on the Financial tab (2026-07-19);
+  // send any stale ?tab=provenance deep link there instead of a blank panel.
+  const requestedTab = searchParams.get('tab') || 'overview';
+  const activeTab = requestedTab === 'provenance' ? 'financial' : requestedTab;
 
   const [stageNotes, setStageNotes] = useState('');
   const [stageExpanded, setStageExpanded] = useState(false);
@@ -232,6 +233,14 @@ export default function DealDetailPage() {
   const shareCount = liveShareCount ?? deal?.share_count ?? 0;
 
   const setTab = (tabId) => setSearchParams({ tab: tabId });
+
+  // Clean the URL when an old Provenance deep link lands — the panel already
+  // shows Financial (via activeTab above); this just tidies the address bar.
+  useEffect(() => {
+    if (searchParams.get('tab') === 'provenance') {
+      setSearchParams({ tab: 'financial' }, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
   const updateField = (key, value) => setEditForm((f) => ({ ...f, [key]: value }));
 
   const handleStageTransition = async (newStage) => {
@@ -491,7 +500,6 @@ export default function DealDetailPage() {
             {activeTab === 'dd' && <DDTab />}
             {activeTab === 'risk' && <RiskTab />}
             {activeTab === 'comps' && <CompsTab />}
-            {activeTab === 'provenance' && <ProvenanceTab />}
             {activeTab === 'audit' && <AuditTab />}
             {activeTab === 'rentroll' && <RentRollTab canEdit={canEdit} />}
           </Suspense>

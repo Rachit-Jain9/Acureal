@@ -172,7 +172,7 @@ function VerifySeal({ dealId, signedCount }) {
   );
 }
 
-export default function ProvenanceTab() {
+export default function ProvenanceTab({ embedded = false }) {
   const { dealId } = useDealContext();
   const reduced = useReducedMotion();
   const { data: ledger, isLoading, isError, error, refetch } = useDealEvidenceLedger(dealId);
@@ -249,12 +249,16 @@ export default function ProvenanceTab() {
 
   return (
     <div className="space-y-5">
-      <SectionHeader
-        size="sm"
-        eyebrow="Chain of custody"
-        title="Provenance"
-        sub="Every figure this deal's decision rests on — traced to an honest, typed source, and (for kernel-computed numbers) cryptographically signed. This is the deterministic claim layer: no AI, no free-floating assertions."
-      />
+      {/* When embedded in the Financial-tab provenance modal, the modal title +
+          description already carry this header — don't repeat it. */}
+      {!embedded && (
+        <SectionHeader
+          size="sm"
+          eyebrow="Chain of custody"
+          title="Provenance"
+          sub="Every figure this deal's decision rests on — traced to an honest, typed source, and (for kernel-computed numbers) cryptographically signed. This is the deterministic claim layer: no AI, no free-floating assertions."
+        />
+      )}
 
       {/* Summary strip */}
       <Card className="p-4">
