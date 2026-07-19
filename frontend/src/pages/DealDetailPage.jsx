@@ -50,6 +50,7 @@ const RiskTab      = lazy(() => import('../components/deal/RiskTab'));
 const CompsTab     = lazy(() => import('../components/deal/CompsTab'));
 const ZoningTab    = lazy(() => import('../components/deal/ZoningTab'));
 const AuditTab     = lazy(() => import('../components/deal/AuditTab'));
+const ProvenanceTab = lazy(() => import('../components/deal/ProvenanceTab'));
 const RentRollTab  = lazy(() => import('../components/rentroll/RentRollTab'));
 import ShareDealPanel from '../components/deal/ShareDealPanel';
 import DealWorkspaceTour from '../components/onboarding/DealWorkspaceTour';
@@ -78,6 +79,7 @@ const TABS = [
   { id: 'dd',         label: 'DD & Approvals' },
   { id: 'risk',       label: 'Risk' },
   { id: 'comps',      label: 'Market / Comps' },
+  { id: 'provenance', label: 'Provenance' },
   { id: 'audit',      label: 'Audit' },
 ];
 
@@ -489,6 +491,7 @@ export default function DealDetailPage() {
             {activeTab === 'dd' && <DDTab />}
             {activeTab === 'risk' && <RiskTab />}
             {activeTab === 'comps' && <CompsTab />}
+            {activeTab === 'provenance' && <ProvenanceTab />}
             {activeTab === 'audit' && <AuditTab />}
             {activeTab === 'rentroll' && <RentRollTab canEdit={canEdit} />}
           </Suspense>
