@@ -30,31 +30,36 @@
  *     the tear-sheet is a verified-data snapshot, not editorial.
  */
 
-const { PDFDocument, StandardFonts, rgb, PageSizes } = require('pdf-lib');
+// pdf-lib (~365ms to load) is accessed through the lazy shim so this module —
+// boot-reachable via the intelligence routes — never forces the library onto
+// the serverless cold-start path. See lib/lazyPdfLib.js.
+const { pdfLib, rgb, lazyByFactory, A4_LANDSCAPE } = require('../lib/lazyPdfLib');
 const intelligenceService = require('./intelligence.service');
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
 // Landscape A4 — same physical paper as the deal PDF, oriented for tables.
-const PAGE_LANDSCAPE = [PageSizes.A4[1], PageSizes.A4[0]]; // [width, height]
+const PAGE_LANDSCAPE = A4_LANDSCAPE; // [width, height] in PDF points
 const MARGIN_X = 40;
 const MARGIN_TOP = 80;   // Below the navy header bar
 const MARGIN_BOTTOM = 36; // Above the footer
 const HEADER_HEIGHT = 56;
 
-const COLORS = {
-  navy:     rgb(0.06, 0.13, 0.27),
-  accent:   rgb(0.15, 0.39, 0.92),
-  slate900: rgb(0.12, 0.16, 0.22),
-  slate700: rgb(0.27, 0.33, 0.4),
-  slate500: rgb(0.45, 0.5, 0.58),
-  slate200: rgb(0.89, 0.91, 0.94),
-  slate100: rgb(0.96, 0.97, 0.98),
-  white:    rgb(1, 1, 1),
-  green:    rgb(0.09, 0.64, 0.37),
-  amber:    rgb(0.85, 0.52, 0.07),
-  red:      rgb(0.86, 0.19, 0.19),
-};
+// Lazy (Proxy) palette — module-scope colors without forcing pdf-lib onto the
+// cold-start path; call sites unchanged.
+const COLORS = lazyByFactory(({ rgb: liveRgb }) => ({
+  navy:     liveRgb(0.06, 0.13, 0.27),
+  accent:   liveRgb(0.15, 0.39, 0.92),
+  slate900: liveRgb(0.12, 0.16, 0.22),
+  slate700: liveRgb(0.27, 0.33, 0.4),
+  slate500: liveRgb(0.45, 0.5, 0.58),
+  slate200: liveRgb(0.89, 0.91, 0.94),
+  slate100: liveRgb(0.96, 0.97, 0.98),
+  white:    liveRgb(1, 1, 1),
+  green:    liveRgb(0.09, 0.64, 0.37),
+  amber:    liveRgb(0.85, 0.52, 0.07),
+  red:      liveRgb(0.86, 0.19, 0.19),
+}));
 
 // ── Pure formatters ────────────────────────────────────────────────────────
 // `safeText` strips non-printable characters that pdf-lib can't render with
@@ -556,6 +561,7 @@ const buildIntelligenceTearSheet = async ({ city = 'Bengaluru', generatedBy = 'U
     intelligenceService.getMarketTransactions({ city }),
   ]);
 
+  const { PDFDocument, StandardFonts } = pdfLib(); // lazy — first PDF build pays the load
   const pdfDoc = await PDFDocument.create();
   const fonts = {
     regular: await pdfDoc.embedFont(StandardFonts.Helvetica),
