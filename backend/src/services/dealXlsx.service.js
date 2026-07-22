@@ -1,6 +1,7 @@
 'use strict';
 
-const ExcelJS = require('exceljs');
+// exceljs (~1.5s to load) is required at point of use below — keeps it off the
+// serverless cold-start path so non-export requests never pay for it.
 const { inferAssetClass } = require('../utils/assetClass');
 
 const FONT = 'Arial';
@@ -1483,6 +1484,7 @@ const buildAuditSheet = (workbook, context) => {
 
 const buildDealWorkbookXlsx = async (exportContext, options = {}) => {
   const context = buildWorkbookContext(exportContext, options);
+  const ExcelJS = require('exceljs'); // lazy — off the cold-start path
   const workbook = new ExcelJS.Workbook();
   workbook.creator = options.userName || 'REDIP';
   workbook.company = context.brandName;

@@ -64,19 +64,20 @@ describe('usePrefetchDealWorkspace', () => {
       await getPrefetch()('deal-1');
     });
     expect(dealsAPI.getWorkspace).toHaveBeenCalledTimes(1);
-    expect(dealsAPI.getWorkspace).toHaveBeenCalledWith('deal-1');
+    // Primes the LITE payload — the one the deal page paints from first.
+    expect(dealsAPI.getWorkspace).toHaveBeenCalledWith('deal-1', { lite: true });
   });
 
   it('skips the fetch when the deal is already in cache (no thrash)', async () => {
     const { qc, getPrefetch } = setup();
-    qc.setQueryData(['deal-workspace', 'deal-2'], { id: 'deal-2' });
+    qc.setQueryData(['deal-workspace-lite', 'deal-2'], { id: 'deal-2' });
     await act(async () => {
       await getPrefetch()('deal-2');
     });
     expect(dealsAPI.getWorkspace).not.toHaveBeenCalled();
   });
 
-  it('caches the result under the shared ["deal-workspace", id] key', async () => {
+  it('caches the result under the ["deal-workspace-lite", id] key (the paint-gating payload)', async () => {
     dealsAPI.getWorkspace.mockResolvedValueOnce({
       data: { data: { id: 'deal-3', name: 'Whitefield JV' } },
     });
@@ -89,7 +90,7 @@ describe('usePrefetchDealWorkspace', () => {
     // before the next synchronous read on CI. `waitFor` polls until the
     // microtask drains — local + CI both deterministic.
     await waitFor(() => {
-      expect(qc.getQueryData(['deal-workspace', 'deal-3'])).toMatchObject({
+      expect(qc.getQueryData(['deal-workspace-lite', 'deal-3'])).toMatchObject({
         id: 'deal-3',
         name: 'Whitefield JV',
       });

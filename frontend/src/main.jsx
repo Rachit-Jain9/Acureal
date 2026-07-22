@@ -7,9 +7,16 @@ import { initSentry } from './lib/sentry';
 import { queryClient } from './lib/queryClient';
 import './index.css';
 
-// Start error monitoring as early as possible so init-time errors are captured.
-// No-op in dev / tests (only runs in the deployed production build).
-initSentry();
+// Start error monitoring, but OFF the first-paint critical path: initSentry()
+// dynamically imports the ~30 KB Sentry SDK, so we kick it off once the browser
+// is idle after mount rather than competing with the app's own initial code.
+// No-op in dev / tests (only runs in the deployed production build); the global
+// chunk-error handlers below cover the brief pre-init window.
+if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+  window.requestIdleCallback(() => initSentry(), { timeout: 3000 });
+} else {
+  window.setTimeout(() => initSentry(), 1);
+}
 
 // ─── Stale-chunk auto-recovery (global handler) ──────────────────────────────
 // The React ErrorBoundary catches stale-chunk errors that surface during a

@@ -29,10 +29,14 @@
  *    rather than silently treating a partial read as complete.
  */
 
-const ExcelJS = require('exceljs');
-const JSZip = require('jszip');
-const mammoth = require('mammoth');
-const { load: loadHtml } = require('cheerio');
+// Heavy parsers (exceljs ~1.5s, cheerio ~0.6s, mammoth ~0.2s, jszip to load)
+// are required at POINT OF USE, not at module top-level, to keep them off the
+// serverless cold-start path — an auth or deal-workspace request must never pay
+// to load the document-extraction stack. cheerio is used across several format
+// handlers, so it gets a lazy wrapper that preserves every call site; the others
+// are required inside the single handler that needs them.
+let _cheerioLoad;
+const loadHtml = (...args) => (_cheerioLoad || (_cheerioLoad = require('cheerio').load))(...args);
 const { normalizeExtension, formatFor } = require('../../constants/documentFormats');
 
 // Caps. Generous enough for real deal documents (a 2,000-row rent roll is
@@ -91,6 +95,7 @@ const cellToText = (value) => {
  * place the asset or phase is stated.
  */
 const parseSpreadsheet = async (buffer) => {
+  const ExcelJS = require('exceljs'); // lazy — off the cold-start path
   const workbook = new ExcelJS.Workbook();
   await workbook.xlsx.load(buffer);
 
@@ -189,6 +194,7 @@ const parseXmlLike = (buffer, ext, label) => {
 };
 
 const readZipSafely = async (buffer) => {
+  const JSZip = require('jszip'); // lazy — off the cold-start path
   const zip = await JSZip.loadAsync(buffer);
   const entries = Object.values(zip.files).filter((f) => !f.dir);
   if (entries.length > MAX_ZIP_ENTRIES) {
@@ -215,6 +221,7 @@ const parseKmz = async (buffer) => {
  * flatten to tab-separated rows.
  */
 const parseDocx = async (buffer) => {
+  const mammoth = require('mammoth'); // lazy — off the cold-start path
   const { value: html, messages } = await mammoth.convertToHtml({ buffer });
   const $ = loadHtml(html || '');
   const out = [];

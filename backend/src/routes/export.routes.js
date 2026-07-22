@@ -1,7 +1,7 @@
 const express = require('express');
 const { query } = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
-const ExcelJS = require('exceljs');
+// exceljs is required at point of use (the comps-xlsx handler) — off the cold-start path.
 const { PDFDocument, StandardFonts, rgb, PageSizes } = require('pdf-lib');
 const { query: qv } = require('express-validator');
 const { handleValidation } = require('../middleware/validate');
@@ -17,7 +17,9 @@ const dealService = require('../services/deal.service');
 const compsService = require('../services/comps.service');
 const { buildDealDeckPptx } = require('../services/dealPptx.service');
 const { buildDealWorkbookXlsx } = require('../services/dealXlsx.service');
-const { buildDealWorkbookV2 } = require('../services/exports/xlsx/v2/buildWorkbook');
+// buildDealWorkbookV2 pulls in the v2 xlsx builder (exceljs ~1.5s + chart
+// injector + jszip). Required at point of use below so it stays off the
+// serverless cold-start path — only an actual xlsx export pays for it.
 const { buildDealReportDocx } = require('../services/exports/docx/buildReport');
 const { buildReraReadinessDocx } = require('../services/exports/docx/buildReraReadiness');
 const { composeReadiness } = require('../services/karnatakaReraReadiness.service');
@@ -1059,6 +1061,7 @@ router.get(
          FROM comps ORDER BY city, rate_per_sqft DESC`
       );
 
+      const ExcelJS = require('exceljs'); // lazy — off the cold-start path
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'REDIP';
       workbook.created = new Date();
@@ -1120,7 +1123,9 @@ router.get(
       // `XLSX_V1_FORCE=1` in Vercel.
       const explicitV1 = String(req.query.v || '').trim() === '1' || process.env.XLSX_V1_FORCE === '1';
       const useV2 = !explicitV1;
-      const builder = useV2 ? buildDealWorkbookV2 : buildDealWorkbookXlsx;
+      const builder = useV2
+        ? require('../services/exports/xlsx/v2/buildWorkbook').buildDealWorkbookV2 // lazy — off cold-start path
+        : buildDealWorkbookXlsx;
 
       // Strict-then-graceful build. The v2 workbook normally hard-blocks
       // (422) when a deal is missing a required underwriting input — great

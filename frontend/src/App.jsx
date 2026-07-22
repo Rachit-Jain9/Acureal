@@ -3,7 +3,10 @@ import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import useAuthStore from './store/authStore';
-import Layout from './components/layout/Layout';
+// Layout (the authenticated app shell: sidebar, header, command palette, guide
+// catalog, product tour) is lazy-loaded so the PUBLIC landing + login pages —
+// which never mount it — don't download the whole shell on first paint.
+const Layout = lazy(() => import('./components/layout/Layout'));
 import ToastContainer from './components/common/Toast';
 import { ConfirmDialogContainer } from './design-system';
 import ErrorBoundary from './components/common/ErrorBoundary';
@@ -156,7 +159,7 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ErrorBoundary>
-                <Layout />
+                {withSuspense(<Layout />)}
               </ErrorBoundary>
             </ProtectedRoute>
           }
