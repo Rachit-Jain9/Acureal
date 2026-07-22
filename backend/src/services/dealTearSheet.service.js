@@ -43,7 +43,10 @@
  *     tear-sheet is for.
  */
 
-const { PDFDocument, StandardFonts, rgb, PageSizes } = require('pdf-lib');
+// pdf-lib (~365ms to load) is accessed through the lazy shim so this module —
+// which is boot-reachable via the export routes — never forces the library
+// onto the serverless cold-start path. See lib/lazyPdfLib.js.
+const { pdfLib, rgb, lazyByFactory, A4_LANDSCAPE } = require('../lib/lazyPdfLib');
 const { getDealExportContext } = require('./dealExport.service');
 const aiArtifacts = require('./aiArtifacts.service');
 const log = require('../lib/logger').child({ module: 'dealTearSheet' });
@@ -51,27 +54,28 @@ const log = require('../lib/logger').child({ module: 'dealTearSheet' });
 // ── Constants ──────────────────────────────────────────────────────────────
 
 // Landscape A4. Same physical paper as the Market Intelligence tear-sheet.
-const PAGE_LANDSCAPE = [PageSizes.A4[1], PageSizes.A4[0]]; // [width, height]
+const PAGE_LANDSCAPE = A4_LANDSCAPE; // [width, height] in PDF points
 const MARGIN_X = 40;
 const MARGIN_BOTTOM = 36;
 const HEADER_HEIGHT = 56;
 
 // Editorial palette — identical to intelligenceExport so the two PDFs
-// look like one product family.
-const COLORS = {
-  navy:     rgb(0.06, 0.13, 0.27),
-  accent:   rgb(0.15, 0.39, 0.92),
-  slate900: rgb(0.12, 0.16, 0.22),
-  slate700: rgb(0.27, 0.33, 0.4),
-  slate500: rgb(0.45, 0.5, 0.58),
-  slate300: rgb(0.74, 0.78, 0.83),
-  slate200: rgb(0.89, 0.91, 0.94),
-  slate100: rgb(0.96, 0.97, 0.98),
-  white:    rgb(1, 1, 1),
-  green:    rgb(0.09, 0.64, 0.37),
-  amber:    rgb(0.85, 0.52, 0.07),
-  red:      rgb(0.86, 0.19, 0.19),
-};
+// look like one product family. Lazy (Proxy) so the module-scope palette
+// doesn't force pdf-lib onto the cold-start path; call sites unchanged.
+const COLORS = lazyByFactory(({ rgb: liveRgb }) => ({
+  navy:     liveRgb(0.06, 0.13, 0.27),
+  accent:   liveRgb(0.15, 0.39, 0.92),
+  slate900: liveRgb(0.12, 0.16, 0.22),
+  slate700: liveRgb(0.27, 0.33, 0.4),
+  slate500: liveRgb(0.45, 0.5, 0.58),
+  slate300: liveRgb(0.74, 0.78, 0.83),
+  slate200: liveRgb(0.89, 0.91, 0.94),
+  slate100: liveRgb(0.96, 0.97, 0.98),
+  white:    liveRgb(1, 1, 1),
+  green:    liveRgb(0.09, 0.64, 0.37),
+  amber:    liveRgb(0.85, 0.52, 0.07),
+  red:      liveRgb(0.86, 0.19, 0.19),
+}));
 
 // ── Pure formatters ────────────────────────────────────────────────────────
 
@@ -524,6 +528,7 @@ async function buildDealTearSheet({ dealId, generatedBy = 'REDIP user' } = {}) {
     return { body: null, sourceLabel: null };
   });
 
+  const { PDFDocument, StandardFonts } = pdfLib(); // lazy — first PDF build pays the load
   const pdfDoc = await PDFDocument.create();
   const fonts = {
     regular: await pdfDoc.embedFont(StandardFonts.Helvetica),

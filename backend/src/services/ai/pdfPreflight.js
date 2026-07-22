@@ -29,7 +29,9 @@
  * No new dependency: pdf-lib is already used for PDF manipulation elsewhere.
  */
 
-const { PDFDocument } = require('pdf-lib');
+// pdf-lib loads lazily via the shim (~365ms off the cold-start path); each
+// entry point destructures PDFDocument at call time.
+const { pdfLib } = require('../../lib/lazyPdfLib');
 const log = require('../../lib/logger').child({ module: 'pdf.preflight' });
 
 /**
@@ -75,6 +77,7 @@ const preflightPdf = async (buffer) => {
 
   let doc;
   try {
+    const { PDFDocument } = pdfLib(); // lazy — off the cold-start path
     // ignoreEncryption:false so an encrypted document REPORTS ITSELF rather
     // than loading into a half-usable state and failing mysteriously later at
     // the provider. A password-protected deed is a normal thing to receive;
@@ -152,6 +155,7 @@ const preflightPdf = async (buffer) => {
  */
 const extractPageRange = async (buffer, startIndex, count) => {
   try {
+    const { PDFDocument } = pdfLib(); // lazy — off the cold-start path
     const src = await PDFDocument.load(buffer, { ignoreEncryption: false, updateMetadata: false });
     const total = src.getPageCount();
     const from = Math.max(0, Math.min(startIndex, total - 1));

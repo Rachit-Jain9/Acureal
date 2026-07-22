@@ -2,7 +2,9 @@ const express = require('express');
 const { query } = require('../config/database');
 const { authenticate, requireRole } = require('../middleware/auth');
 // exceljs is required at point of use (the comps-xlsx handler) — off the cold-start path.
-const { PDFDocument, StandardFonts, rgb, PageSizes } = require('pdf-lib');
+// pdf-lib likewise loads lazily (~365ms saved per cold start); the tear-sheet
+// handler destructures from pdfLib() at request time.
+const { pdfLib } = require('../lib/lazyPdfLib');
 const { query: qv } = require('express-validator');
 const { handleValidation } = require('../middleware/validate');
 const {
@@ -358,6 +360,7 @@ router.get(
               severity: risk.severity || 'medium',
             }));
 
+      const { PDFDocument, StandardFonts, rgb, PageSizes } = pdfLib(); // lazy — off cold start
       const pdfDoc = await PDFDocument.create();
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
