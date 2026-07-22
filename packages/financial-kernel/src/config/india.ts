@@ -22,29 +22,46 @@ export const INDIA_CONFIG = Object.freeze({
 
   /**
    * Stamp duty on land purchase (% of consideration).
-   * Default 5% — Karnataka state schedule for non-urban / developer
-   * transactions. Urban residential can be 5.6%; adjust per deal.
-   * Last reviewed 2026-04-21.
+   * Default 5% — Karnataka slab for consideration above ₹45 lakh (2% / 3%
+   * on lower slabs). Urban add-ons (10% cess + 2% surcharge on the duty)
+   * take the effective duty to ~5.6%; adjust per deal.
+   * Last reviewed 2026-07-22 — 5% slab CONFIRMED current.
    */
   STAMP_DUTY_RATE: 0.05,
 
   /**
    * Karnataka combined stamp + registration for urban property transfers
-   * (5% stamp + 1% registration + 0.6% cess). Used by the hospitality
-   * adapter when registering property. Last reviewed 2026-04-21.
+   * (5% stamp + 1% registration + 0.6% cess/surcharge). Used by the
+   * hospitality adapter when registering property.
+   *
+   * ⚠ KNOWN STALE (review 2026-07-22): Karnataka doubled the registration
+   * fee 1% → 2% in Aug 2025 (first revision since 2003), so the current
+   * combined urban figure is ~7.6%. Value intentionally NOT changed here yet:
+   * 0.066 is load-bearing across the XLSX v2 builder defaults, the kernel
+   * parity/precision/export test suites, and the backend + frontend config
+   * mirrors — the update must move all of them in lockstep (tracked as a
+   * dedicated follow-up). Deal-level overrides win regardless.
    */
   KARNATAKA_STAMP_REG_RATE: 0.066,
 
-  /** Registration charge component (part of the 6.6% figure above). */
+  /**
+   * Registration charge component (part of the 6.6% figure above).
+   * ⚠ KNOWN STALE (review 2026-07-22): now 2% (Aug 2025) — see note above;
+   * updates in lockstep with KARNATAKA_STAMP_REG_RATE.
+   */
   REGISTRATION_RATE: 0.01,
 
   /**
-   * GST on under-construction property (no ITC) — current CBIC schedule.
-   *   - Plotted development: 12% (land component priced separately).
-   *   - All other construction: 18%.
-   *   - Land parcel: 0% (no construction).
+   * GST on under-construction property (no ITC) — CBIC schedule.
+   *   - All other construction: 18% — CONFIRMED current (review 2026-07-22).
+   *   - Land parcel: 0% (Schedule III — sale of land outside GST) — CONFIRMED.
+   *   - Plotted development: ⚠ KNOWN STALE (review 2026-07-22): the Sept-2025
+   *     GST rate rationalization retired most of the 12% services slab; works-
+   *     contract / development services on plotted land are now 18% on the
+   *     development component (land itself remains outside GST). Value kept at
+   *     0.12 pending the same lockstep update as the stamp/registration rates
+   *     (kernel adapters + validators + tests reference it).
    * Asset-class dispatch lives in `DEFAULT_GST_BY_ASSET` in common.ts.
-   * Last reviewed 2026-04-21.
    */
   GST_CONSTRUCTION_STANDARD: 0.18,
   GST_CONSTRUCTION_PLOTTED: 0.12,
