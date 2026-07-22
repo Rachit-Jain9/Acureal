@@ -278,12 +278,17 @@ stay in place across a rollback — they are harmless under the `postgres` role.
 ## Definition of done
 
 - [x] Phase 1 migration written + prod-validated (rolled back) + shipped to repo
-- [ ] Phase 1 applied to production by operator (`20260731_rls_flip_readiness.sql`)
+- [x] Phase 1 applied to production by operator (`20260731_rls_flip_readiness.sql`) — **2026-07-22**
 - [x] Phase 2 auth-bootstrap code + SECURITY DEFINER migration merged
       (red-team hardened; 257 suites / 4,165 tests green; prod-probed under
       `SET LOCAL ROLE authenticated` — direct 0 rows vs definer 1 row; full
       provisioning chain 1/1/1 with zero cross-user leakage)
-- [ ] Phase 2 migration applied to production by operator (`20260801_auth_bootstrap_security_definer.sql`)
+- [x] Phase 2 migration applied to production by operator (`20260801_auth_bootstrap_security_definer.sql`) — **2026-07-22**.
+      Post-apply prod verification: all 6 functions present, self-read + 5
+      system policies present, `auth_find_user_for_login` returns 1 complete
+      row (live login lookup works); dashboard + authenticated flow healthy.
+      The definer path is now the ACTIVE auth path (still under the bypass role,
+      so behavior-neutral) — the flip is now purely Phases 3–5.
 - [ ] Phase 3 `redip_app` role created
 - [ ] Phase 4 branch rehearsal green across the full auth matrix (+ kill-switch drill)
 - [ ] Phase 5 flip — `DATABASE_URL` → `redip_app` **and** `RLS_ENFORCED=true`
