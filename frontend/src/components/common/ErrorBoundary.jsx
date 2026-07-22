@@ -1,6 +1,6 @@
 import { Component, Fragment } from 'react';
 import { AlertTriangle, RefreshCw } from 'lucide-react';
-import * as Sentry from '@sentry/react';
+import { Sentry } from '../../lib/sentry'; // lazy facade — keeps the SDK off first paint
 
 // Detect "stale chunk" errors that happen after a deploy lands new bundle
 // hashes but the user's HTML still references the old ones. The dynamic

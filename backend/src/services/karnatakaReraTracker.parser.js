@@ -21,7 +21,7 @@
  * No regex over HTML strings — uses cheerio for DOM-level parsing.
  */
 
-const cheerio = require('cheerio');
+// cheerio (~0.6s to load) is required at point of use below — off the cold-start path.
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Header normalisation — maps the portal's header text (case + spacing
@@ -205,6 +205,7 @@ const parseDateLoose = (raw) => {
  */
 const parseListingPage = (html, { sourceUrl = null } = {}) => {
   if (!html || typeof html !== 'string') return [];
+  const cheerio = require('cheerio'); // lazy — off the cold-start path
   const $ = cheerio.load(html);
   const out = [];
 

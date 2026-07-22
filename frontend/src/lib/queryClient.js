@@ -46,6 +46,11 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000,
+      // Keep cached rows in memory well beyond staleTime so a >5-min detour
+      // (open a deal, wander off, come back) still finds warm dashboard/workspace
+      // caches instead of a cold refetch. gcTime must exceed staleTime or a
+      // still-fresh query can be garbage-collected the moment it goes unused.
+      gcTime: 30 * 60 * 1000,
       retry: (failureCount, error) => isTransientError(error) && failureCount < 3,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 8000),
       refetchOnWindowFocus: false,

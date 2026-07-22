@@ -26,7 +26,7 @@
 // Pure + deterministic (async only for ExcelJS buffer load). No AI.
 
 const crypto = require('crypto');
-const ExcelJS = require('exceljs');
+// exceljs is required at point of use below — off the serverless cold-start path.
 const { IMPORT_COLUMNS_BY_KIND, TEMPLATE_VERSION } = require('../constants/rentRollImportColumns');
 const { META_SHEET, HEADER_ROW } = require('./rentRollTemplate.service');
 const rentRollService = require('./rentRoll.service');
@@ -178,6 +178,7 @@ async function parseTemplateBuffer(buffer, opts = {}) {
       + 'Split it into smaller files, or remove empty rows.');
   }
 
+  const ExcelJS = require('exceljs'); // lazy — off the cold-start path
   const workbook = new ExcelJS.Workbook();
   try {
     await workbook.xlsx.load(buffer);

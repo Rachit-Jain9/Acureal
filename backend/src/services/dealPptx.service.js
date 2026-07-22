@@ -25,7 +25,7 @@
  * bundle — is unchanged so existing routes + tests don't change.
  */
 
-const PptxGenJS = require('pptxgenjs');
+// pptxgenjs is required at point of use below — off the serverless cold-start path.
 
 const { buildSlideManifest, buildDeckContext } = require('./exports/pptx/deckContext');
 const { addTopHeader, addSectionDivider } = require('./exports/pptx/primitives');
@@ -315,6 +315,7 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
 };
 
 const buildDealDeckPptx = async (exportContext, options = {}) => {
+  const PptxGenJS = require('pptxgenjs'); // lazy — off the cold-start path
   const pptx = new PptxGenJS();
   const context = buildDeckContext(exportContext, options);
 

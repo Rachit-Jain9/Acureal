@@ -19,8 +19,15 @@ const pool = new Pool({
   connectionString,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
   max: isServerless ? 5 : 20,
-  idleTimeoutMillis: isServerless ? 10000 : 30000,
+  // Keep a warm serverless instance's pooled connection alive across short idle
+  // gaps so back-to-back requests reuse a live socket instead of paying a fresh
+  // TLS + pooler handshake on every small pause. TCP keepAlive stops network
+  // intermediaries silently dropping an idle socket (which otherwise surfaces as
+  // an occasional slow request when the next query has to reconnect first).
+  idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
+  keepAlive: true,
+  keepAliveInitialDelayMillis: 10000,
 });
 
 pool.on('connect', () => {

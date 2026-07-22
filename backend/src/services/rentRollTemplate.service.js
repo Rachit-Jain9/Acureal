@@ -17,7 +17,7 @@
 // sample data — the template ships EMPTY (an optional one-line hint row only),
 // so a user never mistakes a placeholder for a real record.
 
-const ExcelJS = require('exceljs');
+// exceljs is required at point of use below — off the serverless cold-start path.
 const palette = require('./exports/shared/palette');
 const {
   TEMPLATE_VERSION, IMPORT_COLUMNS_BY_KIND, KIND_SHEET_NAME, KINDS_BY_FAMILY,
@@ -151,6 +151,7 @@ const buildMetaSheet = (workbook, family, sheetSpecs) => {
 async function buildTemplateWorkbook(family, opts = {}) {
   const resolved = resolveFamily(family);
   const kinds = KINDS_BY_FAMILY[resolved];
+  const ExcelJS = require('exceljs'); // lazy — off the cold-start path
   const workbook = new ExcelJS.Workbook();
   workbook.creator = opts.brandName || 'REDIP';
   workbook.created = opts.now instanceof Date ? opts.now : undefined;

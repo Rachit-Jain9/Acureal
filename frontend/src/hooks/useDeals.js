@@ -124,21 +124,26 @@ export function useDealWorkspaceLite(id) {
  *     sweep over a 12-card list doesn't fan out 12 round-trips. The
  *     simplest pattern is `onMouseEnter` only (one event per card).
  *
- * Cache TTL piggybacks on `useDealWorkspace`'s staleTime — a hover that
- * doesn't lead to a click is wasted bandwidth bounded to that window. Sharing
- * WORKSPACE_STALE_TIME also stops a hover from re-firing the (AI-bearing)
- * workspace read for a deal already fetched within the window.
+ * Cache TTL matches `useDealWorkspaceLite`'s 60s staleTime and shares its key,
+ * so a hover that doesn't lead to a click is bounded, cheap (no AI narration),
+ * and a click within the window paints from the primed cache with no refetch.
  */
 export function usePrefetchDealWorkspace() {
   const qc = useQueryClient();
   return useCallback((id) => {
     if (!id) return Promise.resolve();
-    const key = ['deal-workspace', id];
+    // Prime the LITE payload — that's the one the deal page paints from first
+    // (useDealWorkspaceLite), so warming it is what makes a click-through paint
+    // instantly. The old behavior primed the full AI-bearing ['deal-workspace']
+    // key, which warmed the wrong cache: first paint still blocked on the lite
+    // fetch. Lite is also far cheaper to prefetch on a hover that may never click
+    // (no AI narration), and it shares its key + TTL with useDealWorkspaceLite.
+    const key = ['deal-workspace-lite', id];
     if (qc.getQueryData(key)) return Promise.resolve(); // already cached, skip
     return qc.prefetchQuery({
       queryKey: key,
-      queryFn: () => dealsAPI.getWorkspace(id).then((r) => r.data.data),
-      staleTime: WORKSPACE_STALE_TIME,
+      queryFn: () => dealsAPI.getWorkspace(id, { lite: true }).then((r) => r.data.data),
+      staleTime: 60_000,
     });
   }, [qc]);
 }
