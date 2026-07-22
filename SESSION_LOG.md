@@ -10530,3 +10530,20 @@ Two exported normalizers re-key each kernel result into the shared `segments` sh
 - **Biggest remaining perf win (own PR, high risk):** the per-query DB transaction envelope (BEGIN → set_config → query → COMMIT = 4 pooler round-trips, 3 overhead) — a workspace open pays it ~30×. Collapsing it touches the tenant-context invariant, so it needs live-pooler verification. (task tracked)
 - Smaller: defer pdf-lib off boot (−365ms), lazy OverviewTab below-fold panels, composite DB indexes, the geocoding `auto-derive-context` call (now the slowest single call at ~1.1s — external, cacheable).
 - M1 Phases 2–5 (the DB tenant-isolation flip) still pending, operator-gated.
+
+---
+
+## 2026-07-22 — Quarterly kernel-defaults review: two real regulatory drifts found (#1014)
+
+**Context:** The Defaults Staleness Check went red on master — the financial-kernel asset-class defaults hadn't been re-reviewed against their sources in 92 days (>90-day gate). Per the gate's design, did a genuine web-verified re-review, not a blind date bump. (Also triaged two stale CI-monitor replays about #1013's audit gate — already fixed and merged green; no action.)
+
+**Review findings (web-verified):**
+- CONFIRMED current: stamp duty 5% (>₹45L Karnataka slab), GST 18% standard construction, GST 0% land parcel (Schedule III). Market-benchmark defaults (rents/caps/ADR/USALI) cited to Q1-2026 surveys — within ranges, fine at default granularity.
+- ⚠ **Karnataka doubled the registration fee 1% → 2% in Aug 2025** (first revision since 2003) → combined urban stamp+reg is now ~7.6%, not the kernel's 6.6%.
+- ⚠ **Sept-2025 GST rationalization moved plotted-development works to 18%** (12% services slab retired) — the kernel's plotted default is 12%.
+
+**Shipped (#1014, metadata only — NO value changes):** bumped lastReviewed → 2026-07-22; annotated the two stale entries' investor-visible provenance strings + india.ts comments with the exact findings and why values are deliberately unchanged (0.066 / 12% are load-bearing across the XLSX v2 builder — incl. the NUL-byte binary buildWorkbook.js — the kernel parity/precision suites, and the backend+frontend config mirrors; the update must move all in lockstep); widened the two ranges so corrected values are in-range. Verified: staleness OK (age=0d), kernel tsc + 413 tests, backend parity/precision suites, full CI green incl. the staleness workflow on the PR itself.
+
+### What's left to do next
+- **Lockstep value update (task #21, math-changing):** REGISTRATION_RATE 0.01→0.02, KARNATAKA_STAMP_REG_RATE 0.066→0.076, GST_CONSTRUCTION_PLOTTED 0.12→0.18 across kernel + both mirrors + the binary buildWorkbook.js (careful-edit recipe, never sed) + ~8 test files + hospitality parity. Shifts deal costs slightly (reflects actual law) — give the operator a heads-up when it lands. Plotted is the operator's primary deal type.
+- Prior backlog unchanged: M1 Phases 2–5, DB round-trip collapse, pdf-lib deferral.
