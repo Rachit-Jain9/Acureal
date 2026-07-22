@@ -106,7 +106,7 @@ function M<V>(
     unit,
     description,
     source,
-    lastReviewed: opts?.lastReviewed ?? '2026-04-21',
+    lastReviewed: opts?.lastReviewed ?? '2026-07-22',
     range: opts?.range,
     enum: opts?.enum,
   });
@@ -126,8 +126,11 @@ export const GLOBAL_DEFAULTS_META: DefaultsBlock = Object.freeze({
   registrationPct: M(
     INDIA_CONFIG.REGISTRATION_RATE * 100, 'pct',
     'Registration charge on land transfer.',
-    'Karnataka Registration Act Sec. 78.',
-    { range: [0.5, 1.5] },
+    'Karnataka Registration Act Sec. 78. NOTE: Karnataka doubled this fee to '
+      + '2% in Aug 2025; default update pending (moves in lockstep with the '
+      + 'combined stamp+registration rate across kernel, exports, and tests). '
+      + 'Override per deal for current transactions.',
+    { range: [0.5, 2.5] },
   ),
   gstOnConstructionPct: M(
     INDIA_CONFIG.GST_CONSTRUCTION_STANDARD * 100, 'pct',
@@ -338,8 +341,11 @@ const PLOTTED_DEVELOPMENT_META: DefaultsBlock = Object.freeze({
   gstOnConstructionPct: M(
     INDIA_CONFIG.GST_CONSTRUCTION_PLOTTED * 100, 'pct',
     'GST on plotted development (land component separable).',
-    'CBIC GST Rate Notification 11/2017 as amended.',
-    { range: [0, 12] },
+    'CBIC GST Rate Notification 11/2017 as amended. NOTE: the Sept-2025 GST '
+      + 'rate rationalization moved development-component works on plotted land '
+      + 'to 18% (land itself stays outside GST); default update pending in '
+      + 'lockstep with kernel adapters + tests. Override per deal.',
+    { range: [0, 18] },
   ),
   saleableLandPct: M(
     55, 'pct',
