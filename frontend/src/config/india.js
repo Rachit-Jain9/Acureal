@@ -21,15 +21,21 @@ export const INDIA_CONFIG = Object.freeze({
   /** Stamp duty on land purchase (% of consideration). */
   STAMP_DUTY_RATE: 0.05,
 
-  /** Karnataka combined stamp + registration for urban property transfers. */
-  KARNATAKA_STAMP_REG_RATE: 0.066,
+  /**
+   * Karnataka combined stamp + registration for urban property transfers.
+   * Registration doubled 1% → 2% in Aug 2025 (combined 6.6% → 7.6%).
+   */
+  KARNATAKA_STAMP_REG_RATE: 0.076,
 
-  /** Registration-only charge component. */
-  REGISTRATION_RATE: 0.01,
+  /** Registration-only charge component (2% since Aug 2025). */
+  REGISTRATION_RATE: 0.02,
 
-  /** GST on under-construction property (no ITC). */
+  /**
+   * GST on construction / development works (cost-side). Plotted moved
+   * 12% → 18% with the Sept-2025 GST rate rationalization.
+   */
   GST_CONSTRUCTION_STANDARD: 0.18,
-  GST_CONSTRUCTION_PLOTTED: 0.12,
+  GST_CONSTRUCTION_PLOTTED: 0.18,
   GST_LAND_PARCEL: 0.0,
 
   /** Property tax as % of stabilized revenue (Bengaluru BBMP proxy). */

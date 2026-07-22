@@ -189,7 +189,7 @@ describe('kernel precision — hospitality stamp + betterment', () => {
   // Both must reproduce the exact product at scale 10.
   test('stamp duty from fractional land cost is exact', () => {
     const r = runKernel(hospitalityFractional);
-    const expectedStamp = fractionalLandCostCr * 0.066; // stampRegPct 6.6 → 0.066
+    const expectedStamp = fractionalLandCostCr * 0.066; // fixture PINS stampRegPct: 6.6 (input-driven, not the default)
     close(r.costs.stampDutyCr.toNumber(), expectedStamp);
   });
 

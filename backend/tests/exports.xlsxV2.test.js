@@ -2088,10 +2088,11 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
 
         expect(resGst).toBeCloseTo(0.18, 4);
         expect(comGst).toBeCloseTo(0.18, 4);
-        expect(plotGst).toBeCloseTo(0.12, 4);
+        // Plotted works GST moved 12% → 18% with the Sept-2025 GST rationalization.
+        expect(plotGst).toBeCloseTo(0.18, 4);
       });
 
-      test('StampRegPct defaults to 0.066 (Karnataka 5.6% + 1%) when no input provided', async () => {
+      test('StampRegPct defaults to 0.076 (Karnataka 5.6% + 2% — registration doubled Aug 2025) when no input provided', async () => {
         const ctx = minimalContext();
         delete ctx.deal.model_params.inputs.stampDutyPct;
         delete ctx.deal.model_params.inputs.stampRegPct;
@@ -2104,7 +2105,7 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
           const label = String(row.getCell(1).value || '').trim();
           if (label === 'Stamp Duty + Registration') seed = row.getCell(2).value;
         });
-        expect(seed).toBeCloseTo(0.066, 4);
+        expect(seed).toBeCloseTo(0.076, 4);
       });
 
       test('StampRegPct combines legacy stampDutyPct + registrationPct when both are present', async () => {

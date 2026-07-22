@@ -31,40 +31,34 @@ export const INDIA_CONFIG = Object.freeze({
 
   /**
    * Karnataka combined stamp + registration for urban property transfers
-   * (5% stamp + 1% registration + 0.6% cess/surcharge). Used by the
-   * hospitality adapter when registering property.
-   *
-   * ⚠ KNOWN STALE (review 2026-07-22): Karnataka doubled the registration
-   * fee 1% → 2% in Aug 2025 (first revision since 2003), so the current
-   * combined urban figure is ~7.6%. Value intentionally NOT changed here yet:
-   * 0.066 is load-bearing across the XLSX v2 builder defaults, the kernel
-   * parity/precision/export test suites, and the backend + frontend config
-   * mirrors — the update must move all of them in lockstep (tracked as a
-   * dedicated follow-up). Deal-level overrides win regardless.
+   * (5% stamp + 2% registration + 0.6% cess/surcharge on the duty). Used by
+   * the hospitality adapter when registering property.
+   * Karnataka doubled the registration fee 1% → 2% in Aug 2025 (first
+   * revision since 2003) — combined moved 6.6% → 7.6%.
+   * Last reviewed 2026-07-22. Deal-level overrides win regardless.
    */
-  KARNATAKA_STAMP_REG_RATE: 0.066,
+  KARNATAKA_STAMP_REG_RATE: 0.076,
 
   /**
-   * Registration charge component (part of the 6.6% figure above).
-   * ⚠ KNOWN STALE (review 2026-07-22): now 2% (Aug 2025) — see note above;
-   * updates in lockstep with KARNATAKA_STAMP_REG_RATE.
+   * Registration charge component (part of the 7.6% figure above).
+   * 2% since Aug 2025 (Karnataka Registration Act — fee doubled from the
+   * 1% that had held since 2003). Last reviewed 2026-07-22.
    */
-  REGISTRATION_RATE: 0.01,
+  REGISTRATION_RATE: 0.02,
 
   /**
-   * GST on under-construction property (no ITC) — CBIC schedule.
-   *   - All other construction: 18% — CONFIRMED current (review 2026-07-22).
-   *   - Land parcel: 0% (Schedule III — sale of land outside GST) — CONFIRMED.
-   *   - Plotted development: ⚠ KNOWN STALE (review 2026-07-22): the Sept-2025
-   *     GST rate rationalization retired most of the 12% services slab; works-
-   *     contract / development services on plotted land are now 18% on the
-   *     development component (land itself remains outside GST). Value kept at
-   *     0.12 pending the same lockstep update as the stamp/registration rates
-   *     (kernel adapters + validators + tests reference it).
+   * GST on construction / development works (cost-side, applied to the
+   * construction or development cost in the kernel adapters) — CBIC schedule
+   * after the Sept-2025 GST rate rationalization:
+   *   - Standard construction (works contract): 18%.
+   *   - Plotted development: 18% on the development component — the 12%
+   *     services slab was retired in Sept 2025; land itself stays outside GST.
+   *   - Land parcel: 0% (Schedule III — sale of land outside GST scope).
    * Asset-class dispatch lives in `DEFAULT_GST_BY_ASSET` in common.ts.
+   * Last reviewed 2026-07-22.
    */
   GST_CONSTRUCTION_STANDARD: 0.18,
-  GST_CONSTRUCTION_PLOTTED: 0.12,
+  GST_CONSTRUCTION_PLOTTED: 0.18,
   GST_LAND_PARCEL: 0.0,
 
   /**

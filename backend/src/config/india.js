@@ -31,10 +31,12 @@ function _load() {
     SQFT_PER_ACRE: 43_560,
     CRORE: 1e7,
     STAMP_DUTY_RATE: 0.05,
-    KARNATAKA_STAMP_REG_RATE: 0.066,
-    REGISTRATION_RATE: 0.01,
+    // Karnataka doubled registration 1% → 2% in Aug 2025 (combined 6.6% → 7.6%);
+    // plotted works GST 12% → 18% after the Sept-2025 GST rationalization.
+    KARNATAKA_STAMP_REG_RATE: 0.076,
+    REGISTRATION_RATE: 0.02,
     GST_CONSTRUCTION_STANDARD: 0.18,
-    GST_CONSTRUCTION_PLOTTED: 0.12,
+    GST_CONSTRUCTION_PLOTTED: 0.18,
     GST_LAND_PARCEL: 0.0,
     PROPERTY_TAX_PCT_OF_REVENUE: 0.02,
     BUILDING_INSURANCE_PCT_OF_REVENUE: 0.01,
