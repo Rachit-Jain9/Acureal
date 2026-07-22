@@ -90,69 +90,69 @@ site behaves today.
 
 ---
 
-## Phase 2 — Auth-bootstrap fix (engineering; ships as normal code + one migration)
+## Phase 2 — Auth-bootstrap fix ✅ SHIPPED (code + migration `20260801`)
 
-This is the careful part: the operations that run **before** a user/org context
-exists. Enumerated from `backend/src/services/auth.service.js` +
-`organization.service.js`:
+The careful part: the operations that run **before** a user/org context exists.
+Shipped as two complementary moves, designed by an adversarially red-teamed
+5-agent workflow and empirically validated on prod (rolled back):
 
-| Operation | Location | Breaks under flip because |
-|---|---|---|
-| `SELECT … FROM users WHERE email=$1` | `login()` L245 | no context; `users` policies are self / org-mates only |
-| `UPDATE users SET last_login_at` | `login()` L293, others | needs `id = current_user_id()` in context first |
-| duplicate-email `SELECT id FROM users` | `register()` L153 | no context → cannot see the existing row |
-| **`INSERT INTO users …`** | `register()` L187 | **there is no INSERT policy on `users`** |
-| `createWorkspaceForUser` / `joinByVerifiedDomain` / `consumeInvitation` INSERTs | `register()` | write into `organizations` / `organization_members` pre-context |
-| `findUserByOAuthIdentity` (`oauth_provider`,`oauth_subject`) | Google path A | no context |
-| `findUserByEmail` | Google path B | no context |
-| post-MFA `SELECT id, default_organization_id FROM users WHERE id=$1` | `completeMfaLogin()` L312 | has userId but no context set yet |
+**(a) Context the instant identity is known** (no SECURITY DEFINER needed):
+- `middleware/auth.js` — `setRequestContext({ userId: decoded.userId })`
+  **before** `hydrateUserAuthContext` (fixes EVERY authenticated request).
+- `login()` — context stamped after credential validation, **before** the MFA
+  check (closes a silent MFA bypass: pre-context, the enrollment self-read
+  returns 0 rows → enrolled users would skip the challenge), the
+  `last_login_at` UPDATE, and hydrate.
+- `completeMfaLogin()` / Google path A (last-login UPDATE) / Google path B
+  (the OAuth **bind** UPDATE — would otherwise silently no-op) /
+  `mfa.verifyChallenge()` (recovery-code reads + consume UPDATEs).
+- `emailVerification.confirmToken()` — a PUBLIC route with a `users` UPDATE;
+  stamps the transaction-local context from the validated token row
+  (red-team finding — an op the original enumeration missed).
 
-### Design (two complementary moves)
+**(b) Six SECURITY DEFINER helpers** (migration
+[`20260801_auth_bootstrap_security_definer.sql`](../database/migrations/20260801_auth_bootstrap_security_definer.sql))
+for the genuinely pre-identity ops — login-by-email, OAuth identity lookup,
+MFA-challenge join, verified-domain lookup, invitation lookup, and
+`auth_provision_signup` (the whole register/Google-cold-signup INSERT chain).
+Red-team hardened:
+- pinned `search_path`, `REVOKE FROM PUBLIC`, grants only to `redip_app`;
+- user-lookup helpers **never return MFA secrets**;
+- `auth_provision_signup` accepts the invitation **token** and domain
+  **candidates** — never a caller-resolved org id or role — and re-validates
+  the invitation internally (`FOR UPDATE`), so a SQLi sink or JS bug cannot
+  mint membership in an arbitrary tenant. It is the codebase's ONE deliberate
+  cross-tenant write primitive; a static migration-scan test pins all of this.
 
-**(a) Set request context the instant identity is known.** Everything *after*
-the user is identified already works via the self-policies (`users_self_read`,
-`users_self_update`, `organization_members_self_read`) once the context carries
-the user id. Concretely:
+**Routing + the fail-loud switch** (`backend/src/lib/authDefiners.js`): each
+call site prefers the definer function when a one-time probe finds it, else
+falls back to the byte-identical original query. The probe is tri-state — a
+transient probe error is NEVER cached as "absent". **`RLS_ENFORCED=true`**
+(env) makes the direct fallback UNREACHABLE: probe errors and definitive
+absence throw a loud 503 instead of silently running RLS-emptied queries.
 
-- In `middleware/auth.js` `authenticate`, set the request context from the
-  validated `decoded.userId` (+ `x-organization-id` header) **before** calling
-  `hydrateUserAuthContext`, then re-set with the resolved org after. Under the
-  current bypass role this is a no-op (RLS skipped); post-flip it makes the
-  per-request hydrate self-reads resolve.
-- In `auth.service.js`, after credential validation, set context = `user.id`
-  before `UPDATE users SET last_login_at` and before `resolveLoginAuthContext`.
+> **RLS_ENFORCED contract:** set it to `true` in the SAME Vercel deploy that
+> flips `DATABASE_URL` to `redip_app` (Phase 5) — never before the migration
+> is applied. Unset = bypass-role operation, fallback allowed.
 
-**(b) SECURITY DEFINER helpers for the genuinely pre-identity operations.** These
-cannot be expressed as safe policies (a `USING(true)` on `users` would leak every
-user to any authenticated caller). Wrap them in functions owned by a privileged
-role, with a pinned `search_path`, that the app calls in place of the direct
-queries. Under bypass today they return exactly what the direct queries return;
-post-flip they perform the bootstrap without opening a hole:
+**Validated (2026-07-22):** full backend suite green (257 suites / 4,165 tests
+— behavior-neutral under bypass). Prod probes under `SET LOCAL ROLE
+authenticated` (rolled back): direct email lookup **0 rows** (RLS blocks) vs
+definer **1 row**; full provisioning created user+workspace+membership; with
+the Phase-1 self-read policy present the new user sees its own
+user/membership/org (1/1/1) with **zero cross-user leakage**.
 
-```sql
--- Owned by postgres; runs as owner (bypasses RLS) for ONLY these bootstrap reads.
-CREATE OR REPLACE FUNCTION public.auth_find_user_for_login(p_email text)
-  RETURNS SETOF public.users
-  LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public AS $$
-    SELECT * FROM public.users WHERE email = p_email LIMIT 1;
-$$;
-REVOKE ALL ON FUNCTION public.auth_find_user_for_login(text) FROM public;
-GRANT EXECUTE ON FUNCTION public.auth_find_user_for_login(text) TO redip_app;
--- + auth_find_user_by_oauth(provider,subject), auth_email_exists(email),
---   and a provisioning function that performs the register INSERT chain
---   (users + workspace/membership) as owner, returning the new user id.
-```
+### 🌐 Operator step — apply Phase 2 (safe; nothing changes visibly)
 
-Then `auth.service.js` calls `auth_find_user_for_login` instead of the inline
-`SELECT`, `findUserByOAuthIdentity`/`findUserByEmail` call their `auth_*`
-equivalents, and registration routes its bootstrap INSERTs through the
-provisioning function.
+Do this together with (or any time after) the Phase-1 apply above — same
+routine, different file:
 
-**Why this is safe to ship before the flip:** every change is behavior-identical
-under the current bypass role, so the full existing auth test suite exercises it
-unchanged, and it can ship on its own normal deploy — decoupled from the risky
-config flip. **It must be tested against a real non-bypass role (Phase 4) before
-Phase 5.**
+1. Open: `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
+2. Copy ALL the text from
+   `database/migrations/20260801_auth_bootstrap_security_definer.sql`.
+3. Paste it into the big text box, click the green **Run** button.
+4. Success = **"Success. No rows returned"**.
+5. Send me **"phase 2 done"**.
 
 ---
 
@@ -208,7 +208,20 @@ as `redip_app`, and exercise the full matrix as the non-bypass role:
 - login (password) · register (fresh workspace) · register (domain auto-join) ·
   invitation accept · Google OAuth (new + returning + bind) · MFA challenge +
   verify · token refresh + rotation · logout · a deal read/write round-trip ·
-  dashboard rollups · an export.
+  dashboard rollups · an export · the **public email-verification confirm**
+  flow (its `users` UPDATE is context-stamped from the token row).
+
+Additional rehearsal checks (from the Phase-2 red-team):
+- Re-confirm no trigger / column DEFAULT on the auth tables reads
+  `current_user_id()` / `current_setting('app.current_%')` (verified clean on
+  prod 2026-07-22 — only benign `updated_at` stampers — but the live DB is the
+  source of truth at rehearsal time).
+- Kill-switch drill: with `RLS_ENFORCED=true` and the migration deliberately
+  absent on the branch, confirm auth endpoints return the loud 503 (never a
+  silent empty-result login failure).
+- Confirm the warm-instance probe converges: after applying the migration,
+  two consecutive logins — the second must route via
+  `auth_find_user_for_login` (memoized definer path).
 
 Green on all of the above **as `redip_app`** is the gate to Phase 5. Delete the
 branch afterward.
@@ -231,7 +244,12 @@ Only after Phase 2 code is deployed and Phase 4 is green.
    (same host/port/database as before — only the username `redip_app…` and the
    password change). Send me the *current* value first and I'll hand you the
    exact new value to paste.
-5. Click **Save**.
+5. **In the same session, add a new setting**: click **Add New** →
+   Name: `RLS_ENFORCED` → Value: `true` → Save. (This makes the app fail LOUD
+   instead of silently if anything about the new setup is missing — the safety
+   net designed in Phase 2. It must ride in the same deploy as the
+   `DATABASE_URL` change, never earlier.)
+6. Click **Save**.
 6. Trigger a redeploy (Vercel usually offers **"Redeploy"** after an env change),
    or push any commit.
 7. **Verify:** open `https://<your-app>/dashboard/admin/system-health`. The
@@ -260,9 +278,16 @@ stay in place across a rollback — they are harmless under the `postgres` role.
 ## Definition of done
 
 - [x] Phase 1 migration written + prod-validated (rolled back) + shipped to repo
-- [ ] Phase 1 applied to production by operator
-- [ ] Phase 2 auth-bootstrap code + SECURITY DEFINER migration merged
+- [ ] Phase 1 applied to production by operator (`20260731_rls_flip_readiness.sql`)
+- [x] Phase 2 auth-bootstrap code + SECURITY DEFINER migration merged
+      (red-team hardened; 257 suites / 4,165 tests green; prod-probed under
+      `SET LOCAL ROLE authenticated` — direct 0 rows vs definer 1 row; full
+      provisioning chain 1/1/1 with zero cross-user leakage)
+- [ ] Phase 2 migration applied to production by operator (`20260801_auth_bootstrap_security_definer.sql`)
 - [ ] Phase 3 `redip_app` role created
-- [ ] Phase 4 branch rehearsal green across the full auth matrix
-- [ ] Phase 5 flip — System Health canary shows `bypasses_rls: false`
+- [ ] Phase 4 branch rehearsal green across the full auth matrix (+ kill-switch drill)
+- [ ] Phase 5 flip — `DATABASE_URL` → `redip_app` **and** `RLS_ENFORCED=true`
+      in the same deploy — System Health canary shows `bypasses_rls: false`
+- [ ] Phase 6 cleanup — delete the direct-query fallback branches once the flip
+      is confirmed stable (they must not rot as a second live code path)
 - [ ] `docs/SECURITY.md` §6 updated to state DB-enforced isolation is **live**

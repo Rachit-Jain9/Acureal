@@ -52,6 +52,13 @@ const authenticate = async (req, res, next) => {
       });
     }
 
+    // M1 Phase 2: stamp the JWT-verified user id into the request context
+    // BEFORE hydration. hydrate's users/organization_members/organizations
+    // reads are guarded by self-scoped RLS policies (users_self_read,
+    // organization_members_self_read) that match on current_user_id() — under
+    // a non-BYPASSRLS role they see zero rows until this context exists. A
+    // no-op under the current bypass role (RLS is skipped entirely).
+    setRequestContext({ userId: decoded.userId });
     const authContext = await hydrateUserAuthContext(decoded.userId, req.header('x-organization-id'));
     req.user = authContext.user;
     setRequestContext({

@@ -191,6 +191,18 @@ const confirmToken = async (rawToken) => {
       throw createError('Invalid or expired verification link.', 400);
     }
 
+    // M1 Phase 2: this route is PUBLIC (no JWT) — the request context is
+    // empty, so under a non-bypass role users_self_update would match zero
+    // rows and the verification would silently no-op. The validated token row
+    // pins the user; stamp the transaction-local context (SET LOCAL semantics
+    // — discarded at COMMIT, and the AsyncLocalStorage path can't help here
+    // because this transaction's set_config already ran at BEGIN). A pure
+    // no-op under the current bypass role.
+    await client.query(
+      "SELECT set_config('app.current_user_id', $1, true)",
+      [String(row.user_id)]
+    );
+
     await client.query(
       `UPDATE public.email_verification_tokens
           SET consumed_at = NOW(), consumed_by = 'verified'

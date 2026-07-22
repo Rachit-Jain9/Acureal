@@ -82,6 +82,19 @@ A table can have RLS enabled but no policy — Postgres treats it as **deny by d
 
 That same migration also adds `organization_members_self_read` (self-membership read across orgs) to unblock the login/hydrate bootstrap under RLS. See [`M1_RLS_ROLLOUT.md`](M1_RLS_ROLLOUT.md) for the full staged role-flip plan (the auth-bootstrap SECURITY DEFINER work, the `redip_app` role, the branch rehearsal, and the monitored flip).
 
+## SECURITY DEFINER inventory (M1 Phase 2 — migration `20260801`)
+
+Six `SECURITY DEFINER` functions perform the pre-identity auth bootstrap
+(login-by-email, OAuth lookup, MFA-challenge join, verified-domain lookup,
+invitation lookup, signup provisioning) so the app can run under a
+non-BYPASSRLS role. All are owner-run, pin `search_path`, are revoked from
+PUBLIC, and grant EXECUTE only to `redip_app`. **`auth_provision_signup` is the
+codebase's ONE deliberate cross-tenant write primitive** — it creates
+users/organizations/memberships as owner, but takes only the invitation TOKEN
+and domain CANDIDATES (never a caller-resolved org id or role) and re-validates
+the invitation internally with `FOR UPDATE`. `backend/tests/authBootstrapMigration.test.js`
+statically pins all of these properties; weakening any of them fails CI.
+
 If your migration is adding a new table, define the policy in the same migration. Don't rely on dashboard-only policies.
 
 ## Adding a new org-scoped table
