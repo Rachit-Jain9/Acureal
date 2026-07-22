@@ -10510,3 +10510,23 @@ Two exported normalizers re-key each kernel result into the shared `segments` sh
 
 ### What's left to do next
 - Nothing outstanding for this change. (If the operator later wants a literal side-drawer instead of the centered modal, it's a small swap — the modal was chosen to match the adjacent Audit chip.)
+
+---
+
+## 2026-07-19 — Performance: killed the serverless cold-start (~3.3s→~1.5s) + lighter first paint (#1013)
+
+**Context:** Operator's standing complaint — "the site is so slow." Ran a data-first investigation instead of guessing.
+
+**Diagnosis (live prod measurement, operator's Chrome):** the slowness is serverless COLD START, not slow endpoints. On a deal-workspace open, the first two API calls (`auth/refresh` + `verify-email/status`) took **~3.3s each** and gated the whole page; warm, the same calls are ~150ms (~18×). Root cause: heavy export/document libraries were loaded on EVERY cold start — even to answer a trivial auth call — purely because they were imported at file top-level. Measured cost: exceljs 1469ms, cheerio 638ms, pdf-lib 365ms, mammoth 208ms. A 6-dimension code-grounded audit (11 agents) corroborated this and surfaced the frontend wins.
+
+**Shipped (verified live on prod):**
+- **Backend cold start — full server boot ~4865ms → ~1540ms** (measured 3×; confirmed NONE of exceljs/cheerio/mammoth/pptxgenjs load at boot). Lazy-required those libs at point-of-use across documentTextExtractor, dealXlsx, dealPptx, rentRollImport, rentRollTemplate, karnatakaReraTracker, and export.routes (which now lazy-loads the whole v2 xlsx builder subtree — no edit to the NUL-byte binary buildWorkbook.js). `require()` is cached, so behavior is identical — the libs just load when an export/extraction actually runs. pg pool: TCP keepAlive + longer idle timeout.
+- **Frontend first paint** — lazy-load the authenticated Layout (shell + command palette + guide catalog + tour) off the public landing/login (**entry chunk 60.15→38.40 KB gz, −36%**); defer Sentry off the critical path via a tree-shaken wrapper (kept it 88KB, not the 491KB a naive dynamic import produced, AND async); react-query gcTime 30min so warm caches survive a detour; hover-prefetch now primes the LITE payload (the one the deal page paints from) for instant click-through.
+- **Also patched newly-disclosed dependency vulns** that were failing CI's security-audit gate (unrelated to the perf work but blocking): axios 1.16.1→1.18.1 (frontend+backend), backend brace-expansion/body-parser/morgan, kernel babel/js-yaml/brace-expansion. All non-breaking.
+
+**Verification:** 361 backend export/extraction tests + 413 kernel math tests + full frontend vitest suite all green; 5 frontend guards green; full CI green on #1013. Live on prod: verify-email call now 231ms (was 3293ms), dashboard + deal workspace render correctly with the lazy shell, zero app console errors.
+
+### What's left to do next
+- **Biggest remaining perf win (own PR, high risk):** the per-query DB transaction envelope (BEGIN → set_config → query → COMMIT = 4 pooler round-trips, 3 overhead) — a workspace open pays it ~30×. Collapsing it touches the tenant-context invariant, so it needs live-pooler verification. (task tracked)
+- Smaller: defer pdf-lib off boot (−365ms), lazy OverviewTab below-fold panels, composite DB indexes, the geocoding `auto-derive-context` call (now the slowest single call at ~1.1s — external, cacheable).
+- M1 Phases 2–5 (the DB tenant-isolation flip) still pending, operator-gated.
