@@ -191,9 +191,11 @@ describe('config/defaults — legacy parity values preserved', () => {
     expect(h.stabilizationYear).toBe(4);
   });
 
-  test('plotted_development preserves legacy GST + saleable land overrides', () => {
+  test('plotted_development GST + saleable land overrides', () => {
     const p = ASSET_DEFAULTS_VALUES.plotted_development;
-    expect(p.gstOnConstructionPct).toBe(12);
+    // 18% since the Sept-2025 GST rate rationalization retired the 12%
+    // services slab (development-component works; land stays outside GST).
+    expect(p.gstOnConstructionPct).toBe(18);
     expect(p.saleableLandPct).toBe(55);
   });
 
@@ -221,7 +223,9 @@ describe('config/defaults — legacy parity values preserved', () => {
 
   test('globals preserve legacy baseline values', () => {
     expect(GLOBAL_DEFAULTS_VALUES.stampDutyPct).toBe(5);
-    expect(GLOBAL_DEFAULTS_VALUES.registrationPct).toBe(1);
+    // 2% since Aug 2025 — Karnataka doubled the registration fee (first
+    // revision since 2003).
+    expect(GLOBAL_DEFAULTS_VALUES.registrationPct).toBe(2);
     expect(GLOBAL_DEFAULTS_VALUES.gstOnConstructionPct).toBe(18);
     expect(GLOBAL_DEFAULTS_VALUES.marketingCostPct).toBe(4);
     expect(GLOBAL_DEFAULTS_VALUES.financeCostPct).toBe(12);

@@ -2690,7 +2690,7 @@ const buildMethodologyAndAssumptions = (ctx) => {
     { italic: true, color: HEX('mutedHigh') },
   ));
   children.push(bodyPara(
-    `Indian operating reality: GST tiers (5% residential / 12% commercial / 0% plotted), Karnataka stamp duty + registration (6.6% acquisition), RERA 70/30 escrow on customer collections, BBMP UAV property tax method (area-driven, not revenue), Khata A/B exit haircuts, JDA revenue-share / area-share accounting, Indian lender ecosystem (Repo / MCLR benchmarks + India-specific spreads) are all encoded directly in the kernel — see XLSX_INSTITUTIONAL_GRADE_ROADMAP.md for the full India-localization map.`,
+    `Indian operating reality: GST tiers (5% residential / 12% commercial / 0% plotted), Karnataka stamp duty + registration (7.6% acquisition — registration doubled to 2% in Aug 2025), RERA 70/30 escrow on customer collections, BBMP UAV property tax method (area-driven, not revenue), Khata A/B exit haircuts, JDA revenue-share / area-share accounting, Indian lender ecosystem (Repo / MCLR benchmarks + India-specific spreads) are all encoded directly in the kernel — see XLSX_INSTITUTIONAL_GRADE_ROADMAP.md for the full India-localization map.`,
   ));
 
   // Assumptions table — every input the kernel consumed

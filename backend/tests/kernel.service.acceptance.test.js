@@ -255,26 +255,30 @@ describe('kernel.service acceptance — plotted_development', () => {
   let r;
   beforeAll(() => { r = computeFullFinancials(plottedDeal); });
 
+  // Goldens re-baselined 2026-07-22 for the plotted works-GST change 12% → 18%
+  // (Sept-2025 GST rationalization). Every delta is arithmetically accounted
+  // for: gst 1.68 → 2.52 (= 14 Cr dev cost × 0.06), total +0.84, grossProfit
+  // −0.84, costPerPlot +0.84e7/146; stamp (5% on land) + finance unchanged.
   test('KPIs match golden values', () => {
-    closeTo(r.kpis.irr, 18.9692, EPS.rate);
-    closeTo(r.kpis.npv, 1.7237, EPS.money);
-    closeTo(r.kpis.equityMultiple, 1.1005, EPS.ratio);
-    closeTo(r.kpis.rlv, 41.3322, EPS.money);
-    closeTo(r.kpis.grossMarginPct, 9.1308, EPS.percent);
+    closeTo(r.kpis.irr, 16.7111, EPS.rate);
+    closeTo(r.kpis.npv, 0.9492, EPS.money);
+    closeTo(r.kpis.equityMultiple, 1.0884, EPS.ratio);
+    closeTo(r.kpis.rlv, 40.6322, EPS.money);
+    closeTo(r.kpis.grossMarginPct, 8.1214, EPS.percent);
     closeTo(r.kpis.revenuePerPlot, 5_700_000, 100);
-    closeTo(r.kpis.costPerPlot, 5_179_543.8545, 1);
+    closeTo(r.kpis.costPerPlot, 5_237_078.1011, 1);
   });
 
   test('cost bucket topology matches', () => {
     closeTo(r.costs.land, 40, EPS.money);
     closeTo(r.costs.construction, 14, EPS.money);
-    closeTo(r.costs.gst, 1.68, EPS.money);
+    closeTo(r.costs.gst, 2.52, EPS.money);
     closeTo(r.costs.contingency, 0.7, EPS.money);
     closeTo(r.costs.stampDuty, 2, EPS.money);
     closeTo(r.costs.approval, 3, EPS.money);
     closeTo(r.costs.marketing, 3.3288, EPS.money);
     closeTo(r.costs.finance, 10.9125, EPS.money);
-    closeTo(r.costs.total, 75.6213, EPS.money);
+    closeTo(r.costs.total, 76.4613, EPS.money);
   });
 
   test('area / plot breakdown matches', () => {
@@ -286,8 +290,8 @@ describe('kernel.service acceptance — plotted_development', () => {
 
   test('revenue block matches', () => {
     closeTo(r.revenue.totalRevenueCr, 83.22, EPS.money);
-    closeTo(r.revenue.grossProfitCr, 7.5987, EPS.money);
-    closeTo(r.revenue.grossMarginPct, 9.1308, EPS.percent);
+    closeTo(r.revenue.grossProfitCr, 6.7587, EPS.money);
+    closeTo(r.revenue.grossMarginPct, 8.1214, EPS.percent);
   });
 });
 
@@ -372,19 +376,24 @@ describe('kernel.service acceptance — hospitality', () => {
   let r;
   beforeAll(() => { r = computeFullFinancials(hospitalityDeal); });
 
+  // Goldens re-baselined 2026-07-22 for the Karnataka stamp+registration change
+  // 6.6% → 7.6% (registration doubled to 2% in Aug 2025). Deltas accounted for:
+  // stamp 3.96 → 4.56 (= 60 Cr land × 0.076), finance +0.0466 (carry on the
+  // extra levy), total +0.6466, devCostPerKey +0.6466e7/180. Operating-side
+  // KPIs (NOI, EBITDA, RevPAR, GOP, exit value) unchanged, as they must be.
   test('KPIs + USALI extras match golden values', () => {
-    closeTo(r.kpis.irr, -4.4924, EPS.rate);
-    closeTo(r.kpis.npv, -191.5834, EPS.money);
-    closeTo(r.kpis.equityMultiple, 0.6904, EPS.ratio);
+    closeTo(r.kpis.irr, -4.5168, EPS.rate);
+    closeTo(r.kpis.npv, -192.2163, EPS.money);
+    closeTo(r.kpis.equityMultiple, 0.6889, EPS.ratio);
     closeTo(r.kpis.grossMarginPct, 22, EPS.percent);
     closeTo(r.kpis.noi, 8.3231, EPS.money);
     closeTo(r.kpis.ebitda, 10.1727, EPS.money);
-    closeTo(r.kpis.yieldOnCost, 2.8098, EPS.percent);
+    closeTo(r.kpis.yieldOnCost, 2.8037, EPS.percent);
     closeTo(r.kpis.exitValue, 130.1277, EPS.money);
     closeTo(r.kpis.revPAR, 5100, 0.01);
     closeTo(r.kpis.gopMargin, 30, EPS.percent);
     closeTo(r.kpis.ebitdaMarginPct, 22, EPS.percent);
-    closeTo(r.kpis.devCostPerKey, 16_456_687.7675, 1);
+    closeTo(r.kpis.devCostPerKey, 16_492_610.6841, 1);
   });
 
   test('cost bucket topology matches', () => {
@@ -392,10 +401,10 @@ describe('kernel.service acceptance — hospitality', () => {
     closeTo(r.costs.construction, 108.9, EPS.money);
     closeTo(r.costs.gst, 19.602, EPS.money);
     closeTo(r.costs.contingency, 8.6812, EPS.money);
-    closeTo(r.costs.stampDuty, 3.96, EPS.money);
+    closeTo(r.costs.stampDuty, 4.56, EPS.money);
     closeTo(r.costs.approval, 2.178, EPS.money);
-    closeTo(r.costs.finance, 21.3537, EPS.money);
-    closeTo(r.costs.total, 296.2204, EPS.money);
+    closeTo(r.costs.finance, 21.4003, EPS.money);
+    closeTo(r.costs.total, 296.8670, EPS.money);
   });
 
   test('capital stack is populated (construction → permanent)', () => {

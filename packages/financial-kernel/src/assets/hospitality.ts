@@ -8,7 +8,7 @@
  *     developers actually budget; the kernel converts it to
  *     `hardCostPerSqft = perKey / sqftPerKey` at input so downstream
  *     sqft-based math still holds. Explicit `hardCostPerSqft` wins.
- *   - Karnataka stamp + registration at 6.6% (legacy KARNATAKA_STAMP_REG_RATE),
+ *   - Karnataka stamp + registration at 7.6% (KARNATAKA_STAMP_REG_RATE — 2% registration since Aug 2025),
  *     plus 3% betterment charge (Bengaluru default).
  *   - Soft design (architect, PMC, consultants) as % of hard cost.
  *   - Approvals as % of hard cost (or per-sqft / explicit Cr if provided).

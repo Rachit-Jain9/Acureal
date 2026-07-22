@@ -199,9 +199,9 @@ const INDIA_CONTEXT_NOTES = {
   StampRegPct:
     'Karnataka stamp duty + registration on land conveyance.\n'
     + '• 5% stamp duty (Karnataka Stamp Act, Schedule I)\n'
-    + '• 1% registration fee (Registration Act 1908)\n'
+    + '• 2% registration fee (Registration Act 1908 — doubled from 1% in Aug 2025)\n'
     + '• 0.6% cess (surcharge — varies by district)\n'
-    + 'Total ≈ 6.6% on guidance value. Apartment sales: 5.6% + 1% on first sale.',
+    + 'Total ≈ 7.6% on guidance value. Apartment sales: 5.6% + 2% on first sale.',
   LTCGRate:
     'Long-term capital gains on real-estate disposal.\n'
     + '• 12.5% — post Jul-2024 Union Budget (Finance (No. 2) Bill 2024)\n'
@@ -1023,7 +1023,7 @@ const computeCachedCostSnapshot = (ctx) => {
   const landCostCr = Math.max(0, core.landCostCr || 0);
   if (ctx.assetClass === 'hospitality') {
     const keys = Math.max(0, hospitalityKeys(ctx) || 0);
-    const stampRegPct = toPctDecimal(firstNumber(ctx.inputs.stampRegPct, ctx.inputs.stampDutyPct, 0.066)) || 0;
+    const stampRegPct = toPctDecimal(firstNumber(ctx.inputs.stampRegPct, ctx.inputs.stampDutyPct, 0.076)) || 0;
     const gstPct = gstPctFor(ctx) || 0;
     const architectPct = enginePctDecimal(ctx, ['architectPctOfHard', 'architectFeePct'], 0.04) || 0;
     const pmcPct = enginePctDecimal(ctx, ['pmcPctOfHard'], 0.02) || 0;
@@ -1086,7 +1086,7 @@ const computeCachedCostSnapshot = (ctx) => {
     .reduce((sum, value) => sum + value, 0);
   const propTaxConstPct = toPctDecimal(firstNumber(ctx.inputs.propTaxConstPct, ctx.inputs.propertyTaxesDuringConstructionPct, 0.02)) || 0;
   const softCostsCr = hardCostCr * softPct + landCostCr * propTaxConstPct;
-  const stampRegPct = toPctDecimal(firstNumber(ctx.inputs.stampRegPct, ctx.inputs.stampDutyPct, 0.066)) || 0;
+  const stampRegPct = toPctDecimal(firstNumber(ctx.inputs.stampRegPct, ctx.inputs.stampDutyPct, 0.076)) || 0;
   const gstPct = gstPctFor(ctx) || 0;
   const statutoryCr = landCostCr * stampRegPct + hardCostCr * gstPct;
   const totalProjectCostCr = landCostCr + hardCostCr + approvalCostCr + premiumFsiCostCr + softCostsCr + statutoryCr;
@@ -1951,8 +1951,8 @@ const buildInputsSheet = (workbook, ctx) => {
 
   // ── India Statutory Levies (PR-I1) ────────────────────────────────────
   // Stamp Duty + Registration on land acquisition: Karnataka regime as of
-  // 2026-05 is 5% stamp duty + 1% registration + 0.5% surcharge ≈ 6.6%
-  // total on conveyance deeds for non-agricultural land. Combined as one
+  // 2026-07 is 5% stamp duty + 2% registration (doubled Aug 2025) + 0.6%
+  // surcharge/cess ≈ 7.6% total on conveyance deeds. Combined as one
   // input row "Stamp Duty + Registration" mapped to named range
   // `StampRegPct`. Operators in other states (Maharashtra 5-6%, Tamil
   // Nadu 7%, Telangana 7.5%) override the seeded default.
@@ -1975,7 +1975,8 @@ const buildInputsSheet = (workbook, ctx) => {
   //      (kernels emitting only this field historically meant "the total
   //      stamp + registration outflow" — e.g. a 5% test input meant 5%
   //      combined, not 5% stamp + an extra 1% added by us).
-  //   4. Else, default to 0.066 (Karnataka 5.6% + 1% = 6.6%).
+  //   4. Else, default to 0.076 (Karnataka 5.6% + 2% = 7.6%; registration
+  //      doubled to 2% in Aug 2025).
   const legacyStampDuty = toPctDecimal(ctx.inputs.stampDutyPct);
   const legacyRegistration = toPctDecimal(ctx.inputs.registrationPct);
   let resolvedStampRegPct;
@@ -1986,7 +1987,7 @@ const buildInputsSheet = (workbook, ctx) => {
   } else if (legacyStampDuty != null) {
     resolvedStampRegPct = legacyStampDuty; // legacy: stampDutyPct alone meant the combined rate
   } else {
-    resolvedStampRegPct = 0.066; // Karnataka default
+    resolvedStampRegPct = 0.076; // Karnataka default (5.6% stamp+cess + 2% registration)
   }
 
   const indiaStatutoryLeviesSection = {
@@ -4716,7 +4717,7 @@ const buildPhasingSheet = (workbook, ctx) => {
     // Row positions shifted +5 by PR-I2 RERA block (was 20-22 → now 25-27).
     //
     //   Row 25  Stamp Duty + Registration on Land (Q1-only) — paid up-
-    //           front at acquisition. Karnataka default 6.6% of LandCostCr.
+    //           front at acquisition. Karnataka default 7.6% of LandCostCr.
     //           Modeled as a single-quarter outflow at Q1 to match the
     //           legal-economic reality of conveyance: stamp duty + reg
     //           cleared at deed registration, not amortised.
@@ -5255,7 +5256,7 @@ const DEAL_STRUCTURE_PLAYBOOK = {
   outright_purchase: {
     label: 'Outright purchase',
     mechanics: 'Developer acquires 100% of the land and owns all saleable product; the full land consideration is a Day-1 outflow funded by equity and debt.',
-    watch: 'Marketable title, 13-year encumbrance certificate, land-use conversion and Khata status gate financing; stamp duty + registration (~5.6% + 1%) apply on the full consideration.',
+    watch: 'Marketable title, 13-year encumbrance certificate, land-use conversion and Khata status gate financing; stamp duty + registration (~5.6% + 2%) apply on the full consideration.',
     returns: 'The entire project margin accrues to the developer; return is measured on the full equity base.',
   },
   jda_revenue_share: {
