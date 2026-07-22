@@ -10566,3 +10566,30 @@ Two exported normalizers re-key each kernel result into the shared `segments` sh
 ### What's left to do next
 - Merge perf/defer-pdf-lib once CI is green.
 - Remaining queue: M1 Phases 2–5 (operator-gated), DB round-trip collapse (#19, own high-risk PR).
+
+---
+
+## 2026-07-22 — M1 Phase 2: the auth bootstrap survives a non-BYPASSRLS role (#1017)
+
+**Context:** Continuing "take M1 next." Phase 1 (#1011) proved a blind role flip breaks every login because the auth flow reads/writes users/organization_members/organizations BEFORE the request context exists. Phase 2 makes the whole auth bootstrap flip-ready while staying behavior-neutral under today's bypass role.
+
+**Method:** 5-agent adversarial workflow (enumerate every pre-context DB op → design → parallel red-team + test-plan → synthesized spec). Red-team verdict: sound-with-fixes; all six findings folded in — including a genuinely MISSED op (the public email-verification confirm updates `users` with no context) and a privilege-escalation hardening (the provisioning function must re-validate the invitation internally, never trust caller-resolved org/role).
+
+**Shipped:**
+- **Context the instant identity is known:** middleware stamps the JWT-verified user id BEFORE hydration (fixes every authenticated request under RLS); login() stamps after credential validation and before the MFA check — closing a silent MFA bypass (pre-context, the enrollment self-read returns 0 rows → enrolled users would skip the challenge); same treatment for completeMfaLogin, Google path A (last-login), Google path B (the OAuth bind UPDATE would silently no-op), mfa.verifyChallenge, and emailVerification.confirmToken (transaction-local set_config from the validated token row).
+- **Migration `20260801_auth_bootstrap_security_definer.sql`** (operator-apply pending): six SECURITY DEFINER helpers for the genuinely pre-identity ops. Hardened: pinned search_path, REVOKE FROM PUBLIC, grants only to redip_app, no MFA secrets in user lookups, and `auth_provision_signup` (the whole signup INSERT chain — byte-parity verified line-by-line against consumeInvitation/joinByVerifiedDomain/createWorkspaceForUser/recordAcceptance AND the live schema) takes only the invitation TOKEN + domain CANDIDATES and re-validates internally with FOR UPDATE. Registered in RLS_AUDIT.md as the one deliberate cross-tenant write primitive; a static migration-scan test pins every hardening property.
+- **`backend/src/lib/authDefiners.js`:** tri-state probe (transient errors never cached; probes the most-complex function so partial deployments fail closed) + the `RLS_ENFORCED` env kill-switch — post-flip, the direct fallback is unreachable (loud 503, never a silent empty-result login). Deploy-order safe in both directions.
+- organization.service refactor: pure `assertInvitationUsable` shared by both paths; naming helpers exported.
+- Runbook updated (Phase-2 shipped section, RLS_ENFORCED contract, extended Phase-4 rehearsal incl. kill-switch drill; Phase-5 now sets RLS_ENFORCED in the same deploy; Phase-6 cleanup = delete the fallback branches).
+
+**Verification:** full backend suite 257 suites / 4,165 tests green (behavior-neutrality); 4 new/extended test suites (probe semantics incl. the never-cache-negative pin, per-site definer routing + 19-arg signature order + single-candidate domain contract, migration hardening static scan, email-verify order pin); boot-safety check (probe never fires at require time — preserves the #1013 cold-start win); migration lint + RLS audit green. **Prod probes (rolled back, zero residue) under `SET LOCAL ROLE authenticated`:** direct email lookup 0 rows (RLS blocks) vs definer 1 row; full provisioning created user+workspace+membership; with Phase-1's policy the new user sees its own user/membership/org (1/1/1) with ZERO cross-user leakage. Also discovered: **Phase 1's migration (20260731) is NOT yet applied to prod** — both migrations are now pending the operator's paste.
+
+**Ship note:** the OneDrive git hazard hit during the local post-merge sync ("unable to write new index file" mid-checkout); resolved by proving the working tree was byte-identical to origin/master, then `git reset --hard origin/master` (trust-the-remote rule). No work lost.
+
+### What's left to do next
+- **Operator: apply BOTH migrations** (20260731 Phase 1 + 20260801 Phase 2) in the Supabase SQL editor — safe any time, change nothing visibly. Steps in docs/M1_RLS_ROLLOUT.md.
+- **Phase 3** (operator): create the `redip_app` role.
+- **Phase 4** (mandatory gate): Supabase-branch rehearsal of the full auth matrix as redip_app + the kill-switch drill + warm-probe convergence check + Supavisor custom-role confirmation.
+- **Phase 5** (operator): flip DATABASE_URL → redip_app AND set RLS_ENFORCED=true in the same deploy; verify via the System Health canary (`bypasses_rls: false`).
+- **Phase 6**: delete the direct-query fallback branches once stable (two-live-paths risk).
+- Separate: the DB round-trip perf follow-up (task #19) remains queued.
