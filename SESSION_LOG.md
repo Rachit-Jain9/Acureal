@@ -10547,3 +10547,22 @@ Two exported normalizers re-key each kernel result into the shared `segments` sh
 ### What's left to do next
 - **Lockstep value update (task #21, math-changing):** REGISTRATION_RATE 0.01→0.02, KARNATAKA_STAMP_REG_RATE 0.066→0.076, GST_CONSTRUCTION_PLOTTED 0.12→0.18 across kernel + both mirrors + the binary buildWorkbook.js (careful-edit recipe, never sed) + ~8 test files + hospitality parity. Shifts deal costs slightly (reflects actual law) — give the operator a heads-up when it lands. Plotted is the operator's primary deal type.
 - Prior backlog unchanged: M1 Phases 2–5, DB round-trip collapse, pdf-lib deferral.
+
+---
+
+## 2026-07-22 — Regulatory rates applied in lockstep (#1015) + pdf-lib off cold start (PR pending)
+
+**#1015 (merged): the Aug-2025 / Sept-2025 regulatory rates are now LIVE in the math.**
+- REGISTRATION_RATE 1% → 2%, combined stamp+reg 6.6% → 7.6%, plotted works GST 12% → 18% — applied atomically across the kernel config (authoritative), both backend/frontend mirrors, the XLSX v2 builder fallbacks + prose (Edit-tool-only on the NUL-byte binary; byte-integrity verified: 1 NUL preserved, all CRLF, zero 0.066 remaining), the DOCX prose, and the kernel guard-test pins.
+- Test re-baselines were arithmetically PROVEN, not pasted: plotted gst 1.68→2.52 = 14 Cr × 0.06 exactly; total +0.84; costPerPlot +0.84e7/146; hospitality stamp 3.96→4.56 = 60 × 0.076; total +0.6466 = stamp +0.60 + financed carry +0.0466; devCostPerKey +0.6466e7/180; operating KPIs unchanged. kernel.precision REVERTED to 0.066 — its fixture deliberately pins stampRegPct 6.6 (input-driven test; the interim edit there was wrong and was corrected).
+- Verified: kernel 413 / backend 4140 (254 suites) / frontend 1357 tests + build — ALL green. Full CI green incl. the Defaults Staleness workflow.
+- Note for future sessions: stored deal financials do NOT silently rewrite — the new rates apply on each deal's next kernel run (model refresh). That's the audit-integrity design working as intended.
+
+**perf/defer-pdf-lib (PR open): the last heavy export lib off the boot path.**
+- New `backend/src/lib/lazyPdfLib.js`: cached `pdfLib()` accessor + call-time `rgb()` + `lazyByFactory()` Proxy (materializes module-scope COLORS palettes on first property access — zero call-site churn) + frozen ISO-216 A4 constants (asserted bit-identical to PageSizes.A4).
+- Converted dealTearSheet / intelligenceExport (palettes + PAGE_LANDSCAPE + builders), export.routes (handler-time destructure), pdfPreflight (both entry points).
+- Proven: pdf-lib absent from require.cache after full server boot; 9 PDF suites / 119 tests green; end-to-end probe (Proxy palette → real %PDF- → lib cached only after build).
+
+### What's left to do next
+- Merge perf/defer-pdf-lib once CI is green.
+- Remaining queue: M1 Phases 2–5 (operator-gated), DB round-trip collapse (#19, own high-risk PR).
