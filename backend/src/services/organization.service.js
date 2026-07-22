@@ -184,6 +184,28 @@ const createWorkspaceForUser = async (client, { userId, name, email, organizatio
   return organization;
 };
 
+// Pure invitation-usability gate, shared by consumeInvitation (the direct
+// fallback path) and the register definer branch (M1 Phase 2), so both raise
+// the exact same friendly errors in the same order. `invitation` may be null /
+// undefined (token matched nothing).
+const assertInvitationUsable = (invitation, email) => {
+  if (!invitation) {
+    throw createError('Invitation not found or already used.', 404);
+  }
+
+  if (invitation.accepted_at) {
+    throw createError('Invitation has already been accepted.', 409);
+  }
+
+  if (new Date(invitation.expires_at) < new Date()) {
+    throw createError('Invitation has expired.', 410);
+  }
+
+  if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+    throw createError('Invitation email does not match this registration.', 409);
+  }
+};
+
 const consumeInvitation = async (client, { userId, email, invitationToken }) => {
   const invitationResult = await client.query(
     `SELECT
@@ -198,23 +220,8 @@ const consumeInvitation = async (client, { userId, email, invitationToken }) => 
     [invitationToken]
   );
 
-  if (invitationResult.rows.length === 0) {
-    throw createError('Invitation not found or already used.', 404);
-  }
-
   const invitation = invitationResult.rows[0];
-
-  if (invitation.accepted_at) {
-    throw createError('Invitation has already been accepted.', 409);
-  }
-
-  if (new Date(invitation.expires_at) < new Date()) {
-    throw createError('Invitation has expired.', 410);
-  }
-
-  if (invitation.email.toLowerCase() !== email.toLowerCase()) {
-    throw createError('Invitation email does not match this registration.', 409);
-  }
+  assertInvitationUsable(invitation, email);
 
   await client.query(
     `INSERT INTO organization_members (organization_id, user_id, role, invited_by, is_active)
@@ -634,10 +641,13 @@ const rejectJoinRequest = async ({ organizationId, targetUserId, actor }) => {
 };
 
 module.exports = {
+  assertInvitationUsable,
   buildAuthUser,
   consumeInvitation,
   createWorkspaceForUser,
+  deriveWorkspaceName,
   hydrateUserAuthContext,
+  slugifyOrganizationName,
   inviteOrganizationMember,
   joinByVerifiedDomain,
   listMembershipsForUser,

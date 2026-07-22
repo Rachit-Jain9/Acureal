@@ -172,7 +172,8 @@ describe('emailVerification.service.confirmToken', () => {
         rowCount: 1,
         rows: [{ id: 7, user_id: 'u1', expires_at: futureTimestamp(), consumed_at: null }],
       },
-      { rowCount: 1, rows: [] },
+      { rowCount: 1, rows: [] }, // set_config (M1 Phase 2 context stamp)
+      { rowCount: 1, rows: [] }, // token-consume UPDATE
       {
         rowCount: 1,
         rows: [{ id: 'u1', email: 'user@example.com', email_verified_at: verifiedAt }],
@@ -189,8 +190,15 @@ describe('emailVerification.service.confirmToken', () => {
       verifiedAt,
     });
 
-    // Should mark consumed before updating users.
-    expect(calls[1].sql).toMatch(/UPDATE\s+public\.email_verification_tokens[\s\S]*consumed_by\s*=\s*'verified'/i);
-    expect(calls[2].sql).toMatch(/UPDATE\s+public\.users[\s\S]*email_verified_at/i);
+    // M1 Phase 2 regression pin (red-team finding): this PUBLIC route has no
+    // JWT context, so the transaction-local user context MUST be stamped from
+    // the validated token row BEFORE the users UPDATE — otherwise a
+    // non-BYPASSRLS role silently updates zero rows (users_self_update).
+    expect(calls[1].sql).toMatch(/set_config\('app\.current_user_id'/);
+    expect(calls[1].params).toEqual(['u1']);
+
+    // Then: mark consumed before updating users.
+    expect(calls[2].sql).toMatch(/UPDATE\s+public\.email_verification_tokens[\s\S]*consumed_by\s*=\s*'verified'/i);
+    expect(calls[3].sql).toMatch(/UPDATE\s+public\.users[\s\S]*email_verified_at/i);
   });
 });

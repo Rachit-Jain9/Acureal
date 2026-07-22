@@ -34,6 +34,8 @@ const crypto = require('crypto');
 const { authenticator } = require('otplib');
 const QRCode = require('qrcode');
 const { query } = require('../config/database');
+const { setRequestContext } = require('../lib/requestContext');
+const { requireDefinerPath } = require('../lib/authDefiners');
 const log = require('../lib/logger').child({ module: 'mfa' });
 
 // Standard window (±1 step = ±30s) — covers clock skew without enabling
@@ -166,13 +168,19 @@ const verifyChallenge = async ({ challenge, code }) => {
     err.statusCode = 400;
     throw err;
   }
-  const ticketResult = await query(
-    `SELECT mc.id, mc.user_id, mc.expires_at, mc.consumed_at, u.mfa_secret
-       FROM mfa_challenges mc
-       JOIN users u ON u.id = mc.user_id
-      WHERE mc.challenge = $1`,
-    [challenge],
-  );
+  // M1 Phase 2: the caller holds only a challenge string — no user identity
+  // yet, so the JOIN to users (for mfa_secret) is exactly what RLS blocks
+  // under a non-bypass role. Definer-routed when available; the fallback is
+  // the byte-identical original query.
+  const ticketResult = (await requireDefinerPath())
+    ? await query('SELECT * FROM public.auth_find_mfa_challenge($1)', [challenge])
+    : await query(
+        `SELECT mc.id, mc.user_id, mc.expires_at, mc.consumed_at, u.mfa_secret
+           FROM mfa_challenges mc
+           JOIN users u ON u.id = mc.user_id
+          WHERE mc.challenge = $1`,
+        [challenge],
+      );
   const ticket = ticketResult.rows[0];
   if (!ticket) {
     const err = new Error('Invalid or expired challenge.');
@@ -194,6 +202,11 @@ const verifyChallenge = async ({ challenge, code }) => {
     err.statusCode = 409;
     throw err;
   }
+
+  // M1 Phase 2: the ticket pins the user — stamp the context so the recovery-
+  // code reads/writes and the mfa_last_used_at UPDATE below survive a
+  // non-bypass role (all guarded by self-scoped users policies).
+  setRequestContext({ userId: ticket.user_id });
 
   const cleaned = String(code).replace(/\s+/g, '');
   const isTotp = /^\d{6}$/.test(cleaned);

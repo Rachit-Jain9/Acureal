@@ -4,11 +4,17 @@ const jwt = require('jsonwebtoken');
 const { query, transaction } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const {
+  assertInvitationUsable,
   consumeInvitation,
   createWorkspaceForUser,
+  deriveWorkspaceName,
   hydrateUserAuthContext,
   joinByVerifiedDomain,
+  slugifyOrganizationName,
 } = require('./organization.service');
+const { setRequestContext } = require('../lib/requestContext');
+const { requireDefinerPath } = require('../lib/authDefiners');
+const { normalizeEmailDomain, isPublicEmailDomain } = require('../utils/emailDomain');
 const legalService = require('./legal.service');
 const { mapOrganizationRoleToLegacyUserRole } = require('../constants/roles');
 const { isPasswordBreached } = require('../utils/passwordBreach');
@@ -143,6 +149,80 @@ const resolveLoginAuthContext = async (userId, requestedOrganizationId, defaultO
   }
 };
 
+// M1 Phase 2 — the whole signup INSERT chain (users + invitation/domain
+// membership + workspace + legal acceptance) via the SECURITY DEFINER
+// provisioning function. Shared by register() and the Google cold-signup so
+// the two forks cannot drift. The function re-validates the invitation token
+// and the verified domain INTERNALLY (it never accepts a caller-resolved org
+// id or membership role); the auth_find_invitation pre-check here exists only
+// to surface the same friendly 404/409/410 errors as consumeInvitation.
+const provisionViaDefiner = async ({
+  email, passwordHash, name, legacyRole, phone,
+  oauthProvider, oauthSubject, emailVerified, passwordSet,
+  profile, invitationToken, hostedDomain, organizationName,
+  legalDocumentIds, requestContext, mode = null,
+}) => {
+  if (invitationToken) {
+    const invitationResult = await query(
+      'SELECT * FROM public.auth_find_invitation($1)',
+      [invitationToken]
+    );
+    assertInvitationUsable(invitationResult.rows[0] || null, email);
+  }
+
+  // Single-candidate contract (byte-parity with joinByVerifiedDomain): the
+  // hosted domain wins outright when present — there is deliberately NO
+  // fallback to the email domain when the hosted domain has no verified claim.
+  const domain = normalizeEmailDomain(hostedDomain) || normalizeEmailDomain(email);
+  const domainCandidates =
+    !invitationToken && domain && !isPublicEmailDomain(domain) ? [domain] : null;
+
+  const workspaceName = deriveWorkspaceName({ name, email, organizationName });
+  // May be '' — the SQL falls back to workspace-<uid8> internally, using the
+  // REAL new user id (which does not exist yet on this side of the call).
+  const slugBase = slugifyOrganizationName(workspaceName);
+
+  const uid = (await query(
+    `SELECT public.auth_provision_signup(
+       $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19
+     ) AS id`,
+    [
+      email, passwordHash, name, legacyRole, phone,
+      oauthProvider, oauthSubject, emailVerified, passwordSet,
+      profile.company, profile.jobTitle, profile.city,
+      invitationToken, domainCandidates, workspaceName, slugBase,
+      legalDocumentIds,
+      requestContext?.ipAddress || null,
+      requestContext?.userAgent || null,
+    ]
+  )).rows[0].id;
+
+  // Provisioning is committed; stamp the context so hydrate's self-scoped
+  // reads resolve under a non-bypass role.
+  setRequestContext({ userId: uid });
+
+  // The account exists even if hydrate hiccups — retry once, then hand the
+  // user a truthful "sign in normally" instead of a dead-end error.
+  let authContext;
+  try {
+    authContext = await hydrateUserAuthContext(uid, null);
+  } catch {
+    try {
+      authContext = await hydrateUserAuthContext(uid, null);
+    } catch {
+      throw createError(
+        'Your account was created but sign-in could not complete. Please log in with your credentials.',
+        500
+      );
+    }
+  }
+
+  const token = generateToken(authContext.user.id, authContext.user.role);
+  return mode
+    ? { user: authContext.user, token, mode }
+    : { user: authContext.user, token };
+};
+
 // Registration is open. Anyone who reaches /register and accepts the Terms
 // can create an account; without an invitation token they get their own
 // brand-new workspace as Owner. With an invitation token they join the
@@ -150,7 +230,12 @@ const resolveLoginAuthContext = async (userId, requestedOrganizationId, defaultO
 
 const register = async (name, email, password, phone = null, options = {}) => {
   const normalizedEmail = email.toLowerCase();
-  const existingUser = await query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
+  // M1 Phase 2: pre-identity duplicate-email guard — definer-routed so the
+  // friendly 409 survives the role flip (RLS would hide the existing row and
+  // demote this to a raw UNIQUE-constraint failure).
+  const existingUser = (await requireDefinerPath())
+    ? await query('SELECT * FROM public.auth_find_user_for_login($1)', [normalizedEmail])
+    : await query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
 
   if (existingUser.rows.length > 0) {
     throw createError('An account with this email already exists.', 409);
@@ -179,11 +264,37 @@ const register = async (name, email, password, phone = null, options = {}) => {
   const passwordHash = await bcrypt.hash(password, SALT_ROUNDS);
   const profile = extractSignupProfile(options);
 
-  return transaction(async (client) => {
-    const defaultLegacyRole = options.invitationToken
-      ? mapOrganizationRoleToLegacyUserRole(options.invitedRole || 'viewer')
-      : 'admin';
+  const defaultLegacyRole = options.invitationToken
+    ? mapOrganizationRoleToLegacyUserRole(options.invitedRole || 'viewer')
+    : 'admin';
 
+  // M1 Phase 2 fork: the users INSERT has NO RLS policy (deliberately — a
+  // permissive one would leak), so under a non-bypass role signup must run
+  // through the SECURITY DEFINER provisioning function. The fallback branch
+  // below is the original transaction chain, byte-for-byte, and remains the
+  // only path exercised under the current bypass role until the migration is
+  // applied.
+  if (await requireDefinerPath()) {
+    return provisionViaDefiner({
+      email: normalizedEmail,
+      passwordHash,
+      name,
+      legacyRole: defaultLegacyRole,
+      phone,
+      oauthProvider: null,
+      oauthSubject: null,
+      emailVerified: false,
+      passwordSet: true,
+      profile,
+      invitationToken: options.invitationToken || null,
+      hostedDomain: null,
+      organizationName: options.organizationName,
+      legalDocumentIds,
+      requestContext: options.requestContext,
+    });
+  }
+
+  return transaction(async (client) => {
     const userResult = await client.query(
       `INSERT INTO users (email, password_hash, name, role, phone, company, job_title, city)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -242,13 +353,20 @@ const login = async (email, password, requestedOrganizationId = null) => {
 
   await enforceLoginThrottle(normalizedEmail);
 
-  const result = await query(
-    `SELECT id, email, password_hash, name, phone, is_active, last_login_at, default_organization_id,
-            account_closed_at, erased_at
-     FROM users
-     WHERE email = $1`,
-    [normalizedEmail]
-  );
+  // M1 Phase 2: the email lookup is PRE-IDENTITY — under a non-BYPASSRLS role
+  // no users policy can match it (self-read needs current_user_id(), unset
+  // here). Route through the SECURITY DEFINER helper when it exists; the
+  // fallback is the byte-identical original query, fully correct under the
+  // current bypass role (authDefiners fails loud, never silent, post-flip).
+  const result = (await requireDefinerPath())
+    ? await query('SELECT * FROM public.auth_find_user_for_login($1)', [normalizedEmail])
+    : await query(
+        `SELECT id, email, password_hash, name, phone, is_active, last_login_at, default_organization_id,
+                account_closed_at, erased_at
+         FROM users
+         WHERE email = $1`,
+        [normalizedEmail]
+      );
 
   if (result.rows.length === 0) {
     await recordFailedLogin(normalizedEmail);
@@ -280,6 +398,14 @@ const login = async (email, password, requestedOrganizationId = null) => {
 
   await clearLoginAttempts(normalizedEmail);
 
+  // M1 Phase 2: credentials are validated — stamp the user id into the
+  // request context NOW. Everything below (the MFA-enrollment self-read, the
+  // last_login_at UPDATE, hydrate's users/org_members reads) is guarded by
+  // self-scoped RLS policies matching current_user_id(). Without this stamp a
+  // non-bypass role would see zero rows — which would SILENTLY skip the MFA
+  // challenge for enrolled users. No-op under the current bypass role.
+  setRequestContext({ userId: user.id });
+
   // MFA gate: if the user has enrolled in TOTP, hand back a short-lived
   // challenge ticket instead of an access token. The SPA prompts for the
   // 6-digit code; POST /auth/mfa/verify completes the login by minting
@@ -308,6 +434,10 @@ const login = async (email, password, requestedOrganizationId = null) => {
 const completeMfaLogin = async ({ challenge, code, requestedOrganizationId }) => {
   const mfaService = require('./mfa.service');
   const { userId } = await mfaService.verifyChallenge({ challenge, code });
+
+  // M1 Phase 2: the challenge proved this user's identity — stamp the context
+  // so the self-scoped reads/updates below survive a non-bypass role.
+  setRequestContext({ userId });
 
   const userResult = await query(
     `SELECT id, default_organization_id FROM users WHERE id = $1`,
@@ -452,6 +582,13 @@ const generateUnusablePasswordHash = async () => {
 };
 
 const findUserByOAuthIdentity = async (provider, subject, client = null) => {
+  // M1 Phase 2: pre-identity lookup — definer-routed when no transaction
+  // client is supplied (in-transaction callers keep the direct path; they run
+  // under an established context or the fallback register chain).
+  if (!client && (await requireDefinerPath())) {
+    const result = await query('SELECT * FROM public.auth_find_user_by_oauth($1, $2)', [provider, subject]);
+    return result.rows[0] || null;
+  }
   const exec = client ? client.query.bind(client) : query;
   const result = await exec(
     `SELECT id, email, name, phone, is_active, default_organization_id,
@@ -465,6 +602,13 @@ const findUserByOAuthIdentity = async (provider, subject, client = null) => {
 };
 
 const findUserByEmail = async (email, client = null) => {
+  // M1 Phase 2: pre-identity lookup — definer-routed when no transaction
+  // client is supplied. auth_find_user_for_login's column list is a superset
+  // of this SELECT (never MFA secrets), so callers read identical fields.
+  if (!client && (await requireDefinerPath())) {
+    const result = await query('SELECT * FROM public.auth_find_user_for_login($1)', [email]);
+    return result.rows[0] || null;
+  }
   const exec = client ? client.query.bind(client) : query;
   const result = await exec(
     `SELECT id, email, name, phone, is_active, default_organization_id,
@@ -504,6 +648,9 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
         403
       );
     }
+    // M1 Phase 2: Google verified this identity — stamp the context so the
+    // self-scoped UPDATE + hydrate reads survive a non-bypass role.
+    setRequestContext({ userId: byIdentity.id });
     await query('UPDATE users SET last_login_at = NOW() WHERE id = $1', [byIdentity.id]);
     const authContext = await hydrateUserAuthContext(
       byIdentity.id,
@@ -538,6 +685,12 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
       );
     }
 
+    // M1 Phase 2: bind-eligibility is proven (email match + no conflicting
+    // OAuth binding + active) — stamp the context so the bind UPDATE below
+    // actually persists under a non-bypass role (users_self_update matches on
+    // current_user_id(); without this it would silently update zero rows).
+    setRequestContext({ userId: byEmail.id });
+
     // Bind + verify email + log in.
     await query(
       `UPDATE users
@@ -569,11 +722,35 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
   const displayName = (claims.name || normalizedEmail.split('@')[0] || 'User').slice(0, 200);
   const profile = extractSignupProfile(options);
 
-  return transaction(async (client) => {
-    const defaultLegacyRole = options.invitationToken
-      ? mapOrganizationRoleToLegacyUserRole(options.invitedRole || 'viewer')
-      : 'admin';
+  const defaultLegacyRole = options.invitationToken
+    ? mapOrganizationRoleToLegacyUserRole(options.invitedRole || 'viewer')
+    : 'admin';
 
+  // M1 Phase 2 fork — see register(). Google's hosted-domain (hd) claim wins
+  // outright over the email domain inside provisionViaDefiner, mirroring
+  // joinByVerifiedDomain's preference.
+  if (await requireDefinerPath()) {
+    return provisionViaDefiner({
+      email: normalizedEmail,
+      passwordHash,
+      name: displayName,
+      legacyRole: defaultLegacyRole,
+      phone: null,
+      oauthProvider: claims.provider,
+      oauthSubject: claims.subject,
+      emailVerified: true,
+      passwordSet: false,
+      profile,
+      invitationToken: options.invitationToken || null,
+      hostedDomain: claims.hostedDomain || null,
+      organizationName: options.organizationName,
+      legalDocumentIds,
+      requestContext: options.requestContext,
+      mode: 'register',
+    });
+  }
+
+  return transaction(async (client) => {
     const userResult = await client.query(
       `INSERT INTO users
          (email, password_hash, name, role, oauth_provider, oauth_subject,
