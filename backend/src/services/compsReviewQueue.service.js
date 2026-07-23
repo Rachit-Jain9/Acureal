@@ -56,6 +56,12 @@ const sanitizeFileName = (name) =>
 // Constants
 // ──────────────────────────────────────────────────────────────────────────
 
+// How long a row may sit in 'extracting' before the drain reclaims it.
+// The extractor runs inside one serverless invocation capped at 300s, so a
+// row still 'extracting' well past that was orphaned by an instance death,
+// not by slow work. Comfortably above the cap to avoid racing a live run.
+const STALE_EXTRACTING_MINUTES = 15;
+
 // Queue source → preferred extraction doctype. The worker uses this to
 // pick the right Gemini prompt without re-running classification — the
 // source already tells us what to expect.
@@ -464,10 +470,20 @@ const processPendingBatch = async ({ limit = 5 } = {}) => {
   const result = await query(
     `SELECT id FROM comps_review_queue
        WHERE organization_id = current_organization_id()
-         AND status = 'pending_extraction'
+         AND (
+           status = 'pending_extraction'
+           -- Reclaim rows orphaned mid-drain. processQueueRow flips a row to
+           -- 'extracting' before calling the extractor; if the serverless
+           -- function dies in that window, nothing here ever selected the row
+           -- again and it sat in 'extracting' forever — invisible to the drain
+           -- and to the reviewer. processQueueRow is idempotent for this state
+           -- (it early-returns only on pending_review/committed/rejected), so
+           -- re-picking a stale row simply retries it.
+           OR (status = 'extracting' AND updated_at < NOW() - ($2 || ' minutes')::interval)
+         )
        ORDER BY created_at ASC
        LIMIT $1`,
-    [cappedLimit]
+    [cappedLimit, String(STALE_EXTRACTING_MINUTES)]
   );
 
   const summary = { picked: result.rows.length, processed: 0, failed: 0, skipped: 0 };
@@ -966,8 +982,9 @@ const processPendingBatchAcrossOrgs = async ({ limitPerOrg = 5 } = {}) => {
   const orgsResult = await query(
     `SELECT DISTINCT organization_id
        FROM comps_review_queue
-      WHERE status = 'pending_extraction'`,
-    []
+      WHERE status = 'pending_extraction'
+         OR (status = 'extracting' AND updated_at < NOW() - ($1 || ' minutes')::interval)`,
+    [String(STALE_EXTRACTING_MINUTES)]
   );
 
   const summaries = [];

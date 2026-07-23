@@ -73,7 +73,16 @@ const compose = (preamble, body, what = 'Rows') => {
 /** Cell → flat string. Handles every ExcelJS value shape without interpreting. */
 const cellToText = (value) => {
   if (value === null || value === undefined) return '';
-  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (value instanceof Date) {
+    // ExcelJS yields `new Date(NaN)` for an out-of-range or malformed serial
+    // date (Excel's 1900 leap-year quirk, a negative serial, a corrupt cell).
+    // `instanceof Date` still passes, and toISOString() then throws
+    // RangeError('Invalid time value') — which aborted the whole workbook
+    // parse, and with it the entire extraction, before classification ever ran.
+    // One unreadable cell must not cost the document: treat it as empty.
+    if (Number.isNaN(value.getTime())) return '';
+    return value.toISOString().slice(0, 10);
+  }
   if (typeof value === 'object') {
     // Formula cells: take the CACHED RESULT, never the formula source — the
     // same formula-injection posture as the deterministic template importer.

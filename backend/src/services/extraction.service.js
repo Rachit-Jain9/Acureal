@@ -642,7 +642,34 @@ async function extractStoredFileFields({
   let documentText = null;
   let parsedMeta = null;
   if (tier === 'parseable') {
-    const parsed = await parseDocumentToText(buffer, fileName);
+    // A parser fault must not reach the caller as a raw JS message. Before
+    // this guard, one malformed spreadsheet cell surfaced to the operator as
+    // the literal string "Invalid time value" on a row stuck at 'failed' —
+    // unactionable, and indistinguishable from a provider outage. Re-frame it
+    // as an honest refusal: same shape as the unsupported-format and
+    // unreadable-PDF paths, so the row is cleaned up and the UI shows a
+    // sentence a human can act on.
+    let parsed;
+    try {
+      parsed = await parseDocumentToText(buffer, fileName);
+    } catch (parseErr) {
+      const err = new Error(
+        `REDIP could not read the contents of this file — it is stored as uploaded. `
+        + `This usually means the file is corrupt or was written by a tool REDIP's reader `
+        + `does not fully understand. Re-saving it from Excel (or exporting to PDF) and `
+        + `re-uploading normally fixes it.`,
+      );
+      err.statusCode = 422;
+      err.code = 'EXTRACTION_UNREADABLE_SOURCE';
+      err.coverageReason = 'unreadable_source';
+      err.cause = parseErr;
+      log.warn('document_parse_failed', {
+        documentId: documentId || null,
+        fileName,
+        error: parseErr.message,
+      });
+      throw err;
+    }
     documentText = parsed.text;
     parsedMeta = { kind: parsed.kind, ...parsed.meta };
   } else {

@@ -11,7 +11,7 @@ vi.mock('../../hooks/useDashboard', () => ({
         active_deals_count: 18,
         total_pipeline_value_cr: 812.5,
         avg_irr_pct: 22.4,
-        ic_ready_count: 5,
+        at_ic_or_beyond_count: 5,
         deals_with_open_risks: 2,
         total_documents: 318,
         closed_value_cr: 0,
@@ -111,7 +111,7 @@ describe('DashboardPage — 4-KPI institutional scan layout', () => {
     expect(screen.getByText('Pipeline Value')).toBeInTheDocument();
     expect(screen.getByText('Active Deals')).toBeInTheDocument();
     expect(screen.getByText('Avg IRR')).toBeInTheDocument();
-    expect(screen.getByText('Investor-Grade')).toBeInTheDocument();
+    expect(screen.getByText('At IC or beyond')).toBeInTheDocument();
   });
 
   it('does not render removed secondary KPIs (Total Deals / Documents / Closed value / Open risks tile)', () => {
@@ -134,8 +134,15 @@ describe('DashboardPage — 4-KPI institutional scan layout', () => {
     expect(screen.getByText(/Above 20% bench/)).toBeInTheDocument();
   });
 
-  it('surfaces "Ready to deploy" under IC-ready when count > 0', () => {
+  // The fourth tile used to read `stats.ic_ready_count` — a field the API has
+  // never produced — so in production it rendered 0 and its "Ready to deploy"
+  // tag never appeared. This suite passed only because the fixture above
+  // fabricated the key. The tile now reads a field the API really sends and is
+  // labelled for what it counts: pipeline stage, not a vetting verdict.
+  it('shows the stage-based At-IC tile, not a vetting claim', () => {
     renderPage();
-    expect(screen.getByText(/Ready to deploy/)).toBeInTheDocument();
+    expect(screen.getByText('At IC or beyond')).toBeInTheDocument();
+    expect(screen.queryByText(/Ready to deploy/)).toBeNull();
+    expect(screen.queryByText(/fully vetted/i)).toBeNull();
   });
 });
