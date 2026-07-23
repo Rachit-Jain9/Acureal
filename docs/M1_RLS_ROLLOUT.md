@@ -1,6 +1,8 @@
 # M1 — Make tenant isolation real at the database (RLS role flip)
 
-**Status:** Phase 1 shipped (safe, additive). Phases 2–5 staged, not yet executed.
+**Status:** Phases 1–2 shipped + applied to prod (2026-07-22). Phase 3/4
+enablement shipped 2026-07-23 (amended grants, migration `20260802`, rehearsal
+kit under `scripts/rehearsal/`). Phases 3–6 not yet executed.
 **Owner:** REDIP engineering + operator (Rachit) for the two live-config steps.
 **Why this matters:** Today REDIP's isolation between customers is enforced by
 application code (every query is scoped to the caller's organization). The
@@ -161,6 +163,23 @@ routine, different file:
 A dedicated **login role that cannot bypass RLS and owns nothing**, so RLS
 applies to it on every table.
 
+> **Amended 2026-07-23** after the external-critique verification pass. Three
+> changes from the original draft: (1) **no default EXECUTE on future
+> functions** — a future SECURITY DEFINER function must ship its own explicit
+> grant (fail-closed; the `20260801` pattern already does this); (2) the six
+> auth definers + the two RLS helpers are granted **explicitly** — mandatory,
+> because `20260801`'s conditional grant no-op'd on prod (applied before this
+> role existed) and the definers revoke PUBLIC; (3) `regulatory_data` narrows
+> from blanket read/write to **read-everything + write only the 15 tables the
+> backend genuinely writes at runtime**, per-verb. The broad EXECUTE snapshot
+> on `public` stays: PostGIS / pg_trgm / pgvector live in `public` (hundreds
+> of extension functions the app really calls — enumeration is impractical).
+>
+> **Prerequisite:** apply migration `20260802_rls_flip_hardening.sql` first
+> (same routine as Phases 1–2 — it hardens the definer search path and adds
+> the four `regulatory_data` policies the flip needs). Either order works,
+> but 20260802-first keeps the grant story simple.
+
 ### 📋 Operator step — create the role
 
 1. Open: `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
@@ -173,18 +192,66 @@ applies to it on every table.
 ```sql
 CREATE ROLE redip_app WITH LOGIN PASSWORD 'PASTE_STRONG_PASSWORD_HERE' NOBYPASSRLS NOSUPERUSER NOCREATEDB NOCREATEROLE;
 
+-- ── public: tenant tables (RLS is the row boundary after the flip) ─────────
 GRANT USAGE ON SCHEMA public TO redip_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO redip_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO redip_app;
+-- Snapshot EXECUTE across public: PostGIS/pg_trgm/pgvector live here and the
+-- app calls them (ST_*, similarity(), <=>), plus uuid/gen_random defaults.
 GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO redip_app;
+-- The security-load-bearing functions, explicitly (the auth definers REVOKE
+-- PUBLIC — this grant is their real path; the snapshot above is the backstop):
+GRANT EXECUTE ON FUNCTION public.current_user_id() TO redip_app;
+GRANT EXECUTE ON FUNCTION public.current_organization_id() TO redip_app;
+GRANT EXECUTE ON FUNCTION public.auth_find_user_for_login(text) TO redip_app;
+GRANT EXECUTE ON FUNCTION public.auth_find_user_by_oauth(text, text) TO redip_app;
+GRANT EXECUTE ON FUNCTION public.auth_find_mfa_challenge(text) TO redip_app;
+GRANT EXECUTE ON FUNCTION public.auth_lookup_verified_domain(text[]) TO redip_app;
+GRANT EXECUTE ON FUNCTION public.auth_find_invitation(text) TO redip_app;
+GRANT EXECUTE ON FUNCTION public.auth_provision_signup(text,text,text,text,text,text,text,boolean,boolean,text,text,text,text,text[],text,text,bigint[],inet,text) TO redip_app;
+-- Future tables/sequences keep flowing; future FUNCTIONS deliberately do NOT —
+-- each new function ships its own grant (fail-closed).
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO redip_app;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO redip_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO redip_app;
 
--- Regulatory reference data lives in its own schema.
+-- ── regulatory_data: read everything; write ONLY the runtime-written tables ─
 GRANT USAGE ON SCHEMA regulatory_data TO redip_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA regulatory_data TO redip_app;
-ALTER DEFAULT PRIVILEGES IN SCHEMA regulatory_data GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO redip_app;
+GRANT SELECT ON ALL TABLES IN SCHEMA regulatory_data TO redip_app;
+
+-- Evidence/extraction pipeline + masterplan registry (upserts ⇒ INSERT+UPDATE)
+GRANT INSERT, UPDATE ON
+  regulatory_data.evidence_sources,
+  regulatory_data.guidance_values,
+  regulatory_data.far_rules,
+  regulatory_data.planning_districts,
+  regulatory_data.master_plan_zones,
+  regulatory_data.master_plan_documents
+TO redip_app;
+
+-- Re-ingest replaces pending facts (DELETE at evidenceIngestion.service.js:303)
+GRANT INSERT, UPDATE, DELETE ON regulatory_data.evidence_facts TO redip_app;
+
+-- Append-only audit / candidate / log tables (INSERT only)
+GRANT INSERT ON
+  regulatory_data.zone_versions,
+  regulatory_data.master_plan_document_versions,
+  regulatory_data.master_plan_document_pages,
+  regulatory_data.bbmp_uav_entries,
+  regulatory_data.parcel_intelligence_snapshots,
+  regulatory_data.jurisdiction_resolution_log
+TO redip_app;
+
+-- Per-org geo caches (write + cron sweep-delete)
+GRANT INSERT, UPDATE, DELETE ON
+  regulatory_data.kgis_cache,
+  regulatory_data.osm_road_cache
+TO redip_app;
+
+-- New regulatory_data tables default to READ-ONLY; write grants are added per
+-- table, deliberately. (Excluded from writes on purpose: bbmp_street_index,
+-- district_localities, the micro_market tables, karnataka_rera_*,
+-- planning_authorities, statutory_plans — all operator-script/seed-written.)
+ALTER DEFAULT PRIVILEGES IN SCHEMA regulatory_data GRANT SELECT ON TABLES TO redip_app;
 ```
 
 4. Click green **Run**. Success = **"Success. No rows returned"**.
@@ -201,30 +268,52 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA regulatory_data GRANT SELECT, INSERT, UPDATE,
 
 ## Phase 4 — Rehearse on a throwaway Supabase branch (mandatory gate)
 
-Never rehearse on production. Create a Supabase **branch** (an isolated copy),
-apply Phases 1–3 there, point a local backend at the branch's connection string
-as `redip_app`, and exercise the full matrix as the non-bypass role:
+Never rehearse on production. **The rehearsal is now a kit** —
+[`scripts/rehearsal/`](../scripts/rehearsal/README.md) contains the seed, the
+automated probe runner, and the drill choreography. Two facts the kit
+encodes (from the 2026-07-23 verification pass):
 
-- login (password) · register (fresh workspace) · register (domain auto-join) ·
-  invitation accept · Google OAuth (new + returning + bind) · MFA challenge +
-  verify · token refresh + rotation · logout · a deal read/write round-trip ·
-  dashboard rollups · an export · the **public email-verification confirm**
-  flow (its `users` UPDATE is context-stamped from the token row).
+- A Supabase branch copies the **schema, not the data** — so the kit seeds
+  deterministic security fixtures (`seed_security.sql`: two orgs, nine users
+  covering every account state, invitations/refresh grants/verification
+  tokens in every lifecycle state, deals with children in both orgs).
+- The branch is a prod copy, so migrations `20260731`/`20260801`/`20260802`
+  arrive with it — the kill-switch drill manufactures the "functions absent"
+  state via `drop_definers.sql` + re-apply, with a backend restart between
+  states (the definer probe is memoized per process).
 
-Additional rehearsal checks (from the Phase-2 red-team):
-- Re-confirm no trigger / column DEFAULT on the auth tables reads
-  `current_user_id()` / `current_setting('app.current_%')` (verified clean on
-  prod 2026-07-22 — only benign `updated_at` stampers — but the live DB is the
-  source of truth at rehearsal time).
-- Kill-switch drill: with `RLS_ENFORCED=true` and the migration deliberately
-  absent on the branch, confirm auth endpoints return the loud 503 (never a
-  silent empty-result login failure).
-- Confirm the warm-instance probe converges: after applying the migration,
-  two consecutive logins — the second must route via
-  `auth_find_user_for_login` (memoized definer path).
+Run order (details + exact commands in the kit README): create branch →
+run the amended Phase-3 block on it (also clears the pooler-accepts-custom-role
+risk) → apply `20260802` → seed as `postgres` → start a local backend as
+`redip_app` → `node scripts/rehearsal/run-probes.js` → the kill-switch drill
+(`--drill=killswitch`) → delete the branch.
 
-Green on all of the above **as `redip_app`** is the gate to Phase 5. Delete the
-branch afterward.
+The runner covers, as the non-bypass role: password login · register (fresh /
+domain auto-join / invitation, incl. expired-invitation refusal) · MFA
+challenge + verify with live TOTP + replay refusal · refresh rotation + reuse
+detection (family burn) · logout · the public email-verification confirm ·
+warm-probe convergence (two consecutive logins) · deal read/write round-trip ·
+dashboard rollups · CSV export · **adversarial cross-tenant probes** (beta's
+deals unreadable/unwritable/unexportable; list/dashboard/export responses
+leak-scanned for beta markers; `x-organization-id` forgery refused for
+non-members while legitimate multi-org switching still works; viewer-role
+write refusal) · direct-SQL posture checks (role is `redip_app`,
+`bypasses_rls: false`, zero rows visible without context, no context-dependent
+trigger on the auth tables).
+
+**Google OAuth (new + returning + bind) stays MANUAL** — it needs a real
+Google ID token; the runner asserts only that the config endpoint responds.
+Do the three Google paths by hand against the local stack, or accept them as
+covered by post-flip production verification (they ride the same definer
+functions the runner exercises).
+
+Also rehearse the ROLLBACK here: after the matrix is green, practice the
+Phase-6 moves once (see Phase 6 — on the rehearsal stack that means flipping
+the local `DATABASE_URL` back to `postgres` and confirming recovery), so the
+production rollback is a rehearsed motion, not a first-time improvisation.
+
+Green across the runner + the drill **as `redip_app`** is the gate to Phase 5.
+Delete the branch afterward.
 
 ---
 
@@ -237,8 +326,9 @@ Only after Phase 2 code is deployed and Phase 4 is green.
 1. Open: `https://vercel.com/` → your REDIP project → **Settings** →
    **Environment Variables**.
 2. Find the row named **`DATABASE_URL`**. Click **⋯ → Edit**.
-3. **Before changing it, copy the current value into a safe note** — that is your
-   instant rollback.
+3. **Before changing it, copy the current value into a safe note** — you'll
+   need it for the post-rollback cleanup (the fast undo itself is Vercel's
+   Instant Rollback, Phase 6).
 4. Replace the username part so it connects as `redip_app`. The value looks like:
    `postgresql://redip_app.niamgjbxxgmmffggumvj:THE_PASSWORD@aws-0-ap-south-1.pooler.supabase.com:6543/postgres?sslmode=require`
    (same host/port/database as before — only the username `redip_app…` and the
@@ -259,19 +349,34 @@ Only after Phase 2 code is deployed and Phase 4 is green.
 
 ---
 
-## Phase 6 — Rollback (instant, if anything looks wrong)
+## Phase 6 — Rollback (if anything looks wrong)
 
-The flip is **one setting**, so rollback is one setting:
+> **Corrected 2026-07-23:** an environment-variable edit only takes effect on
+> a NEW deployment — with this project's build that is **minutes**, not
+> seconds. Vercel's **Instant Rollback** switches traffic back to the previous
+> production deployment at the routing layer in **seconds**, and that
+> deployment was built with the old `DATABASE_URL` (and without
+> `RLS_ENFORCED`), so it reconnects as `postgres` immediately — both settings
+> revert together, exactly as they were coupled on the way in.
 
-1. Open the same Vercel `DATABASE_URL` row → **⋯ → Edit**.
-2. Paste back the **old value you saved in Phase 5 step 3** (the `postgres…`
-   one).
-3. Click **Save** and redeploy.
-4. The System Health line returns to `bypasses_rls: true`. Login/data are
-   restored immediately.
+**First move — Instant Rollback (seconds):**
 
-Phase 1's policies and Phase 2's SECURITY DEFINER functions are additive and can
-stay in place across a rollback — they are harmless under the `postgres` role.
+1. Open `https://vercel.com/` → your REDIP project → **Deployments**.
+2. Find the deployment **just below the current one** in the list (the one
+   that was live before the flip).
+3. Click the **⋯** menu on its row → **Instant Rollback** → confirm.
+4. Within seconds the site serves the pre-flip deployment. Verify: the System
+   Health line reads `bypasses_rls: true` again, and login works.
+
+**Second move — clean up the settings (so the next deploy doesn't re-flip):**
+
+5. Settings → Environment Variables → `DATABASE_URL` → **⋯ → Edit** → paste
+   back the old value you saved in Phase 5 → Save.
+6. Delete the `RLS_ENFORCED` row (⋯ → Remove).
+7. Any future deploy now builds with the restored settings.
+
+Phase 1's policies and the SECURITY DEFINER functions (20260801/20260802) are
+additive and stay in place across a rollback — harmless under `postgres`.
 
 ---
 
@@ -289,8 +394,18 @@ stay in place across a rollback — they are harmless under the `postgres` role.
       row (live login lookup works); dashboard + authenticated flow healthy.
       The definer path is now the ACTIVE auth path (still under the bypass role,
       so behavior-neutral) — the flip is now purely Phases 3–5.
-- [ ] Phase 3 `redip_app` role created
-- [ ] Phase 4 branch rehearsal green across the full auth matrix (+ kill-switch drill)
+- [x] Phase 3/4 enablement shipped (2026-07-23): amended least-privilege grant
+      block; migration `20260802_rls_flip_hardening.sql` (definer
+      `search_path` gains `pg_temp`; the four `regulatory_data` policy gaps
+      found by live introspection closed — `bbmp_street_index` read +
+      `master_plan_zones`/`planning_districts` writes + `zone_versions`
+      append-only); rehearsal kit `scripts/rehearsal/` (seed + probe runner +
+      drill); Phase 6 rewritten around Vercel Instant Rollback
+- [ ] Migration `20260802_rls_flip_hardening.sql` applied to production by
+      operator (safe any time — behavior-neutral under the bypass role)
+- [ ] Phase 3 `redip_app` role created (run the AMENDED block above)
+- [ ] Phase 4 branch rehearsal green — probe runner + kill-switch drill
+      (`scripts/rehearsal/README.md`), Google paths manual
 - [ ] Phase 5 flip — `DATABASE_URL` → `redip_app` **and** `RLS_ENFORCED=true`
       in the same deploy — System Health canary shows `bypasses_rls: false`
 - [ ] Phase 6 cleanup — delete the direct-query fallback branches once the flip
