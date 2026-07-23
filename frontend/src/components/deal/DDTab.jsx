@@ -13,6 +13,7 @@ import IcReadinessPanel from './IcReadinessPanel';
 // engineer / structural engineer / banker). A signed sign-off marks its
 // matching K-RERA cockpit item verified.
 import SignoffsSection from './SignoffsSection';
+import DueDateChip from './DueDateChip';
 // PR-NX72 (2026-05-19) — Phase A1.1: DDTab read path migrated to the shared
 // workspace cache via useDealDDItems + useDealDDScore selectors. Mutations
 // stay on the per-domain hooks but already invalidate `['deal-workspace', dealId]`
@@ -176,6 +177,15 @@ function DDSection({ dealId, canEdit }) {
 
   const handleStatusChange = (item, status) => {
     updateStatus.mutate({ dealId, id: item.id, status });
+  };
+
+  // due_date drives the dashboard's "Overdue diligence" list, the Deals-list
+  // overdue chip and the Risk Radar's overdue term. Until this control existed
+  // the column was NULL on every organically-created item, so all three were
+  // structurally dead. The mutation invalidates deal posture, which refreshes
+  // those rollups.
+  const handleDueDateChange = (item, dueDate) => {
+    updateItem.mutate({ dealId, id: item.id, data: { due_date: dueDate } });
   };
 
   const handleDelete = async (itemId) => {
@@ -400,6 +410,12 @@ function DDSection({ dealId, canEdit }) {
                                     <option key={v} value={v}>{cfg.label}</option>
                                   ))}
                                 </select>
+                                <DueDateChip
+                                  value={item.due_date}
+                                  onChange={(next) => handleDueDateChange(item, next)}
+                                  disabled={!canEdit}
+                                  itemName={item.item_name}
+                                />
                                 {item.notes && (
                                   <span className="text-xs text-content-muted italic">{item.notes}</span>
                                 )}
