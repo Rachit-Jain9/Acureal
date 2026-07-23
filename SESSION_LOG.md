@@ -10593,3 +10593,17 @@ Two exported normalizers re-key each kernel result into the shared `segments` sh
 - **Phase 5** (operator): flip DATABASE_URL → redip_app AND set RLS_ENFORCED=true in the same deploy; verify via the System Health canary (`bypasses_rls: false`).
 - **Phase 6**: delete the direct-query fallback branches once stable (two-live-paths risk).
 - Separate: the DB round-trip perf follow-up (task #19) remains queued.
+
+---
+
+## 2026-07-23 — Evidence-links "Show dependents" was plan-time broken: dd.title → dd.item_name (#1018)
+
+**Context:** The dd.title bug was finding #1 of the 2026-07-23 ChatGPT-critique verification (confirmed against code + live prod information_schema) and the agreed Phase-0-style correctness gate before resuming M1 Phase 3: no known schema/code mismatch before the role flip.
+
+**The bug:** `evidenceLinks.service.js` line 510 labelled `dd_item` owners with `dd.title`, but dd_items has `item_name` (schema.sql:508). Postgres validates column references at plan time, so every `listDependents` call for sourceKind document / evidence_source / evidence_fact threw `column dd.title does not exist` — the `/evidence-links/dependents` endpoint never worked; the Documents-tab DependentsPopover always showed "Could not load dependents. Try again." Only `comp` escaped via its early return.
+
+**Shipped (#1018, one-line fix + test pin):** `dd.title` → `dd.item_name`. Neighbouring CASE branches verified against schema and untouched (ap.name, rf.title, cmp.project_name, fs.label; deleted_at present on all joined tables via 20260719). The unit test — which mocks the DB and had only string-matched the WHERE clause, which is exactly how this shipped — now pins the label columns in the generated SQL (`THEN dd.item_name` present, `dd.title` absent, plus ap.name / rf.title). 13/13 evidenceLinks tests green.
+
+### What's left to do next
+- Correctness gate cleared → M1 Phase 3 (operator creates `redip_app` with the AMENDED grant block per the 2026-07-23 critique memory), then seeded Phase 4 rehearsal, then the flip with the Instant-Rollback runbook.
+- Small adopted follow-ups from the critique still queued: pg_temp in the six 20260801 definers, mfa_challenges plaintext→hash, getPlatformOrgId loud-degraded fix.
