@@ -270,7 +270,9 @@ describe('mfa.verifyChallenge routes through auth_find_mfa_challenge', () => {
     const result = await mfaService.verifyChallenge({ challenge: 'ch-raw', code: '123456' });
 
     expect(query.mock.calls[0][0]).toContain('public.auth_find_mfa_challenge($1)');
-    expect(query.mock.calls[0][1]).toEqual(['ch-raw']);
+    // Challenges are stored hashed at rest — the lookup param is sha256(raw).
+    const challengeHash = require('crypto').createHash('sha256').update('ch-raw').digest('hex');
+    expect(query.mock.calls[0][1]).toEqual([challengeHash]);
     expect(result).toEqual({ userId: 'uid-7', usedRecoveryCode: false });
     jest.restoreAllMocks();
   });

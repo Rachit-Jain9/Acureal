@@ -109,6 +109,17 @@ const validateEnv = ({ exitOnFailure = true } = {}) => {
     }
   }
 
+  // PLATFORM_ORG_ID is optional (the email lookup is a real fallback), but a
+  // present-and-malformed pin silently degrades platform comps/benchmarks to
+  // the legacy path — surface it at boot like the AI-key format checks.
+  const platformOrgPin = process.env.PLATFORM_ORG_ID;
+  if (platformOrgPin && !isPlaceholder(platformOrgPin)) {
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_RE.test(platformOrgPin.trim())) {
+      warnings.push('PLATFORM_ORG_ID is set but is not a UUID — the platform-org pin is ignored and the email lookup is used instead.');
+    }
+  }
+
   for (const warning of warnings) {
     console.warn(`[REDIP env] WARNING: ${warning}`);
   }

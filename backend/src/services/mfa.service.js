@@ -135,13 +135,15 @@ const isMfaRequired = async (userId) => {
 };
 
 const issueChallenge = async (userId) => {
-  // 32 bytes of entropy → 64 hex chars; opaque to the SPA.
+  // 32 bytes of entropy → 64 hex chars; opaque to the SPA. Stored hashed at
+  // rest (same pattern as refresh/email-verification tokens) so a DB read
+  // can't be replayed into a session; the raw value goes to the SPA once.
   const challenge = crypto.randomBytes(32).toString('hex');
   const expiresAt = new Date(Date.now() + CHALLENGE_TTL_MINUTES * 60 * 1000);
   await query(
     `INSERT INTO mfa_challenges (user_id, challenge, expires_at)
      VALUES ($1, $2, $3)`,
-    [userId, challenge, expiresAt],
+    [userId, sha256(challenge), expiresAt],
   );
   return { challenge, expiresAt: expiresAt.toISOString() };
 };
@@ -171,15 +173,18 @@ const verifyChallenge = async ({ challenge, code }) => {
   // M1 Phase 2: the caller holds only a challenge string — no user identity
   // yet, so the JOIN to users (for mfa_secret) is exactly what RLS blocks
   // under a non-bypass role. Definer-routed when available; the fallback is
-  // the byte-identical original query.
+  // the byte-identical original query. The column stores sha256(challenge),
+  // so both branches look up by hash — the definer's plain text-equality
+  // WHERE needs no change.
+  const challengeHash = sha256(challenge);
   const ticketResult = (await requireDefinerPath())
-    ? await query('SELECT * FROM public.auth_find_mfa_challenge($1)', [challenge])
+    ? await query('SELECT * FROM public.auth_find_mfa_challenge($1)', [challengeHash])
     : await query(
         `SELECT mc.id, mc.user_id, mc.expires_at, mc.consumed_at, u.mfa_secret
            FROM mfa_challenges mc
            JOIN users u ON u.id = mc.user_id
           WHERE mc.challenge = $1`,
-        [challenge],
+        [challengeHash],
       );
   const ticket = ticketResult.rows[0];
   if (!ticket) {

@@ -104,6 +104,16 @@ describe('mfa.issueChallenge', () => {
     expect(new Date(out.expiresAt).getTime()).toBeGreaterThan(Date.now());
     expect(new Date(out.expiresAt).getTime() - Date.now()).toBeLessThanOrEqual(5 * 60 * 1000 + 1000);
   });
+
+  test('stores sha256(challenge) at rest — never the raw value', async () => {
+    query.mockResolvedValueOnce({ rowCount: 1 });
+    const out = await mfa.issueChallenge('u-1');
+    const stored = query.mock.calls[0][1][1];
+    const expected = require('crypto').createHash('sha256').update(out.challenge).digest('hex');
+    expect(stored).toMatch(/^[a-f0-9]{64}$/);
+    expect(stored).not.toBe(out.challenge);
+    expect(stored).toBe(expected);
+  });
 });
 
 describe('mfa.verifyChallenge', () => {
