@@ -30,6 +30,7 @@ const { geocodeAddress } = require('../utils/geocode');
 const { fetchKgisContext } = require('./adapters/kgis.adapter');
 const masterplanService = require('./masterplan.service');
 const { buildVerificationLinks } = require('../utils/parcelVerificationLinks');
+const log = require('../lib/logger').child({ module: 'parcel.context' });
 
 // BBMP (Bruhat Bengaluru Mahanagara Palike) city-corporation bbox.
 // Tightened 2026-05-18 from the prior BMA-wide rectangle (12.70-13.30,
@@ -414,6 +415,136 @@ const fetchApplicableCallouts = async () => {
   }
 };
 
+// ─── K-GIS coordinate cache ────────────────────────────────────────────────
+// fetchKgisContext makes up to THREE sequential external calls to
+// kgis.ksrsac.in (hierarchy → survey numbers → geometry), each with a 10s
+// timeout — the dominant cost of a warm auto-derive once geocoding is cached.
+// The property-keyed cache in parcelIntelligence.service can't help here:
+// this path has coordinates only, no property id. Same table, same 30-day
+// TTL, keyed on rounded coordinates (5dp ≈ 1.1 m — finer than K-GIS's own
+// 100 m hierarchy search radius, so a key collision cannot cross parcels).
+//
+// Every cache operation is best-effort: a cache miss, a malformed row, or a
+// dead cache table must never degrade the response below "call K-GIS live".
+const KGIS_COORD_CACHE_TTL = "30 days";
+
+const buildKgisCoordCacheKey = ({ lat, lng }) => {
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  return `coords:${lat.toFixed(5)}:${lng.toFixed(5)}`;
+};
+
+const readKgisCoordCache = async (cacheKey) => {
+  if (!cacheKey) return null;
+  try {
+    const result = await query(
+      `SELECT response_payload
+         FROM regulatory_data.kgis_cache
+        WHERE cache_key = $1
+          AND org_id = current_organization_id()
+          AND (expires_at IS NULL OR expires_at > NOW())
+        ORDER BY updated_at DESC
+        LIMIT 1`,
+      [cacheKey],
+    );
+    const payload = result.rows[0]?.response_payload;
+    // Only a well-formed K-GIS envelope is a usable hit; anything else falls
+    // through to a live call rather than serving a half-shaped object.
+    return payload && typeof payload === 'object' && payload.provider === 'kgis' ? payload : null;
+  } catch (err) {
+    log.warn('kgis_coord_cache_read_failed', { error: err.message });
+    return null;
+  }
+};
+
+const writeKgisCoordCache = async (cacheKey, coords, kgisResult) => {
+  if (!cacheKey || !kgisResult) return;
+  // Never cache a failed lookup — a transient K-GIS outage would otherwise
+  // pin an error response for 30 days.
+  if (kgisResult.status === 'error' || kgisResult.status === 'not_available') return;
+  try {
+    const requestPayload = JSON.stringify({ lat: coords.lat, lng: coords.lng, source: 'auto_derive' });
+    const responsePayload = JSON.stringify(kgisResult);
+    const updated = await query(
+      `UPDATE regulatory_data.kgis_cache
+          SET provider_status = $2,
+              request_payload = $3::jsonb,
+              response_payload = $4::jsonb,
+              hierarchy = $5::jsonb,
+              survey_numbers = $6::jsonb,
+              geometry_geojson = $7::jsonb,
+              confidence_score = $8,
+              expires_at = NOW() + INTERVAL '${KGIS_COORD_CACHE_TTL}',
+              updated_at = NOW()
+        WHERE cache_key = $1
+          AND org_id = current_organization_id()
+        RETURNING id`,
+      [
+        cacheKey,
+        kgisResult.status || 'unknown',
+        requestPayload,
+        responsePayload,
+        JSON.stringify(kgisResult.hierarchy || {}),
+        JSON.stringify(kgisResult.survey_numbers || []),
+        kgisResult.geometry_geojson ? JSON.stringify(kgisResult.geometry_geojson) : null,
+        kgisResult.confidence || 0,
+      ],
+    );
+    if (updated.rows[0]) return;
+
+    await query(
+      `INSERT INTO regulatory_data.kgis_cache (
+         org_id, property_id, cache_key, provider_status, request_payload,
+         response_payload, hierarchy, survey_numbers, geometry_geojson,
+         confidence_score, expires_at
+       )
+       VALUES (
+         current_organization_id(), NULL, $1, $2, $3::jsonb,
+         $4::jsonb, $5::jsonb, $6::jsonb, $7::jsonb,
+         $8, NOW() + INTERVAL '${KGIS_COORD_CACHE_TTL}'
+       )
+       ON CONFLICT (COALESCE(org_id, '00000000-0000-0000-0000-000000000000'::uuid), cache_key)
+       DO NOTHING`,
+      [
+        cacheKey,
+        kgisResult.status || 'unknown',
+        requestPayload,
+        responsePayload,
+        JSON.stringify(kgisResult.hierarchy || {}),
+        JSON.stringify(kgisResult.survey_numbers || []),
+        kgisResult.geometry_geojson ? JSON.stringify(kgisResult.geometry_geojson) : null,
+        kgisResult.confidence || 0,
+      ],
+    );
+  } catch (err) {
+    log.warn('kgis_coord_cache_write_failed', { error: err.message });
+  }
+};
+
+// Cache-aside wrapper around the K-GIS adapter. Preserves the caller's
+// existing contract exactly: it still resolves to a K-GIS envelope and never
+// rejects (the error envelope is built here, as before).
+const fetchKgisContextCached = async (coords) => {
+  const cacheKey = buildKgisCoordCacheKey(coords);
+  const cached = await readKgisCoordCache(cacheKey);
+  if (cached) return { ...cached, cache_hit: true };
+
+  try {
+    const fresh = await fetchKgisContext({ lat: coords.lat, lng: coords.lng });
+    await writeKgisCoordCache(cacheKey, coords, fresh);
+    return fresh;
+  } catch (err) {
+    return {
+      provider: 'kgis',
+      status: 'error',
+      confidence: 0,
+      message: `K-GIS error: ${err.message}`,
+      hierarchy: null,
+      survey_numbers: [],
+      geometry_geojson: null,
+    };
+  }
+};
+
 // Main entry point. All steps are wrapped in best-effort try/catch so a
 // single upstream failure (e.g. K-GIS timeout) doesn't drop the whole
 // response — the caller still gets a useful payload with the gap clearly
@@ -484,15 +615,7 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
   // BBMP search just returns nothing for those addresses anyway).
   const [kgisResult, streetIndexResult, pdMatched, callouts] = await Promise.all([
     hasCoords
-      ? fetchKgisContext({ lat: coords.lat, lng: coords.lng }).catch((err) => ({
-          provider: 'kgis',
-          status: 'error',
-          confidence: 0,
-          message: `K-GIS error: ${err.message}`,
-          hierarchy: null,
-          survey_numbers: [],
-          geometry_geojson: null,
-        }))
+      ? fetchKgisContextCached({ lat: coords.lat, lng: coords.lng })
       : Promise.resolve(null),
     provisionallyInsideBbmp && tokens.length
       ? masterplanService
