@@ -75,6 +75,14 @@ describe('listDependents — document source', () => {
     expect(sql).toMatch(/organization_id = current_organization_id\(\)/);
     expect(params).toEqual(['doc-uuid-99']);
 
+    // Schema pin: dd_items labels its rows with `item_name`, not `title`.
+    // A dd.title reference is a plan-time failure that breaks the whole
+    // endpoint in prod while every mocked test stays green.
+    expect(sql).toMatch(/THEN dd\.item_name/);
+    expect(sql).not.toMatch(/dd\.title/);
+    expect(sql).toMatch(/THEN ap\.name/);
+    expect(sql).toMatch(/THEN rf\.title/);
+
     expect(out.supported).toBe(true);
     expect(out.note).toBeNull();
     expect(out.owners).toHaveLength(3);

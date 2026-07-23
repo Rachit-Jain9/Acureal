@@ -507,7 +507,7 @@ const listDependents = async (sourceKind, sourceId) => {
        el.created_at                            AS link_created_at,
        -- Owner-specific labels + parent deal id
        CASE
-         WHEN el.owner_kind = 'dd_item'           THEN dd.title
+         WHEN el.owner_kind = 'dd_item'           THEN dd.item_name
          WHEN el.owner_kind = 'approval'          THEN ap.name
          WHEN el.owner_kind = 'risk_flag'         THEN rf.title
          WHEN el.owner_kind = 'comp'              THEN cmp.project_name
