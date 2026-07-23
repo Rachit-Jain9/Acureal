@@ -204,6 +204,89 @@ describe('parcelContext.service — failure modes', () => {
   });
 });
 
+describe('parcelContext.service — K-GIS coordinate cache', () => {
+  // The K-GIS adapter makes up to three sequential 10s-timeout external
+  // calls; these pin the cache-aside behaviour that keeps a repeat lookup
+  // off that path without ever degrading correctness.
+  const cachedEnvelope = { ...stubKgis, message: 'served from cache' };
+
+  const routeWithCacheHit = () => {
+    query.mockImplementation((sql) => {
+      if (/FROM regulatory_data\.kgis_cache/i.test(sql)) {
+        return Promise.resolve({ rows: [{ response_payload: cachedEnvelope }] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+  };
+
+  test('a cache hit serves the stored envelope and never calls K-GIS', async () => {
+    routeWithCacheHit();
+    masterplanService.searchBbmpStreets.mockResolvedValue({ rows: [], summary: {} });
+
+    const ctx = await deriveParcelContextFromAddress({ lat: 12.972, lng: 77.598 });
+
+    expect(fetchKgisContext).not.toHaveBeenCalled();
+    expect(ctx.kgis.hierarchy.village).toBe('Begur');
+    expect(ctx.kgis.cache_hit).toBe(true);
+  });
+
+  test('a miss calls K-GIS once and writes the result back', async () => {
+    fetchKgisContext.mockResolvedValueOnce(stubKgis);
+    masterplanService.searchBbmpStreets.mockResolvedValue({ rows: [], summary: {} });
+
+    await deriveParcelContextFromAddress({ lat: 12.972, lng: 77.598 });
+
+    expect(fetchKgisContext).toHaveBeenCalledTimes(1);
+    const writes = query.mock.calls.filter(([sql]) => /INTO regulatory_data\.kgis_cache|UPDATE regulatory_data\.kgis_cache/i.test(sql));
+    expect(writes.length).toBeGreaterThan(0);
+    // Rounded-coordinate key — finer than K-GIS's own 100m search radius.
+    expect(writes[0][1][0]).toBe('coords:12.97200:77.59800');
+  });
+
+  test('a failed lookup is NOT cached — an outage must not pin for 30 days', async () => {
+    fetchKgisContext.mockRejectedValueOnce(new Error('K-GIS timeout'));
+    masterplanService.searchBbmpStreets.mockResolvedValue({ rows: [], summary: {} });
+
+    const ctx = await deriveParcelContextFromAddress({ lat: 12.972, lng: 77.598 });
+
+    expect(ctx.kgis.status).toBe('error');
+    const writes = query.mock.calls.filter(([sql]) => /INTO regulatory_data\.kgis_cache|UPDATE regulatory_data\.kgis_cache/i.test(sql));
+    expect(writes).toHaveLength(0);
+  });
+
+  test('a malformed cached row falls through to a live call', async () => {
+    query.mockImplementation((sql) => {
+      if (/FROM regulatory_data\.kgis_cache/i.test(sql)) {
+        return Promise.resolve({ rows: [{ response_payload: { not: 'a kgis envelope' } }] });
+      }
+      return Promise.resolve({ rows: [] });
+    });
+    fetchKgisContext.mockResolvedValueOnce(stubKgis);
+    masterplanService.searchBbmpStreets.mockResolvedValue({ rows: [], summary: {} });
+
+    const ctx = await deriveParcelContextFromAddress({ lat: 12.972, lng: 77.598 });
+
+    expect(fetchKgisContext).toHaveBeenCalledTimes(1);
+    expect(ctx.kgis.hierarchy.village).toBe('Begur');
+  });
+
+  test('a dead cache table degrades to a live call, never to an error', async () => {
+    query.mockImplementation((sql) => {
+      if (/regulatory_data\.kgis_cache/i.test(sql)) {
+        return Promise.reject(new Error('relation does not exist'));
+      }
+      return Promise.resolve({ rows: [] });
+    });
+    fetchKgisContext.mockResolvedValueOnce(stubKgis);
+    masterplanService.searchBbmpStreets.mockResolvedValue({ rows: [], summary: {} });
+
+    const ctx = await deriveParcelContextFromAddress({ lat: 12.972, lng: 77.598 });
+
+    expect(ctx.kgis.hierarchy.village).toBe('Begur');
+    expect(ctx.kgis.status).toBe('matched');
+  });
+});
+
 describe('parcelContext.service — master plan zone honesty rule', () => {
   test('does NOT auto-derive master_plan_zone (geom not populated)', async () => {
     geocodeAddress.mockResolvedValueOnce({
