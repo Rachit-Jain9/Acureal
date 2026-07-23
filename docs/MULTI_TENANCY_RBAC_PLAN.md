@@ -40,7 +40,7 @@ owner (4)  >  admin (3)  >  editor (2)  >  viewer (1)        ENUM organization_r
 
 Two independent gates, both defaulting to `rachitj579@gmail.com`:
 - **Backend** `backend/src/utils/platformOrg.js` — `PLATFORM_ADMIN_EMAILS` env → resolves the *platform org* whose verified comps are shared to every workspace (read-only).
-- **Frontend** `frontend/src/utils/permissions.js` — `VITE_PLATFORM_ADMIN_EMAILS` env → `isPlatformAdmin(user)` shows/hides the entire **Admin** nav group and the `RequirePlatformAdmin` route guard.
+- **Frontend** `frontend/src/utils/permissions.js` — `isPlatformAdmin(user)` reads the server-computed `is_platform_admin` fact from `/auth/me` (persisted `users.is_platform_admin` flag OR backend break-glass allowlist; shipped 2026-07-23). The browser holds no operator list. Shows/hides the **Admin** nav group and the `RequirePlatformAdmin` route guard.
 
 The Admin nav group (operator-only, from `frontend/src/components/layout/Sidebar.jsx`): **Master Plan · Parcel Intelligence · Comps Review Queue · AI Usage & Cost · A/B Evaluations · Learning Signals · Audit Trail**. Everyone else sees only the five primary items + Settings.
 
@@ -281,4 +281,4 @@ Add `organizations.plan text` (`free|pro|enterprise`) and `seats int`. Gate feat
 **Backend:** `services/auth.service.js` (register decision tree), `services/organization.service.js` (domain join, role change, approvals), new `services/organizationDomain.service.js`, `routes/organization.routes.js` (+members/role, +domains, +join-requests, +audit/usage), `constants/roles.js` (unchanged), `middleware/auth.js` (unchanged).
 **DB (new migrations):** `organization_domains`, `public_email_providers`, `organizations.plan/seats` (Phase 4), market read-all split (Phase 0), ledger backfill.
 **Frontend:** new `pages/TeamPage.jsx`, workspace switcher in `components/layout/Sidebar.jsx`, role-aware states in `components/deal/*Tab.jsx`, `services/api.js` (org endpoints), `store/authStore.js` (active-org switch), `utils/permissions.js`/`utils/roles.js` (unchanged core).
-**Ops:** Vercel env `PLATFORM_ADMIN_EMAILS` / `VITE_PLATFORM_ADMIN_EMAILS` (operator allowlist), CI `check-permissive-rls.js` blocking, Supabase CLI as the single migration runner.
+**Ops:** Vercel env `PLATFORM_ADMIN_EMAILS` (backend break-glass allowlist only — `VITE_PLATFORM_ADMIN_EMAILS` is retired and should be deleted from Vercel; the operator fact is the persisted `users.is_platform_admin` flag), CI `check-permissive-rls.js` blocking, Supabase CLI as the single migration runner.

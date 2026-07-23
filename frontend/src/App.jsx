@@ -129,6 +129,15 @@ function LegacyPropertyDetailRedirect() {
 
 export default function App() {
   useDisableNumberInputScroll();
+  // One-time boot refresh of the cached profile: sessions persist the user in
+  // local/session storage, so server-added fields (e.g. is_platform_admin)
+  // would otherwise stay absent until the next re-login. Cheap (one GET
+  // /auth/me), and also re-syncs role / MFA state after a long-lived tab.
+  useEffect(() => {
+    if (useAuthStore.getState().isAuthenticated) {
+      useAuthStore.getState().refreshUser();
+    }
+  }, []);
   return (
     <BrowserRouter>
       <Analytics />
