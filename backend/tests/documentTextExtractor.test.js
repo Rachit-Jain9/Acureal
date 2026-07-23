@@ -34,6 +34,39 @@ describe('parseDocumentToText — spreadsheets', () => {
     expect(text).toMatch(/G-01\tAnchor Retail Pvt Ltd\t12000\t110/);
   });
 
+  // REGRESSION — production incident 2026-07-22. A real cash-flow workbook
+  // failed extraction 8 times out of 8 with the raw JS string "Invalid time
+  // value". Root cause: ExcelJS yields `new Date(NaN)` for a malformed or
+  // out-of-range serial date; `instanceof Date` passes, so cellToText called
+  // toISOString() and threw RangeError — aborting the ENTIRE workbook parse
+  // before classification ever ran (which is why all 8 rows had doc_type NULL).
+  // One unreadable cell must never cost the whole document.
+  test('an invalid Date cell degrades to empty and does NOT abort the parse', async () => {
+    const { cellToText } = require('../src/services/ai/documentTextExtractor').__internal;
+
+    // The exact value ExcelJS hands back for a malformed serial date.
+    expect(() => cellToText(new Date(NaN))).not.toThrow();
+    expect(cellToText(new Date(NaN))).toBe('');
+
+    // Valid dates still transcribe as ISO calendar dates.
+    expect(cellToText(new Date('2026-03-09T00:00:00Z'))).toBe('2026-03-09');
+  });
+
+  test('a workbook containing an invalid date still transcribes its other cells', async () => {
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Cash Flows');
+    ws.addRow(['Period', 'Date', 'Inflow']);
+    const row = ws.addRow(['Q1', null, 4200000]);
+    // Plant the poison cell the way ExcelJS surfaces it from a corrupt serial.
+    row.getCell(2).value = new Date(NaN);
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+
+    const { text } = await parseDocumentToText(buffer, 'Cash Flows Statement.xlsx');
+    expect(text).toMatch(/### Sheet: Cash Flows/);
+    expect(text).toMatch(/Period/);
+    expect(text).toMatch(/4200000/);
+  });
+
   test('reads Kannada cell content verbatim', async () => {
     const buffer = await buildWorkbook([['ಮಾಲೀಕರ ಹೆಸರು', 'ಸರ್ವೆ ಸಂಖ್ಯೆ'], ['ರಮೇಶ್ ಕುಮಾರ್', '೧೨೩/೪']]);
     const { text } = await parseDocumentToText(buffer, 'rtc.xlsx');

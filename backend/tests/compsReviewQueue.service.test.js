@@ -769,3 +769,46 @@ describe('streamRawDoc', () => {
     expect(res.setHeader).not.toHaveBeenCalled();
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Drain reclaim — orphaned 'extracting' rows
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('drain reclaims rows orphaned mid-extraction', () => {
+  // processQueueRow flips a row to 'extracting' before calling the extractor.
+  // If the serverless instance dies in that window the row was previously
+  // stranded forever: the drain selected only 'pending_extraction', and no
+  // reaper existed for this table. A stale-'extracting' row must be re-picked.
+  test('processPendingBatch also selects stale extracting rows', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await queue.processPendingBatch({ limit: 5 });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toMatch(/status = 'pending_extraction'/);
+    expect(sql).toMatch(/status = 'extracting'/);
+    expect(sql).toMatch(/updated_at < NOW\(\)/);
+    // Staleness window rides as a bound parameter, never interpolated.
+    expect(params).toContain('15');
+  });
+
+  test('the org picker also sees orgs whose only rows are stale extracting', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await queue.processPendingBatchAcrossOrgs({ limitPerOrg: 5 });
+
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toMatch(/status = 'pending_extraction'/);
+    expect(sql).toMatch(/status = 'extracting'/);
+    expect(params).toContain('15');
+  });
+
+  test('a FRESH extracting row is not reclaimed (no racing a live run)', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await queue.processPendingBatch({ limit: 5 });
+
+    const [sql] = query.mock.calls[0];
+    // The reclaim must be time-bounded, never a bare status match that would
+    // pick up a row an active invocation is still working on.
+    expect(sql).not.toMatch(/OR\s+status = 'extracting'\s*\)/);
+    expect(sql).toMatch(/status = 'extracting' AND updated_at </);
+  });
+});

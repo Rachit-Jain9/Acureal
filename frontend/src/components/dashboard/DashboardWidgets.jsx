@@ -55,8 +55,13 @@ export function KpiStripWidget({ stats = {} }) {
   // benchmark tag/tone so a missing value shows a neutral "—" instead.
   const avgIrr          = stats.avg_irr_pct;
   const avgIrrFinite    = Number.isFinite(avgIrr);
-  const icReadyDeals    = stats.ic_ready_count        || 0;
-  const dealsWithRisk   = stats.deals_with_open_risks || 0;
+  // Both of these read fields the API now actually sends. They previously read
+  // `ic_ready_count` / `deals_with_open_risks`, neither of which the backend
+  // ever produced — so this tile showed 0 and the risk delta never rendered.
+  // `at_ic_or_beyond_count` is stage-based by design; the tile says so rather
+  // than claiming a vetting judgement the number does not carry.
+  const atIcOrBeyond    = stats.at_ic_or_beyond_count  || 0;
+  const dealsWithRisk   = stats.deals_with_open_risks  || 0;
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
       <MetricTile
@@ -86,12 +91,12 @@ export function KpiStripWidget({ stats = {} }) {
       />
       <MetricTile
         interactive
-        label="Investor-Grade"
-        value={icReadyDeals}
+        label="At IC or beyond"
+        value={atIcOrBeyond}
         format={formatIntWithDash}
-        footnote="IC-ready · fully vetted"
-        delta={icReadyDeals > 0 ? 'Ready to deploy' : null}
-        tone={icReadyDeals > 0 ? 'up' : 'neutral'}
+        footnote="IC review, negotiation or active"
+        delta={null}
+        tone="neutral"
       />
     </div>
   );

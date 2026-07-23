@@ -91,18 +91,45 @@ describe('parseable formats transcribe to text, then extract from the text', () 
     }
   });
 
-  test('a corrupt parseable file surfaces as a failed extraction (parse error propagates)', async () => {
+  // CONTRACT CHANGE (2026-07-23, production incident). A parser fault used to
+  // land as a 'failed' row carrying the raw JS message — an operator saw the
+  // literal string "Invalid time value" and had nothing to act on. A file REDIP
+  // cannot transcribe is a REFUSAL, not a fault, so it now takes the same path
+  // as unsupported-format and unreadable-PDF: an honest 422 with a coverage
+  // receipt, and the row removed so a retry starts clean.
+  test('a corrupt parseable file is an honest 422 refusal, not a raw-message failure', async () => {
     parseDocumentToText.mockRejectedValue(new Error('KMZ archive contains no .kml document.'));
 
-    // extractDocument catches the failure and records it (does not throw).
-    const result = await extractionService.extractDocument(
-      'doc-1', 'https://f', 'parcel.kmz', null, 'deal-1', 'user-1',
-    );
-    // The row was created (kmz is parseable) then marked failed with the message.
+    await expect(
+      extractionService.extractDocument('doc-1', 'https://f', 'parcel.kmz', null, 'deal-1', 'user-1'),
+    ).rejects.toMatchObject({
+      statusCode: 422,
+      code: 'EXTRACTION_UNREADABLE_SOURCE',
+      coverageReason: 'unreadable_source',
+    });
+
+    // The row was created (kmz is parseable) and then CLEANED UP, not left
+    // sitting at 'failed' — same as every other refusal path.
     const insertCalls = query.mock.calls.filter(([sql]) => /INSERT INTO document_extractions/i.test(sql));
     expect(insertCalls).toHaveLength(1);
-    const failUpdate = query.mock.calls.find(([sql]) => /extraction_status\s*=\s*'failed'/i.test(sql));
-    expect(failUpdate).toBeDefined();
+    const deleteCall = query.mock.calls.find(([sql]) => /DELETE FROM document_extractions/i.test(sql));
+    expect(deleteCall).toBeDefined();
+    expect(query.mock.calls.find(([sql]) => /extraction_status\s*=\s*'failed'/i.test(sql))).toBeUndefined();
+  });
+
+  test('the refusal message is human-actionable and never leaks the raw parser error', async () => {
+    parseDocumentToText.mockRejectedValue(new Error('Invalid time value'));
+
+    await expect(
+      extractionService.extractDocument('doc-1', 'https://f', 'cash-flows.xlsx', null, 'deal-1', 'user-1'),
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/could not read the contents of this file/i),
+    });
+
+    // The production symptom: "Invalid time value" reaching the operator.
+    await expect(
+      extractionService.extractDocument('doc-1', 'https://f', 'cash-flows.xlsx', null, 'deal-1', 'user-1'),
+    ).rejects.not.toMatchObject({ message: 'Invalid time value' });
   });
 });
 

@@ -55,7 +55,31 @@ const getDashboardStats = async (userId) => {
         COALESCE(bool_or(${buildVisibleDealCondition('d')} AND EXISTS (
           SELECT 1 FROM documents doc WHERE doc.deal_id = d.id AND doc.deleted_at IS NULL
         )), FALSE) as has_document,
-        COALESCE(bool_or(${buildVisibleDealCondition('d')} AND f.irr_pct IS NOT NULL), FALSE) as has_model
+        COALESCE(bool_or(${buildVisibleDealCondition('d')} AND f.irr_pct IS NOT NULL), FALSE) as has_model,
+        -- KPI-strip inputs the frontend has always read but the API never sent,
+        -- so the "At IC or beyond" tile rendered 0 and the open-risk delta never
+        -- appeared, on every dashboard, for every org. Folded into this same
+        -- single-row aggregate — two FILTER clauses, no extra round trip.
+        --
+        -- at_ic_or_beyond is deliberately STAGE-based and labelled as such. The
+        -- rigorous "IC-ready" judgement is icReadiness.service's 7-pillar score
+        -- (completeness_pct >= 75), which needs a full workspace payload per
+        -- deal and cannot be computed across the portfolio in a dashboard
+        -- round trip. Publishing a cheaper proxy under the same name would put
+        -- two different meanings behind one word; this counts pipeline
+        -- progression and says only that.
+        COUNT(*) FILTER (
+          WHERE d.is_archived = FALSE
+            AND d.stage IN ('ic_review', 'negotiation', 'active')
+        ) as at_ic_or_beyond_count,
+        COUNT(*) FILTER (
+          WHERE d.is_archived = FALSE
+            AND d.stage = ANY($1::deal_stage[])
+            AND EXISTS (
+              SELECT 1 FROM risk_flags rf
+              WHERE rf.deal_id = d.id AND rf.status = 'open'
+            )
+        ) as deals_with_open_risks
        FROM deals d
        LEFT JOIN financials f ON d.id = f.deal_id
        WHERE (d.organization_id = current_organization_id() OR d.id IN (SELECT ds.deal_id FROM deal_shares ds WHERE ds.shared_with = current_user_id()))`,
@@ -199,6 +223,9 @@ const getDashboardStats = async (userId) => {
       comps_queue_pending_review:     parseInt(queueCounts.pending_review, 10)     || 0,
       comps_queue_pending_extraction: parseInt(queueCounts.pending_extraction, 10) || 0,
       comps_queue_failed:             parseInt(queueCounts.failed, 10)             || 0,
+      // KPI-strip fields the dashboard reads (see the aggregate above).
+      at_ic_or_beyond_count:  parseInt(dealsStats.at_ic_or_beyond_count, 10)  || 0,
+      deals_with_open_risks:  parseInt(dealsStats.deals_with_open_risks, 10)  || 0,
     },
     deals_by_stage: dealsByStage,
     stage_distribution: stageDistribution,

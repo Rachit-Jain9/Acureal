@@ -48,6 +48,11 @@ const REASON_COPY = Object.freeze({
     'This PDF is password-protected, so REDIP could not open it. Upload an unlocked copy to have it read.',
   unreadable_file: (c) =>
     `REDIP could not open this PDF${c.detail ? ` (${c.detail})` : ''}. The file is stored as uploaded; a re-export from the source may read cleanly.`,
+  // A parseable-tier file (spreadsheet / doc / csv) whose reader threw. The
+  // file type IS supported — this specific file could not be transcribed —
+  // so the copy must not imply the format is unsupported.
+  unreadable_source: (c) =>
+    `REDIP could not read the contents of this file${c.detail ? ` (${c.detail})` : ''}. It is stored as uploaded — re-saving it from the source application, or exporting to PDF, normally reads cleanly.`,
   unsupported_format: () =>
     'REDIP cannot read this file type. It is stored, versioned and downloadable.',
   not_a_pdf: () => null, // handled by tier routing; no receipt copy needed
