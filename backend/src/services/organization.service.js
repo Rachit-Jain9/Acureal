@@ -9,6 +9,7 @@ const {
   mapLegacyUserRoleToOrganizationRole,
 } = require('../constants/roles');
 const { normalizeEmailDomain, isPublicEmailDomain } = require('../utils/emailDomain');
+const { getPlatformAdminEmails } = require('../utils/platformOrg');
 const organizationAuditLog = require('./organizationAuditLog.service');
 
 const slugifyOrganizationName = (value) =>
@@ -102,6 +103,14 @@ const buildAuthUser = (userRow, memberships, activeMembership) => ({
   password_set: userRow.password_set !== false,
   oauth_provider: userRow.oauth_provider || null,
   mfa_enrolled: Boolean(userRow.mfa_enrolled_at),
+  // Server-computed operator fact: the persisted users.is_platform_admin
+  // flag (migration 20260803) OR the PLATFORM_ADMIN_EMAILS break-glass
+  // allowlist. The OR keeps the founder un-lockable-out and makes the field
+  // correct even before the migration is applied (the projection returns
+  // NULL then). The browser renders this fact and holds NO operator list.
+  is_platform_admin:
+    userRow.is_platform_admin === true ||
+    getPlatformAdminEmails().includes(String(userRow.email || '').trim().toLowerCase()),
   role: activeMembership.role,
   organization_role: activeMembership.role,
   organization_id: activeMembership.organization_id,
@@ -118,8 +127,12 @@ const buildAuthUser = (userRow, memberships, activeMembership) => ({
 
 const hydrateUserAuthContext = async (userId, requestedOrganizationId = null, client = { query }) => {
   const userResult = await client.query(
+    // is_platform_admin rides a to_jsonb projection so this query cannot
+    // 42703 before migration 20260803 adds the column — it just reads NULL,
+    // and buildAuthUser falls back to the env allowlist.
     `SELECT id, email, name, phone, is_active, default_organization_id,
-            password_set, oauth_provider, mfa_enrolled_at
+            password_set, oauth_provider, mfa_enrolled_at,
+            (to_jsonb(users) ->> 'is_platform_admin')::boolean AS is_platform_admin
      FROM users
      WHERE id = $1`,
     [userId]

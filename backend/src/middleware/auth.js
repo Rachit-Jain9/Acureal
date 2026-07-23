@@ -122,16 +122,16 @@ const requireAdmin = requireRole('admin');
 //   • `requireRole('admin')` checks the caller's role WITHIN their own
 //     organization. Every signup is owner/admin of their own workspace, so
 //     ordinary customers satisfy it — it is NOT an operator boundary.
-//   • `requirePlatformAdmin` checks the caller's email against the REDIP
-//     platform-operator allowlist (`PLATFORM_ADMIN_EMAILS`, falling back to
-//     the founding operator). This is the SAME source of truth `platformOrg`
-//     uses, and the frontend mirrors it via `VITE_PLATFORM_ADMIN_EMAILS` /
-//     `isPlatformAdmin`.
+//   • `requirePlatformAdmin` checks the server-computed operator fact:
+//     the persisted `users.is_platform_admin` flag (migration 20260803) OR
+//     the `PLATFORM_ADMIN_EMAILS` break-glass allowlist. buildAuthUser
+//     computes the same fact into every auth payload, so the frontend
+//     renders it from /auth/me and carries NO operator list of its own.
 //
 // Use on cross-org / platform-integrity surfaces: anything that mutates GLOBAL
 // config (AI provider routing) or spends shared platform AI budget (A/B eval),
 // plus the operator-only analytics endpoints. Fails closed — no authenticated
-// user, or an email absent from the allowlist, gets 403.
+// user, or neither the flag nor the allowlist, gets 403.
 const requirePlatformAdmin = (req, res, next) => {
   if (!req.user) {
     return res.status(401).json({
@@ -140,16 +140,22 @@ const requirePlatformAdmin = (req, res, next) => {
     });
   }
 
-  const email = String(req.user.email || '').trim().toLowerCase();
-  // getPlatformAdminEmails() already returns a lowercased, trimmed list.
-  if (!email || !getPlatformAdminEmails().includes(email)) {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied. This is a REDIP platform-operator surface.',
-    });
+  // Persisted flag first (grantable/revocable per user without a redeploy).
+  if (req.user.is_platform_admin === true) {
+    return next();
   }
 
-  return next();
+  // Break-glass fallback — also keeps this middleware self-sufficient for any
+  // req.user not built by buildAuthUser. Allowlist is lowercased + trimmed.
+  const email = String(req.user.email || '').trim().toLowerCase();
+  if (email && getPlatformAdminEmails().includes(email)) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: 'Access denied. This is a REDIP platform-operator surface.',
+  });
 };
 
 module.exports = {

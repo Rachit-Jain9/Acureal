@@ -11,9 +11,11 @@
  * reach platform-operator tooling. A regression here re-opens that hole, so the
  * contract is asserted directly rather than only via route integration.
  *
- * The allowlist source of truth is `PLATFORM_ADMIN_EMAILS` (shared with
- * `platformOrg`), falling back to the founding operator when unset — the same
- * value the frontend mirrors via `VITE_PLATFORM_ADMIN_EMAILS` / isPlatformAdmin.
+ * Operator sources, in order: the server-computed `is_platform_admin` flag on
+ * req.user (persisted users column, computed into every auth payload by
+ * buildAuthUser), then the `PLATFORM_ADMIN_EMAILS` break-glass allowlist
+ * (shared with `platformOrg`, falling back to the founding operator when
+ * unset). The frontend renders the server fact and holds no list of its own.
  */
 
 // `requirePlatformAdmin` never touches the database, but importing auth.js pulls
@@ -79,6 +81,40 @@ describe('middleware/auth.requirePlatformAdmin', () => {
     requirePlatformAdmin({ user: { role: 'admin' } }, res, next);
     expect(res.status).toHaveBeenCalledWith(403);
     expect(next).not.toHaveBeenCalled();
+  });
+
+  test('allows a persisted-flag operator regardless of the email allowlist', () => {
+    const res = buildRes();
+    const next = jest.fn();
+    requirePlatformAdmin(
+      { user: { email: 'teammate@acme.com', is_platform_admin: true } },
+      res,
+      next
+    );
+    expect(next).toHaveBeenCalledTimes(1);
+    expect(res.status).not.toHaveBeenCalled();
+  });
+
+  test('a false or truthy-but-not-true flag falls through to the allowlist check', () => {
+    const res = buildRes();
+    const next = jest.fn();
+    requirePlatformAdmin(
+      { user: { email: 'customer@acme.com', is_platform_admin: 'true' } },
+      res,
+      next
+    );
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(next).not.toHaveBeenCalled();
+
+    // Break-glass: flag false but email on the allowlist still passes.
+    const res2 = buildRes();
+    const next2 = jest.fn();
+    requirePlatformAdmin(
+      { user: { email: FOUNDING_OPERATOR, is_platform_admin: false } },
+      res2,
+      next2
+    );
+    expect(next2).toHaveBeenCalledTimes(1);
   });
 
   test('honors a custom PLATFORM_ADMIN_EMAILS allowlist and excludes the fallback', () => {
