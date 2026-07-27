@@ -18,6 +18,7 @@ const aiMarketContext = require('./aiMarketContext.service');
 const aiAugmentEntitlement = require('./aiAugmentEntitlement.service');
 const { enrichPdWithDemographics } = require('./parcelContext.service');
 const { buildReadinessSummary, deriveNextSteps } = require('./dealReadiness.service');
+const auditService = require('./audit.service');
 const masterplanService = require('./masterplan.service');
 // PR-B (2026-05-25) — attach the latest Recommendation Engine run + Deal
 // Doctor view to the export context so the DOCX builder can render both
@@ -1028,6 +1029,14 @@ const getDealExportContext = async (dealId, options = {}) => {
     .getExportSlice(dealId, modelParams?.inputs || null)
     .catch(() => null);
 
+  // Latest committed kernel computation → the reference stamped on every
+  // document this context produces. Null when the deal has never been
+  // calculated (or on any lookup failure), in which case builders print
+  // nothing rather than an unverifiable claim.
+  const computationRef = await auditService
+    .getLatestComputationRef(dealId)
+    .catch(() => null);
+
   return {
     deal,
     siteYield,
@@ -1038,6 +1047,12 @@ const getDealExportContext = async (dealId, options = {}) => {
     durationYears,
     effectiveDate,
     generatedAt: new Date().toISOString(),
+    // The deal's latest committed kernel computation, resolved ONCE here so
+    // DOCX / XLSX / PPTX / tear-sheet all stamp a byte-identical reference —
+    // four documents from one export are otherwise four unfalsifiable claims.
+    // Best-effort: a lookup failure yields null and every builder degrades to
+    // its previous output rather than failing the export.
+    computationRef,
     assumptions: buildDynamicAssumptions(modelParams?.inputs || {}),
     cashFlows,
     sensitivity,

@@ -35,6 +35,7 @@
 const crypto = require('crypto');
 const { query } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
+const log = require('../lib/logger').child({ module: 'audit' });
 
 // ── Stable stringify ─────────────────────────────────────────────────────────
 //
@@ -502,6 +503,36 @@ const verifyChain = async (dealId, { replayLatest = true } = {}) => {
   const failed = total - verified;
   const engineVersions = [...new Set(rows.map((r) => r.engine_version).filter(Boolean))];
 
+  // The quotable reference for the latest committed computation. Derived from
+  // the rows already loaded above rather than re-queried, so the string this
+  // panel shows and the string an export stamps can never drift apart — that
+  // identity is the whole point of the reference.
+  const latestComputationRow = [...rows]
+    .reverse()
+    .find((r) => r.event_type === 'calculate_and_save') || null;
+  const latestSensitivityRow = [...rows]
+    .reverse()
+    .find((r) => r.event_type === 'sensitivity_run') || null;
+  const latestComputation = latestComputationRow
+    ? {
+      event_id: latestComputationRow.id,
+      ref: formatComputationRef({
+        engineVersion: latestComputationRow.engine_version,
+        outputsHash: latestComputationRow.outputs_hash,
+        computedAt: latestComputationRow.created_at,
+      }),
+      engine_version: latestComputationRow.engine_version || null,
+      inputs_hash: latestComputationRow.inputs_hash || null,
+      outputs_hash: latestComputationRow.outputs_hash || null,
+      computed_at: latestComputationRow.created_at,
+      signed: keyAvailable,
+      sensitivity_may_be_newer: Boolean(
+        latestSensitivityRow
+        && new Date(latestSensitivityRow.created_at) > new Date(latestComputationRow.created_at),
+      ),
+    }
+    : null;
+
   // Re-run the kernel on the most recent replayable event so the panel can
   // claim more than "the signature is intact" — it can claim "the numbers
   // themselves reproduce". Walk newest→oldest (rows are oldest→newest).
@@ -534,15 +565,160 @@ const verifyChain = async (dealId, { replayLatest = true } = {}) => {
     engine_versions: engineVersions,
     first_at: rows.length ? rows[0].created_at : null,
     last_at: rows.length ? rows[rows.length - 1].created_at : null,
+    latest_computation: latestComputation,
     events,
     replay,
   };
 };
 
+// ── Computation reference ────────────────────────────────────────────────────
+
+/**
+ * A short, quotable identifier for the deal's latest committed kernel
+ * computation — the thing a reader can cite when asking "which run produced
+ * these numbers?".
+ *
+ * NAMING: deliberately NOT "snapshot". That word already means three unrelated
+ * things in this repo (the IC-memo LLM prompt-cache hash,
+ * parcel_intelligence_snapshots, and the rent-roll register snapshots).
+ * A fourth meaning — on an investor-facing document — is how the wrong hash
+ * ends up printed. It is a "computation reference" everywhere: code and copy.
+ *
+ * FORMAT: `kernel-v2 · 7f3a91c4e2b8 · 2026-07-20`
+ *   engine version — which kernel produced it
+ *   12 hex of outputs_hash — content-addressed, so two identical computations
+ *     yield the same ref and any changed figure yields a different one
+ *   date — human orientation
+ * The full deal_events UUID rides alongside in the payload for exact lookup,
+ * but is never printed on a customer document: 36 opaque characters reads as a
+ * leaked database key, and it is not content-addressed.
+ *
+ * WHAT THIS REF DOES AND DOES NOT COVER — the honesty boundary that must
+ * survive every future edit:
+ *   • COVERED: the figures in `flattenOutputsForAudit` — kpis, costs, revenue,
+ *     areas, engineVersion.
+ *   • NOT COVERED: cash-flow schedules, the capital stack, the proforma and
+ *     the sensitivity matrix. Those are replay-DERIVABLE from the signed
+ *     inputs, which is a weaker and different claim than being signed.
+ *   • `sensitivity_matrix` is additionally mutated by runSensitivity OUTSIDE
+ *     any calculate_and_save, so an exported tornado can be NEWER than the
+ *     referenced computation — hence `sensitivity_may_be_newer`.
+ * Copy built on this MUST NOT claim "every number in this document is signed".
+ */
+const COMPUTATION_REF_HASH_CHARS = 12;
+
+const formatComputationRef = ({ engineVersion, outputsHash, computedAt }) => {
+  if (!outputsHash) return null;
+  const day = computedAt ? new Date(computedAt).toISOString().slice(0, 10) : null;
+  return [
+    engineVersion || 'kernel',
+    String(outputsHash).slice(0, COMPUTATION_REF_HASH_CHARS),
+    day,
+  ].filter(Boolean).join(' · ');
+};
+
+/**
+ * Resolve the latest COMMITTED computation for a deal. Returns null when the
+ * deal has never been calculated — callers must degrade to "not computed yet"
+ * rather than inventing a reference.
+ */
+const getLatestComputationRef = async (dealId) => {
+  const result = await query(
+    `SELECT e.id, e.event_type, e.engine_version, e.inputs_hash, e.outputs_hash,
+            e.created_at,
+            -- A sensitivity_run writes financials.sensitivity_matrix OUTSIDE
+            -- calculate_and_save, so a tornado on screen can post-date the
+            -- referenced computation. Read it from the signed event log rather
+            -- than a financials timestamp: same table, already indexed, and it
+            -- is the exact fact we mean.
+            (SELECT MAX(s.created_at)
+               FROM deal_events s
+              WHERE s.deal_id = e.deal_id
+                AND s.event_type = 'sensitivity_run') AS latest_sensitivity_at
+       FROM deal_events e
+      WHERE e.deal_id = $1
+        AND e.event_type = 'calculate_and_save'
+      ORDER BY e.created_at DESC, e.id DESC
+      LIMIT 1`,
+    [dealId],
+  );
+
+  const row = result.rows[0];
+  if (!row) return null;
+
+  const sensitivityAt = row.latest_sensitivity_at || null;
+  return {
+    event_id: row.id,
+    ref: formatComputationRef({
+      engineVersion: row.engine_version,
+      outputsHash: row.outputs_hash,
+      computedAt: row.created_at,
+    }),
+    engine_version: row.engine_version || null,
+    inputs_hash: row.inputs_hash || null,
+    outputs_hash: row.outputs_hash || null,
+    computed_at: row.created_at,
+    // Never hardcoded: without the HMAC key nothing can honestly be called
+    // "signed", and the UI must say so instead of asserting an unverifiable claim.
+    signed: isSignatureKeyAvailable(),
+    // True when the tornado/sensitivity output on screen post-dates the
+    // referenced computation (runSensitivity writes outside calculate_and_save).
+    sensitivity_may_be_newer: Boolean(
+      sensitivityAt && new Date(sensitivityAt) > new Date(row.created_at),
+    ),
+  };
+};
+
+/**
+ * Record that a document was exported carrying a given computation reference.
+ *
+ * Completes a promise the codebase already made and never kept: 'export_snapshot'
+ * has been an allowed event type with a wired UI label and ZERO producers, so
+ * the timeline could never answer "what did we actually send the IC, and which
+ * computation was in it?".
+ *
+ * FAIL-OPEN, ALWAYS. Exports are HTTP GETs; recording turns them into write
+ * paths, and an audit write must never be the reason a user cannot download
+ * their report. Every failure is logged and swallowed.
+ */
+const recordExportSnapshot = async ({ dealId, format, computationRef, actorId = null }) => {
+  try {
+    if (!dealId || !format) return null;
+    return await recordEvent({
+      dealId,
+      eventType: 'export_snapshot',
+      // Mirrors the referenced computation's engine so the row is self-describing
+      // even if the reference itself is absent.
+      engineVersion: computationRef?.engine_version || 'kernel-v2',
+      actorId,
+      inputs: {
+        format,
+        computation_ref: computationRef?.ref || null,
+        source_event_id: computationRef?.event_id || null,
+      },
+      outputs: {
+        outputs_hash: computationRef?.outputs_hash || null,
+      },
+      metadata: {
+        format,
+        // An export of an uncalculated deal is a real, loggable state — not an
+        // error — and the null reference says so honestly.
+        stamped: Boolean(computationRef?.ref),
+      },
+    });
+  } catch (err) {
+    log.warn('export_snapshot_record_failed', { dealId, format, error: err.message });
+    return null;
+  }
+};
+
 module.exports = {
   recordEvent,
+  recordExportSnapshot,
   listEvents,
   listEventsForVerification,
+  getLatestComputationRef,
+  formatComputationRef,
   getEvent,
   verifyEvent,
   replayEvent,

@@ -374,6 +374,18 @@ const buildCover = (ctx) => {
   children.push(bodyPara(ctx.locationLine || 'Location not provided'));
   children.push(blank());
   children.push(bodyPara(`Generated: ${formatDate(ctx.generatedAt)}`, { color: HEX('mutedHigh'), italic: true }));
+  // Computation reference — makes the cover's "figures come from the
+  // deterministic kernel" claim checkable against this deal's append-only
+  // computation log. Deliberately narrow: the signed outputs hash covers the
+  // returns / cost / revenue / area figures, NOT the cash-flow schedule or
+  // sensitivity matrix, so the copy says exactly that and no more. Omitted
+  // entirely when the deal has never been calculated.
+  if (ctx.computationRef?.ref) {
+    children.push(bodyPara(
+      `Kernel computation: ${ctx.computationRef.ref}`,
+      { color: HEX('mutedHigh'), italic: true },
+    ));
+  }
   children.push(blank());
   children.push(blank());
 
@@ -2909,6 +2921,10 @@ const buildReportContext = (exportContext = {}, options = {}) => {
     dealScore,
     brandName: options.brandName || 'REDIP',
     generatedAt: options.generatedAt || exportContext.generatedAt || new Date().toISOString(),
+    // Latest committed kernel computation. This view-model is an explicit
+    // allowlist — a field absent here is silently dropped from every section,
+    // so the reference must be threaded through deliberately.
+    computationRef: exportContext.computationRef || null,
   };
 };
 

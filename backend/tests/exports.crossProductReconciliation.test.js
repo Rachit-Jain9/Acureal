@@ -407,3 +407,58 @@ describe('Cross-export reconciliation (PR-NX19)', () => {
     });
   });
 });
+
+// ── Computation reference parity ────────────────────────────────────────────
+// The whole value of the reference is that ONE export yields the SAME string on
+// every document. If DOCX says one thing and the deck says another, a reader
+// holding both has two unfalsifiable claims instead of one checkable fact.
+describe('Computation reference — identical across DOCX / PPTX / XLSX', () => {
+  jest.setTimeout(60000);
+
+  const REF = 'kernel-v2 · f393b4a12e54 · 2026-07-18';
+
+  test('the same export context stamps a byte-identical reference everywhere', async () => {
+    const ctx = HOSPITALITY_DEAL();
+    ctx.computationRef = {
+      ref: REF,
+      event_id: 'a05cd737-5834-47a1-8400-917ffd9f7e09',
+      engine_version: 'kernel-v2',
+      outputs_hash: 'f393b4a12e54b6d3f24ce608a0e707ec0501e916b74f135c05b113e899b5ace0',
+      computed_at: '2026-07-18T07:04:49.144Z',
+      signed: true,
+      sensitivity_may_be_newer: false,
+    };
+
+    const docxBuf = await buildDealReportDocx(ctx, {
+      brandName: 'REDIP', userName: 'Recon', generatedAt: '2026-05-16T10:00:00Z',
+    });
+    const docxText = await extractDocxText(docxBuf);
+    const pptxText = await extractPptxText(buildPptxBufferInSubprocess(ctx));
+
+    // XLSX stamps the Model Integrity sheet, alongside the live-recalculation
+    // caveat — the workbook's formulas drift from the stamp once edited.
+    const xlsxBuf = await buildDealWorkbookV2(ctx, { skipAiBriefing: true });
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(xlsxBuf);
+    const integrity = wb.getWorksheet('Model Integrity');
+    const xlsxText = integrity ? String(integrity.getCell('A2').value || '') : '';
+
+    expect(docxText).toContain(REF);
+    expect(pptxText).toContain(REF);
+    expect(xlsxText).toContain(REF);
+    // The honesty caveat must travel WITH the stamp, never separately.
+    expect(xlsxText).toMatch(/recalculates this workbook away from it/i);
+  });
+
+  test('a deal that was never calculated stamps nothing — no invented reference', async () => {
+    const ctx = HOSPITALITY_DEAL();
+    ctx.computationRef = null;
+
+    const docxBuf = await buildDealReportDocx(ctx, {
+      brandName: 'REDIP', userName: 'Recon', generatedAt: '2026-05-16T10:00:00Z',
+    });
+    const docxText = await extractDocxText(docxBuf);
+
+    expect(docxText).not.toMatch(/Kernel computation/i);
+  });
+});

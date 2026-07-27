@@ -1636,6 +1636,10 @@ const buildContext = (exportContext = {}, options = {}) => {
     brandName: options.brandName || 'REDIP',
     generatedAt: options.generatedAt || exportContext.generatedAt || new Date().toISOString(),
     effectiveDate,
+    // Latest committed kernel computation, stamped on the Model Integrity
+    // sheet. This context is an explicit allowlist — an omitted field is
+    // silently dropped from every sheet, so it must be threaded deliberately.
+    computationRef: exportContext.computationRef || null,
   };
 };
 
@@ -4025,8 +4029,16 @@ const buildModelIntegritySheet = (workbook, ctx) => {
   styleSectionTitle(sheet.getCell('A1'));
   sheet.getRow(1).height = 26;
   sheet.mergeCells('A2:G2');
+  // The computation reference pins WHICH kernel run produced the committed
+  // figures. Stated alongside the live-recalculation caveat on purpose: this
+  // workbook's inputs are unlocked, so its formulas drift away from the
+  // referenced computation the moment the recipient edits a cell. Claiming the
+  // stamp still describes the sheet after that would be false.
   sheet.getCell('A2').value =
-    'Automated tie-outs recomputed live by Excel. OK means the arithmetic ties internally — it does not validate the inputs, the market, or any legal / statutory position.';
+    'Automated tie-outs recomputed live by Excel. OK means the arithmetic ties internally — it does not validate the inputs, the market, or any legal / statutory position.'
+    + (ctx.computationRef?.ref
+      ? ` Kernel computation ${ctx.computationRef.ref} produced the committed figures; editing any input recalculates this workbook away from it.`
+      : '');
   sheet.getCell('A2').font = { name: FONT, size: 9, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell('A2').alignment = { vertical: 'middle', wrapText: true };
   sheet.getRow(2).height = 24;

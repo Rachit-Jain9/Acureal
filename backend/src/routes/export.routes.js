@@ -15,6 +15,7 @@ const {
 } = require('../constants/domain');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { getDealExportContext } = require('../services/dealExport.service');
+const auditService = require('../services/audit.service');
 const dealService = require('../services/deal.service');
 const compsService = require('../services/comps.service');
 const { buildDealDeckPptx } = require('../services/dealPptx.service');
@@ -1162,6 +1163,15 @@ router.get(
       // v2 is now the default — only tag the filename when the operator
       // opts back to v1, so they can tell which they downloaded.
       const variantSuffix = explicitV1 ? '-v1' : '';
+      // Log WHAT left the building and which computation it carried. Awaited
+      // only after the buffer exists, and fail-open inside — an audit write
+      // must never cost the operator their download.
+      await auditService.recordExportSnapshot({
+        dealId,
+        format: useV2 ? 'xlsx' : 'xlsx-v1',
+        computationRef: exportContext.computationRef,
+        actorId: req.user?.id || null,
+      });
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
       res.setHeader('Content-Disposition', `attachment; filename="redip-${xlsxSafeName}${variantSuffix}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
       return res.send(xlsxBuffer);
@@ -1216,6 +1226,12 @@ router.get(
       const safeName = ((exportContext.deal && exportContext.deal.name) || 'deal')
         .replace(/[^a-z0-9]/gi, '-')
         .toLowerCase();
+      await auditService.recordExportSnapshot({
+        dealId: req.params.dealId,
+        format: 'docx',
+        computationRef: exportContext.computationRef,
+        actorId: req.user?.id || null,
+      });
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader('Content-Disposition', `attachment; filename="redip-${safeName}-underwriting-${new Date().toISOString().slice(0, 10)}.docx"`);
       return res.send(docxBuffer);
