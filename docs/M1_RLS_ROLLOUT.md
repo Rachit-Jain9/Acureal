@@ -403,9 +403,25 @@ additive and stay in place across a rollback — harmless under `postgres`.
       drill); Phase 6 rewritten around Vercel Instant Rollback
 - [ ] Migration `20260802_rls_flip_hardening.sql` applied to production by
       operator (safe any time — behavior-neutral under the bypass role)
-- [ ] Phase 3 `redip_app` role created (run the AMENDED block above)
-- [ ] Phase 4 branch rehearsal green — probe runner + kill-switch drill
-      (`scripts/rehearsal/README.md`), Google paths manual
+- [x] Phase 3 `redip_app` role created on PRODUCTION with the amended block —
+      **2026-07-23**. Verified live: `rolcanlogin=t, rolbypassrls=f,
+      rolsuper=f`; all 6 auth definers + `current_user_id` /
+      `current_organization_id` EXECUTE-granted; all 15 `regulatory_data`
+      runtime-write tables match the intended verbs exactly; the 9 excluded
+      tables are read-only; and there is **no default-privileges row for
+      FUNCTIONS**, so future functions are fail-closed as designed.
+- [x] Phase 4 branch rehearsal **GREEN — 2026-07-27**. Branch `m1-rehearsal`,
+      real pooler, real `redip_app`: **19/19 isolation + 4/4 kill-switch**.
+      Cleared the open Phase-3 risk (the pooler DOES accept a custom role).
+      Full results + honest limits: `scripts/rehearsal/README.md`.
+      ⚠ **Finding:** the first run caught a genuine cross-tenant leak from
+      legacy `*_select_all USING (true)` policies. Production is clean (it has
+      `20260623_fix_rls_cross_tenant_select.sql` applied) — but that migration
+      is **load-bearing**: any environment without it leaks across tenants
+      once the app stops running as a BYPASSRLS role.
+- [ ] Google OAuth (new / returning / bind) — the one path the runner cannot
+      automate (needs a real Google ID token). Do it manually against the
+      local stack, or verify immediately after the flip.
 - [ ] Phase 5 flip — `DATABASE_URL` → `redip_app` **and** `RLS_ENFORCED=true`
       in the same deploy — System Health canary shows `bypasses_rls: false`
 - [ ] Phase 6 cleanup — delete the direct-query fallback branches once the flip
