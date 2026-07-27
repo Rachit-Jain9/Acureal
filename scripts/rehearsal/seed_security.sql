@@ -21,6 +21,22 @@
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- ── Legal documents (REQUIRED for register to work at all) ──────────────────
+-- No migration seeds these — production publishes them via
+-- scripts/publish-legal-doc.js, so a schema-only branch has ZERO rows and
+-- /api/legal/active returns {}. Registration hard-requires acceptedTermsVersion
+-- + acceptedPrivacyVersion to match a CURRENT document, so without these the
+-- probe runner silently skips every register path — exactly the coverage a
+-- rehearsal exists to provide. Bodies are placeholders; only kind/version/
+-- is_current are load-bearing for the flow.
+INSERT INTO legal_documents (kind, version, effective_at, body_md, content_sha256, is_current)
+VALUES
+  ('terms_of_service', 'rehearsal-1.0', NOW() - INTERVAL '1 day',
+   '# Terms of Service (rehearsal fixture)', encode(digest('rehearsal-tos-1.0', 'sha256'), 'hex'), TRUE),
+  ('privacy_policy',   'rehearsal-1.0', NOW() - INTERVAL '1 day',
+   '# Privacy Policy (rehearsal fixture)',  encode(digest('rehearsal-privacy-1.0', 'sha256'), 'hex'), TRUE)
+ON CONFLICT (kind, version) DO NOTHING;
+
 -- ── Organizations ───────────────────────────────────────────────────────────
 INSERT INTO organizations (id, name, slug, created_by)
 VALUES
