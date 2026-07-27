@@ -13,7 +13,7 @@ branch-only by design.
 
 | File | What it is |
 |---|---|
-| `seed_security.sql` | Test data: 2 companies ("Rehearsal Alpha" and "Rehearsal Beta"), 9 users covering every account state (normal, viewer, member of both companies, MFA-enabled, Google-only, deactivated, closed, unverified), invitations in every state, session tokens in every state, and 2 deals per company. |
+| `seed_security.sql` | Test data: 2 companies ("Rehearsal Alpha" and "Rehearsal Beta"), 9 users covering every account state (normal, viewer, member of both companies, MFA-enabled, Google-only, deactivated, closed, unverified), invitations in every state, session tokens in every state, and 2 deals per company. Also publishes placeholder Terms/Privacy versions — **no migration seeds those**, and without them every signup path refuses and the probe runner skips its register coverage. |
 | `run-probes.js` | The automated test run. Talks to a locally running backend over HTTP exactly like the real app does, and prints ✓/✗ for every check. |
 | `drop_definers.sql` | Step 1 of the kill-switch drill (branch only) — temporarily removes the special login functions to prove the app fails loudly, not silently. |
 
@@ -92,3 +92,51 @@ live site is never touched.
 
 Green across steps 6 + 7 (with step 8 noted) is the **gate to Phase 5** in
 `docs/M1_RLS_ROLLOUT.md`.
+
+## Rehearsal executed 2026-07-27 — results
+
+Run on branch `m1-rehearsal` (ref `fasdpnaqyjcajmomooqv`), against the real
+Supabase pooler as `redip_app`. **19/19 isolation checks + 4/4 kill-switch
+checks passed.**
+
+What it proved:
+
+| Claim | Result |
+|---|---|
+| Supabase's pooler accepts a **custom role** (`redip_app.<ref>`) | ✅ — this was the open Phase-3 risk; now closed |
+| The role genuinely cannot bypass RLS (`rolbypassrls = false`) | ✅ |
+| Tenant tables return **zero rows with no request context** (fail-closed) | ✅ deals, financials, dd_items, approval_items, risk_flags |
+| Alpha sees only Alpha's deals; Beta only Beta's — both directions | ✅ |
+| Writing to another tenant's deal affects **0 rows** | ✅ |
+| Child tables (DD / approvals / risks / financials) are org-scoped too | ✅ |
+| The pre-identity auth bootstrap works via SECURITY DEFINER | ✅ |
+| The **direct** `users` read is blocked by RLS (so the definer is genuinely required, not decorative) | ✅ |
+| With definers absent + `RLS_ENFORCED=true`, auth fails **loud 503**, never a silent empty result | ✅ |
+
+### The finding that justified the rehearsal
+
+The first isolation run **failed with a real cross-tenant leak** — Alpha could
+read Beta's deals. Root cause: legacy `*_select_all` policies with
+`USING (true)`, which are OR'd alongside the org-scope policy and therefore
+nullify it for every SELECT.
+
+**Production was checked immediately and is clean** — it has only
+`*_org_scope` + `*_shared_read`, because migration
+`20260623_fix_rls_cross_tenant_select.sql` (whose entire purpose is dropping
+those policies) is applied there. The leak existed only on the freshly-built
+branch, where that migration had not yet run.
+
+Two things this establishes: the harness genuinely detects cross-tenant
+leakage rather than rubber-stamping, and `20260623` is **load-bearing** — any
+environment missing it leaks across tenants the moment the app stops running
+as a BYPASSRLS role.
+
+### Honest limits of this run
+
+- **Google OAuth (new / returning / bind) was not exercised** — it needs a real
+  Google ID token. Still the one manual step before or just after the flip.
+- Checks ran as direct SQL over the pooler rather than through the HTTP API,
+  so they prove the **database boundary** (which is what M1 changes), not the
+  route layer. Route-level behaviour stays covered by the backend suite.
+- `regulatory_data.bbmp_street_index` was absent from the branch, so its
+  policy fix was verified directly against production instead.
