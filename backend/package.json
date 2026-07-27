@@ -51,6 +51,12 @@
     "jest": "^29.7.0",
     "nodemon": "^3.0.2"
   },
+  "overridesRationale": {
+    "brace-expansion": "<=5.0.7 carries a DoS advisory (GHSA-mh99-v99m-4gvg) that reaches production via exceljs → archiver → glob → minimatch, and dev via the jest toolchain. npm's only offered remedy is exceljs@3.4.0 — a breaking downgrade that would destroy the v2 workbook. 5.0.8 is the patched line and the public API (a single exported expand function) is unchanged, so pinning it fixes every branch without touching exceljs. Remove once the intermediate packages widen their own ranges."
+  },
+  "overrides": {
+    "brace-expansion": "^5.0.8"
+  },
   "engines": {
     "node": ">=20.0.0"
   }

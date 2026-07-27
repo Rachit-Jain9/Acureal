@@ -837,6 +837,64 @@ function IntegrityTicks({ events, revealed }) {
   );
 }
 
+/**
+ * The quotable reference for this deal's latest committed kernel computation.
+ *
+ * Copy-on-click because its whole job is to be pasted — into an IC email, a
+ * memo, a support thread — so a reader can ask "which run produced these
+ * numbers?" and get an exact answer.
+ *
+ * The caption is deliberately narrow. The signed outputs hash covers the
+ * returns / cost / revenue / area figures, NOT the cash-flow schedule, capital
+ * stack or sensitivity matrix (those are replay-derivable from signed inputs —
+ * a weaker claim). Do not broaden this copy without broadening the hash.
+ */
+function ComputationRefChip({ computation }) {
+  const [copied, setCopied] = useState(false);
+  if (!computation?.ref) return null;
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(computation.ref);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard can fail in iframes / permission-denied contexts. The ref is
+      // rendered as text, so it stays selectable by hand.
+    }
+  };
+
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+        <span className="text-content-muted">computation</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          title="Copy this reference"
+          aria-label={`Copy computation reference ${computation.ref}`}
+          className="inline-flex items-center gap-1 font-mono text-content-secondary rounded px-1.5 py-0.5
+                     border border-hairline bg-bg-elevated hover:border-hairline-strong
+                     focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent
+                     active:scale-[0.98] transition-[border-color,transform] duration-120"
+        >
+          {computation.ref}
+          {copied
+            ? <Check size={10} className="text-data-positive shrink-0" aria-hidden="true" />
+            : <Hash size={10} className="text-content-muted shrink-0" aria-hidden="true" />}
+        </button>
+        {copied && <span className="text-data-positive">copied</span>}
+      </div>
+      <p className="mt-1 text-[11px] leading-relaxed text-content-muted">
+        Covers the returns, cost, revenue and area figures produced by the
+        deterministic kernel.
+        {computation.sensitivity_may_be_newer
+          && ' The sensitivity matrix was re-run after this computation, so the tornado may reflect newer inputs.'}
+      </p>
+    </div>
+  );
+}
+
 function IntegrityPanel({ dealId, signedCount }) {
   const verify = useVerifyDealChain();
   const [phase, setPhase] = useState('idle'); // idle | verifying | done
@@ -981,6 +1039,8 @@ function IntegrityPanel({ dealId, signedCount }) {
                 )}
               </div>
             )}
+
+            <ComputationRefChip computation={report.latest_computation} />
 
             {report.replay?.attempted && (
               <div className={clsx(
