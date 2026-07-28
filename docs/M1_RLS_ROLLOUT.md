@@ -1,8 +1,9 @@
 # M1 — Make tenant isolation real at the database (RLS role flip)
 
-**Status:** Phases 1–2 shipped + applied to prod (2026-07-22). Phase 3/4
-enablement shipped 2026-07-23 (amended grants, migration `20260802`, rehearsal
-kit under `scripts/rehearsal/`). Phases 3–6 not yet executed.
+**Status: ✅ LIVE IN PRODUCTION (2026-07-28).** The app connects as `redip_app`
+with `bypasses_rls: false` — PostgreSQL itself, not just application code, now
+rejects cross-customer access. Phases 1–5 complete; Phase 6 (deleting the
+fallback code path) is the only remaining step.
 **Owner:** REDIP engineering + operator (Rachit) for the two live-config steps.
 **Why this matters:** Today REDIP's isolation between customers is enforced by
 application code (every query is scoped to the caller's organization). The
@@ -419,9 +420,32 @@ additive and stay in place across a rollback — harmless under `postgres`.
       `20260623_fix_rls_cross_tenant_select.sql` applied) — but that migration
       is **load-bearing**: any environment without it leaks across tenants
       once the app stops running as a BYPASSRLS role.
+- [x] **PHASE 5 FLIPPED — PRODUCTION IS LIVE ON `redip_app` (2026-07-28).**
+      `DATABASE_URL` → `redip_app` + `RLS_ENFORCED=true` shipped in one deploy.
+      Verified live: `pg_stat_activity` shows the app connecting as
+      **`redip_app` with `bypasses_rls: false`** (the `postgres` app
+      connections are gone); `/api/legal/active` 200; login returns a correct
+      401 on bad credentials (not a 503, so the definer path resolves); the
+      SPA loads with zero console errors. Data counts byte-identical to the
+      pre-flip baseline: 29 deals · 7 users · 7 orgs · 81 comps · 23 documents
+      · 14 financials · 29 deal_events · 458 live sessions (nobody logged out).
+
+      ⚠ **Flip-day gotcha, recorded so it never costs an hour again:** after
+      `ALTER ROLE … PASSWORD`, Supavisor needs ~30–60s to propagate the new
+      credential. A connection attempt in that window fails with
+      `password authentication failed for user "redip_app"` even though the
+      password is correct. Wait and retry before diagnosing anything else.
+      Note the error is *diagnostic*: "password authentication failed **for
+      user redip_app**" proves the pooler resolved the custom role and the
+      host/port/database are right — only the credential is in question.
+
 - [ ] Google OAuth (new / returning / bind) — the one path the runner cannot
-      automate (needs a real Google ID token). Do it manually against the
-      local stack, or verify immediately after the flip.
+      automate (needs a real Google ID token). Verify by signing in with
+      Google on the live site now that the flip is in.
+- [ ] Phase 6 cleanup — delete the direct-query fallback branches once the
+      flip has been stable for a few days (they must not rot as a second live
+      code path), and update `docs/SECURITY.md` §6 to state DB-enforced
+      isolation is **live**.
 - [ ] Phase 5 flip — `DATABASE_URL` → `redip_app` **and** `RLS_ENFORCED=true`
       in the same deploy — System Health canary shows `bypasses_rls: false`
 - [ ] Phase 6 cleanup — delete the direct-query fallback branches once the flip
