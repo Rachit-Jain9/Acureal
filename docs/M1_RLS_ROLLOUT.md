@@ -402,8 +402,14 @@ additive and stay in place across a rollback — harmless under `postgres`.
       `master_plan_zones`/`planning_districts` writes + `zone_versions`
       append-only); rehearsal kit `scripts/rehearsal/` (seed + probe runner +
       drill); Phase 6 rewritten around Vercel Instant Rollback
-- [ ] Migration `20260802_rls_flip_hardening.sql` applied to production by
-      operator (safe any time — behavior-neutral under the bypass role)
+- [x] Migration `20260802_rls_flip_hardening.sql` applied to production —
+      **verified live 2026-07-28**: all 6 definers carry
+      `search_path = … pg_temp`, the `bbmp_street_index_read_app` policy exists
+      and is role-agnostic (PUBLIC), and reading as `redip_app` over the pooler
+      returns 19,830 street rows / 108 UAV entries / 1,313 guidance values.
+      (This box was previously left unticked while the migration WAS applied —
+      the stale checkbox triggered a false "silent reference-data failure"
+      alarm during a later audit. Verify against the database, never this list.)
 - [x] Phase 3 `redip_app` role created on PRODUCTION with the amended block —
       **2026-07-23**. Verified live: `rolcanlogin=t, rolbypassrls=f,
       rolsuper=f`; all 6 auth definers + `current_user_id` /

@@ -15,7 +15,32 @@ Manual actions that still require credentials, authority, or infrastructure outs
 > **✅ Migration backlog FULLY APPLIED + VERIFIED on production (Mumbai `niamgjbxxgmmffggumvj`) — 2026-06-09.**
 > Verified live via the Supabase MCP that every migration through `20260701_deal_signoffs.sql` is applied. In particular the cross-tenant SELECT hole is **CLOSED** — `0` permissive `USING(true)` SELECT policies remain on tenant tables — so the "🔴 URGENT" `20260623` item below is **DONE**, not pending. Also confirmed present: `document_access_log`, `deal_signoffs`, durable `deal_audit_log` (`deal_id` nullable / `ON DELETE SET NULL`), `organization_domains` + `organization_audit_log`, `deal_workspace_cache`, `deals.rera_inputs`, the market-reference Data-API scoping (`20260628`), the function search-path lockdown (`20260627b`), and the `document_extractions.extraction_started_at` reaper column. Supabase's security advisor shows **no actionable findings**; the only remaining lints are benign/intentional: auth/cache tables RLS-enabled-with-no-policy (that is *default-deny*, the correct locked-down posture); `extension_in_public` on PostGIS/pgvector (deliberately left — relocating in-use extensions is riskier than the lint); and the `spatial_ref_sys` RLS ERROR, which is unfixable via SQL (public PostGIS EPSG reference owned by `supabase_admin`) and carries no sensitive data. The per-migration entries below are retained for history.
 
-### K-RERA compliance-deadline email reminders — DEFERRED until a sending domain + Resend exist (2026-06-04)
+### K-RERA compliance-deadline email reminders — DEFERRED. The real blocker is NOT email (re-verified 2026-07-28)
+
+> **Corrected 2026-07-28.** This was recorded as blocked on `RESEND_API_KEY`. Email is
+> *a* blocker but it is the lesser one. Live production check: **16 active deals, 0 with a
+> RERA number; 0 properties with one either.** `composeComplianceCalendar` gates every
+> item behind `registered = !!ctx.reraNumber` (`complianceCalendar.js:105`), so the
+> calendar returns `items: []` for every deal today. A perfect reminder cron with Resend
+> fully working would send **exactly nothing, forever**, until a RERA number is entered.
+>
+> **Do not build the cron before this 5-minute test.** Put a real K-RERA number +
+> completion date on one live deal, open the K-RERA panel, and see whether the compliance
+> calendar populates. If it does, the feature has a user and is worth building.
+>
+> If it does not — i.e. REDIP's deals are pre-acquisition diligence, while post-registration
+> K-RERA filing is a *developer/promoter* obligation — then zero registered deals is
+> **structural, not data-entry lag**, this feature has no user, and the right move is to
+> close this item rather than build it. That question has never been asked and should be
+> answered before any code is written.
+>
+> Design notes if it does go ahead: a zero-new-table build is available — `monitoring_logs`
+> (already in prod, org-scoped RLS) as the "already reminded" ledger, plus exact-offset
+> selection (30/14/7/1 days) so correctness does not depend on the ledger at all. Dedupe
+> key **must** include `item.due_date`: only the quarterly id embeds a date, so keying on
+> `item.id` alone would suppress next year's annual audit forever.
+
+_Original entry (email blocker) below — still true, just not the binding constraint:_
 The post-registration compliance calendar (PRs #770–#771) deterministically computes each registered deal's upcoming K-RERA deadlines (quarterly updates, annual audit, declared-completion/extension, certificate expiry) and surfaces them in the cockpit **and** the DOCX pack. The **proactive email-reminder layer** is intentionally NOT built yet — it shares the `RESEND_API_KEY` blocker below (no verified sending domain). Operator confirmed (2026-06-04) they will set up a domain soon; see the plain-English step **#6 in `TODO_OPERATOR.md`**. When email sending is enabled, build `/api/cron/compliance-reminders/daily` — a `cronAuth`-guarded handler (pattern: `backend/src/routes/parcelCron.routes.js`; register the schedule in `vercel.json`) that, per active org/deal, calls `complianceCalendar.composeComplianceCalendar`, selects items inside a configurable due-soon window, and batches one digest email via `backend/src/lib/mailer.js` to the deal owner/assignee. Idempotent + fire-and-forget. Optional later: a `compliance_reminder_preferences` table for per-deal opt-out + a "last reminded" stamp to avoid repeat sends. The calendar VIEW already ships and is fully usable without this — reminders are additive nudges only.
 
 ### ~~Apply migration: `20260623_fix_rls_cross_tenant_select.sql`~~ — ✅ DONE + VERIFIED 2026-06-09 (live probe: 0 permissive cross-tenant SELECT policies remain)

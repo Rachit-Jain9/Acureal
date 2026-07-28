@@ -1,6 +1,6 @@
 # REDIP — Security & Privacy Overview
 
-**Status date:** 2026-07-19
+**Status date:** 2026-07-28
 **Audience:** prospective customers, institutional investors, and their security / privacy reviewers
 **Owner:** REDIP engineering
 
@@ -91,16 +91,48 @@ restrict every read and write to the caller's current organization. Audit tables
 additionally have no UPDATE or DELETE policy under these policies, so they are
 append-only.
 
-Tenant separation is enforced in **two layers**: (1) the application scopes every
-database query to the authenticated user's organization, and (2) the RLS policies
-above. Today the application connects using a database role that is exempt from
-RLS, so layer (1) is the active enforcement boundary and the RLS policies are a
-prepared, force-enabled defense-in-depth layer. Migrating the application to a
-non-privileged database role — so PostgreSQL itself rejects any cross-organization
-access independent of application code — is a staged, monitored hardening item
-(see section 16). An internal liveness check continuously reports the database
-role's RLS posture so any regression or completion of this migration is observed,
-not assumed.
+Tenant separation is enforced in **two independent layers**: (1) the application
+scopes every database query to the authenticated user's organization, and (2) the
+RLS policies above, enforced by PostgreSQL itself.
+
+**As of 2026-07-28 the application connects using a dedicated database role that
+cannot bypass RLS** (`NOBYPASSRLS`, and it owns no tables). Layer (2) is therefore
+live: a query that omits or mis-sets the organization scope returns **no rows**
+rather than another organization's data. Cross-organization access is refused by
+the database engine independently of application code, so an application-layer
+bug can no longer widen the blast radius beyond the caller's own organization.
+
+Before this role was adopted in production, the change was rehearsed end-to-end on
+an isolated copy of the database with fixtures for two unrelated organizations —
+verifying in both directions that neither could read, modify, or export the
+other's records, and that every tenant table returns zero rows when no
+organization context is set. The same fail-closed checks were then re-run against
+production after the change.
+
+Two deliberate, disclosed limits on this boundary:
+
+- **Pre-authentication operations.** Sign-in, registration, token refresh, MFA
+  challenge lookup and email verification necessarily run *before* any user
+  identity exists, so they cannot be constrained by an identity-based policy.
+  These paths are served by a small, fixed set of `SECURITY DEFINER` database
+  functions with a pinned `search_path`, execution revoked from `PUBLIC` and
+  granted only to the application role. They return narrow column sets — the
+  user-lookup helpers never return MFA secrets — and the account-provisioning
+  function re-validates its own invitation token and domain claim internally,
+  so a caller cannot direct it to create membership in an arbitrary organization.
+- **Non-tenant system tables.** Login-throttle records, refresh-token grants,
+  MFA challenges, email-verification tokens and the shared AI response cache
+  carry no `organization_id` — there is no organization to scope them to. Their
+  access boundary is a per-token / per-email / per-hash `WHERE` clause in
+  application code. Tokens in these tables are stored as SHA-256 hashes, never
+  in a directly replayable form.
+
+A misconfiguration of this boundary fails **loudly**: if the application is
+configured to enforce RLS but the authentication functions are absent, sign-in
+returns an explicit `503` naming the misconfiguration rather than silently
+returning empty results (which would surface to a user as an incorrect password).
+An internal liveness check continuously reports the database role's RLS posture,
+so a regression is observed rather than assumed.
 
 ## 7. Data protection
 
@@ -221,7 +253,7 @@ items are tracked; status is current as of the date above:
 | Granular, per-purpose consent (separate from bundled Terms/Privacy acceptance) | In place |
 | Self-service "see / export my data" (DPDP access & portability) | In place — Privacy Centre |
 | Public sub-processor disclosure page | In place |
-| Database-enforced tenant isolation (application connects via a non-RLS-exempt role) | In progress — policies defined & FORCE-enabled; role migration staged and monitored by a liveness check |
+| Database-enforced tenant isolation (application connects via a non-RLS-exempt role) | **In place (2026-07-28)** — policies FORCE-enabled and the application connects via a `NOBYPASSRLS` role; rehearsed on an isolated database copy, then verified in production. See section 6 for the two disclosed limits |
 | Backup & disaster-recovery posture and recovery procedure | Documented — restore drill pending |
 | India-resident security-log retention for the CERT-In 180-day requirement | In progress |
 | Published Data Processing Agreement (DPA) | Planned — pending legal counsel |
