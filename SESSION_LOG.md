@@ -4,6 +4,32 @@ Running history of every working session. Read this to understand what was built
 
 ---
 
+## 2026-07-28 — M1 tenant-isolation flip LIVE, post-flip hardening, IC-memo credibility stamp (PRs #1029–#1032 merged)
+
+**The headline: M1 is done. Production now connects as `redip_app` (`NOBYPASSRLS`) with `RLS_ENFORCED=true` — PostgreSQL itself enforces cross-customer isolation, not just application code.** Verified live in both directions.
+
+### Phase 4 rehearsal (#1029) — it caught a real leak
+Drove the full dress rehearsal on a throwaway Supabase branch (schema-only + operator auto-migration failed as usual → rebuilt by hand), created `redip_app` with the amended Phase-3 grants, seeded the two-org fixture set, and probed **as the real restricted role over the pooler** (MCP can't `SET ROLE`; the pooler with the role's own creds tests more anyway). **First isolation run FAILED — a genuine cross-tenant leak**: legacy `*_select_all USING(true)` SELECT policies are OR'd alongside org-scope and nullify it. Production was checked immediately and is **clean** (has `20260623_fix_rls_cross_tenant_select.sql`); the leak was branch-only. After applying that migration to the branch: **19/19 isolation + 4/4 kill-switch (definers dropped → loud 503, restored → green)**. Established that `20260623` is load-bearing.
+
+### The flip (#1030)
+`DATABASE_URL` → `redip_app` + `RLS_ENFORCED=true` in one deploy. Cost ~40 min to an operator-instruction failure: I handed a connection-string TEMPLATE with a `THE_PHASE3_PASSWORD` placeholder; ambiguity + a special-char password 500'd the site. Root-caused via a direct pg probe ("password authentication failed **for user redip_app**" = pooler resolved the role, only the credential is wrong), reset to an alphanumeric password, site recovered. **Lesson recorded: always hand Rachit a COMPLETE copy-paste value, never a placeholder.** Also learned: Supavisor takes ~30–60s to propagate a new password — the first attempt fails even when correct. Post-flip verified: `bypasses_rls: false`, data byte-identical to baseline (29 deals/7 users/81 comps), 458 sessions preserved, Google cold-signup exercised the full `auth_provision_signup` chain end-to-end.
+
+### Post-flip hardening + doc corrections (#1031)
+- **The real find:** the auth bootstrap chose definer-vs-fallback on `RLS_ENFORCED`, an env var read at call time — so deleting/mistyping one Vercel setting would re-arm the (now RLS-emptied) direct fallback across every auth path, turning every login into a silent "invalid email or password". **Rewrote the guard to read the live role's `rolbypassrls` in the same probe round-trip** — cannot be disarmed by config, self-configures per environment, and a probe FAILURE now always throws 503 instead of guessing. `authDefiners.test.js` rewritten (11 pins incl. "cannot be disarmed by removing RLS_ENFORCED").
+- **`docs/SECURITY.md` §6 was false** — said the app "connects using a role that is exempt from RLS". Rewritten accurate + discloses the two real limits (pre-auth definer ops, non-tenant system tables). §16 → In place.
+- Ticked the stale `20260802` checkbox (it WAS applied — verified live, the stale box had triggered a false "silent reference-data failure" alarm).
+- **K-RERA reminders — corrected the blocker:** NOT email. Live check: 16 active deals, **0 with a RERA number** → the calendar returns nothing for every deal, so a perfect cron would send nothing forever. Recorded the 5-min test that decides if the feature has a user at all (post-registration RERA filing is a *developer's* obligation; REDIP's deals are pre-acquisition — zero registered deals may be structural).
+
+### IC-memo computation reference (#1032)
+The signed computation reference (`kernel-v2 · <hash12> · <date>`) already anchored the Audit tab + DOCX/XLSX/PPTX. Added it to the **IC memo** — the decision artifact — as a deterministic footer appended AFTER generation (never in the AI payload; a model drifts hex). Honesty boundary honoured (signed figures only, "signed" only when keyed, sensitivity-may-be-newer disclosed). Defused the `snapshotHash` (LLM prompt-cache) vs kernel-ref naming collision with blocking comments. 6 new tests.
+
+### Correctness backlog — CLOSED
+Re-verified the 2026-06-23 audit against live code: all 31 findings fixed; the sole "open" #3 (non-owner DB role) was completed by today's flip. Zero autonomously-fixable items remain. Fixed the stale "~22 remain" memory index.
+
+**Left for the operator:** point `acureal.in` DNS at the site → unblocks email (Resend) → unblocks signup-verification + password-reset emails (today a new user never gets one). **Open product question:** the code promises `security@redip.in`/`grievance@redip.in` but the owned domain is `acureal.in` — those addresses don't resolve (grievance@ is a DPDP requirement). Also parked: full Phase-6 deletion of the 7 now-dead fallback branches (the dangerous env-var part is already fixed in #1031); a fresh review session for it.
+
+---
+
 ## 2026-07-17 (cont.) — Trapped overlays + Remember-me made real (PR #1001 — merged; migration 20260730 applied)
 
 Two operator-reported bugs from live screenshots, both diagnosed to root cause by a 2-agent recon. **In both cases the obvious explanation was wrong.**
