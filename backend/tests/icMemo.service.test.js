@@ -262,3 +262,60 @@ describe('SYSTEM_PROMPT', () => {
     expect(p).toMatch(/Risk Radar/i);
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────
+// Computation reference footer — the credibility anchor
+// ──────────────────────────────────────────────────────────────────────────
+// The IC memo is the decision artifact; it now carries the same signed kernel
+// computation reference the Audit tab and the DOCX/XLSX/PPTX exports quote.
+// The reference is appended DETERMINISTICALLY after the model writes the memo,
+// never handed to the LLM — a model asked to reproduce a hex id would drift it.
+
+describe('composeComputationFooter', () => {
+  const REF = {
+    ref: 'kernel-v2 · 7f3a91c4e2b8 · 2026-07-20',
+    signed: true,
+    sensitivity_may_be_newer: false,
+  };
+
+  test('stamps the exact reference string verbatim (no drift is possible)', () => {
+    const footer = icMemo.composeComputationFooter(REF);
+    expect(footer).toContain('kernel-v2 · 7f3a91c4e2b8 · 2026-07-20');
+    // The whole reference travels as one literal — nothing reformats the hex.
+    expect(footer).toContain('`kernel-v2 · 7f3a91c4e2b8 · 2026-07-20`');
+  });
+
+  test('scopes the claim to the signed figures only — never "every number"', () => {
+    const footer = icMemo.composeComputationFooter(REF);
+    expect(footer).toMatch(/returns, cost, revenue and area figures/i);
+    // Must NOT over-claim coverage of the whole memo.
+    expect(footer).not.toMatch(/every number/i);
+    expect(footer).not.toMatch(/all figures/i);
+  });
+
+  test('says "signed" only when the signing key is available', () => {
+    expect(icMemo.composeComputationFooter({ ...REF, signed: true }))
+      .toMatch(/cryptographically signed/i);
+    expect(icMemo.composeComputationFooter({ ...REF, signed: false }))
+      .not.toMatch(/signed/i);
+  });
+
+  test('discloses when the sensitivity analysis may post-date the computation', () => {
+    const withSens = icMemo.composeComputationFooter({ ...REF, sensitivity_may_be_newer: true });
+    expect(withSens).toMatch(/sensitivity analysis was re-run/i);
+    const withoutSens = icMemo.composeComputationFooter({ ...REF, sensitivity_may_be_newer: false });
+    expect(withoutSens).not.toMatch(/sensitivity analysis was re-run/i);
+  });
+
+  test('emits NOTHING when the deal has no committed computation', () => {
+    expect(icMemo.composeComputationFooter(null)).toBe('');
+    expect(icMemo.composeComputationFooter({ ref: null })).toBe('');
+    expect(icMemo.composeComputationFooter({})).toBe('');
+  });
+
+  test('renders as a markdown rule + italic footnote, separated from the body', () => {
+    const footer = icMemo.composeComputationFooter(REF);
+    expect(footer.startsWith('\n\n---\n\n')).toBe(true);
+    expect(footer).toMatch(/^\n\n---\n\n\*.*\*\n$/s);
+  });
+});
