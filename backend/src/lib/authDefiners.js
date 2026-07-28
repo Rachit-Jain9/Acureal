@@ -51,34 +51,58 @@ const requireDefinerPath = async () => {
   }
 
   let present;
+  let fallbackIsSafe;
   try {
     // Lazy-required to avoid a config/database ↔ lib cycle at module load.
     const { query } = require('../config/database');
+    // Both facts in ONE round trip: are the definers present, and could the
+    // direct fallback even work? The fallback is only correct when the
+    // connecting role bypasses RLS — that is a property of the live
+    // connection, not of an env var someone might delete, so we read it from
+    // the database rather than trusting configuration.
     const result = await query(
-      'SELECT to_regprocedure($1) IS NOT NULL AS present',
+      `SELECT to_regprocedure($1) IS NOT NULL AS present,
+              COALESCE((SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user), false) AS bypasses_rls`,
       [PROBE_SIGNATURE]
     );
     present = result.rows[0]?.present === true;
+    fallbackIsSafe = result.rows[0]?.bypasses_rls === true;
   } catch (probeError) {
-    if (rlsEnforced()) {
-      // Post-flip, the direct path would silently return RLS-emptied rows —
-      // that is the one outcome this module exists to prevent. Fail loud.
-      throw createError(
-        'Authentication backend is temporarily unavailable (definer probe failed under enforced RLS). Please retry.',
-        503
-      );
-    }
-    // Pre-flip a transient probe failure is safe to survive: the direct path
-    // is fully correct under the bypass role. Do NOT cache — retry next call.
-    return false;
+    // A probe failure means we could not DETERMINE which path is safe.
+    //
+    // This used to fall through to `return false` whenever RLS_ENFORCED was
+    // absent, on the reasoning that the direct path is correct under a
+    // BYPASSRLS role. That reasoning expired on 2026-07-28: production now
+    // connects as `redip_app`, which cannot bypass RLS, so the direct path
+    // returns RLS-emptied rows — a login that silently reports "invalid email
+    // or password" rather than an outage.
+    //
+    // The danger was that `rlsEnforced()` reads the env var at CALL time, so a
+    // single removed or mistyped `RLS_ENFORCED` would re-arm that silent
+    // failure across every auth path at once. An env var is the wrong thing to
+    // stake the auth boundary on. We now fail loud unconditionally: guessing
+    // wrong in the safe direction costs one retry, guessing wrong in the other
+    // direction costs a total auth outage disguised as user error.
+    //
+    // Deliberately NOT cached — a transient DB blip must not pin this state.
+    throw createError(
+      'Authentication backend is temporarily unavailable (could not verify the auth definer functions). Please retry.',
+      503
+    );
   }
 
-  if (!present && rlsEnforced()) {
-    // Definitive absence while RLS is enforced = misconfigured deploy
-    // (DATABASE_URL flipped before the migration was applied). Fail loud —
-    // never fall back to direct queries that would silently see zero rows.
+  if (!present && !fallbackIsSafe) {
+    // The definers are absent AND the connecting role cannot bypass RLS, so
+    // the direct fallback would read RLS-emptied rows and report a correct
+    // password as invalid. Fail loud instead.
+    //
+    // The gate used to be `rlsEnforced()` — an env var. It is now the live
+    // role's own RLS posture, so the guard cannot be disarmed by editing
+    // configuration, and it self-configures for any environment: a dev
+    // database still on the bypass role keeps its working fallback, while
+    // anything running restricted is protected.
     throw createError(
-      'Authentication backend is misconfigured (RLS enforced but auth definer functions are absent). Apply migration 20260801.',
+      'Authentication backend is misconfigured (the database role cannot bypass RLS but the auth definer functions are absent). Apply migration 20260801.',
       503
     );
   }

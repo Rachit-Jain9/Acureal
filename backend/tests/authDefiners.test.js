@@ -1,17 +1,21 @@
 /**
- * authDefiners — the tri-state SECURITY DEFINER probe (M1 Phase 2).
+ * authDefiners — the SECURITY DEFINER probe (M1).
  *
  * The probe decides whether the auth bootstrap routes through the definer
  * functions (migration 20260801) or the original direct queries. Its safety
  * contract, pinned here:
  *   1. In the test env it NEVER touches the DB (existing mocked auth suites
  *      keep exercising the direct path deterministically).
- *   2. Only DEFINITIVE probe results are cached. A thrown/transient probe
- *      error is never cached as "absent" — a cold-start pooler hiccup must
- *      not pin a warm post-flip instance onto the (RLS-emptied) direct path.
- *   3. RLS_ENFORCED=true makes the direct fallback UNREACHABLE: probe errors
- *      and definitive absence both throw a loud 503 instead of silently
- *      returning empty rows.
+ *   2. A thrown/transient probe error NEVER silently selects the direct path —
+ *      it throws 503, because a probe failure means we could not DETERMINE
+ *      which path is safe, and guessing wrong costs a total auth outage
+ *      disguised as "invalid email or password".
+ *   3. The fallback is gated on the LIVE ROLE's RLS posture, not on an env
+ *      var. Post-flip (2026-07-28) production runs as `redip_app`, which
+ *      cannot bypass RLS, so the direct path would read RLS-emptied rows.
+ *      Basing the guard on `rolbypassrls` means it cannot be disarmed by
+ *      deleting or mistyping a Vercel setting, and it self-configures: a dev
+ *      database still on the bypass role keeps its working fallback.
  */
 
 jest.mock('../src/config/database', () => ({
@@ -27,6 +31,11 @@ const {
 } = require('../src/lib/authDefiners');
 
 const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+
+// The probe now returns two facts in one round trip.
+const probeRow = ({ present, bypassesRls }) => ({
+  rows: [{ present, bypasses_rls: bypassesRls }],
+});
 
 afterEach(() => {
   __resetForTests();
@@ -54,42 +63,65 @@ describe('authDefiners.requireDefinerPath — probe semantics (non-test env)', (
   });
 
   test('definitive true is cached — second call issues no query', async () => {
-    query.mockResolvedValueOnce({ rows: [{ present: true }] });
+    query.mockResolvedValueOnce(probeRow({ present: true, bypassesRls: false }));
     await expect(requireDefinerPath()).resolves.toBe(true);
     await expect(requireDefinerPath()).resolves.toBe(true);
     expect(query).toHaveBeenCalledTimes(1);
-    expect(query).toHaveBeenCalledWith(
-      'SELECT to_regprocedure($1) IS NOT NULL AS present',
-      [PROBE_SIGNATURE]
-    );
   });
 
-  test('definitive false is cached (RLS not enforced) — second call issues no query', async () => {
-    query.mockResolvedValueOnce({ rows: [{ present: false }] });
+  test('the probe reads BOTH the definer presence and the live RLS posture in one round trip', async () => {
+    query.mockResolvedValueOnce(probeRow({ present: true, bypassesRls: false }));
+    await requireDefinerPath();
+    const [sql, params] = query.mock.calls[0];
+    expect(sql).toContain('to_regprocedure($1) IS NOT NULL AS present');
+    expect(sql).toContain('rolbypassrls');
+    expect(sql).toContain('current_user');
+    expect(params).toEqual([PROBE_SIGNATURE]);
+  });
+
+  test('definers absent BUT the role bypasses RLS → fallback is genuinely safe, cached', async () => {
+    // A dev/pre-flip database: the direct queries are fully correct there.
+    query.mockResolvedValueOnce(probeRow({ present: false, bypassesRls: true }));
     await expect(requireDefinerPath()).resolves.toBe(false);
     await expect(requireDefinerPath()).resolves.toBe(false);
     expect(query).toHaveBeenCalledTimes(1);
   });
 
-  test('RED-TEAM PIN: a rejected probe is NOT cached — the next call re-probes and can flip to true', async () => {
-    query
-      .mockRejectedValueOnce(new Error('pooler hiccup'))
-      .mockResolvedValueOnce({ rows: [{ present: true }] });
-
-    await expect(requireDefinerPath()).resolves.toBe(false); // transient, uncached
-    await expect(requireDefinerPath()).resolves.toBe(true);  // re-probed
-    expect(query).toHaveBeenCalledTimes(2);
+  test('RED-TEAM PIN: definers absent AND the role cannot bypass RLS → loud 503, never a silent empty read', async () => {
+    query.mockResolvedValueOnce(probeRow({ present: false, bypassesRls: false }));
+    await expect(requireDefinerPath()).rejects.toMatchObject({ statusCode: 503 });
   });
 
-  test('RLS_ENFORCED=true: a rejected probe throws 503 — never a silent direct fallback', async () => {
-    process.env.RLS_ENFORCED = 'true';
+  test('the misconfiguration 503 names the remedy', async () => {
+    query.mockResolvedValueOnce(probeRow({ present: false, bypassesRls: false }));
+    await expect(requireDefinerPath()).rejects.toMatchObject({
+      message: expect.stringMatching(/Apply migration 20260801/),
+    });
+  });
+
+  test('RED-TEAM PIN: a rejected probe ALWAYS throws 503 — it is never resolved into a fallback', async () => {
+    // Previously this returned false whenever RLS_ENFORCED was absent. That
+    // made a single deleted env var re-arm a silent auth outage across every
+    // path at once. A probe failure now fails loud regardless of config.
     query.mockRejectedValueOnce(new Error('pooler hiccup'));
     await expect(requireDefinerPath()).rejects.toMatchObject({ statusCode: 503 });
   });
 
-  test('RLS_ENFORCED=true: definitive absence throws 503 (flip before migration = loud misconfig)', async () => {
-    process.env.RLS_ENFORCED = 'true';
-    query.mockResolvedValueOnce({ rows: [{ present: false }] });
+  test('a rejected probe is NOT cached — a later call re-probes and can succeed', async () => {
+    query
+      .mockRejectedValueOnce(new Error('pooler hiccup'))
+      .mockResolvedValueOnce(probeRow({ present: true, bypassesRls: false }));
+
+    await expect(requireDefinerPath()).rejects.toMatchObject({ statusCode: 503 });
+    await expect(requireDefinerPath()).resolves.toBe(true);
+    expect(query).toHaveBeenCalledTimes(2);
+  });
+
+  test('the guard cannot be disarmed by removing RLS_ENFORCED', async () => {
+    // The env var is gone; the live role still cannot bypass RLS. The guard
+    // must hold on the database fact alone.
+    delete process.env.RLS_ENFORCED;
+    query.mockResolvedValueOnce(probeRow({ present: false, bypassesRls: false }));
     await expect(requireDefinerPath()).rejects.toMatchObject({ statusCode: 503 });
   });
 
