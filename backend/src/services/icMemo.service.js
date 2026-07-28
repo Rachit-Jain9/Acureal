@@ -35,6 +35,7 @@ const { query } = require('../config/database');
 const { getProviderAvailability } = require('./ai/providerRegistry');
 const { runClaudeReasoning, runClaudeReasoningStream } = require('./ai/aiRouter');
 const aiArtifacts = require('./aiArtifacts.service');
+const auditService = require('./audit.service');
 const numericalVerifier = require('./numericalVerifier.service');
 const { formatQuantumCr } = require('../utils/marketUnits');
 // Deterministic trust-signal services (Workstreams A, B, C). The IC memo —
@@ -149,6 +150,50 @@ const buildVerificationContext = async (dealId) => {
   };
 };
 
+/**
+ * Deterministic computation-reference footer for the memo.
+ *
+ * The IC memo is REDIP's decision artifact; anchoring it to the same signed
+ * kernel computation the in-app Audit tab and the DOCX/XLSX/PPTX exports quote
+ * lets an IC reader ask "which run produced these numbers?" and get one exact,
+ * cross-surface answer.
+ *
+ * This is appended AFTER the model has written the memo — the reference is
+ * never placed in the AI payload. A language model asked to reproduce a hex id
+ * will drift a character, which is precisely the AI-fabricated-figure failure
+ * CLAUDE.md forbids. String concatenation cannot drift.
+ *
+ * NAMING: this is the KERNEL computation reference (audit.service's
+ * outputs_hash), NOT `snapshotHash` in this file — that is the LLM
+ * prompt-cache key. Two different hashes; do not print one where the other
+ * belongs.
+ *
+ * HONESTY BOUNDARY: the reference covers the figures in the signed outputs —
+ * returns, cost, revenue, area. It does NOT cover the cash-flow schedule,
+ * capital stack, or sensitivity/tornado (those are replay-derivable from the
+ * signed inputs, a weaker claim), and the sensitivity matrix can post-date the
+ * referenced computation entirely. The copy says exactly that and no more.
+ */
+const composeComputationFooter = (computationRef) => {
+  if (!computationRef?.ref) return '';
+
+  const ledger = computationRef.signed
+    ? "recorded in this deal's append-only, cryptographically signed computation log"
+    : "recorded in this deal's append-only computation log";
+
+  const sensitivity = computationRef.sensitivity_may_be_newer
+    ? ' The sensitivity analysis was re-run after this computation, so any scenario or tornado figures may reflect newer inputs.'
+    : '';
+
+  return (
+    '\n\n---\n\n'
+    + `*Kernel computation \`${computationRef.ref}\` produced the committed returns, `
+    + `cost, revenue and area figures in this memo; they are ${ledger}.`
+    + sensitivity
+    + '*\n'
+  );
+};
+
 const buildIcMemoInput = async (dealId) => {
   // Gate: deal must be visible to the user. Same RLS condition as the
   // rest of the deal-scoped queries.
@@ -163,6 +208,7 @@ const buildIcMemoInput = async (dealId) => {
     ddResult,
     approvalResult,
     verificationContext,
+    computationRef,
   ] = await Promise.all([
     query(
       `SELECT d.id, d.name, d.stage, d.priority, d.deal_type, d.notes,
@@ -242,6 +288,12 @@ const buildIcMemoInput = async (dealId) => {
       [dealId],
     ).catch(() => ({ rows: [] })),
     buildVerificationContext(dealId),
+    // The signed kernel computation reference — resolved here so both the
+    // streaming and non-streaming paths stamp the SAME id without a second
+    // query, and deliberately NOT added to the AI payload (see
+    // composeComputationFooter). Best-effort: a lookup miss simply omits the
+    // footer, never blocks the memo.
+    auditService.getLatestComputationRef(dealId).catch(() => null),
   ]);
 
   const deal = dealResult.rows[0];
@@ -340,7 +392,9 @@ const buildIcMemoInput = async (dealId) => {
     verification: verificationContext,
   };
 
-  return { systemPrompt: SYSTEM_PROMPT, payload, dealName: deal.name };
+  // computationRef travels ALONGSIDE the payload, never inside it — the model
+  // narrates the deterministic `verification` posture but never sees the hex.
+  return { systemPrompt: SYSTEM_PROMPT, payload, dealName: deal.name, computationRef };
 };
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -354,23 +408,24 @@ const persistMemoArtifact = async ({
   snapshotHash,
   callId,
   input,
+  computationRef,
 }) => {
   // Defense-in-depth on the closed verb dictionary (CLAUDE.md): the prompt
   // instructs the model to avoid absolute decision verbs, but neutralize any
   // that slip through before this customer-facing memo is persisted/exported.
-  const safeContentMd = neutralizeMemoRecommendation(contentMd);
-  if (safeContentMd !== contentMd) {
+  const neutralized = neutralizeMemoRecommendation(contentMd);
+  if (neutralized !== contentMd) {
     log.warn('ic_memo_stance_verb_neutralized', { dealId });
   }
 
-  // Run the numerical verifier so IC-cited numbers are audited before
-  // signoff. Drifts are written alongside the memo.
+  // Numerical verification runs over the MODEL's text only — the deterministic
+  // footer carries no free figures to drift, so append it after verifying.
   let drifts = null;
   let verifiedAt = null;
   try {
     const snapshot = numericalVerifier.snapshotFromDealAnalysisInput(input);
     const verification = numericalVerifier.verifyDealAnalysis({
-      contentMd: safeContentMd,
+      contentMd: neutralized,
       snapshot,
     });
     drifts = verification.drifts;
@@ -378,6 +433,11 @@ const persistMemoArtifact = async ({
   } catch (err) {
     log.warn('ic_memo_verifier_failed', { error: err.message, dealId });
   }
+
+  // Stamp the signed computation reference deterministically. This is the
+  // persisted, exportable, re-fetchable copy of the memo — so the anchor
+  // travels with it everywhere the memo goes.
+  const safeContentMd = neutralized + composeComputationFooter(computationRef);
 
   const saved = await aiArtifacts.saveArtifact({
     organizationId,
@@ -390,7 +450,7 @@ const persistMemoArtifact = async ({
     numericalDrifts: drifts,
     verifiedAt,
   });
-  return { saved, drifts, verifiedAt };
+  return { saved, drifts, verifiedAt, contentMd: safeContentMd };
 };
 
 const generate = async (dealId) => {
@@ -405,6 +465,11 @@ const generate = async (dealId) => {
   const input = await buildIcMemoInput(dealId);
   if (input.error) return { memo: null, reason: input.error };
 
+  // NB: this is the LLM PROMPT-CACHE key (sha256 of prompt + payload), used to
+  // return the cached memo until the inputs shift. It is NOT the kernel
+  // computation reference stamped in the footer — that is
+  // input.computationRef, from the signed deal_events log. Two different
+  // hashes; never print one where the other belongs.
   const snapshotHash = aiArtifacts.computeSnapshotHash({
     systemPrompt: input.systemPrompt,
     payload: input.payload,
@@ -425,24 +490,30 @@ const generate = async (dealId) => {
     const organizationId = ctx?.organizationId || null;
     let artifactId = null;
     let drifts = null;
+    // The persisted memo carries the deterministic computation footer; fall
+    // back to the raw model text if there was no org context to persist under.
+    let stampedMemo = memo;
     if (organizationId && memo) {
-      const { saved, drifts: d } = await persistMemoArtifact({
+      const { saved, drifts: d, contentMd } = await persistMemoArtifact({
         organizationId,
         dealId,
         contentMd: memo,
         snapshotHash,
         callId: null,
         input: input.payload,
+        computationRef: input.computationRef,
       });
       artifactId = saved?.id || null;
       drifts = d;
+      stampedMemo = contentMd;
     }
 
     return {
-      memo,
+      memo: stampedMemo,
       dealName: input.dealName,
       generatedAt: new Date().toISOString(),
       snapshotHash,
+      computationRef: input.computationRef || null,
       artifactId,
       numericalDrifts: drifts,
     };
@@ -462,6 +533,11 @@ const stream = async (dealId) => {
   const input = await buildIcMemoInput(dealId);
   if (input.error) return { error: input.error, status: 404 };
 
+  // NB: this is the LLM PROMPT-CACHE key (sha256 of prompt + payload), used to
+  // return the cached memo until the inputs shift. It is NOT the kernel
+  // computation reference stamped in the footer — that is
+  // input.computationRef, from the signed deal_events log. Two different
+  // hashes; never print one where the other belongs.
   const snapshotHash = aiArtifacts.computeSnapshotHash({
     systemPrompt: input.systemPrompt,
     payload: input.payload,
@@ -489,6 +565,11 @@ const stream = async (dealId) => {
       let artifactId = null;
       let drifts = null;
       let verifiedAt = null;
+      // The live-streamed text the client already rendered has no footer; the
+      // persisted artifact does. Return the stamped copy so a client that
+      // reconstructs from done() ends up on the same anchored memo a re-fetch
+      // would serve.
+      let stampedResult = final?.result || null;
       if (organizationId && final?.result) {
         const result = await persistMemoArtifact({
           organizationId,
@@ -497,16 +578,20 @@ const stream = async (dealId) => {
           snapshotHash,
           callId: final.callId,
           input: input.payload,
+          computationRef: input.computationRef,
         });
         artifactId = result.saved?.id || null;
         drifts = result.drifts;
         verifiedAt = result.verifiedAt;
+        stampedResult = result.contentMd;
       }
       return {
         ...final,
+        result: stampedResult,
         dealName: input.dealName,
         generatedAt: new Date().toISOString(),
         snapshotHash,
+        computationRef: input.computationRef || null,
         artifactId,
         numericalDrifts: drifts,
         verifiedAt,
@@ -524,6 +609,7 @@ module.exports = {
   generate,
   stream,
   getCached,
-  // Internal helper exported for tests
+  // Internal helpers exported for tests
   SYSTEM_PROMPT,
+  composeComputationFooter,
 };
