@@ -1,6 +1,44 @@
-# REDIP Session Log
+# Acureal Session Log
 
 Running history of every working session. Read this to understand what was built, what changed, and what's next — even if the chat session is gone.
+
+_Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That was the name until the rebrand below. Historical entries are deliberately not rewritten._
+
+---
+
+## 2026-07-30 — REDIP → **Acureal**: total rebrand, 5 PRs merged (#1034–#1038), 1 held (#1039)
+
+**The product is now called Acureal everywhere a user can see it.** REDIP is retired as a brand. Zero uppercase `REDIP` remains in the built frontend bundle, in any export template, or in any generated document.
+
+### The identity (#1034)
+Implemented from the operator's ACUREAL design handoff. `components/brand/AcurealBrand.jsx` — wordmark (Jost, ALL CAPS, 0.2em tracking, weight 200 display / 300 below 24px, fifth letter in signal blue `#1E6FD0`), the **measure rule** (rose-gold graduated scale, one blue node on a plumb drop, node at **62.5% of span — never centred**), plus a 32px glyph and a 120px badge. SVG path data + gradient stops copied verbatim from the handoff, not redrawn. Theme reverses via two new tokens (`--brand-wordmark-ink` / `--brand-wordmark-e`); both verified resolving. METAL RULE honoured — rose gold only as the rule's hairlines. Real favicon + apple-touch-icon + manifest replace the old inline data-URI "R". ~90 files of product copy, all four legal-page headers unified onto the component, email templates (verify button moved to signal blue).
+
+### Exports (#1035)
+Every generated document + `Content-Disposition` filename. **The `redip_meta` problem:** the register template stamps a `veryHidden` sheet the importer reads to map a filled template back to DB fields, and its name leaked into copy ("do not edit the hidden redip_meta sheet"). A blind rename would reject every template already downloaded. Shipped a **dual-read**: new templates stamp `acureal_meta`, the importer accepts either, and a test renames the sheet on a real generated workbook to pin the guarantee. `buildWorkbook.js` has CRLF + an embedded NUL byte — all edits byte-level, never `sed`; NUL verified present after.
+
+### Compliance (#1036) — a real gap, not cosmetics
+The code promised `security@redip.in` and `grievance@redip.in`. **`redip.in` was never owned — both bounced.** `grievance@` is a statutory contact under DPDP §8(9) / IT Rules 3(11), cited by name on the Grievance Officer page while listing an unreachable address. Both moved to `@acureal.in` (operator-confirmed). Also found: the **live `legal_documents` rows carry 28 `REDIP` mentions** — Terms/Privacy/Cookie bodies render from the DB, not source. Updated the source markdown in `docs/legal/`; **publishing is a deliberate operator step, not done here**. Safe when run: all three are unsigned drafts (`Effective Date: [DATE TO BE FILLED]`, `LAWYER REVIEW REQUIRED`), and `publishLegalDocument` upserts on `(kind, version)` so the row id — and therefore every `user_legal_acceptances` reference — survives; **no re-acceptance forced on 458 sessions**.
+
+### Docs + packages (#1037)
+63 files. `TODO_OPERATOR.md` items 5/6 **were unfollowable** — they instructed the operator to create mailboxes and a sending domain on a domain he does not own. Rewritten with exact GoDaddy/Vercel/Resend steps. Package names → `acureal-frontend` / `acureal-backend` (that one was still `redevint-backend`) / `acureal-e2e`. Six documents preserved verbatim as historical record (SESSION_LOG, the dated strategic review, M1 rollout, RLS audit, exports-rewrite status, parcel deck).
+
+### The built-bundle sweep earned its keep (#1038)
+Source greps said clean; grepping compiled `frontend/dist` found **three real leaks**:
+1. **Six client-side download filenames still `redip-*`** — ExportMenu (tear sheet, PPTX, underwriting DOCX, all three audience packs), IC-readiness, K-RERA readiness, DealCard PPTX, deals CSV, market tear sheet. Invisible to a `REDIP` grep because the literal is lowercase. Fix shields the 23 `redip-` CSS/keyframe/DOM-id prefixes through sentinels with an assertion — a blanket `redip-`→`acureal-` sweep would have renamed the animation classes behind the July fixed-overlay containment bug.
+2. **The methodology panel printed `@redip/financial-kernel`** to customers. Sentence now omits the package name; scope itself unchanged.
+3. **`compProvenance` classified only the old brand** as an internal comp source — "Acureal" alone would have fallen through to unclassified. Now matches both, in both mirrors (parity test).
+
+### Deliberately NOT renamed — and why
+`redip_app` (live DB role), `redip.access`/`redip.refresh` cookies (458 sessions), `redip.*` localStorage keys (saved views / dashboard layout / tour progress), `redip-documents` bucket, `redip:*` window events + the `redip:auth:refresh` Web Locks name, 39 `redip-*` CSS classes/keyframes, `@redip/*` npm scope (invisible; renaming means Vite aliases + Jest mappers + every import atomically), `erased+<id>@redip.local` (internal sentinel, 0 rows), `database/migrations/**`, and the historical docs above. **116 case-insensitive `redip` hits remain in the bundle; every one is on this list. Zero are uppercase.**
+
+### Verified
+Backend **259 suites / 4227 tests** green (+1, the legacy-template compat test). Frontend **169 / 1368** green, build clean, theme-token + hover guards clean, kernel `tsc` clean. Login + landing rendered in-browser: Jost loading, computed weight 300 at 17px, tracking exactly 0.2em, uppercase, E = `rgb(30,111,208)`, zero console errors. Generated a real report-pack DOCX and register XLSX, unzipped both, grepped every entry incl. `xl/workbook.xml` + `docProps/app.xml` → **zero REDIP**.
+
+### What's left
+- **#1039 is open and deliberately NOT merged** — the `redip.vercel.app` → `acureal.in` 308 redirect. Merging before DNS resolves = total outage. Merge condition is in the PR body.
+- **Operator-blocked (in `TODO_OPERATOR.md` 5, 6, 6b):** GoDaddy A `@`→`76.76.21.21` + CNAME `www`→`cname.vercel-dns.com`; add the domain in Vercel; update `CORS_ORIGINS` (keeping the old host); create the two mailboxes; Resend + `RESEND_API_KEY`/`MAIL_FROM`.
+- **Then:** publish the updated legal bodies, and **verify a real signup verification email actually lands** — today a new user never receives one. That test is the whole point of the email work.
+- Operator chose to rename **only the Supabase display name**; GitHub repo + Vercel project keep their names, so `github.com/Rachit-Jain9/REDIP` URLs (incl. one cited inside the privacy policy) stay valid.
 
 ---
 
