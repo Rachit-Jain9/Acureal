@@ -642,7 +642,7 @@ export default function KarnatakaReraReadinessPanel() {
       const a = document.createElement('a');
       a.href = url;
       const safeName = (slice?.deal_name || 'deal').replace(/[^a-z0-9]/gi, '-').toLowerCase();
-      a.download = `redip-${safeName}-rera-readiness-${new Date().toISOString().slice(0, 10)}.docx`;
+      a.download = `acureal-${safeName}-rera-readiness-${new Date().toISOString().slice(0, 10)}.docx`;
       document.body.appendChild(a);
       a.click();
       a.remove();

@@ -521,7 +521,7 @@ export default function IntelligencePage() {
       const link = document.createElement('a');
       link.href = url;
       const stamp = new Date().toISOString().slice(0, 10);
-      link.download = `redip-${city.toLowerCase()}-market-tearsheet-${stamp}.pdf`;
+      link.download = `acureal-${city.toLowerCase()}-market-tearsheet-${stamp}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
