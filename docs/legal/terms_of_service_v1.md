@@ -1,18 +1,18 @@
-# REDIP — Terms of Service
+# Acureal — Terms of Service
 
 **Effective Date:** [DATE TO BE FILLED BY OPERATOR AT PUBLISH TIME]
 **Version:** 1.0
 **Last Updated:** [DATE TO BE FILLED BY OPERATOR AT PUBLISH TIME]
 
-> **DRAFT — LAWYER REVIEW REQUIRED before opening REDIP to any user other than the founder.** This text is a structured draft covering every section the Indian Contract Act 1872, the Information Technology Act 2000, the Information Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules 2021, and the Digital Personal Data Protection Act 2023 expect. Names, addresses, registration numbers, and grievance-officer contact must be filled in before publication. Engage a Bengaluru technology / data-protection lawyer for red-line review.
+> **DRAFT — LAWYER REVIEW REQUIRED before opening Acureal to any user other than the founder.** This text is a structured draft covering every section the Indian Contract Act 1872, the Information Technology Act 2000, the Information Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules 2021, and the Digital Personal Data Protection Act 2023 expect. Names, addresses, registration numbers, and grievance-officer contact must be filled in before publication. Engage a Bengaluru technology / data-protection lawyer for red-line review.
 
 ## 1. Who we are
 
-REDIP ("REDIP", "we", "us", "our") is a deal-intelligence software platform operated by [LEGAL ENTITY NAME], a [Sole Proprietorship / LLP / Private Limited] organized under the laws of India, with its registered office at [REGISTERED ADDRESS], Bengaluru, Karnataka, India. CIN/GSTIN: [TBD].
+Acureal ("Acureal", "we", "us", "our") is a deal-intelligence software platform operated by [LEGAL ENTITY NAME], a [Sole Proprietorship / LLP / Private Limited] organized under the laws of India, with its registered office at [REGISTERED ADDRESS], Bengaluru, Karnataka, India. CIN/GSTIN: [TBD].
 
 ## 2. What you are agreeing to
 
-By creating an account or using the REDIP platform (the "Platform"), you ("User", "you") agree to these Terms of Service ("Terms"), our [Privacy Policy](/privacy), and our [Cookie Policy](/cookies). If you do not agree, do not create an account or use the Platform.
+By creating an account or using the Acureal platform (the "Platform"), you ("User", "you") agree to these Terms of Service ("Terms"), our [Privacy Policy](/privacy), and our [Cookie Policy](/cookies). If you do not agree, do not create an account or use the Platform.
 
 These Terms constitute a binding contract under the Indian Contract Act 1872. Click-wrap acceptance is enforceable; we record your acceptance with timestamp, IP address, and browser user agent.
 
@@ -44,9 +44,9 @@ You agree not to:
 
 ## 6. Your content
 
-(a) **Ownership.** You retain ownership of all documents, data, and content you upload ("Your Content"). REDIP does not claim ownership.
+(a) **Ownership.** You retain ownership of all documents, data, and content you upload ("Your Content"). Acureal does not claim ownership.
 
-(b) **License to REDIP.** You grant REDIP a limited, non-exclusive, worldwide, royalty-free license to host, process, transmit, and display Your Content solely as necessary to provide the Platform to you, including processing through third-party AI providers (see [Privacy Policy](/privacy) §6).
+(b) **License to Acureal.** You grant Acureal a limited, non-exclusive, worldwide, royalty-free license to host, process, transmit, and display Your Content solely as necessary to provide the Platform to you, including processing through third-party AI providers (see [Privacy Policy](/privacy) §6).
 
 (c) **Responsibility.** You are solely responsible for the lawfulness of Your Content and the consequences of uploading it.
 
@@ -56,7 +56,7 @@ You agree not to:
 
 (b) **AI-assisted outputs are advisory only.** They are not legal advice, not tax advice, not investment advice, not a valuation, and not a regulatory opinion. You must independently verify every material fact with qualified professionals before making any investment, contractual, or regulatory decision.
 
-(c) Confidence scores surfaced by the Platform are heuristic and reflect the AI provider's self-assessment, not REDIP's certification of accuracy.
+(c) Confidence scores surfaced by the Platform are heuristic and reflect the AI provider's self-assessment, not Acureal's certification of accuracy.
 
 (d) The Platform may render inputs incorrectly, omit information, or misclassify documents. Human review is required.
 
@@ -72,7 +72,7 @@ You agree not to:
 
 ## 10. Intellectual property
 
-(a) The Platform, including all software, design, trademarks, and content (other than Your Content), is owned by REDIP or its licensors and is protected by Indian and international intellectual property law.
+(a) The Platform, including all software, design, trademarks, and content (other than Your Content), is owned by Acureal or its licensors and is protected by Indian and international intellectual property law.
 
 (b) These Terms grant you a limited, non-transferable, non-exclusive, revocable right to use the Platform.
 
@@ -88,7 +88,7 @@ Your privacy is governed by our [Privacy Policy](/privacy), which is incorporate
 
 THE PLATFORM IS PROVIDED "AS IS" AND "AS AVAILABLE" WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT, TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW.
 
-REDIP does not warrant that:
+Acureal does not warrant that:
 
 - the Platform will be error-free, uninterrupted, or secure;
 - AI-extracted data will be accurate;
@@ -97,15 +97,15 @@ REDIP does not warrant that:
 
 ## 14. Limitation of liability
 
-TO THE FULLEST EXTENT PERMITTED BY INDIAN LAW, REDIP'S AGGREGATE LIABILITY ARISING FROM OR RELATED TO THESE TERMS OR THE PLATFORM, FOR ANY CAUSE OF ACTION, IS LIMITED TO THE GREATER OF (a) FEES YOU PAID TO REDIP IN THE TWELVE (12) MONTHS PRECEDING THE EVENT OR (b) INR 10,000.
+TO THE FULLEST EXTENT PERMITTED BY INDIAN LAW, Acureal'S AGGREGATE LIABILITY ARISING FROM OR RELATED TO THESE TERMS OR THE PLATFORM, FOR ANY CAUSE OF ACTION, IS LIMITED TO THE GREATER OF (a) FEES YOU PAID TO Acureal IN THE TWELVE (12) MONTHS PRECEDING THE EVENT OR (b) INR 10,000.
 
-REDIP IS NOT LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, INCLUDING LOST PROFITS, LOST DATA, OR BUSINESS INTERRUPTION.
+Acureal IS NOT LIABLE FOR INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE DAMAGES, INCLUDING LOST PROFITS, LOST DATA, OR BUSINESS INTERRUPTION.
 
 NOTHING IN THESE TERMS LIMITS LIABILITY THAT CANNOT BE EXCLUDED UNDER APPLICABLE LAW (FRAUD, GROSS NEGLIGENCE, WILLFUL MISCONDUCT).
 
 ## 15. Indemnification
 
-You agree to indemnify and hold harmless REDIP from any third-party claim arising out of (a) your breach of these Terms, (b) Your Content, or (c) your violation of applicable law.
+You agree to indemnify and hold harmless Acureal from any third-party claim arising out of (a) your breach of these Terms, (b) Your Content, or (c) your violation of applicable law.
 
 ## 16. Termination
 

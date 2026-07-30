@@ -105,7 +105,7 @@ export default function LegalDocPage({ kind }) {
           {!loading && error && (
             <Notice tone="danger" title="Could not load this document">
               The document could not be retrieved. Please try again in a moment, or contact{' '}
-              <a className="underline" href="mailto:grievance@redip.in">grievance@redip.in</a>.
+              <a className="underline" href="mailto:grievance@acureal.in">grievance@acureal.in</a>.
             </Notice>
           )}
 
@@ -120,8 +120,8 @@ export default function LegalDocPage({ kind }) {
 
         <footer className="mt-12 pt-6 border-t border-hairline text-xs text-content-muted">
           Questions about this document? Email{' '}
-          <a href="mailto:grievance@redip.in" className="text-[#c2410c] underline underline-offset-2">
-            grievance@redip.in
+          <a href="mailto:grievance@acureal.in" className="text-[#c2410c] underline underline-offset-2">
+            grievance@acureal.in
           </a>
           .
         </footer>

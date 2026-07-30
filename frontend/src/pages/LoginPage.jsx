@@ -446,8 +446,8 @@ export default function LoginPage() {
                       <p className="text-xs text-data-negative mt-2">
                         Could not load the current Terms and Privacy versions. Please refresh the
                         page or contact{' '}
-                        <a href="mailto:grievance@redip.in" className={linkClass}>
-                          grievance@redip.in
+                        <a href="mailto:grievance@acureal.in" className={linkClass}>
+                          grievance@acureal.in
                         </a>
                         .
                       </p>

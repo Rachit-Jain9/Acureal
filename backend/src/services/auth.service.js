@@ -385,7 +385,7 @@ const login = async (email, password, requestedOrganizationId = null) => {
   // closed user is the legitimate owner of the account, not an attacker.
   if (user.account_closed_at) {
     throw createError(
-      'This account has been closed. Contact grievance@redip.in if this was unexpected.',
+      'This account has been closed. Contact grievance@acureal.in if this was unexpected.',
       403,
     );
   }

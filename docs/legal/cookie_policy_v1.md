@@ -1,11 +1,11 @@
-# REDIP — Cookie Policy
+# Acureal — Cookie Policy
 
 **Effective Date:** [DATE TO BE FILLED BY OPERATOR AT PUBLISH TIME]
 **Version:** 1.0
 
-> **DRAFT — LAWYER REVIEW REQUIRED before opening REDIP to any user other than the founder.** India does not currently mandate a cookie banner, but we ship one as a transparency signal. If REDIP is offered to users in the EU / EEA / UK, a full ePrivacy / GDPR consent UI will need to replace this minimal notice.
+> **DRAFT — LAWYER REVIEW REQUIRED before opening Acureal to any user other than the founder.** India does not currently mandate a cookie banner, but we ship one as a transparency signal. If Acureal is offered to users in the EU / EEA / UK, a full ePrivacy / GDPR consent UI will need to replace this minimal notice.
 
-REDIP uses only **essential cookies and similar local-storage technologies** necessary for the Platform to function. We do **not** use third-party advertising cookies, analytics cookies, or tracking pixels.
+Acureal uses only **essential cookies and similar local-storage technologies** necessary for the Platform to function. We do **not** use third-party advertising cookies, analytics cookies, or tracking pixels.
 
 ## What we store
 

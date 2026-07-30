@@ -9,7 +9,7 @@ revision dates
 
 Per DPDP Act 2023 §8(7), personal data must be erased once the purpose is
 fulfilled and no statutory retention applies. This document is the canonical
-retention map for REDIP. It reflects what the platform actually enforces today,
+retention map for Acureal. It reflects what the platform actually enforces today,
 not a future intention — the automated retention sweep described under *Erasure*
 is live in production.
 

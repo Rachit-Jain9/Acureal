@@ -1,13 +1,13 @@
 # Backup & Disaster Recovery Posture (Internal)
 
 **Status date:** 2026-05-20
-**Owner:** REDIP engineering
+**Owner:** Acureal engineering
 **Review cadence:** annual, plus after any restore drill or production incident
 **Maintained in:** version control — see the git history of this file
 
 ## Purpose
 
-This document records how REDIP customer data is backed up, how it is encrypted
+This document records how Acureal customer data is backed up, how it is encrypted
 at rest, and how the platform would be recovered after data loss or a
 destructive incident. It exists so that the recovery answer to a security
 diligence questionnaire is written down and testable, not improvised.
@@ -57,7 +57,7 @@ of the managed-storage provider's durability guarantees.
 ### 2.3 Encryption at rest
 
 Database and object storage are **encrypted at rest by the storage providers**
-(industry-standard AES-256-class encryption, provider-managed keys). REDIP does
+(industry-standard AES-256-class encryption, provider-managed keys). Acureal does
 not operate its own at-rest encryption layer on top; it relies on the managed
 providers, which is the standard posture for a Supabase/Vercel stack. This is
 stated to customers in `docs/SECURITY.md` §7.
@@ -73,7 +73,7 @@ drill — see §5.
 | RPO (Recovery Point Objective) | ≤ 24 hours without PITR; ≤ 5 minutes with PITR enabled | Driven entirely by whether PITR is on — see §2.1 |
 
 The RTO assumes the failure is data corruption / loss, not a Supabase regional
-outage. A full regional outage is outside REDIP's direct control and is governed
+outage. A full regional outage is outside Acureal's direct control and is governed
 by Supabase's own availability commitments.
 
 ## 4. Recovery procedure

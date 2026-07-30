@@ -118,11 +118,11 @@ describe('middleware/auth.requirePlatformAdmin', () => {
   });
 
   test('honors a custom PLATFORM_ADMIN_EMAILS allowlist and excludes the fallback', () => {
-    process.env.PLATFORM_ADMIN_EMAILS = 'ops@redip.in, founder@redip.in';
+    process.env.PLATFORM_ADMIN_EMAILS = 'ops@acureal.in, founder@acureal.in';
 
     const res = buildRes();
     const next = jest.fn();
-    requirePlatformAdmin({ user: { email: 'founder@redip.in' } }, res, next);
+    requirePlatformAdmin({ user: { email: 'founder@acureal.in' } }, res, next);
     expect(next).toHaveBeenCalledTimes(1);
 
     // Once a custom list is configured, the built-in fallback no longer passes.
