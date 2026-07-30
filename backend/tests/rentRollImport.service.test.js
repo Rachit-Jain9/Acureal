@@ -2,12 +2,14 @@
 
 // Deterministic deal-register IMPORTER (rent-roll program, PR-11b).
 // Round-trips a template through fill → parse and pins the value mapping, the
-// redip_meta validation (family / version), and the security posture (values
+// hidden-meta validation (family / version), and the security posture (values
 // only, enum-validate-or-drop, byte cap). The template generator + this parser
 // are exact inverses, so these guard both.
 
 const ExcelJS = require('exceljs');
-const { buildTemplateWorkbook, META_SHEET, HEADER_ROW } = require('../src/services/rentRollTemplate.service');
+const {
+  buildTemplateWorkbook, META_SHEET, LEGACY_META_SHEET, HEADER_ROW,
+} = require('../src/services/rentRollTemplate.service');
 const rentRollService = require('../src/services/rentRoll.service');
 const { parseTemplateBuffer, commitImport, __internal } = require('../src/services/rentRollImport.service');
 const { IMPORT_COLUMNS_BY_KIND } = require('../src/constants/rentRollImportColumns');
@@ -70,11 +72,29 @@ describe('rentRollImport — round-trip parse', () => {
 });
 
 describe('rentRollImport — validation + security', () => {
-  test('rejects a non-template file (no redip_meta) with a readable reason', async () => {
+  // The Acureal rename moved the hidden contract sheet from `redip_meta` to
+  // `acureal_meta`. A template a user downloaded BEFORE the rename must still
+  // import — otherwise the rebrand silently invalidates work already in
+  // progress, which reads as data loss.
+  test('still imports a template stamped with the pre-rename meta sheet', async () => {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(await buildTemplateWorkbook('lease_income'));
+    const meta = wb.getWorksheet(META_SHEET);
+    expect(meta).toBeTruthy();
+    meta.name = LEGACY_META_SHEET; // exactly what an older download carries
+    wb.getWorksheet('Rent Roll').getRow(HEADER_ROW + 1).getCell(1).value = 'LEGACY-1';
+    const buf = await wb.xlsx.writeBuffer().then((b) => Buffer.from(b));
+
+    const out = await parseTemplateBuffer(buf, { expectedFamily: 'lease_income' });
+    expect(out.family).toBe('lease_income');
+    expect(out.kinds.lease.rows[0].record_label).toBe('LEGACY-1');
+  });
+
+  test('rejects a non-template file (no hidden meta sheet) with a readable reason', async () => {
     const wb = new ExcelJS.Workbook();
     wb.addWorksheet('Sheet1').getCell('A1').value = 'hello';
     const buf = await wb.xlsx.writeBuffer().then((b) => Buffer.from(b));
-    await expect(parseTemplateBuffer(buf)).rejects.toThrow(/not a REDIP register template/i);
+    await expect(parseTemplateBuffer(buf)).rejects.toThrow(/not an Acureal register template/i);
   });
 
   test('rejects a wrong-family template for this deal', async () => {

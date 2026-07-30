@@ -24,7 +24,7 @@ const SHARED_DISCLAIMER_TAIL =
   'Market figures, where shown, carry their source and last-verified date; where no verified feed exists that is '
   + 'stated plainly. Title, encumbrance, RERA registration and statutory-approval positions are documentary status '
   + 'only — confirm each independently with qualified counsel and the issuing authorities. No figure in this pack is '
-  + 'model-generated; all numbers come from REDIP\'s deterministic underwriting kernel.';
+  + 'model-generated; all numbers come from Acureal\'s deterministic underwriting kernel.';
 
 const REPORT_PACK_AUDIENCES = Object.freeze({
   lender: {
@@ -35,7 +35,7 @@ const REPORT_PACK_AUDIENCES = Object.freeze({
     eyebrowText: 'Lender Briefing · Credit Review',
     footer: 'Lender Briefing · Organisation aid · Not a credit decision or legal opinion',
     disclaimer:
-      'This Lender Briefing is an organisation aid assembled from REDIP\'s structured deal data. It is not a credit '
+      'This Lender Briefing is an organisation aid assembled from Acureal\'s structured deal data. It is not a credit '
       + 'decision, a valuation, or a legal opinion; the lending decision rests with the institution\'s own credit '
       + 'process. ' + SHARED_DISCLAIMER_TAIL,
     sections: [
@@ -59,7 +59,7 @@ const REPORT_PACK_AUDIENCES = Object.freeze({
     eyebrowText: 'Investor Briefing · Deal Review',
     footer: 'Investor Briefing · Organisation aid · Not investment advice or an offer',
     disclaimer:
-      'This Investor Briefing is an organisation aid assembled from REDIP\'s structured deal data. It is not '
+      'This Investor Briefing is an organisation aid assembled from Acureal\'s structured deal data. It is not '
       + 'investment advice, an offer, a solicitation, or a valuation; modelled returns are scenario estimates, not '
       + 'guarantees, and depend on assumptions that may not hold. ' + SHARED_DISCLAIMER_TAIL,
     sections: [
@@ -67,7 +67,7 @@ const REPORT_PACK_AUDIENCES = Object.freeze({
       { id: 'scenarios',          title: 'Scenarios & Sensitivity',     lead: 'How returns move across the bear, base and bull cases under the kernel\'s standard sensitivities. Estimates, not guarantees.' },
       { id: 'capital_stack',      title: 'Capital Stack',               lead: 'Financing scenarios scored against asset-class covenant norms — the equity/debt shape behind the base-case returns.' },
       { id: 'market_context',     title: 'Market Context',              lead: 'Where this site sits in its micro-market. Every figure carries its source and last-verified date; absence of a verified feed is stated plainly.' },
-      { id: 'promoter',           title: 'Promoter & Execution',        lead: 'The promoter\'s recorded track record and REDIP\'s deterministic execution posture.' },
+      { id: 'promoter',           title: 'Promoter & Execution',        lead: 'The promoter\'s recorded track record and Acureal\'s deterministic execution posture.' },
       { id: 'ic_readiness',       title: 'IC Readiness',                lead: 'How close the deal is to an investment-committee-ready package, by evidence bucket.' },
       { id: 'recommendations',    title: 'Diagnostic Call-outs',        lead: 'Deterministic call-outs composed from kernel signals — financial, market and structural only; statutory matters are excluded.' },
       { id: 'risk_register',      title: 'Risk Register',               lead: 'Open critical and high risk flags recorded on the deal.' },
@@ -86,7 +86,7 @@ const REPORT_PACK_AUDIENCES = Object.freeze({
       'This Buyer Information Pack is an organisation aid prepared from the developer/advisor\'s records. It is NOT '
       + 'legal advice, financial advice, or any guarantee about the project, its registration, or its delivery. '
       + 'Verify the project\'s RERA registration directly on the Karnataka RERA portal (rera.karnataka.gov.in), and '
-      + 'engage your own advocate to confirm title, encumbrances and approvals before any payment or booking. REDIP '
+      + 'engage your own advocate to confirm title, encumbrances and approvals before any payment or booking. Acureal '
       + 'is a software tool — it is not the promoter, builder, or seller. ' + SHARED_DISCLAIMER_TAIL,
     sections: [
       { id: 'project_overview',     title: 'Project Overview',          lead: 'The essentials of the project at a glance.' },

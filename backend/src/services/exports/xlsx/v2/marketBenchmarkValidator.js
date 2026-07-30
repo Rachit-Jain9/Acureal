@@ -310,7 +310,7 @@ const validateYocVsExitCapSpread = (ctx, core, addIssue) => {
  * income-family-only. A development / residential / plotted / hospitality deal
  * could compute a NEGATIVE IRR or an equity multiple BELOW 1.0× — i.e. the
  * model destroys investor capital — and the workbook shipped with no flag.
- * REDIP exists to "reduce catastrophic blind spots"; a silently capital-losing
+ * Acureal exists to "reduce catastrophic blind spots"; a silently capital-losing
  * deal reaching IC is exactly that.
  *
  * Reads the kernel's ALREADY-COMPUTED returns (ctx.kernelKpis.irr,

@@ -212,9 +212,9 @@ const buildDeckContext = (exportContext, options = {}) => {
     }));
 
   const context = {
-    brandName: options.brandName || 'REDIP',
+    brandName: options.brandName || 'Acureal',
     generatedAt: options.generatedAt || exportContext.generatedAt || new Date().toISOString(),
-    generatedFor: options.userName || 'REDIP user',
+    generatedFor: options.userName || 'Acureal user',
     // Latest committed kernel computation — stamped on the closing footer so a
     // circulated deck ties back to the exact signed run behind its figures.
     computationRef: exportContext.computationRef || null,

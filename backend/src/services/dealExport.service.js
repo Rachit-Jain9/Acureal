@@ -9,7 +9,7 @@ const { generateDealInsights, generateRiskNarrative, generateSensitivityNarrativ
 // PR-NX67 (2026-05-19) — AI market-context augment layer. Generates 5
 // market-context sections (Why This Area, Demographics, Job Growth,
 // Social Infrastructure, Supply & Demand Pipeline) from Claude's general
-// knowledge when REDIP's structured payload is empty. Each section carries
+// knowledge when Acureal's structured payload is empty. Each section carries
 // an explicit "AI-generated from general knowledge — verify before IC"
 // disclaimer per CLAUDE.md.
 const aiMarketContext = require('./aiMarketContext.service');
@@ -1093,7 +1093,7 @@ const getDealExportContext = async (dealId, options = {}) => {
       // { available, paragraphs|paragraph|bullets|buckets, summary?, caution?,
       //   provider, confidence, dataQuality, disclaimer, fallbackReason }.
       // Consumed by the DOCX section builders as a SECOND-CHANCE FALLBACK
-      // when REDIP's structured payload (intelligence_briefs, infra_proximity,
+      // when Acureal's structured payload (intelligence_briefs, infra_proximity,
       // demographics fact-row) is empty for the deal.
       //
       // NEVER overrides verified structured data — only fills the gap when

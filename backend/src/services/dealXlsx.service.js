@@ -224,7 +224,7 @@ const buildWorkbookContext = (exportContext, options = {}) => {
   const revenueWeights = makeWeightVector(periods, 'positiveWeight');
   const costWeights = makeWeightVector(periods, 'negativeWeight');
   const generatedAt = options.generatedAt || exportContext?.generatedAt || new Date().toISOString();
-  const brandName = options.brandName || 'REDIP';
+  const brandName = options.brandName || 'Acureal';
 
   const area = {
     landAreaSqft: firstNumber(property.land_area_sqft, deal.land_area_sqft, inputs.plotAreaSqft),
@@ -1486,7 +1486,7 @@ const buildDealWorkbookXlsx = async (exportContext, options = {}) => {
   const context = buildWorkbookContext(exportContext, options);
   const ExcelJS = require('exceljs'); // lazy — off the cold-start path
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = options.userName || 'REDIP';
+  workbook.creator = options.userName || 'Acureal';
   workbook.company = context.brandName;
   workbook.subject = `${context.assetLabel} underwriting workbook`;
   workbook.title = `${context.brandName} - ${textOrNull(context.deal.name, context.deal.property_name, 'Deal')} workbook`;

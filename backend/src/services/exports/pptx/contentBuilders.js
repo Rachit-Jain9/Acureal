@@ -180,7 +180,7 @@ const buildFinancialCommentary = (context) => {
   const points = [];
 
   if (!context.hasFinancialModel) {
-    return ['Stored financial outputs are incomplete, so the economics slide is intentionally limited to available REDIP fields.'];
+    return ['Stored financial outputs are incomplete, so the economics slide is intentionally limited to available Acureal fields.'];
   }
 
   if (context.isIncome) {
@@ -531,7 +531,7 @@ const buildMarketObservations = (context, exportContext) => {
   }
 
   if (!observations.length) {
-    observations.push('Verified city benchmark or comparable data has not been fully linked for this deal, so market commentary is intentionally limited to stored REDIP records.');
+    observations.push('Verified city benchmark or comparable data has not been fully linked for this deal, so market commentary is intentionally limited to stored Acureal records.');
   }
 
   return observations.slice(0, 3);

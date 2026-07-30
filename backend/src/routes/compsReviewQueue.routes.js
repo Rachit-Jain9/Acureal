@@ -157,7 +157,7 @@ router.get(
       const today = new Date().toISOString().slice(0, 10);
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="redip-comps-queue-${today}.csv"`);
+      res.setHeader('Content-Disposition', `attachment; filename="acureal-comps-queue-${today}.csv"`);
       res.send(csv);
     } catch (err) {
       next(err);

@@ -87,7 +87,7 @@ describe('rentRollTemplate.service', () => {
   });
 
   test('templateFileName is filesystem-safe and descriptive', () => {
-    expect(templateFileName('lease_income', 'Whitefield / Phase 2!')).toMatch(/^REDIP-Whitefield-Phase-2-.*-template\.xlsx$/);
+    expect(templateFileName('lease_income', 'Whitefield / Phase 2!')).toMatch(/^Acureal-Whitefield-Phase-2-.*-template\.xlsx$/);
     expect(templateFileName('redevelopment', null)).toMatch(/\.xlsx$/);
   });
 });

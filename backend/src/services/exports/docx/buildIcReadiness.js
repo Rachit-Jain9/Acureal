@@ -137,7 +137,7 @@ const buildCoverPage = ({ readiness, generatedAt, brandName, userName }) => {
   return [
     new Paragraph({
       alignment: AlignmentType.CENTER, spacing: { before: 1200, after: 80 },
-      children: [text(brandName || 'REDIP', { bold: true, color: COLORS.navy, size: 40 })],
+      children: [text(brandName || 'Acureal', { bold: true, color: COLORS.navy, size: 40 })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER, spacing: { after: 480 },
@@ -389,7 +389,7 @@ const buildDisclaimerSection = (readiness) => [
 
 // ─── Public entry ──────────────────────────────────────────────────────────
 
-const buildIcReadinessDocx = async (readiness, { brandName = 'REDIP', userName = null, generatedAt = null } = {}) => {
+const buildIcReadinessDocx = async (readiness, { brandName = 'Acureal', userName = null, generatedAt = null } = {}) => {
   if (!readiness) throw new Error('buildIcReadinessDocx: readiness payload is required.');
 
   if (!readiness.overall || (readiness.buckets || []).length === 0) {

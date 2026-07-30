@@ -26,7 +26,7 @@
  * stacked. Scatter / radar / area can be added later if needed.
  *
  * The chart XML mirrors the structure of the operator's reference template
- * pack (`REDIP_India_Template_*.xlsx`, openpyxl-generated) — same element
+ * pack (`Acureal_India_Template_*.xlsx`, openpyxl-generated) — same element
  * order, same minimal namespace declarations — so files open without the
  * "Excel found a problem with formulas in this workbook" repair dialog.
  */

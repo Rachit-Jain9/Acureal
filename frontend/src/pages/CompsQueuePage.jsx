@@ -565,7 +565,7 @@ export default function CompsQueuePage() {
       const response = await compsReviewQueueAPI.exportCsv(params);
       const today = new Date().toISOString().slice(0, 10);
       const suffix = activeView ? `-${activeView.name.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 40).toLowerCase()}` : '';
-      downloadAxiosResponse(response, `redip-comps-queue${suffix}-${today}.csv`);
+      downloadAxiosResponse(response, `acureal-comps-queue${suffix}-${today}.csv`);
       toast.success(`Exported ${total} item${total === 1 ? '' : 's'} to CSV`);
     } catch (err) {
       toast.error(err?.response?.data?.message || 'CSV export failed');

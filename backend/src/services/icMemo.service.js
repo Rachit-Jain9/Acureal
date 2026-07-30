@@ -4,7 +4,7 @@
  * IC memo drafting service (Tier-2 #13).
  *
  * Generates a Claude-authored Investment Committee memo for a deal.
- * Pulls the most comprehensive context of any AI artifact REDIP produces:
+ * Pulls the most comprehensive context of any AI artifact Acureal produces:
  * deal + property + financials + risk_flags + dd_items + approvals +
  * comps + market benchmarks + recent transactions. Outputs structured
  * markdown across 8 IC-grade sections.
@@ -39,7 +39,7 @@ const auditService = require('./audit.service');
 const numericalVerifier = require('./numericalVerifier.service');
 const { formatQuantumCr } = require('../utils/marketUnits');
 // Deterministic trust-signal services (Workstreams A, B, C). The IC memo —
-// REDIP's decision artifact — must be honest about what has been verified, so
+// Acureal's decision artifact — must be honest about what has been verified, so
 // it is fed the same postures the workspace shows the analyst.
 const riskRadarService = require('./riskRadar.service');
 const modelConfidenceService = require('./modelConfidence.service');
@@ -54,7 +54,7 @@ const log = require('../lib/logger').child({ module: 'icMemo' });
 // Context assembly — pulls every primary input the IC needs.
 // ──────────────────────────────────────────────────────────────────────────
 
-const SYSTEM_PROMPT = `You are a senior investment committee author at REDIP, an India-first real-estate investment platform. Your job is to write an institutional-grade IC memo in markdown that an investment committee can read and act on in 5 minutes.
+const SYSTEM_PROMPT = `You are a senior investment committee author at Acureal, an India-first real-estate investment platform. Your job is to write an institutional-grade IC memo in markdown that an investment committee can read and act on in 5 minutes.
 
 OUTPUT FORMAT — strict, in this order:
 
@@ -82,11 +82,11 @@ Short bullet list of outstanding diligence items. Pull from the supplied dd_item
 Pull from the supplied approval_items. State which are pending vs received. If pending count > 0, this is a yellow light at minimum.
 
 ## 8. Recommendation
-Single paragraph. Lead with EXACTLY ONE stance from REDIP's closed recommendation vocabulary — and NEVER use the words approve, approval, decline, reject, buy, sell, pass, or clear: "Recommend proceeding", "Recommend proceeding subject to [conditions]", "Hold pending [specific items]", or "Re-examine [specific items]". State the conditions or items explicitly. End with a one-line capital ask: "Capital required: ₹ X Cr equity / ₹ Y Cr debt." Weigh the supplied \`verification\` block: if the financial model is assumption-led, or any Risk Radar category is flagged or unverified, a clean "Recommend proceeding" is not available — name those specific items as explicit conditions, holds, or re-examines.
+Single paragraph. Lead with EXACTLY ONE stance from Acureal's closed recommendation vocabulary — and NEVER use the words approve, approval, decline, reject, buy, sell, pass, or clear: "Recommend proceeding", "Recommend proceeding subject to [conditions]", "Hold pending [specific items]", or "Re-examine [specific items]". State the conditions or items explicitly. End with a one-line capital ask: "Capital required: ₹ X Cr equity / ₹ Y Cr debt." Weigh the supplied \`verification\` block: if the financial model is assumption-led, or any Risk Radar category is flagged or unverified, a clean "Recommend proceeding" is not available — name those specific items as explicit conditions, holds, or re-examines.
 
 RULES:
 - Every number in your memo must come from the supplied data — do not invent.
-- A \`verification\` block is supplied — REDIP's deterministic engines (not AI) reporting the model-confidence level, the Risk Radar posture for each failure mode, the promoter posture, and the count of analyst-relied comps. Treat it as ground truth: never contradict it, and state plainly what it shows is NOT yet verified.
+- A \`verification\` block is supplied — Acureal's deterministic engines (not AI) reporting the model-confidence level, the Risk Radar posture for each failure mode, the promoter posture, and the count of analyst-relied comps. Treat it as ground truth: never contradict it, and state plainly what it shows is NOT yet verified.
 - If a field is null/empty, say so explicitly ("Not yet modelled", "Pending"). Never silently omit.
 - Tone: senior partner briefing the IC, not marketing copy.
 - Markdown only — use proper headings, tables, and bullets.
@@ -153,7 +153,7 @@ const buildVerificationContext = async (dealId) => {
 /**
  * Deterministic computation-reference footer for the memo.
  *
- * The IC memo is REDIP's decision artifact; anchoring it to the same signed
+ * The IC memo is Acureal's decision artifact; anchoring it to the same signed
  * kernel computation the in-app Audit tab and the DOCX/XLSX/PPTX exports quote
  * lets an IC reader ask "which run produced these numbers?" and get one exact,
  * cross-surface answer.

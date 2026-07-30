@@ -212,7 +212,7 @@ const fullWidthTable = (rows) =>
 // The single quiet AI-disclosure line (CLAUDE.md operator override 2026-05-19):
 // 7pt italic muted, cover only. No per-section banners, no provider names.
 const AI_DISCLAIMER =
-  'Portions of this pack are drafted with model-assisted synthesis from REDIP\'s structured deal data. '
+  'Portions of this pack are drafted with model-assisted synthesis from Acureal\'s structured deal data. '
   + 'All numerical figures originate from the deterministic underwriting kernel — no figures are model-generated. '
   + 'Statutory matters (title, encumbrance, RERA registration, and approvals) are presented as factual status only, '
   + 'never as a legal conclusion. Independent verification against primary source documents is required before any decision.';
@@ -228,7 +228,7 @@ const coverPage = ({ brandName, eyebrowText, title, subtitle, metaLines = [], ge
   const children = [
     new Paragraph({
       spacing: { before: 1000, after: 80 },
-      children: [text(brandName || 'REDIP', { bold: true, color: C.accent, size: 28, characterSpacing: 40 })],
+      children: [text(brandName || 'Acureal', { bold: true, color: C.accent, size: 28, characterSpacing: 40 })],
     }),
     eyebrow(eyebrowText || 'Deal Briefing'),
     new Paragraph({
@@ -261,7 +261,7 @@ const coverPage = ({ brandName, eyebrowText, title, subtitle, metaLines = [], ge
 
 // ─── Document shell (margins + header + footer with page numbers) ───────────
 
-const buildDocShell = ({ children, brandName = 'REDIP', dealTitle = 'Deal', docTitle = 'Report Pack', footerText }) => {
+const buildDocShell = ({ children, brandName = 'Acureal', dealTitle = 'Deal', docTitle = 'Report Pack', footerText }) => {
   const doc = new Document({
     creator: brandName,
     title: `${docTitle} — ${dealTitle}`,

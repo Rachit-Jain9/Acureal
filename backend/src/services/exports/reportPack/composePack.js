@@ -521,7 +521,7 @@ const sectionRecommendations = (ws) => {
   const items = top.map((r) => ({ verb: r.verb, headline: r.headline || r.topic_label, detail: r.detail || '' }));
   return [
     { type: 'callouts', items },
-    { type: 'note', text: 'Call-outs are composed deterministically from kernel signals; verbs follow REDIP\'s fixed dictionary. Statutory matters are excluded here and shown as documentary status only.' },
+    { type: 'note', text: 'Call-outs are composed deterministically from kernel signals; verbs follow Acureal\'s fixed dictionary. Statutory matters are excluded here and shown as documentary status only.' },
   ];
 };
 
@@ -607,7 +607,7 @@ const composePack = (workspace, audienceKey) => {
   if (deal.stage) metaLines.push(`Stage: ${String(deal.stage).replace(/_/g, ' ')}`);
 
   const meta = {
-    brandName: 'REDIP',
+    brandName: 'Acureal',
     docTitle: audience.docTitle,
     eyebrowText: audience.eyebrowText,
     title: deal.name || 'Deal',

@@ -1220,7 +1220,7 @@ const namedRangeSource = (ctx, name, value, isDerivedFormula, options = {}) => {
   if (hasOwnValue(ctx.inputs, modelInputAliases[name])) {
     return {
       sourceType: 'Financial model input',
-      sourceName: 'REDIP financial model',
+      sourceName: 'Acureal financial model',
       url: dealUrl,
       freshness: ctx.generatedAt,
       confidence: 'stored-input',
@@ -1231,7 +1231,7 @@ const namedRangeSource = (ctx, name, value, isDerivedFormula, options = {}) => {
   if (hasOwnValue(ctx.engineAssumptions, modelInputAliases[name])) {
     return {
       sourceType: 'Financial engine default registry',
-      sourceName: 'REDIP financial engine',
+      sourceName: 'Acureal financial engine',
       url: dealUrl,
       freshness: ctx.generatedAt,
       confidence: 'engine-default',
@@ -1242,7 +1242,7 @@ const namedRangeSource = (ctx, name, value, isDerivedFormula, options = {}) => {
   if (hasOwnValue(ctx.deal, dealAliases[name])) {
     return {
       sourceType: 'Deal financial record',
-      sourceName: 'REDIP deal financials',
+      sourceName: 'Acureal deal financials',
       url: dealUrl,
       freshness: ctx.generatedAt,
       confidence: 'stored-financial',
@@ -1253,7 +1253,7 @@ const namedRangeSource = (ctx, name, value, isDerivedFormula, options = {}) => {
   if (hasOwnValue(ctx.property, propertyAliases[name])) {
     return {
       sourceType: 'Property record',
-      sourceName: 'REDIP property table',
+      sourceName: 'Acureal property table',
       url: dealUrl,
       freshness: ctx.generatedAt,
       confidence: ctx.property.geocode_confidence ? `stored-property (${ctx.property.geocode_confidence})` : 'stored-property',
@@ -1310,7 +1310,7 @@ const buildSourceRegister = (ctx, options = {}) => {
       label: 'Market comps used in export',
       value: `${comps.length} comps (${verifiedCount} verified)`,
       sourceType: 'Comparable transactions / listings',
-      sourceName: comps[0]?.source || 'REDIP comps table',
+      sourceName: comps[0]?.source || 'Acureal comps table',
       url: firstUrl,
       // Honest freshness: the market-observation "as of" date, then a data_type
       // period token — NEVER possession_year (a FUTURE construction milestone, not
@@ -1633,7 +1633,7 @@ const buildContext = (exportContext = {}, options = {}) => {
     projectMonths,
     totalQuarters,
     kernelKpis,
-    brandName: options.brandName || 'REDIP',
+    brandName: options.brandName || 'Acureal',
     generatedAt: options.generatedAt || exportContext.generatedAt || new Date().toISOString(),
     effectiveDate,
     // Latest committed kernel computation, stamped on the Model Integrity
@@ -3183,7 +3183,7 @@ const appendQaSourcesToSheet = (sheet, ctx, startRow) => {
       row.confidence || 'unknown',
       row.notes || '',
     ])
-    : [['all', 'Source register', 'No tracked source fields', 'system', 'REDIP export', 'No link available', 'n/a', 'unknown', 'No source rows were emitted for this workbook.']];
+    : [['all', 'Source register', 'No tracked source fields', 'system', 'Acureal export', 'No link available', 'n/a', 'unknown', 'No source rows were emitted for this workbook.']];
 
   sheet.addTable({
     name: 'ExportSourceRegister',
@@ -5459,7 +5459,7 @@ const buildExecutiveBriefingSheet = (workbook, ctx) => {
   sheet.mergeCells('A18:H18');
   const footnoteCell = sheet.getCell('A18');
   footnoteCell.value =
-    'All numbers in this briefing are sourced from the Inputs sheet or REDIP\'s deterministic financial kernel. ALL underwriting decisions require human review of source documents (sale deeds, RERA registration, encumbrance certificate, BBMP plan sanction, etc.) and verification of every input against ground truth. See the Inputs sheet for the full editable assumption stack with India-context cell tooltips (RERA / GST / BBMP UAV / LTCG / Khata).';
+    'All numbers in this briefing are sourced from the Inputs sheet or Acureal\'s deterministic financial kernel. ALL underwriting decisions require human review of source documents (sale deeds, RERA registration, encumbrance certificate, BBMP plan sanction, etc.) and verification of every input against ground truth. See the Inputs sheet for the full editable assumption stack with India-context cell tooltips (RERA / GST / BBMP UAV / LTCG / Khata).';
   footnoteCell.font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedLow') } };
   footnoteCell.alignment = { horizontal: 'left', vertical: 'top', wrapText: true, indent: 1 };
   footnoteCell.protection = { locked: true };
@@ -6386,7 +6386,7 @@ const buildDashboardSheet = (workbook, ctx) => {
   // the workbook understands why the two rows differ (and which one
   // matches the rest of the platform).
   sheet.mergeCells('A23:F23');
-  sheet.getCell('A23').value = 'KERNEL = stored on the deal record by REDIP\'s deterministic financial kernel; matches the Reports page + PPTX/DOCX exports. MODELED = recomputed live from the Phasing + Cash Flow sheets; edit Inputs to explore scenarios. POST-TAX = MODELED gross IRR × (1 − Effective CG Rate); switches LTCG/STCG based on hold period.';
+  sheet.getCell('A23').value = 'KERNEL = stored on the deal record by Acureal\'s deterministic financial kernel; matches the Reports page + PPTX/DOCX exports. MODELED = recomputed live from the Phasing + Cash Flow sheets; edit Inputs to explore scenarios. POST-TAX = MODELED gross IRR × (1 − Effective CG Rate); switches LTCG/STCG based on hold period.';
   sheet.getCell('A23').font = { name: FONT, size: 8, italic: true, color: { argb: palette.xlsx('mutedHigh') } };
   sheet.getCell('A23').alignment = { vertical: 'top', wrapText: true };
   sheet.getCell('A23').protection = { locked: true };
@@ -8648,7 +8648,7 @@ const buildDealWorkbookV2Workbook = (exportContext, options = {}) => {
   workbook.modified = new Date();
   workbook.title = `${ctx.deal.name || ctx.property.property_name || 'Deal'} — Investor-Grade Workbook`;
   workbook.subject = `${ctx.assetClass || 'Generic'} financial model`;
-  workbook.description = 'REDIP investor-grade workbook (v2). Investor-grade — verify all inputs.';
+  workbook.description = 'Acureal investor-grade workbook (v2). Investor-grade — verify all inputs.';
   workbook.company = ctx.brandName;
   workbook.calcProperties.fullCalcOnLoad = true;
 
@@ -8945,7 +8945,7 @@ const forceWorkbookRecalculationOnOpen = async (xlsxBuffer) => {
 // ──────────────────────────────────────────────────────────────────────
 //
 // The Pointec Pens hospitality bug evaded THREE rounds of fixes (#327,
-// #329, #332) because the bug surfaced ONLY after the file left REDIP
+// #329, #332) because the bug surfaced ONLY after the file left Acureal
 // and reached Microsoft Excel. The server-side validator passed; ExcelJS
 // re-parsed the buffer cleanly in Jest tests; the file was valid by every
 // check we had — but Excel still auto-repaired the Dashboard sheet to
@@ -9158,7 +9158,7 @@ const validateXlsxBufferForDownload = async (xlsxBuffer, options = {}) => {
 
   // PR-NX16: log per-sheet cell-count diagnostics to console (visible in
   // Vercel function logs). Helps diagnose production-only bugs by seeing
-  // exactly what each sheet looked like when REDIP shipped it.
+  // exactly what each sheet looked like when Acureal shipped it.
   if (process.env.NODE_ENV !== 'test') {
     const diagLine = sheetDiagnostics
       .sort((a, b) => a.basename.localeCompare(b.basename))
@@ -9298,15 +9298,15 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
   const dashboardSheetFile = dashboardIdx >= 0 ? `sheet${dashboardIdx + 1}.xml` : 'sheet1.xml';
 
   // PR-NX16 (2026-05-16) — escape hatches for diagnosing the Pointec Pens
-  // bug class. If REDIP_SKIP_CHART_INJECTION=1, skip the native-chart XML
-  // splice. If REDIP_SKIP_SPARKLINE_INJECTION=1, skip sparklines. If
-  // REDIP_SKIP_ALL_POST_INJECTION=1, skip both. Operator can toggle via
+  // bug class. If Acureal_SKIP_CHART_INJECTION=1, skip the native-chart XML
+  // splice. If Acureal_SKIP_SPARKLINE_INJECTION=1, skip sparklines. If
+  // Acureal_SKIP_ALL_POST_INJECTION=1, skip both. Operator can toggle via
   // Vercel env vars without a redeploy. Helps isolate whether the
   // Dashboard corruption is from chart injection or earlier in the pipeline.
-  const skipCharts = process.env.REDIP_SKIP_CHART_INJECTION === '1'
-    || process.env.REDIP_SKIP_ALL_POST_INJECTION === '1';
-  const skipSparklines = process.env.REDIP_SKIP_SPARKLINE_INJECTION === '1'
-    || process.env.REDIP_SKIP_ALL_POST_INJECTION === '1';
+  const skipCharts = process.env.Acureal_SKIP_CHART_INJECTION === '1'
+    || process.env.Acureal_SKIP_ALL_POST_INJECTION === '1';
+  const skipSparklines = process.env.Acureal_SKIP_SPARKLINE_INJECTION === '1'
+    || process.env.Acureal_SKIP_ALL_POST_INJECTION === '1';
 
   // PR-NX16: track Dashboard cell count BEFORE and AFTER chart injection
   // so server-side logs reveal which step (if any) corrupts the sheet.
@@ -9395,7 +9395,7 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
       }
     } else if (skipCharts && process.env.NODE_ENV !== 'test') {
       // eslint-disable-next-line no-console
-      console.log(`[xlsx.v2 ${ctxLabel}] chart injection SKIPPED (REDIP_SKIP_CHART_INJECTION=1)`);
+      console.log(`[xlsx.v2 ${ctxLabel}] chart injection SKIPPED (Acureal_SKIP_CHART_INJECTION=1)`);
     }
   } catch (err) {
     // Chart injection is best-effort. If anything goes wrong (a future
@@ -9431,7 +9431,7 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
       }
     } else if (process.env.NODE_ENV !== 'test') {
       // eslint-disable-next-line no-console
-      console.log(`[xlsx.v2 ${ctxLabel}] sparkline injection SKIPPED (REDIP_SKIP_SPARKLINE_INJECTION=1)`);
+      console.log(`[xlsx.v2 ${ctxLabel}] sparkline injection SKIPPED (Acureal_SKIP_SPARKLINE_INJECTION=1)`);
     }
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {

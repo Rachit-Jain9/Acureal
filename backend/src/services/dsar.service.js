@@ -3,7 +3,7 @@
 /**
  * Data Subject Access Request (DSAR) service — DPDP Act 2023 §11.
  *
- * Assembles the personal data REDIP holds about a single user and serves the
+ * Assembles the personal datan Acureal holds about a single user and serves the
  * Privacy Centre's two needs:
  *   - getPrivacyOverview(userId) — a light read model for the page.
  *   - buildDataExport(userId)    — the full machine-readable export.
@@ -11,7 +11,7 @@
  * Scope is the user's OWN personal/account data: profile, organisation
  * memberships, consent decisions, legal acceptances, and an active-session
  * summary. Deal and document content belongs to the organisation workspace
- * (REDIP is a Data Processor for it) and is available inside the app; it is
+ * (Acureal is a Data Processor for it) and is available inside the app; it is
  * intentionally not duplicated into a personal-data export.
  *
  * Every optional-table read is migration-tolerant: an absent table degrades
@@ -228,10 +228,10 @@ const buildDataExport = async (userId) => {
     export_metadata: {
       generated_at: new Date().toISOString(),
       subject_user_id: userId,
-      platform: 'REDIP — Real Estate Deal Intelligence Platform',
+      platform: 'Acureal — Real Estate Deal Intelligence Platform',
       format_version: '1.0',
       scope:
-        'Personal account data REDIP holds about you, under the Digital Personal ' +
+        'Personal account datan Acureal holds about you, under the Digital Personal ' +
         'Data Protection Act, 2023 (§11 — right to access). Deal, document and ' +
         'workspace content belongs to your organisation and is available inside ' +
         'the app; it is not duplicated into this personal-data export.',
