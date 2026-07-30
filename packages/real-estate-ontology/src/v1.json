@@ -2,11 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "ontology_version": "1.2.0",
   "last_reviewed": "2026-05-22",
-  "review_owner": "REDIP core",
-  "description": "Canonical real-estate ontology for REDIP. Single source of truth for area / pricing / deal-structure / exit-strategy taxonomies + extraction field mappings. Bengaluru-priority, India-context. Used by document ingestion (extraction.service), apply-extractions endpoint, deal export builders, frontend form validation.",
+  "review_owner": "Acureal core",
+  "description": "Canonical real-estate ontology for Acureal. Single source of truth for area / pricing / deal-structure / exit-strategy taxonomies + extraction field mappings. Bengaluru-priority, India-context. Used by document ingestion (extraction.service), apply-extractions endpoint, deal export builders, frontend form validation.",
 
   "asset_class": {
-    "description": "10 native asset classes REDIP underwrites. Anything else routes through 'mixed_use' or 'raw_land' depending on entitlement stage. Per CLAUDE.md the primary nav axis.",
+    "description": "10 native asset classes Acureal underwrites. Anything else routes through 'mixed_use' or 'raw_land' depending on entitlement stage. Per CLAUDE.md the primary nav axis.",
     "values": [
       { "key": "hospitality",            "label": "Hospitality (hotel)",           "family": "income",      "india_notes": "USALI cost structure; ADR + RevPAR + OCC% KPIs; STR / branded vs unbranded keys distinct on tax/financing." },
       { "key": "commercial_office",      "label": "Commercial Office",              "family": "income",      "india_notes": "Grade A vs B; CBD vs SBD vs PBD rental tiers; vacancy in Bengaluru micro-markets (ORR, EPIP, KIADB) varies 8-22%." },
@@ -115,7 +115,7 @@
   },
 
   "extraction_field_map": {
-    "description": "Maps canonical extraction-field keys to their destination table + column in REDIP's DB schema. Used by the apply-extractions endpoint to route each approved extraction value to the correct write path. Each entry includes: table, column, value_type, optional transform (for unit-conversion or basis-change), description, and an india_context note explaining WHY this matters.",
+    "description": "Maps canonical extraction-field keys to their destination table + column in Acureal's DB schema. Used by the apply-extractions endpoint to route each approved extraction value to the correct write path. Each entry includes: table, column, value_type, optional transform (for unit-conversion or basis-change), description, and an india_context note explaining WHY this matters.",
     "fields": {
       "survey_number": {
         "label": "Survey Number",
@@ -296,7 +296,7 @@
   },
 
   "confidence_bands": {
-    "description": "How REDIP UI renders raw confidence scores. Per AI_ROADMAP §10 (UX/UI conventions for AI surfaces).",
+    "description": "How Acureal UI renders raw confidence scores. Per AI_ROADMAP §10 (UX/UI conventions for AI surfaces).",
     "bands": [
       { "key": "high",   "label": "High",   "min": 0.80, "max": 1.00, "tone": "data-positive",  "applies": "Auto-fill candidate — operator may accept-all-high in bulk." },
       { "key": "medium", "label": "Medium", "min": 0.50, "max": 0.80, "tone": "data-highlight", "applies": "Requires explicit per-field review before apply." },

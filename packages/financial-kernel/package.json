@@ -1,7 +1,7 @@
 {
   "name": "@redip/financial-kernel",
   "version": "0.1.0",
-  "description": "REDIP canonical financial kernel — pure deterministic underwriting primitives, KPIs, and asset-class models.",
+  "description": "Acureal canonical financial kernel — pure deterministic underwriting primitives, KPIs, and asset-class models.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

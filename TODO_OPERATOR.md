@@ -8,7 +8,7 @@ have. Everything else (the code, the database, the product) is built and verifie
 After each one, reply with the little "done" phrase shown — that's how I keep this
 list up to date. Everything is written step-by-step, no jargon.
 
-_Last updated: 2026-06-09._
+_Last updated: 2026-07-30 (Acureal rebrand — items 5, 6 and 6b are new/rewritten)._
 
 ---
 
@@ -109,27 +109,77 @@ working Grievance Officer contact).
 
 # 🟡 NEEDS LEAD TIME — start soon
 
-## 6. Get a domain + turn on email sending
-**Why:** A few features need REDIP to *send* email — sign-up verification + password
-reset links, and automatic **K-RERA deadline reminders**. Right now it can't send any
-email because there's no verified sending domain. (Nothing is broken without it — the
-K-RERA calendar is fully visible on screen and in the Word download; this just adds
-the email nudges.)
+## 6. 🔴 Point acureal.in at the site (do this FIRST — three other things wait on it)
+**Why:** You own **acureal.in** but the site still only answers at
+`redip.vercel.app`. Until the domain is connected, the product is called Acureal
+but lives at the old address — and email cannot be switched on at all.
 
-Once you have a domain (e.g. `redip.in`):
+### Step A — tell Vercel about the domain
+1. 🌐 Open: `https://vercel.com/rachitjain348-4262s-projects/redip/settings/domains`
+2. In the box that says **Enter domain**, type exactly: `acureal.in`
+3. Click **Add**.
+4. If it offers **"Add www.acureal.in and redirect to acureal.in"**, choose that one.
+5. Vercel will now show the domain with an orange **Invalid Configuration** label and
+   list the DNS records it wants. That is expected — Step B fixes it.
+
+### Step B — add two records at GoDaddy
+1. 🌐 Open: `https://dcc.godaddy.com/control/portfolio/acureal.in/settings`
+2. Find **DNS** and click **Manage DNS**.
+3. Click **Add New Record**. Fill in exactly:
+   - **Type:** `A`
+   - **Name:** `@`
+   - **Value:** `76.76.21.21`
+   - **TTL:** leave the default (1 hour)
+   - Click **Save**.
+4. Click **Add New Record** again. Fill in exactly:
+   - **Type:** `CNAME`
+   - **Name:** `www`
+   - **Value:** `cname.vercel-dns.com`
+   - **TTL:** leave the default
+   - Click **Save**.
+5. ⚠️ If GoDaddy already has an **A record** on `@` (often pointing at a GoDaddy
+   parking page), **edit that one** instead of adding a second. Two A records on
+   `@` will make the site load only half the time.
+6. **Success signal:** back on the Vercel page from Step A, the orange
+   **Invalid Configuration** turns into a green **Valid Configuration**, and a
+   padlock (HTTPS certificate) appears. This usually takes 10–30 minutes; it can
+   take a few hours.
+7. **Reply:** `domain live` (or send a screenshot if it still looks orange after
+   two hours).
+
+### Step C — one setting so the app trusts the new address
+1. 🌐 Open: `https://vercel.com/rachitjain348-4262s-projects/redip/settings/environment-variables`
+2. Find the row named **`CORS_ORIGINS`**. Click **⋯ → Edit**.
+3. Replace the value with exactly this:
+   `https://acureal.in,https://www.acureal.in,https://redip.vercel.app`
+4. Click **Save**. You'll see a green **Updated** message.
+5. **Reply:** `cors updated`. (Keeping the old address in the list on purpose —
+   it stays working until we confirm everything is fine on the new one.)
+
+## 6b. 🔴 Turn on email sending (after 6 is done)
+**Why:** Right now **a new person who signs up never receives their verification
+email.** The app tries to send it and fails, because no email provider is
+connected. This also unlocks password-reset links and the K-RERA deadline
+reminders (already built and waiting).
+
 1. 🌐 Go to `https://resend.com`, sign up (free to start), log in.
-2. **Domains → Add Domain**, type your domain, click Add.
-3. Resend shows a few **DNS records**. Go to where you bought the domain (GoDaddy,
-   Namecheap, Cloudflare, etc.), open its DNS settings, and add those exact records
-   (copy-paste each — don't retype).
-4. Back on Resend, wait for the domain to show a green **Verified**.
-5. **API Keys → Create API Key**, copy the key (starts with `re_…`).
-6. 🌐 Open `https://vercel.com/rachitjain348-4262s-projects/redip/settings/environment-variables`
-   and add two settings:
-   - `RESEND_API_KEY` = the `re_…` key.
-   - `MAIL_FROM` = `REDIP <noreply@redip.in>` (your real domain).
-7. **Reply:** `email sending on` — I'll switch on the automatic K-RERA reminders
-   (already built and waiting).
+2. Click **Domains → Add Domain**. Type `acureal.in`. Click **Add**.
+3. Resend shows a list of **DNS records** (usually 3: one `TXT` and two `CNAME`).
+4. 🌐 Open GoDaddy DNS again: `https://dcc.godaddy.com/control/portfolio/acureal.in/settings`
+   → **Manage DNS**. Add each record Resend listed, one at a time, using
+   **Add New Record**. **Copy-paste each value — do not retype it.**
+   - Where GoDaddy asks for **Name** and Resend shows something like
+     `send.acureal.in`, enter only the first part (`send`), not the whole thing.
+5. Back on Resend, wait for the domain to show a green **Verified**.
+6. Click **API Keys → Create API Key**. Name it `acureal-production`. Copy the
+   key (it starts with `re_`). ⚠️ You only get to see it once.
+7. 🌐 Open `https://vercel.com/rachitjain348-4262s-projects/redip/settings/environment-variables`
+   and add these two, using **Add New** for each:
+   - Name: `RESEND_API_KEY` · Value: the `re_…` key you copied
+   - Name: `MAIL_FROM` · Value: `Acureal <noreply@acureal.in>`
+8. Click **Save** on each. Green **Updated** message each time.
+9. **Reply:** `email sending on` — then I'll create a test account and confirm a
+   real verification email actually arrives, and switch on the K-RERA reminders.
 
 ## 7. Hire a lawyer for two legal documents
 **Why:** Big customers (funds, banks, REITs) check for proper legal paperwork before

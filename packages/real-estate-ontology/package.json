@@ -1,7 +1,7 @@
 {
   "name": "@redip/real-estate-ontology",
   "version": "1.0.0",
-  "description": "REDIP canonical real-estate ontology — asset class / deal structure / exit strategy / area / pricing / extraction field map. Single source of truth shared across backend, frontend, and exports.",
+  "description": "Acureal canonical real-estate ontology — asset class / deal structure / exit strategy / area / pricing / extraction field map. Single source of truth shared across backend, frontend, and exports.",
   "main": "src/index.js",
   "files": [
     "src"

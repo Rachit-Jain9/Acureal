@@ -12,7 +12,7 @@
 import { readFileSync } from 'node:fs';
 import { argv } from 'node:process';
 
-const SOURCE_PATH = argv[2] || 'C:/Users/rachi/OneDrive - UW/Desktop/REDIP-COMPS/redip_bengaluru_micro_market_rates_v0_2_2026Q1.json';
+const SOURCE_PATH = argv[2] || 'C:/Users/rachi/OneDrive - UW/Desktop/Acureal-COMPS/redip_bengaluru_micro_market_rates_v0_2_2026Q1.json';
 const AS_OF_DATE = '2026-05-04';
 const PERIOD_LABEL = 'Q1 2026 v0.2';
 // Single-tenant org_id used by all existing market_* rows. Hardcoded so the
@@ -51,7 +51,7 @@ const out = [];
 
 const header = `-- 20260507_q1_2026_v0_2_data_refresh.sql
 -- =============================================================================
--- REDIP Bengaluru Micro-Market Rate Pack v0.2 — Q1 2026 refresh
+-- Acureal Bengaluru Micro-Market Rate Pack v0.2 — Q1 2026 refresh
 -- Generated: ${new Date().toISOString()}
 -- Source: redip_bengaluru_micro_market_rates_v0_2_2026Q1.json (${records.length} records)
 -- =============================================================================

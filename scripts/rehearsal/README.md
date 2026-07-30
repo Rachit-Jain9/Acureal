@@ -22,7 +22,7 @@ branch-only by design.
 Everything below happens on the **branch**, with a **local backend** — the
 live site is never touched.
 
-1. **Create the branch** (operator): Supabase dashboard → the REDIP project →
+1. **Create the branch** (operator): Supabase dashboard → the Acureal project →
    **Branches** → **Create branch**. Any name (e.g. `m1-rehearsal`). Small
    metered cost on the Pro plan; deleted at the end.
 

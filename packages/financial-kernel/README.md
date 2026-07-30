@@ -1,6 +1,6 @@
 # @redip/financial-kernel
 
-Pure, deterministic underwriting kernel for REDIP.
+Pure, deterministic underwriting kernel for Acureal.
 
 ## Hard rules
 

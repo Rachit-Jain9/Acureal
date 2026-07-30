@@ -47,7 +47,7 @@ describe('FinancialGraph', () => {
 });
 
 describe('buildStandardGraph', () => {
-  test('produces the canonical REDIP deal graph', () => {
+  test('produces the canonical Acureal deal graph', () => {
     const g = buildStandardGraph({
       facilityIds: ['f1', 'f2'],
       tierIds: ['roc', 'pref', 'catchup', 'promote'],

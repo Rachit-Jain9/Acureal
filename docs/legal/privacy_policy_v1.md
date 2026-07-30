@@ -103,7 +103,7 @@ To exercise rights, write to grievance@[YOUR-DOMAIN] from the email on your acco
 - Audit log entries cryptographically signed (HMAC-SHA256) and append-only.
 - Daily AI cost cap per workspace to limit blast radius of credential abuse.
 
-We follow ISO 27001-aligned practices (formal certification not yet attained). We do not warrant that no breach can occur; in the event of one, we follow the [Breach Notification Runbook](https://github.com/Rachit-Jain9/REDIP/blob/master/docs/legal/breach_notification_runbook.md) and notify the Indian Computer Emergency Response Team (CERT-In) within 6 hours of awareness, per CERT-In Directions April 2022 §II.
+We follow ISO 27001-aligned practices (formal certification not yet attained). We do not warrant that no breach can occur; in the event of one, we follow the [Breach Notification Runbook](https://github.com/Rachit-Jain9/Acureal/blob/master/docs/legal/breach_notification_runbook.md) and notify the Indian Computer Emergency Response Team (CERT-In) within 6 hours of awareness, per CERT-In Directions April 2022 §II.
 
 ## 10. Children's data
 

@@ -2,8 +2,8 @@
 """Generate the discrepancy-resolution workflow .js with the manifest embedded."""
 import json
 
-MAN = r'C:\Users\rachi\OneDrive - UW\Desktop\REDIP\backend\_pdf_tmp\igr_disc_manifest.json'
-OUT = r'C:\Users\rachi\OneDrive - UW\Desktop\REDIP\backend\_pdf_tmp\resolve_workflow.js'
+MAN = r'C:\Users\rachi\OneDrive - UW\Desktop\Acureal\backend\_pdf_tmp\igr_disc_manifest.json'
+OUT = r'C:\Users\rachi\OneDrive - UW\Desktop\Acureal\backend\_pdf_tmp\resolve_workflow.js'
 
 manifest = json.load(open(MAN, encoding='utf-8'))
 mjson = json.dumps(manifest, ensure_ascii=False)

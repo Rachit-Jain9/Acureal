@@ -7,7 +7,7 @@ const path = require('path');
 // Log in ONCE (via the real login form) and persist the authenticated session
 // so every test reuses it. Runs before the suite (playwright.config globalSetup).
 module.exports = async () => {
-  const baseURL = process.env.E2E_BASE_URL || 'https://redip.vercel.app';
+  const baseURL = process.env.E2E_BASE_URL || 'https://acureal.in';
   const email = process.env.E2E_EMAIL;
   const password = process.env.E2E_PASSWORD;
   if (!email || !password) {
@@ -32,7 +32,7 @@ module.exports = async () => {
     await page.locator('input[name="email"]').fill(email);
     await page.locator('input[name="password"]').fill(password);
 
-    // REDIP stores the cached `user` in sessionStorage unless "Remember me" is
+    // Acureal stores the cached `user` in sessionStorage unless "Remember me" is
     // checked. Playwright's storageState captures cookies + localStorage but
     // NOT sessionStorage — so without this tick the restored context would lack
     // the user object and ProtectedRoute would bounce every test to /login.

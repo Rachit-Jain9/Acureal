@@ -1,8 +1,8 @@
 {
-  "name": "redip-e2e",
+  "name": "acureal-e2e",
   "private": true,
   "version": "1.0.0",
-  "description": "REDIP end-to-end smoke tests (Playwright). Logs in as an isolated test account and click-tests the flows that broke in July 2026 — empty dashboard/deals, NaN chips, blank pages, broken exports — against a live deployment (PR preview in CI, production locally).",
+  "description": "Acureal end-to-end smoke tests (Playwright). Logs in as an isolated test account and click-tests the flows that broke in July 2026 — empty dashboard/deals, NaN chips, blank pages, broken exports — against a live deployment (PR preview in CI, production locally).",
   "scripts": {
     "test": "playwright test",
     "test:headed": "playwright test --headed",

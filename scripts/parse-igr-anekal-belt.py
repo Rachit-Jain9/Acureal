@@ -35,7 +35,7 @@ import fitz
 
 SQM_TO_SQFT = 10.76391041671
 DESK = r'C:\Users\rachi\OneDrive - UW\Desktop'
-OUT = r'C:\Users\rachi\OneDrive - UW\Desktop\REDIP\backend\_pdf_tmp\igr_anekal_belt.json'
+OUT = r'C:\Users\rachi\OneDrive - UW\Desktop\Acureal\backend\_pdf_tmp\igr_anekal_belt.json'
 
 # Per-file calibration: ruled column-divider x-positions (detected from the PDF
 # vector grid; identical across pages within a file) + the land-table page span.

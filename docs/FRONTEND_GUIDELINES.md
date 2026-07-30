@@ -1,4 +1,4 @@
-# REDIP Frontend Guidelines — Motion, Interactivity, Polish
+# Acureal Frontend Guidelines — Motion, Interactivity, Polish
 
 **Read this before writing any frontend code.** These are standing rules. Failing any of them is a regression.
 

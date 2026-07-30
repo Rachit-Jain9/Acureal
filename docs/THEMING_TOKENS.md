@@ -1,4 +1,4 @@
-# REDIP Theming — Semantic Tokens (single source of truth)
+# Acureal Theming — Semantic Tokens (single source of truth)
 
 **Read before writing any color in the app UI.** The app is themeable (default **dark**, light supported) via a single `html[data-theme]` flip. Every color MUST route through a semantic token so it adapts to the theme. **Raw Tailwind palette utilities (`bg-red-50`, `text-green-700`, `border-amber-200`, `bg-primary-600`, …) are banned in `src/components` and `src/pages`** — they compile to fixed hex and render broken in the theme they weren't tuned for (the classic failure: `bg-red-50` is near-white, so it becomes a glaring white box on the near-black dark workspace).
 

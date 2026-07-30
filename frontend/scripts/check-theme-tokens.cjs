@@ -3,7 +3,7 @@
  * Theme-token guard — fails when raw Tailwind palette utilities (e.g. bg-red-50,
  * text-green-700, border-amber-200, bg-primary-600) appear in app UI code.
  *
- * Why: REDIP is themeable (default dark, light supported) via a single
+ * Why: Acureal is themeable (default dark, light supported) via a single
  * html[data-theme] flip. Raw palette utilities compile to fixed hex and break
  * in the theme they weren't tuned for. All colors must route through the
  * semantic tokens documented in docs/THEMING_TOKENS.md.

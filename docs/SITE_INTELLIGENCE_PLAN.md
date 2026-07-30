@@ -4,7 +4,7 @@ Status as of 2026-06-29. The deal tab is named **Yield Studio** (renamed from th
 
 ## Thesis
 
-Turn a parcel + regulatory envelope into an **investable development programme**, deterministically, inside the deal — then push it into underwriting. Not "AI floor plans" (Maket); closer to TestFit / Forma / Archistar with a capital-markets layer. The pattern every serious incumbent actually uses is a **deterministic parametric solver, not an LLM** — which maps exactly onto REDIP's "no LLM for math" hard rule. AI may only **propose** the editable assumptions and **explain** the result.
+Turn a parcel + regulatory envelope into an **investable development programme**, deterministically, inside the deal — then push it into underwriting. Not "AI floor plans" (Maket); closer to TestFit / Forma / Archistar with a capital-markets layer. The pattern every serious incumbent actually uses is a **deterministic parametric solver, not an LLM** — which maps exactly onto Acureal's "no LLM for math" hard rule. AI may only **propose** the editable assumptions and **explain** the result.
 
 ## What shipped (Crawl)
 

@@ -121,7 +121,7 @@ export interface StandardGraphInputs {
   readonly hasCovenants: boolean;
 }
 
-/** Canonical graph shape for a REDIP deal. Orchestrator populates values. */
+/** Canonical graph shape for an Acureal deal. Orchestrator populates values. */
 export function buildStandardGraph(inp: StandardGraphInputs): FinancialGraph {
   const g = new FinancialGraph();
   g.addInput('assumptions', 'Deal assumptions');

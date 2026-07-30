@@ -1,4 +1,4 @@
-# REDIP — AI Agent Rules
+# Acureal — AI Agent Rules
 
 This file is read by Claude Code, Codex, Cursor, and any other AI tool working on this repo.
 All rules here apply to every session, every PR, every code change.
@@ -46,7 +46,7 @@ This ensures work history is never lost even if the chat session disappears.
 
 ## What this product is
 
-REDIP is an India-first, Bengaluru-priority deal intelligence platform. It is the operating system for live real estate deal work — sourcing, due diligence, underwriting, IC prep, investor reporting.
+Acureal is an India-first, Bengaluru-priority deal intelligence platform. It is the operating system for live real estate deal work — sourcing, due diligence, underwriting, IC prep, investor reporting.
 
 It is NOT a generic CRM or document vault.
 

@@ -2,7 +2,7 @@
  * Pref / catch-up / promote tier builder.
  *
  * Produces the canonical four-tier private-equity distribution waterfall
- * used by REDIP JV and outright structures:
+ * used by Acureal JV and outright structures:
  *
  *   1) Return of capital (LP + sponsor pro-rata, capped at contributed capital)
  *   2) Preferred return (LP-only, accrues at `prefRatePct` on unreturned capital)

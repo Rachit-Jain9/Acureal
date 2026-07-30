@@ -1,6 +1,6 @@
 # GBA Coverage Checklist — planning authorities & master plans to gather
 
-**Purpose:** a practical "what to gather" list so REDIP can extend operative master-plan / zoning
+**Purpose:** a practical "what to gather" list so Acureal can extend operative master-plan / zoning
 coverage from the BDA core out to the **other planning authorities now around / under the
 Greater Bengaluru Authority (GBA)**. Built 2026-06-26 from primary/official sources (BMRDA's own
 Local-Planning-Areas register + each authority's `*.tpa.gov.in` portal). Pairs with
@@ -21,7 +21,7 @@ Local-Planning-Areas register + each authority's `*.tpa.gov.in` portal). Pairs w
   ~712 km² Bengaluru city core** (replaced BBMP). It is *expected* to notify its own master plan; until
   then **RMP 2015 remains the operative plan** for that core. **Watch for a new GBA master plan.**
 - **BDA — Bangalore Development Authority.** Now the area planning authority for the **peripheral BMA
-  zones outside GBA** (~582 km²). Operative plan = **RMP 2015**. ✅ *Already in REDIP.*
+  zones outside GBA** (~582 km²). Operative plan = **RMP 2015**. ✅ *Already in Acureal.*
 - **BMRDA — Bengaluru Metropolitan Region Development Authority.** Oversees the wider region and
   **coordinates the 12 Local Planning Authorities (LPAs) below**; publishes a regional **Structure /
   Land-Utilisation Plan 2031** (context only, not parcel zoning).
@@ -30,7 +30,7 @@ Local-Planning-Areas register + each authority's `*.tpa.gov.in` portal). Pairs w
 
 ---
 
-## ✅ Already in REDIP (do not re-gather)
+## ✅ Already in Acureal (do not re-gather)
 
 | Authority | Area | Operative plan | Status |
 |---|---|---|---|

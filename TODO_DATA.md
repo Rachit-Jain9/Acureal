@@ -1,6 +1,6 @@
 # TODO_DATA — External Data Sources Required
 
-Data sources that REDIP would benefit from but cannot fabricate or assume availability of.
+Data sources that Acureal would benefit from but cannot fabricate or assume availability of.
 
 ## Status legend
 - BLOCKED: No usable API or open dataset exists
@@ -118,7 +118,7 @@ next session should:
 
 ### Asset classes from Q1 2026 v0.2 rate-pack — schema + data RESOLVED
 - Status: RESOLVED — schema (`residential_segmented_benchmarks`) and data (67 rows) shipped in PR #166.
-- Source: REDIP-COMPS folder (`redip_bengaluru_micro_market_rates_v0_2_2026Q1.json`); MagicBricks / Housing.com listings + IGR Karnataka.
+- Source: Acureal-COMPS folder (`redip_bengaluru_micro_market_rates_v0_2_2026Q1.json`); MagicBricks / Housing.com listings + IGR Karnataka.
 - Five asset classes loaded:
   - **Builder floor apartments** (7 rows) — capital-value benchmarks per micro-market.
   - **Plotted development / residential plot** (18 rows) — plot asking value INR/sqft per micro-market.

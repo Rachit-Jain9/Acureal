@@ -4,7 +4,7 @@ const { defineConfig, devices } = require('@playwright/test');
 
 // Target: PR preview URL in CI (E2E_BASE_URL injected by the workflow),
 // production when run locally.
-const baseURL = process.env.E2E_BASE_URL || 'https://redip.vercel.app';
+const baseURL = process.env.E2E_BASE_URL || 'https://acureal.in';
 
 // If Vercel Deployment Protection is enabled on preview URLs, requests need a
 // bypass header (set E2E_BYPASS_SECRET to the project's protection-bypass token).

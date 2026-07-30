@@ -1,6 +1,6 @@
-# REDIP Project Guidance
+# Acureal Project Guidance
 
-REDIP is an India-first, Bengaluru-priority, AI-powered deal intelligence, due diligence, underwriting, and investor reporting platform. Treat it as the operating system for live deal work, not as a generic CRM or document vault.
+Acureal is an India-first, Bengaluru-priority, AI-powered deal intelligence, due diligence, underwriting, and investor reporting platform. Treat it as the operating system for live deal work, not as a generic CRM or document vault.
 
 ## Product intent
 
@@ -12,7 +12,7 @@ REDIP is an India-first, Bengaluru-priority, AI-powered deal intelligence, due d
 
 ## Core philosophy
 
-REDIP exists to compress the time between spotting a deal and making a confident IC decision, while reducing the catastrophic blind spots common in Indian real estate — title disputes, hidden encumbrances, approval gaps, RERA deviations, and promoter execution risk. The platform must feel like a sharp co-pilot for seasoned deal professionals in Bengaluru, not a generic tool.
+Acureal exists to compress the time between spotting a deal and making a confident IC decision, while reducing the catastrophic blind spots common in Indian real estate — title disputes, hidden encumbrances, approval gaps, RERA deviations, and promoter execution risk. The platform must feel like a sharp co-pilot for seasoned deal professionals in Bengaluru, not a generic tool.
 
 Prioritize depth on live deals over breadth of features. Support messy, early-stage sourcing data without friction, but enforce rigor and explicit confidence levels as the deal matures toward underwriting and IC.
 

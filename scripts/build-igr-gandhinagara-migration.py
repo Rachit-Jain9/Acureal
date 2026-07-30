@@ -2,8 +2,8 @@
 """Emit the guidance_values seed migration from the parsed IGR Gandhinagara JSON."""
 import io, json
 
-SRC = r'C:\Users\rachi\OneDrive - UW\Desktop\REDIP\backend\_pdf_tmp\igr_gandhinagara.json'
-OUT = r'C:\Users\rachi\OneDrive - UW\Desktop\REDIP\database\migrations\20260717_igr_gandhinagara_guidance_values_seed.sql'
+SRC = r'C:\Users\rachi\OneDrive - UW\Desktop\Acureal\backend\_pdf_tmp\igr_gandhinagara.json'
+OUT = r'C:\Users\rachi\OneDrive - UW\Desktop\Acureal\database\migrations\20260717_igr_gandhinagara_guidance_values_seed.sql'
 
 LU = {'residential': 'residential', 'commercial': 'commercial', 'apartment_or_built_up': 'residential'}
 
