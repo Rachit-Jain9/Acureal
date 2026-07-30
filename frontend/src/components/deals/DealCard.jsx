@@ -85,7 +85,7 @@ function DealCard({ deal, selected = false, onToggleSelect }) {
     try {
       const response = await exportsAPI.dealPptx(deal.id);
       const safe = (deal.name || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-      downloadAxiosResponse(response, `redip-${safe}.pptx`);
+      downloadAxiosResponse(response, `acureal-${safe}.pptx`);
       toast.success('PPTX deck downloaded');
     } catch (err) {
       toast.error(err.response?.data?.message || 'PPTX export failed');

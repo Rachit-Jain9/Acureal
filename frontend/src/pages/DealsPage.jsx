@@ -341,7 +341,7 @@ export default function DealsPage() {
       const response = await exportsAPI.dealsCsv(exportParams);
       const today = new Date().toISOString().slice(0, 10);
       const suffix = activeView ? `-${activeView.name.replace(/[^a-z0-9_-]+/gi, '_').slice(0, 40).toLowerCase()}` : '';
-      downloadAxiosResponse(response, `redip-deals${suffix}-${today}.csv`);
+      downloadAxiosResponse(response, `acureal-deals${suffix}-${today}.csv`);
       toast.success(`Exported ${pagination.total} deal${pagination.total === 1 ? '' : 's'} to CSV`);
     } catch (error) {
       toast.error(error?.response?.data?.message || 'CSV export failed');

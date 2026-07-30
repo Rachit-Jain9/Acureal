@@ -59,37 +59,37 @@ export default function ExportMenu({ dealId, dealName }) {
     const config = {
       pdf: {
         call: () => exportsAPI.dealPdf(dealId),
-        filename: `redip-${safeName}-tear-sheet-${today}.pdf`,
+        filename: `acureal-${safeName}-tear-sheet-${today}.pdf`,
         ok: 'Tear-sheet PDF downloaded',
         err: 'Tear-sheet export failed',
       },
       pptx: {
         call: () => exportsAPI.dealPptx(dealId),
-        filename: `redip-${safeName}.pptx`,
+        filename: `acureal-${safeName}.pptx`,
         ok: 'PPTX deck downloaded',
         err: 'PPTX export failed',
       },
       docx: {
         call: () => exportsAPI.dealDocx(dealId),
-        filename: `redip-${safeName}-underwriting-${today}.docx`,
+        filename: `acureal-${safeName}-underwriting-${today}.docx`,
         ok: 'Underwriting report downloaded',
         err: 'Underwriting report download failed',
       },
       lender: {
         call: () => exportsAPI.dealPack(dealId, 'lender'),
-        filename: `redip-${safeName}-lender-pack-${today}.docx`,
+        filename: `acureal-${safeName}-lender-pack-${today}.docx`,
         ok: 'Lender pack downloaded',
         err: 'Lender pack export failed',
       },
       investor: {
         call: () => exportsAPI.dealPack(dealId, 'investor'),
-        filename: `redip-${safeName}-investor-pack-${today}.docx`,
+        filename: `acureal-${safeName}-investor-pack-${today}.docx`,
         ok: 'Investor pack downloaded',
         err: 'Investor pack export failed',
       },
       buyer: {
         call: () => exportsAPI.dealPack(dealId, 'buyer'),
-        filename: `redip-${safeName}-buyer-pack-${today}.docx`,
+        filename: `acureal-${safeName}-buyer-pack-${today}.docx`,
         ok: 'Buyer pack downloaded',
         err: 'Buyer pack export failed',
       },

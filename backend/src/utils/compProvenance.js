@@ -57,7 +57,7 @@ const SOURCE_KEYWORD_RULES = [
   [/sale deed|registr|kaveri|\bsro\b|sub.?regist|encumbrance|conveyance/i, 'transaction'],
   [/jll|knight frank|cbre|colliers|anarock|cushman|savills|propequity|\breport\b|research/i, 'research'],
   [/magicbricks|99\s?acres|housing\.com|nobroker|squareyards|square yards|proptiger|\blisting\b|portal/i, 'listing'],
-  [/redip|internal|in.?house|\bdesk\b|benchmark/i, 'internal'],
+  [/acureal|redip|internal|in.?house|\bdesk\b|benchmark/i, 'internal'],
   [/guidance value|circle rate|government|gazette|\bbbmp\b|\bbda\b|\bigr\b/i, 'guidance'],
 ];
 
