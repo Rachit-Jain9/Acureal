@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ArrowUpRight } from 'lucide-react';
 
-// REDIP landing — Scene 1 of 6
+// Acureal landing — Scene 1 of 6
 // "The parcel comes into focus." A single illustrative parcel off Sarjapur Road
 // is drawn as cadastral survey linework on warm bone, then docks to a persistent
 // 64px corner-glyph as the hero scrolls out. All figures illustrative.
@@ -149,7 +149,7 @@ export default function HeroParcelResolve() {
   return (
     <section
       ref={sectionRef}
-      aria-label="REDIP — real estate deal intelligence"
+      aria-label="Acureal — real estate deal intelligence"
       style={{
         position: 'relative',
         backgroundColor: '#F5F1E8',
@@ -266,7 +266,7 @@ export default function HeroParcelResolve() {
                   fontFeatureSettings: "'tnum' 1",
                 }}
               >
-                REDIP · Real estate deal intelligence · Bengaluru-first
+                Acureal · Real estate deal intelligence · Bengaluru-first
               </div>
               <div
                 style={{
@@ -319,7 +319,7 @@ export default function HeroParcelResolve() {
             >
               A parcel off Sarjapur Road, the way a deal usually arrives — a survey
               sketch, a builder&rsquo;s word, a folder of scans forwarded on
-              WhatsApp. REDIP takes it from there: ingest the documents, structure
+              WhatsApp. Acureal takes it from there: ingest the documents, structure
               the facts, score the diligence, run the numbers in deterministic
               code, and trace every figure back to the page it came from. From
               first look to a defensible IC position, with the blind spots that

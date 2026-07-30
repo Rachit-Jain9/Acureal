@@ -3,7 +3,7 @@ import { SQFT_PER_ACRE } from '../config/india';
 /**
  * Format number as Indian currency (lakhs/crores).
  *
- * REDIP is India-only. Numbers are always stored and shown in INR — the
+ * Acureal is India-only. Numbers are always stored and shown in INR — the
  * old multi-currency display layer (2026-04 → 2026-05-24) was retired
  * because it added confusion without earning its complexity. Stored
  * values were never converted; only the displayed unit was.

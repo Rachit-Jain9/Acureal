@@ -12,13 +12,13 @@ beforeEach(() => {
 describe('WelcomeModal', () => {
   it('opens on the welcome scene', () => {
     render(<WelcomeModal open onStartTour={noop} onSkip={noop} />);
-    expect(screen.getByText(/welcome to redip/i)).toBeInTheDocument();
+    expect(screen.getByText(/welcome to acureal/i)).toBeInTheDocument();
   });
 
   it('advances through the scenes with Next', () => {
     render(<WelcomeModal open onStartTour={noop} onSkip={noop} />);
     next();
-    expect(screen.getByText(/why redip earns your trust/i)).toBeInTheDocument();
+    expect(screen.getByText(/why acureal earns your trust/i)).toBeInTheDocument();
     next();
     expect(screen.getByText(/where will you spend most of your time/i)).toBeInTheDocument();
     next();
@@ -29,7 +29,7 @@ describe('WelcomeModal', () => {
     render(<WelcomeModal open onStartTour={noop} onSkip={noop} />);
     next();
     fireEvent.click(screen.getByRole('button', { name: /back/i }));
-    expect(screen.getByText(/welcome to redip/i)).toBeInTheDocument();
+    expect(screen.getByText(/welcome to acureal/i)).toBeInTheDocument();
   });
 
   it('records a personalisation choice (aria-pressed toggles)', () => {

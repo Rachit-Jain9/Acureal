@@ -1,5 +1,5 @@
 // ProductTourReplayCard — Settings-page card that lets the user replay
-// REDIP's onboarding surfaces:
+// Acureal's onboarding surfaces:
 //   - The welcome / sidebar tour (3-pane intro + coachmark walkthrough).
 //   - The deal-workspace tour (per-tab coachmarks inside an open deal).
 //   - The Getting Started first-run dashboard panel.
@@ -70,7 +70,7 @@ export default function ProductTourReplayCard() {
       </h3>
       <p className="mt-1 text-sm text-content-secondary">
         Open the Guide any time for a searchable explainer of every page, tab and
-        concept — or replay any of REDIP&apos;s first-run surfaces: the dashboard
+        concept — or replay any of Acureal&apos;s first-run surfaces: the dashboard
         Getting Started panel, the welcome tour that walks through each section in
         the sidebar, or the per-tab walkthrough that opens the first time you visit
         a deal.

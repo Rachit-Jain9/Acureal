@@ -148,7 +148,7 @@ export default function MasterPlanCorpusPanel() {
           </button>
         )}
       >
-        REDIP could not reach the corpus endpoint. Try again, or check the master-plan service.
+        Acureal could not reach the corpus endpoint. Try again, or check the master-plan service.
       </ErrorState>
     );
   }
@@ -166,7 +166,7 @@ export default function MasterPlanCorpusPanel() {
       <SectionHeader
         eyebrow="Source corpus"
         title="Bengaluru RMP 2031 — expected sources"
-        sub="REDIP knows what files belong in the regulatory corpus and how each should be classified. Upload via the Source Documents tab; REDIP applies the role, legal status, authority, and processing mode shown here."
+        sub="Acureal knows what files belong in the regulatory corpus and how each should be classified. Upload via the Source Documents tab; Acureal applies the role, legal status, authority, and processing mode shown here."
         action={(
           <button
             type="button"

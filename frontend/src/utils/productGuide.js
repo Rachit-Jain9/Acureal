@@ -1,4 +1,4 @@
-// productGuide.js — the single source of truth for what every REDIP surface
+// productGuide.js — the single source of truth for what every Acureal surface
 // is, what you can do there, and why it exists.
 //
 // One catalog feeds four things, so the copy is written once and never drifts:
@@ -40,7 +40,7 @@ export const GUIDE_CATEGORIES = [
   },
   {
     id: 'concepts',
-    label: 'How REDIP thinks',
+    label: 'How Acureal thinks',
     blurb: 'The ideas that make the numbers trustworthy — provenance, confidence, the deterministic engine.',
   },
 ];
@@ -72,7 +72,7 @@ export const GUIDE_ENTRIES = [
     tourTarget: '[data-tour="nav-deals"]',
     eyebrow: 'The master object',
     what: "Every deal you're working — from a half-sourced site visit to an IC-ready memo. Click any card to open its full workspace.",
-    why: 'Deals are the master object in REDIP — documents, diligence, risks and models all live inside a deal, never scattered across folders and inboxes.',
+    why: 'Deals are the master object in Acureal — documents, diligence, risks and models all live inside a deal, never scattered across folders and inboxes.',
     doThis: [
       "Create a deal with whatever you have — even just 'Whitefield opportunity'",
       'Filter by stage, type or priority, or save a view you reuse',
@@ -104,7 +104,7 @@ export const GUIDE_ENTRIES = [
     tourTarget: '[data-tour="nav-comps"]',
     eyebrow: 'Verified transactions',
     what: 'Verified transaction comparables. Every record carries its source and last-verified date. Search by location, asset class or vintage.',
-    why: 'A comp is only as good as its provenance. REDIP keeps verified, listing and IPC sources visibly distinct so you never quote an unverified number as fact.',
+    why: 'A comp is only as good as its provenance. Acureal keeps verified, listing and IPC sources visibly distinct so you never quote an unverified number as fact.',
     doThis: [
       'Filter by source, sort by rate or year-on-year growth',
       "Add a comp manually when you have one the feed doesn't",
@@ -171,7 +171,7 @@ export const GUIDE_ENTRIES = [
     tourTarget: '[data-tour="nav-parcel-intel"]',
     platformAdminOnly: true,
     eyebrow: 'Curated parcel data',
-    what: 'Curate and enrich the parcel data REDIP uses across deals — auto-derived facts, cadastral overlays, audit-trail-backed corrections.',
+    what: 'Curate and enrich the parcel data Acureal uses across deals — auto-derived facts, cadastral overlays, audit-trail-backed corrections.',
     why: 'Clean parcel data upstream means every deal reads trustworthy site facts without anyone re-keying them.',
     doThis: [
       'Review auto-derived parcel facts',
@@ -239,7 +239,7 @@ export const GUIDE_ENTRIES = [
     // No tourTarget — documented in the Guide, not walked in the sidebar tour.
     platformAdminOnly: true,
     eyebrow: 'The learning loop',
-    what: "The learning-loop telemetry — how REDIP's recommendations and extractions are performing over time.",
+    what: "The learning-loop telemetry — how Acureal's recommendations and extractions are performing over time.",
     why: 'Operators need to see, with numbers, whether the system is actually getting smarter.',
     doThis: [
       'Review recommendation accept / dismiss signals',
@@ -337,7 +337,7 @@ export const GUIDE_ENTRIES = [
     tourTarget: '#tab-documents',
     eyebrow: 'The evidence base',
     what: 'Title docs, RERA filings, financial models, site photos — uploaded once, then read by AI for cross-document analysis.',
-    why: 'Documents are evidence. Everything REDIP claims about a deal traces back to a page in one of these files.',
+    why: 'Documents are evidence. Everything Acureal claims about a deal traces back to a page in one of these files.',
     doThis: [
       'Drag in PDFs, Word, Excel or images',
       'Let AI extract and categorise them',
@@ -570,7 +570,7 @@ export const GUIDE_ENTRIES = [
     icon: 'Building2',
     eyebrow: 'Execution risk',
     what: "Where you record the promoter / builder's verified track record — past delivery, delays and RERA project links. The posture (cleared / not-verified / flagged) is computed and feeds the Risk Radar.",
-    why: "Promoter execution is one of the catastrophic ways Indian deals fail. This keeps the track record on the record — and REDIP never lets AI judge a promoter's competence or intent; that call stays yours.",
+    why: "Promoter execution is one of the catastrophic ways Indian deals fail. This keeps the track record on the record — and Acureal never lets AI judge a promoter's competence or intent; that call stays yours.",
     doThis: [
       "Record and verify the promoter's delivery history",
       'Link any RERA projects',
@@ -606,7 +606,7 @@ export const GUIDE_ENTRIES = [
     ],
   },
 
-  // ─── How REDIP thinks (concepts — no route, no tour stop) ─────────────────
+  // ─── How Acureal thinks (concepts — no route, no tour stop) ─────────────────
   {
     id: 'concept.provenance',
     category: 'concepts',
@@ -614,7 +614,7 @@ export const GUIDE_ENTRIES = [
     icon: 'FileCheck',
     eyebrow: 'Trust',
     what: "Every number on every page can be traced back to a source document. Look for the small 'Evidence' pill across the DD, Risk and Comps tabs.",
-    why: "Investor-grade work means never saying 'trust me'. If REDIP shows a figure, it can show you where it came from.",
+    why: "Investor-grade work means never saying 'trust me'. If Acureal shows a figure, it can show you where it came from.",
     doThis: [
       'Hover any Evidence pill to see the source page and confidence',
       'Open the linked document to verify it yourself',
@@ -627,7 +627,7 @@ export const GUIDE_ENTRIES = [
     label: 'Confidence & verification',
     icon: 'BadgeCheck',
     eyebrow: 'Trust',
-    what: 'REDIP separates verified facts from unverified ones, and shows confidence and last-verified dates rather than implying false certainty.',
+    what: 'Acureal separates verified facts from unverified ones, and shows confidence and last-verified dates rather than implying false certainty.',
     why: 'Knowing how sure you are is as important as the number itself. Unverified comps look different from verified ones — on purpose.',
     doThis: [
       'Check the source and freshness on market data',
@@ -656,7 +656,7 @@ export const GUIDE_ENTRIES = [
     icon: 'ShieldCheck',
     eyebrow: 'How the maths works',
     what: 'AI reads messy documents and drafts synthesis, but it never asserts statutory facts. Title, encumbrance, RERA and approval status stay extraction-aid only, with human verification.',
-    why: 'On the four things that can sink a deal, REDIP refuses to put words in your mouth. AI surfaces the evidence; a person makes the call.',
+    why: 'On the four things that can sink a deal, Acureal refuses to put words in your mouth. AI surfaces the evidence; a person makes the call.',
     doThis: [
       'Use AI extractions as a starting point, not a verdict',
       'Verify the legal four against the source documents yourself',

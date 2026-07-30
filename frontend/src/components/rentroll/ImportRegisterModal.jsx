@@ -5,7 +5,7 @@ import { rentRollAPI } from '../../services/api';
 import { useCommitImport } from '../../hooks/useRentRoll';
 import { toast } from '../common/Toast';
 
-// Register import — upload a filled REDIP template, review the staged preview
+// Register import — upload a filled Acureal template, review the staged preview
 // (parsed server-side, no writes), then commit. The commit re-parses the file
 // server-side (never trusts these preview rows), so what you see is exactly
 // what lands. Family/version are validated on the server with readable errors.
@@ -73,7 +73,7 @@ function ImportModal({ dealId, onClose }) {
       setDataUrl(url);
       setPreview(res.data.data);
     } catch (err) {
-      setError(err?.response?.data?.message || 'That file could not be read. Make sure it is a filled REDIP template (.xlsx).');
+      setError(err?.response?.data?.message || 'That file could not be read. Make sure it is a filled Acureal template (.xlsx).');
     } finally {
       setLoading(false);
     }
@@ -99,7 +99,7 @@ function ImportModal({ dealId, onClose }) {
       onClose={commit.isPending ? () => {} : onClose}
       closeOnOverlayClick={!commit.isPending}
       title="Import from template"
-      description="Upload a filled REDIP template. Review what will be added, then import — nothing is saved until you confirm."
+      description="Upload a filled Acureal template. Review what will be added, then import — nothing is saved until you confirm."
       size="lg"
       footer={(
         <div className="flex w-full items-center justify-between gap-3">

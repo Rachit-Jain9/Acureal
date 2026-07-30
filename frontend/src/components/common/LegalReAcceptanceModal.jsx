@@ -112,7 +112,7 @@ export default function LegalReAcceptanceModal({ pending, onAccepted }) {
           </span>
           <div className="min-w-0">
             <div className="text-eyebrow uppercase tracking-[0.12em] text-content-muted font-medium">
-              REDIP · Compliance
+              Acureal · Compliance
             </div>
             <h2
               id="legal-reaccept-title"

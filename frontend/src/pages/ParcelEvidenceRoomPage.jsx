@@ -13,7 +13,7 @@ import { useCountUp } from '../hooks/useCountUp';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 
 /**
- * Parcel Evidence Room — the customer-facing front door to REDIP's single most
+ * Parcel Evidence Room — the customer-facing front door to Acureal's single most
  * proprietary, deal-less asset: the 18,743-street BBMP Guidance-Value gazette
  * index. Every Bengaluru street resolves to its ward, UAV zone, guidance-value
  * band, and the EXACT gazette page it was read from — a cited "evidence chain"
@@ -374,7 +374,7 @@ export default function ParcelEvidenceRoomPage() {
       <PageHeader
         eyebrow="Bengaluru · Gazette-verified reference"
         title="Parcel Evidence Room"
-        description="Type any Bengaluru street and trace its evidence chain — ward, BBMP-UAV zone, and IGR guidance-value band — each read from, and cited to, the exact page of the 686-page BBMP Guidance-Value gazette. This is REDIP's own indexed register of every street inside BBMP limits: reference intelligence you can check against the source, not a black box."
+        description="Type any Bengaluru street and trace its evidence chain — ward, BBMP-UAV zone, and IGR guidance-value band — each read from, and cited to, the exact page of the 686-page BBMP Guidance-Value gazette. This is Acureal's own indexed register of every street inside BBMP limits: reference intelligence you can check against the source, not a black box."
       />
 
       {/* Corpus proof strip */}

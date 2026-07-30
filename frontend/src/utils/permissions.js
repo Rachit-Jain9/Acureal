@@ -1,7 +1,7 @@
 // Platform-admin permission helper. Distinct from workspace role:
 //   - workspace `role` (owner / admin / editor / viewer) is the user's
 //     position inside their own organization, which everyone has.
-//   - platform admin is the operator(s) of REDIP itself who get access to
+//   - platform admin is the operator(s) of Acureal itself who get access to
 //     cross-org admin surfaces — Master Plan, Parcel Intelligence, the
 //     Comps Review Queue, AI Usage & Cost, A/B Evaluations.
 //

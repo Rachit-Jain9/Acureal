@@ -602,7 +602,7 @@ export default function PropertyDetailPage() {
                     <p className="mt-2 text-xs text-content-secondary">
                       {editAreaSqft
                         ? `Normalized area: ${formatArea(editAreaSqft)}`
-                        : 'Enter whichever land unit you have. REDIP will normalize it for calculations and map coverage.'}
+                        : 'Enter whichever land unit you have. Acureal will normalize it for calculations and map coverage.'}
                     </p>
                   </div>
 

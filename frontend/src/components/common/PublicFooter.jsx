@@ -1,5 +1,5 @@
 // Slim footer for public pages (Landing, Login, Legal). Carries the legal-link
-// row REDIP needs for compliance + trust. Routes through semantic tokens so it
+// row Acureal needs for compliance + trust. Routes through semantic tokens so it
 // stays correct in light mode (public pages force the light theme).
 
 import { Link } from 'react-router-dom';
@@ -24,7 +24,7 @@ export default function PublicFooter({ className = '' }) {
       aria-label="Footer"
     >
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-content-muted">
-        <p>© {year} REDIP · Bengaluru, India</p>
+        <p>© {year} Acureal · Bengaluru, India</p>
         <nav aria-label="Legal" className="flex flex-wrap items-center gap-x-4 gap-y-1">
           {LEGAL_LINKS.map((link) => (
             <Link key={link.to} to={link.to} className={LINK_CLASS}>

@@ -1,4 +1,4 @@
-// GettingStarted — REDIP's first-run setup checklist.
+// GettingStarted — Acureal's first-run setup checklist.
 //
 // Presentational: it receives a live, role-aware checklist (built in
 // utils/setupChecklist.js from real workspace data) and renders it with a
@@ -112,7 +112,7 @@ export default function GettingStarted({ userName, items = [], compact = false, 
               You&apos;re all set{firstName ? `, ${firstName}` : ''}.
             </h2>
             <p className="mt-1.5 max-w-xl text-sm text-content-secondary">
-              You&apos;ve found your way around REDIP. The Guide is always one click
+              You&apos;ve found your way around Acureal. The Guide is always one click
               away whenever you want a refresher on any page or feature.
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
@@ -180,7 +180,7 @@ export default function GettingStarted({ userName, items = [], compact = false, 
             Getting started
           </div>
           <h2 className="mt-2 text-xl font-semibold text-content-primary">
-            Welcome to REDIP{firstName ? `, ${firstName}` : ''}.
+            Welcome to Acureal{firstName ? `, ${firstName}` : ''}.
           </h2>
           <p className="mt-1.5 max-w-xl text-sm text-content-secondary">
             A few first moves to get the most out of your workspace. Each one

@@ -171,7 +171,7 @@ export default function AdminSystemHealthPage() {
       <PageHeader
         eyebrow="Admin · Reliability"
         title="System Health"
-        description="The liveness watchdog. REDIP's costliest failures have been silent — a subsystem quietly doing nothing while everything looks fine. These four checks run hourly (alerting on degradation) and on demand here, so the platform detects its own decline instead of waiting for someone to hit the bug."
+        description="The liveness watchdog. Acureal's costliest failures have been silent — a subsystem quietly doing nothing while everything looks fine. These four checks run hourly (alerting on degradation) and on demand here, so the platform detects its own decline instead of waiting for someone to hit the bug."
         actions={
           <div className="flex items-center gap-3">
             {data?.generated_at && (

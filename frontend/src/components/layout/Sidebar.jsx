@@ -9,6 +9,7 @@ import { clsx } from 'clsx';
 import useAuthStore from '../../store/authStore';
 import { isPlatformAdmin } from '../../utils/permissions';
 import WorkspaceSwitcher from './WorkspaceSwitcher';
+import { AcurealWordmark } from '../brand/AcurealBrand';
 
 // `tourId` is consumed by the product-tour coachmarks (data-tour attribute
 // on the NavLink). Steps for nav items the user can't see (e.g. admin
@@ -54,7 +55,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
 
   const desktopWidth = collapsed ? 'md:w-16' : 'md:w-60';
   // Cross-org admin surfaces (Master Plan, AI Usage, etc.) are only for the
-  // REDIP platform operator(s) — NOT every workspace owner. See utils/permissions.
+  // Acureal platform operator(s) — NOT every workspace owner. See utils/permissions.
   const showAdminGroup = isPlatformAdmin(user);
 
   const renderItem = ({ to, icon: Icon, label, tourId }) => (
@@ -114,14 +115,7 @@ export default function Sidebar({ mobileOpen = false, onMobileClose = () => {} }
       >
         {/* Logo / header */}
         <div className="flex items-center justify-between p-4 border-b border-hairline">
-          {!collapsed && (
-            <div className="flex items-baseline gap-1.5">
-              <span className="font-serif text-lg font-semibold tracking-tight text-content-primary">
-                REDIP
-              </span>
-              <span className="w-1.5 h-1.5 rounded-sm inline-block bg-premium" />
-            </div>
-          )}
+          {!collapsed && <AcurealWordmark className="text-[15px]" />}
           {/* Mobile close */}
           <button
             onClick={onMobileClose}

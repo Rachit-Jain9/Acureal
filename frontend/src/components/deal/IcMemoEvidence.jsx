@@ -8,7 +8,7 @@ import { useIcEvidence } from '../../hooks/useIcEvidence';
  *
  * The deterministic claim layer beneath the IC memo: every material number
  * the IC decision rests on, each click-to-expand to its honest, typed source
- * (kernel-computed, analyst-set, REDIP benchmark, deal records, verified
+ * (kernel-computed, analyst-set, Acureal benchmark, deal records, verified
  * feed). The AI narrative is the interpretive layer on top; this is the
  * traceable evidence under it. Pure display — computed server-side.
  *
@@ -188,7 +188,7 @@ export default function IcMemoEvidence({ dealId }) {
           </div>
 
           <p className="text-[11px] text-content-muted mt-3 leading-snug">
-            Every figure here is produced by REDIP&apos;s deterministic engines or maintained
+            Every figure here is produced by Acureal&apos;s deterministic engines or maintained
             by your team — none is AI-generated. The IC memo&apos;s narrative is the
             interpretive layer; these are the traceable facts under it.
           </p>

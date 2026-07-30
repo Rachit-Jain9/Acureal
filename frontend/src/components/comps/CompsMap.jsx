@@ -28,7 +28,7 @@ const paletteFor = (comp) => {
 };
 
 // Dark-theme map style — desaturated, matches the editorial dashboard chrome.
-// Built from Google's Night-mode preset, tuned to REDIP's neutral palette
+// Built from Google's Night-mode preset, tuned to Acureal's neutral palette
 // (fewer pure blacks, more navy-grey, restrained labels). Light theme uses
 // no override so the default Google "roadmap" style ships.
 const DARK_MAP_STYLES = [
@@ -99,7 +99,7 @@ function MarkerDot({ comp, selected, onClick, theme }) {
 }
 
 // Inline tooltip rendered next to the selected marker — replaces the
-// leaflet popup with a custom overlay so the styling matches REDIP chrome
+// leaflet popup with a custom overlay so the styling matches Acureal chrome
 // instead of Google's white-on-shadow default. Anchored above the marker
 // with a small gap.
 function MarkerTooltip({ comp }) {

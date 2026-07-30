@@ -208,7 +208,7 @@ export default function InboundBecomesStructure() {
                 : `opacity 700ms ${EASE} 140ms, transform 700ms ${EASE} 140ms`,
             }}
           >
-            The first hours of a deal are spent reading, not deciding. REDIP
+            The first hours of a deal are spent reading, not deciding. Acureal
             ingests what actually shows up — a registered sale deed in Kannada, a
             Khata that turns out to be B-grade, an encumbrance certificate that
             runs current only to 2019, a broker&rsquo;s number on a call. Each

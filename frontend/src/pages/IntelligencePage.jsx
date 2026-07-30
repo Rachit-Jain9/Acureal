@@ -170,7 +170,7 @@ function TransactionTable({ rows }) {
       <p className="mt-3 text-xs text-content-muted">
         Compiled from public reporting — Economic Times, Business Standard, Hindustan Times,
         Moneycontrol, and company press releases. Figures are as reported by those sources, not
-        independently verified by REDIP; confirm before relying on them for underwriting. Quantum in ₹ Cr.
+        independently verified by Acureal; confirm before relying on them for underwriting. Quantum in ₹ Cr.
       </p>
     </div>
   );
@@ -179,7 +179,7 @@ function TransactionTable({ rows }) {
 // ─── Micro-Market Benchmarks Table ────────────────────────────────────────────
 
 // Classify a row's data_type into one of three top-level layers per the
-// methodology doc: "Create separate tabs/layers in the REDIP UI: Listing
+// methodology doc: "Create separate tabs/layers in the Acureal UI: Listing
 // Benchmarks, IPC Benchmarks, Guidance Value, Internal Deals." Tagging
 // rows by prefix means new v0.x cohorts auto-roll up without a code edit.
 const layerForDataType = (dt) => {
@@ -247,7 +247,7 @@ function BenchmarksTable({ rows }) {
           ariaLabel="Search residential micro-markets"
         />
         {/* Source-layer toggle. Listing (99acres/MagicBricks asking-prices)
-            vs. IPC (C&W/JLL/KF benchmarks) vs. Internal (REDIP-verified
+            vs. IPC (C&W/JLL/KF benchmarks) vs. Internal (Acureal-verified
             comps). Methodology doc explicitly demands this separation;
             blending them silently destroys credibility. Hide a chip if
             its count is zero so the UI doesn't surface empty buckets. */}
@@ -467,7 +467,7 @@ export default function IntelligencePage() {
   // Marks the setup-checklist "explore Market Intelligence" step done — the one
   // item with no server signal. Set on mount; harmless to re-set.
   useEffect(() => { markIntelExplored(); }, []);
-  // Bengaluru-locked: REDIP is Bengaluru-priority and Bengaluru is the only
+  // Bengaluru-locked: Acureal is Bengaluru-priority and Bengaluru is the only
   // city with seeded data. Multi-city navigation was removed — see asset-
   // class filter below for the replacement.
   const city = 'Bengaluru';

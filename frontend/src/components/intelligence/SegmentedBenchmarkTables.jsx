@@ -40,7 +40,7 @@ import { matchesSearch, buildClusterOptions } from '../../utils/intelligenceTabl
 // `micro_market_benchmarks`.
 //
 // Methodology rule (TODO_DATA.md):
-//   "Create separate tabs/layers in the REDIP UI: Listing Benchmarks, IPC
+//   "Create separate tabs/layers in the Acureal UI: Listing Benchmarks, IPC
 //    Benchmarks, Guidance Value, Internal Deals."
 // Honored here via the asset-class chip group + per-row data_type badge.
 

@@ -2,7 +2,7 @@
 // Keep the bucket logic byte-for-byte equivalent so a comp reads identically
 // in-app and in every export. See the backend file for the full rationale.
 //
-// REDIP hard rule (CLAUDE.md): comps must always surface source, freshness, and
+// Acureal hard rule (CLAUDE.md): comps must always surface source, freshness, and
 // confidence — or "No verified feed available." Deterministic string matching
 // only (no AI, no fabricated confidence number).
 

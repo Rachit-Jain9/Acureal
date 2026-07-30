@@ -58,7 +58,7 @@ export function useScenarios(dealId) {
 
 // Workstream A (Provenance Spine) — read-side model-confidence summary for a
 // saved financial model: how many key inputs are set for this deal vs. still
-// on REDIP's benchmark defaults. Read-only display; no toast on error — the
+// on Acureal's benchmark defaults. Read-only display; no toast on error — the
 // panel hides itself when the payload is unavailable.
 export function useModelConfidence(dealId) {
   return useQuery({

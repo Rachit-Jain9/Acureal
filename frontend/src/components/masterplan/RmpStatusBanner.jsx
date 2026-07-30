@@ -1,16 +1,16 @@
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
 
-// Single source of truth for how REDIP frames the legal status of the governing
+// Single source of truth for how Acureal frames the legal status of the governing
 // master plan across every deal-facing surface — now PLAN-AWARE.
 //
-// Two operative statutory plans exist in REDIP: the BDA's RMP 2015 (notified
+// Two operative statutory plans exist in Acureal: the BDA's RMP 2015 (notified
 // 2007) and the Anekal LPA Master Plan 2031 (BMRDA, notified 2014). For a parcel
 // governed by either, this renders a calm "operative plan" note.
 //
 // The Bengaluru RMP 2031 was exhibited for public objection (Nov 2017–Jan 2018)
 // but was never notified — the State elected to skip it. When a surface shows
 // RMP-2031-derived figures (or no plan is identified), this renders the amber
-// "draft — not legally notified" caveat so REDIP never asserts statutory status
+// "draft — not legally notified" caveat so Acureal never asserts statutory status
 // for a draft. The default (no `planVersion`) keeps that caveat.
 export default function RmpStatusBanner({ className = '', planVersion = null, planName = null }) {
   const v = String(planVersion || '').toLowerCase();

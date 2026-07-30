@@ -106,7 +106,7 @@ export default function DashboardPage() {
   const userRole = user?.role;
   const userName = user?.name;
   // The Comps Review Queue widget links to a platform-admin surface, so the
-  // signal that gates it is "is REDIP platform admin", not workspace role.
+  // signal that gates it is "is Acureal platform admin", not workspace role.
   const canCurate = isPlatformAdmin(user);
 
   const { layout, toggleVisible, moveUp, moveDown, reset } = useDashboardLayout();
@@ -150,7 +150,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6" aria-busy="true">
         <PageHeader
-          eyebrow="REDIP — Deal Intelligence"
+          eyebrow="Acureal — Deal Intelligence"
           title="Dashboard"
           description="Live overview of sourcing, underwriting, and IC-ready deals across the pipeline."
         />
@@ -197,7 +197,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <PageHeader
-          eyebrow="REDIP — Deal Intelligence"
+          eyebrow="Acureal — Deal Intelligence"
           title="Dashboard"
           description="Live overview of sourcing, underwriting, and IC-ready deals across the pipeline."
         />
@@ -274,7 +274,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        eyebrow="REDIP — Deal Intelligence"
+        eyebrow="Acureal — Deal Intelligence"
         title="Dashboard"
         description="Live overview of sourcing, underwriting, and IC-ready deals across the pipeline."
         actions={

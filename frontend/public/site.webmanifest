@@ -1,0 +1,13 @@
+{
+  "name": "Acureal",
+  "short_name": "Acureal",
+  "description": "The intelligence layer for Indian real estate — underwriting, diligence and IC-ready reporting.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B2440",
+  "theme_color": "#0B2440",
+  "icons": [
+    { "src": "/icons/acureal-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/acureal-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

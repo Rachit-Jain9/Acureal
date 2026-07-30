@@ -11,7 +11,7 @@ import { buildMassingModel } from '../../utils/buildabilityMassing';
  * Pure SVG — no 3D engine, no dependency. Drawn entirely from the
  * deterministic `buildMassingModel`; the proportions (coverage, floors,
  * FAR utilisation) are exact. The plot is a representative square because
- * REDIP holds the parcel's area, not its surveyed shape — stated plainly
+ * Acureal holds the parcel's area, not its surveyed shape — stated plainly
  * in the caption so the schematic is never mistaken for a site plan.
  */
 

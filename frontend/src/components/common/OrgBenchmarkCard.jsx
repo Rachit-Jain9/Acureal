@@ -70,7 +70,7 @@ export default function OrgBenchmarkCard() {
         Market benchmark contribution
       </h3>
       <p className="text-xs text-content-secondary mb-4 leading-relaxed">
-        REDIP is building an anonymized market-benchmark layer — de-identified deal
+        Acureal is building an anonymized market-benchmark layer — de-identified deal
         facts pooled across organisations so every deal can be measured against the
         real market. Contribution is gated twice over: each user opts in for their
         own data in their Privacy Centre, and an owner or admin can opt the whole

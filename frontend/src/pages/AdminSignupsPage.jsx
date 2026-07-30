@@ -18,7 +18,7 @@ import { useSignups } from '../hooks/useSignups';
 /**
  * Admin · Signups — the open-beta "who has joined" roster.
  *
- * REDIP registration is open to everyone; this operator-only page is how the
+ * Acureal registration is open to everyone; this operator-only page is how the
  * founder actually SEES it happening. It lists every account platform-wide,
  * newest first, with the profile detail each person volunteered at sign-up
  * (company / role / city) plus account timestamps and how they joined.
@@ -153,7 +153,7 @@ export default function AdminSignupsPage() {
       <PageHeader
         eyebrow="Admin · Growth"
         title="Signups"
-        description="Everyone who has joined REDIP, newest first. Registration is open to all during the beta — this is where you see who it's attracting, with the company, role and city they shared when they signed up. You also get an email the moment each new person joins."
+        description="Everyone who has joined Acureal, newest first. Registration is open to all during the beta — this is where you see who it's attracting, with the company, role and city they shared when they signed up. You also get an email the moment each new person joins."
         actions={
           <button
             type="button"

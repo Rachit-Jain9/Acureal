@@ -25,7 +25,7 @@ import DealQaBox from './DealQaBox';
 import AutoFillReadyCard from './AutoFillReadyCard';
 // Workstream B — compact Risk Radar pinned to the deal front page.
 import RiskRadarStrip from './RiskRadarStrip';
-// REDIP Pending §5.7 — Recommendation Engine cards on the Overview.
+// Acureal Pending §5.7 — Recommendation Engine cards on the Overview.
 import RecommendationsPanel from './RecommendationsPanel';
 // Phase 1 / Pillar 1 — Bengaluru micro-market intelligence briefing.
 import MicroMarketBriefingPanel from './MicroMarketBriefingPanel';
@@ -178,7 +178,7 @@ export default function OverviewTab({ setTab }) {
           to the full radar on the Risk tab. */}
       <RiskRadarStrip dealId={dealId} />
 
-      {/* REDIP Pending §5.7 — Recommendation Engine cards. Deterministic
+      {/* Acureal Pending §5.7 — Recommendation Engine cards. Deterministic
           signal-extractor + rule-engine output on every workspace load.
           Cards are evidence-backed; legal-carve-out cards (RERA, approvals,
           title, encumbrance) bypass any future AI narrator. */}

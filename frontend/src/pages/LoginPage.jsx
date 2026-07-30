@@ -7,6 +7,7 @@ import usePublicLightTheme from '../hooks/usePublicLightTheme';
 import { Button, Field, Input, Checkbox, ErrorState } from '../design-system';
 import PublicFooter from '../components/common/PublicFooter';
 import GoogleSignInButton from '../components/auth/GoogleSignInButton';
+import { AcurealWordmark, AcurealRule } from '../components/brand/AcurealBrand';
 
 export default function LoginPage() {
   usePublicLightTheme();
@@ -195,12 +196,13 @@ export default function LoginPage() {
     <div className="min-h-screen flex flex-col bg-bg-secondary">
       <div className="flex-1 flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          {/* Branding */}
+          {/* Branding — the primary lockup: wordmark over the measure rule */}
           <div className="text-center mb-8">
-            <h1 className="font-serif text-4xl font-semibold text-content-primary tracking-tight">
-              REDIP<span className="text-premium">.</span>
+            <h1 className="text-[30px]">
+              <AcurealWordmark display />
             </h1>
-            <p className="text-content-muted mt-2 text-[11px] uppercase tracking-[0.18em]">
+            <AcurealRule className="mx-auto mt-4 h-[24px] w-full max-w-[320px]" />
+            <p className="text-content-muted mt-3 text-[11px] uppercase tracking-[0.18em]">
               Real Estate Deal Intelligence · India
             </p>
           </div>
@@ -213,7 +215,7 @@ export default function LoginPage() {
             <p className="text-sm text-content-secondary mb-6">
               {isRegister
                 ? 'Create a deal workspace account for sourcing, diligence, and underwriting.'
-                : 'Sign in to your REDIP deal intelligence workspace.'}
+                : 'Sign in to your Acureal deal intelligence workspace.'}
             </p>
 
             {/* Server error — hidden during the MFA step (that form shows its own) */}
@@ -249,7 +251,7 @@ export default function LoginPage() {
                   />
                   <p className="mt-1 text-xs text-content-muted">
                     Applies to Google and email sign-in. Untick on a shared
-                    machine — REDIP will then sign you out when the browser
+                    machine — Acureal will then sign you out when the browser
                     closes.
                   </p>
                 </div>

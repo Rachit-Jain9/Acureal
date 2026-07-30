@@ -183,7 +183,7 @@ function ContextDrawer({ selected, onClose }) {
   );
 }
 
-// Regulatory coverage — the operative authorities REDIP holds a rulebook for.
+// Regulatory coverage — the operative authorities Acureal holds a rulebook for.
 // Makes the RMP-2015-only land-use overlay read as ONE layer of a deliberate,
 // multi-authority system rather than "coverage stops at the city". Honest: only
 // RMP 2015 has a georeferenced map overlay; the LPA rulebooks apply per-deal.
@@ -248,7 +248,7 @@ export default function MasterPlanExplorer() {
     staleTime: 60_000,
   });
 
-  // Regulatory coverage — the operative authorities REDIP holds a rulebook for.
+  // Regulatory coverage — the operative authorities Acureal holds a rulebook for.
   // Powers the "Regulatory coverage" panel so the RMP-2015-only overlay reads as
   // one layer of a broader system. Reference data → long staleTime.
   const { data: coverageResp } = useQuery({

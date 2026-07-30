@@ -523,7 +523,7 @@ export default function ReportsPage() {
           />
           {performanceData.length === 0 ? (
             <div className="p-6">
-              <EmptyTableState message="No performance ranking yet. As financial models are added, REDIP will rank live opportunities by return profile." />
+              <EmptyTableState message="No performance ranking yet. As financial models are added, Acureal will rank live opportunities by return profile." />
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -629,7 +629,7 @@ export default function ReportsPage() {
                   {dailyBrief?.title || 'Daily Real Estate Intelligence Brief'}
                 </h3>
                 <p className="mt-2 max-w-3xl text-sm text-content-secondary">
-                  {dailyBrief?.notes || 'REDIP only publishes verified intelligence. Connect trusted external feeds to activate market-facing Bengaluru and India brief generation.'}
+                  {dailyBrief?.notes || 'Acureal only publishes verified intelligence. Connect trusted external feeds to activate market-facing Bengaluru and India brief generation.'}
                 </p>
               </div>
               {dailyBrief?.mode && (
@@ -642,7 +642,7 @@ export default function ReportsPage() {
             <div className="rounded-2xl border border-hairline bg-premium-soft p-6 shadow-sm">
               <h4 className="text-base font-semibold text-premium">Verified market sources required</h4>
               <p className="mt-2 text-sm text-premium">
-                REDIP is intentionally withholding external market claims until verified data feeds are connected.
+                Acureal is intentionally withholding external market claims until verified data feeds are connected.
               </p>
               <div className="mt-4 grid gap-3 lg:grid-cols-3">
                 {(dailyBrief?.verifiedSourceRequirements || []).map((source) => (

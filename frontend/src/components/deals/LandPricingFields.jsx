@@ -38,7 +38,7 @@ export default function LandPricingFields({
       <div className="mb-3 flex items-center justify-between">
         <div>
           <h4 className="text-sm font-semibold text-content-primary">Land Pricing</h4>
-          <p className="text-xs text-content-secondary">Quote land cost in crore, per acre, or per sqft. REDIP will normalize the total.</p>
+          <p className="text-xs text-content-secondary">Quote land cost in crore, per acre, or per sqft. Acureal will normalize the total.</p>
         </div>
       </div>
 

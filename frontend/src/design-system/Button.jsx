@@ -1,4 +1,4 @@
-// Button — the canonical interactive control for REDIP.
+// Button — the canonical interactive control for Acureal.
 //
 // Replaces the scatter of `.btn` CSS classes, inline-styled buttons, and raw
 // Tailwind buttons with one primitive that enforces the

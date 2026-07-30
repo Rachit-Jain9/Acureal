@@ -1,7 +1,7 @@
-// WelcomeModal — REDIP's first-run welcome experience.
+// WelcomeModal — Acureal's first-run welcome experience.
 //
 // A short, cinematic, multi-scene introduction shown the first time a user
-// lands on the app: the vision, what makes REDIP trustworthy, one light
+// lands on the app: the vision, what makes Acureal trustworthy, one light
 // personalisation step, and a tailored "where to start". Same props the tour
 // orchestrator already passes (open / onStartTour / onSkip), so ProductTour is
 // unchanged. Scene-to-scene motion reuses the app's `.redip-empty-in` fade-rise
@@ -43,7 +43,7 @@ const FOCUS_OPTIONS = [
 ];
 
 const START_BY_FOCUS = {
-  source: 'Start by creating a deal — even a rough label like “Whitefield opportunity” works. REDIP is built for messy, early-stage sourcing.',
+  source: 'Start by creating a deal — even a rough label like “Whitefield opportunity” works. Acureal is built for messy, early-stage sourcing.',
   diligence: 'Open a deal and head to Documents — drop in a title doc or RERA filing and AI does the first read. Then work the DD checklist down.',
   decide: 'Open a deal’s Overview for the ten-second read, then the Risk and DD tabs to see what stands between you and a confident call.',
   default: 'Create your first deal, or take the two-minute tour to see where everything lives. The Guide is always one click away.',
@@ -149,7 +149,7 @@ export default function WelcomeModal({ open, onStartTour, onSkip }) {
       open={open}
       onClose={handleSkip}
       size="lg"
-      ariaLabel="Welcome to REDIP"
+      ariaLabel="Welcome to Acureal"
       footer={footer}
       closeOnOverlayClick={false}
     >
@@ -163,7 +163,7 @@ export default function WelcomeModal({ open, onStartTour, onSkip }) {
         {scene === 0 && (
           <div>
             <h2 className="mt-2 text-2xl font-semibold text-content-primary">
-              Welcome to REDIP{firstName ? `, ${firstName}` : ''}.
+              Welcome to Acureal{firstName ? `, ${firstName}` : ''}.
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-content-secondary">
               The operating system for live real-estate deal work — sourcing, due
@@ -190,7 +190,7 @@ export default function WelcomeModal({ open, onStartTour, onSkip }) {
         {scene === 1 && (
           <div>
             <h2 className="mt-2 text-2xl font-semibold text-content-primary">
-              Why REDIP earns your trust.
+              Why Acureal earns your trust.
             </h2>
             <p className="mt-2 text-sm leading-relaxed text-content-secondary">
               Three guarantees sit under everything you&apos;ll see.

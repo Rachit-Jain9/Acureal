@@ -1117,7 +1117,7 @@ export default function ParcelIntelligencePanel({ property, deal, dealId, onUplo
         <div className="flex items-start gap-3">
           <Gauge size={14} className="mt-0.5 shrink-0 text-content-muted" />
           <div className="min-w-0 text-xs leading-relaxed text-content-secondary">
-            Additional/TDR FAR, vendor guidance values, K-GIS geometries, Kaveri/e-Aasthi records, and uploaded extracts remain screening inputs until reviewed and approved. REDIP will surface them but never silently promote them into verified facts.
+            Additional/TDR FAR, vendor guidance values, K-GIS geometries, Kaveri/e-Aasthi records, and uploaded extracts remain screening inputs until reviewed and approved. Acureal will surface them but never silently promote them into verified facts.
           </div>
         </div>
       </div>

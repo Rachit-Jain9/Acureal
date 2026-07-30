@@ -18,7 +18,7 @@ beforeEach(() => {
 describe('GuideCenter', () => {
   it('renders nothing while closed', () => {
     renderGuide();
-    expect(screen.queryByRole('dialog', { name: /redip guide/i })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: /acureal guide/i })).toBeNull();
   });
 
   it('opens on the redip:guide-open event and shows navigation topics', () => {
@@ -26,7 +26,7 @@ describe('GuideCenter', () => {
     act(() => {
       window.dispatchEvent(new CustomEvent('redip:guide-open'));
     });
-    expect(screen.getByRole('dialog', { name: /redip guide/i })).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: /acureal guide/i })).toBeInTheDocument();
     // Default category is "Getting around" → the Dashboard topic card shows.
     expect(screen.getByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
   });

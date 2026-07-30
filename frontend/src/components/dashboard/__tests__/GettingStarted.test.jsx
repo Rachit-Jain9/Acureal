@@ -23,12 +23,12 @@ function renderPanel(props = {}) {
 describe('GettingStarted checklist', () => {
   it('greets the user by first name only', () => {
     renderPanel({ userName: 'Rachit Jain' });
-    expect(screen.getByText('Welcome to REDIP, Rachit.')).toBeInTheDocument();
+    expect(screen.getByText('Welcome to Acureal, Rachit.')).toBeInTheDocument();
   });
 
   it('greets gracefully when no name is available', () => {
     renderPanel({ userName: undefined });
-    expect(screen.getByText('Welcome to REDIP.')).toBeInTheDocument();
+    expect(screen.getByText('Welcome to Acureal.')).toBeInTheDocument();
   });
 
   it('renders an undone step with its deep-linked CTA', () => {

@@ -230,7 +230,7 @@ function PropertyPickerModal({ dealId, onClose }) {
         ) : (
           <div className="px-5 py-4 space-y-3">
             <p className="text-xs text-content-secondary">
-              Paste a Google Maps link, Plus Code, coordinates, survey number, address, or broker message — REDIP will resolve it and fill the parcel record. Create-and-link in one step.
+              Paste a Google Maps link, Plus Code, coordinates, survey number, address, or broker message — Acureal will resolve it and fill the parcel record. Create-and-link in one step.
             </p>
             <PropertyCaptureField
               onSaved={handleCaptureSaved}

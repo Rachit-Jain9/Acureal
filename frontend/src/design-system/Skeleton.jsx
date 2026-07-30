@@ -1,6 +1,6 @@
 // Skeleton — editorial loading placeholder primitive.
 //
-// REDIP standing rule (`docs/FRONTEND_GUIDELINES.md` §2): any operation that
+// Acureal standing rule (`docs/FRONTEND_GUIDELINES.md` §2): any operation that
 // takes longer than 100ms must show a *skeleton* of the eventual content,
 // not a spinning circle. Spinners are reserved for in-button pending states
 // and full-page suspense fallbacks where the eventual layout is unknown.

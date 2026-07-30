@@ -8,7 +8,7 @@ import { useModelConfidence } from '../../hooks/useFinancials';
  *
  * A compact readout of the Provenance-Spine Model Confidence signal built on
  * the DCF Underwriting page — how many key inputs are set for this deal vs. on
- * REDIP's benchmark defaults.
+ * Acureal's benchmark defaults.
  *
  * The full panel lives on the DCF page (the model builder's surface). This
  * strip carries the verdict to where a deal is actually reviewed — the deal

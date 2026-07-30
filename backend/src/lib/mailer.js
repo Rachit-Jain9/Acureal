@@ -27,7 +27,7 @@
  * Operator setup (manual blocker, recorded in TODO_MANUAL.md):
  *   1. Sign up at https://resend.com (free tier covers MVP).
  *   2. Verify the sender domain (DNS records).
- *   3. Set Vercel env: RESEND_API_KEY, MAIL_FROM ("REDIP <noreply@your.domain>").
+ *   3. Set Vercel env: RESEND_API_KEY, MAIL_FROM ("Acureal <noreply@acureal.in>").
  *
  * Until that is done, the dev console-log path is the source of truth: every
  * verification link is logged at INFO level on the server, and operators can
@@ -41,7 +41,7 @@ const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const isProviderConfigured = () => Boolean(process.env.RESEND_API_KEY);
 
 const getDefaultFrom = () =>
-  process.env.MAIL_FROM || 'REDIP <noreply@redip.example>';
+  process.env.MAIL_FROM || 'Acureal <noreply@acureal.example>';
 
 // Redact recipient email(s) for logs — keep enough to debug delivery without
 // writing raw PII (DPDP data-minimisation; mirrors errorHandler's no-PII-in-logs

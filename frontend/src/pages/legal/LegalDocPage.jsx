@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, AlertTriangle, Info } from 'lucide-react';
 import { useLegalActive } from '../../hooks/useLegalActive';
 import usePublicLightTheme from '../../hooks/usePublicLightTheme';
+import { AcurealWordmark } from '../../components/brand/AcurealBrand';
 import Markdown from '../../components/common/Markdown';
 import { Skeleton } from '../../design-system';
 
@@ -72,15 +73,13 @@ export default function LegalDocPage({ kind }) {
             <ArrowLeft size={14} />
             Back
           </button>
-          <span className="font-serif text-lg font-semibold text-content-primary">
-            REDIP<span className="text-[#c2410c]">.</span>
-          </span>
+          <AcurealWordmark className="text-[14px]" />
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <div className="text-[11px] uppercase tracking-[0.14em] text-content-muted mb-2 font-medium">
-          REDIP · Legal
+          Acureal · Legal
         </div>
         <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-content-primary tracking-tight">
           {title}

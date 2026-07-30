@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-// REDIP dual-mode theme.
+// Acureal dual-mode theme.
 //
 // Dark is the default analytical work mode (Bloomberg DNA).
 // Light is the report / share mode for IC memos and PDFs.

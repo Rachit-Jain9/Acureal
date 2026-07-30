@@ -1,4 +1,4 @@
-// REDIP design-system primitives — editorial, IC-grade.
+// Acureal design-system primitives — editorial, IC-grade.
 // All colors route through CSS variables (see `frontend/src/index.css`), so
 // both themes work with a single `data-theme` flip.
 // Import as: import { Button, Modal, Tabs, Field, Card, SectionHeader, MetricTile, Skeleton, ... } from '../design-system'

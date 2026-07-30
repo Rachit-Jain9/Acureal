@@ -21,7 +21,7 @@ const CURRENCY_OPTIONS = [
 ];
 
 // The multi-currency display feature (USD/AED/EUR/GBP/JPY/SGD conversion
-// at render time) was retired 2026-05-24 — REDIP is India-only and the
+// at render time) was retired 2026-05-24 — Acureal is India-only and the
 // extra control added friction without earning it.
 
 const AREA_UNIT_OPTIONS = [
@@ -285,8 +285,8 @@ export default function SettingsPage() {
           <p className="text-sm font-medium text-content-primary">Current session behavior</p>
           <p className="mt-1 text-xs text-content-secondary">
             {sessionPersistence === 'persistent'
-              ? 'Remember me is enabled for this browser. REDIP will keep this session across browser restarts until you sign out.'
-              : 'This is a browser-session login. REDIP will sign you out when the browser closes unless you choose Remember me at sign-in.'}
+              ? 'Remember me is enabled for this browser. Acureal will keep this session across browser restarts until you sign out.'
+              : 'This is a browser-session login. Acureal will sign you out when the browser closes unless you choose Remember me at sign-in.'}
           </p>
         </div>
 
@@ -389,7 +389,7 @@ export default function SettingsPage() {
           Privacy & your data
         </h3>
         <p className="text-xs text-content-secondary mb-4 max-w-2xl">
-          See exactly what personal data REDIP holds about you, download a copy, manage
+          See exactly what personal data Acureal holds about you, download a copy, manage
           your consent choices for each purpose, and exercise your rights under the
           Digital Personal Data Protection Act, 2023.
         </p>
@@ -471,7 +471,7 @@ export default function SettingsPage() {
 
       {/* AI provider health + usage are cross-org platform operations data
           (cost across every workspace, provider availability) — not something
-          every workspace owner needs. Gated to the REDIP platform admin via
+          every workspace owner needs. Gated to the Acureal platform admin via
           isPlatformAdmin, NOT workspace role (every account is admin of its
           own workspace, which would expose these to everyone). */}
       {isPlatformAdmin(user) && (
@@ -482,7 +482,7 @@ export default function SettingsPage() {
       )}
 
       {/* Market Intelligence Notes are platform-curated — they appear in the
-          shared brief and are labelled "admin-entered" — so only the REDIP
+          shared brief and are labelled "admin-entered" — so only the Acureal
           platform admin should be editing them. */}
       {isPlatformAdmin(user) && (
         <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
@@ -493,7 +493,7 @@ export default function SettingsPage() {
           <p className="text-xs text-content-secondary mb-4">
             Enter your own verified market observations — sourced from broker calls, reports, or site visits.
             Each line becomes one bullet in the Intelligence brief. These are labelled as admin-entered and never
-            fabricated by REDIP.
+            fabricated by Acureal.
           </p>
 
           {[

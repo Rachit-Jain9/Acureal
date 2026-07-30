@@ -36,7 +36,7 @@ export function useInviteMember() {
     mutationFn: ({ email, role }) => organizationAPI.invite(email, role).then((r) => r.data.data),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: MEMBERS_KEY });
-      // Existing REDIP users are added to the workspace immediately; new emails
+      // Existing Acureal users are added to the workspace immediately; new emails
       // get an invitation link consumed when they sign up.
       toast.success(data?.kind === 'added' ? 'Teammate added to the workspace' : 'Invitation sent');
     },

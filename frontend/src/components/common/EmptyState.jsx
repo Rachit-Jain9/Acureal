@@ -1,4 +1,4 @@
-// EmptyState — REDIP's canonical "nothing here yet" panel.
+// EmptyState — Acureal's canonical "nothing here yet" panel.
 //
 // docs/FRONTEND_GUIDELINES.md §11 ("Content presence — never empty, never
 // anxious") requires every empty surface to carry a friendly placeholder

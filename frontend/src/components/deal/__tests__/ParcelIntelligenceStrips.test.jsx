@@ -46,7 +46,7 @@ describe('GoverningPlanStrip', () => {
   });
 
   it('surfaces the honest "rulebook not loaded" note for an Anekal parcel', () => {
-    const note = 'Anekal Local Planning Area — Master Plan 2031 (BMRDA) is operative but its zoning/FAR rules are not yet loaded into REDIP — FAR cannot be computed against this rulebook yet.';
+    const note = 'Anekal Local Planning Area — Master Plan 2031 (BMRDA) is operative but its zoning/FAR rules are not yet loaded into Acureal — FAR cannot be computed against this rulebook yet.';
     const { getByText } = render(
       <GoverningPlanStrip
         plan={{

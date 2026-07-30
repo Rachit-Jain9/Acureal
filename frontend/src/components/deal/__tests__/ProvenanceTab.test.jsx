@@ -26,8 +26,8 @@ const LEDGER = {
     {
       category: 'Returns',
       claims: [
-        { key: 'irr', label: 'Project IRR', value: 18.4, unit: 'pct', source: { type: 'kernel', label: 'REDIP deterministic kernel', detail: 'kernel v2' }, traced: true },
-        { key: 'npv', label: 'NPV', value: 42.1, unit: 'inr_cr', source: { type: 'kernel', label: 'REDIP deterministic kernel', detail: 'kernel v2' }, traced: true },
+        { key: 'irr', label: 'Project IRR', value: 18.4, unit: 'pct', source: { type: 'kernel', label: 'Acureal deterministic kernel', detail: 'kernel v2' }, traced: true },
+        { key: 'npv', label: 'NPV', value: 42.1, unit: 'inr_cr', source: { type: 'kernel', label: 'Acureal deterministic kernel', detail: 'kernel v2' }, traced: true },
       ],
     },
     {
@@ -56,7 +56,7 @@ describe('ProvenanceTab', () => {
     expect(screen.getByText('Project IRR')).toBeInTheDocument();
     expect(screen.getByText('Sell rate')).toBeInTheDocument();
     // typed source pills carry the honest origin label
-    expect(screen.getAllByText('REDIP deterministic kernel').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('Acureal deterministic kernel').length).toBeGreaterThanOrEqual(2);
     expect(screen.getByText('Set for this deal')).toBeInTheDocument();
     // formatted values
     expect(screen.getByText('18.4%')).toBeInTheDocument();

@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * REDIP Waterfall Engine
+ * Acureal Waterfall Engine
  * Handles JDA (Joint Development Agreement) and JV (Joint Venture) profit distribution.
  * All monetary values in Crores (₹ Cr).
  *

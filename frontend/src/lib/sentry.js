@@ -1,4 +1,4 @@
-// REDIP error monitoring (Sentry, EU data residency — operator's choice).
+// Acureal error monitoring (Sentry, EU data residency — operator's choice).
 //
 // The Sentry SDK (~30 KB gz) is DYNAMICALLY imported inside initSentry() so it
 // never sits on the first-paint critical path — it loads as its own async chunk

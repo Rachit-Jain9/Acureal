@@ -4,7 +4,7 @@ import { coverageLabel } from '../DocumentsTab';
 /**
  * The coverage chip's copy.
  *
- * This is the operator-facing half of the product promise — "REDIP tells you
+ * This is the operator-facing half of the product promise — "Acureal tells you
  * exactly what it processed, and what it didn't." The tests below pin the two
  * things that make the chip trustworthy rather than decorative:
  *
