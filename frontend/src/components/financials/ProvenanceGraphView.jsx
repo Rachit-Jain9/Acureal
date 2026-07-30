@@ -80,7 +80,7 @@ function formatNodeValue(value, unit) {
  *
  * Props:
  *   - dealId (optional): if set, fetches the live graph from the backend.
- *   - assetClass: one of the REDIP asset classes. Drives client-side fallback
+ *   - assetClass: one of the Acureal asset classes. Drives client-side fallback
  *     topology when `dealId` is absent.
  *   - facilityIds, tierIds, hasDSRA, hasCashTraps, hasCovenants:
  *     passed to client-side fallback; ignored when the backend graph loads.

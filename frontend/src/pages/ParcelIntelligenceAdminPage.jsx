@@ -928,7 +928,7 @@ export default function ParcelIntelligenceAdminPage() {
             <EmptyState
               icon={AlertTriangle}
               title="No review items found"
-              description="Change filters or ingest reviewed source material. REDIP will not create placeholder regulatory facts."
+              description="Change filters or ingest reviewed source material. Acureal will not create placeholder regulatory facts."
             />
           </div>
         ) : (

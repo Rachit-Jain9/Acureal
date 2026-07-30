@@ -160,7 +160,7 @@ export default function BestUseSimulatorPanel() {
           Best Use Simulator
         </h3>
         <div className="text-sm text-content-muted py-2">
-          This parcel sits outside REDIP's seeded Bengaluru micro-markets.
+          This parcel sits outside Acureal's seeded Bengaluru micro-markets.
           Best Use scoring is unavailable until the locality is benchmarked.
         </div>
       </div>

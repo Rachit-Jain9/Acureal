@@ -58,7 +58,7 @@ const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.value, c]));
 
 // Two different limits, deliberately named apart (they were one number, which
 // is what let the UI imply that anything it accepts, it can read):
-//   MAX_SIZE_MB     what REDIP accepts and STORES. Ours to choose — a product
+//   MAX_SIZE_MB     what Acureal accepts and STORES. Ours to choose — a product
 //                   decision, not a platform ceiling.
 //   MAX_READ_MB     what the document READER accepts. Bounded by Gemini's PDF
 //                   ceiling (50 MB / 1,000 pages), which no paid plan raises.
@@ -99,7 +99,7 @@ function formatDocType(docType) {
  * reader.
  *
  * The word is "sent", never "read": a successful provider call is not evidence
- * that a model attended to page 847, and REDIP does not claim what it cannot
+ * that a model attended to page 847, and Acureal does not claim what it cannot
  * show. The backend receipt uses the same vocabulary (`submitted_pages`).
  *
  * Returns null — rendering nothing — when there is nothing true to say:
@@ -369,7 +369,7 @@ export default function DocumentsTab() {
                   reader: it is kept, not lost. */}
               <p className="mt-1 text-[11px] text-content-tertiary">
                 PDFs are read up to {MAX_READ_MB} MB and {MAX_READ_PAGES.toLocaleString('en-IN')} pages.
-                Anything larger is still stored, versioned and downloadable — REDIP will tell you it could not read it rather than read part of it silently.
+                Anything larger is still stored, versioned and downloadable — Acureal will tell you it could not read it rather than read part of it silently.
               </p>
               <input
                 ref={fileRef}
@@ -381,7 +381,7 @@ export default function DocumentsTab() {
                 className="block w-full text-sm text-content-secondary file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-medium file:bg-accent-soft file:text-accent hover:file:bg-accent-soft cursor-pointer disabled:opacity-60"
               />
               <p className="mt-1 text-[11px] text-content-muted">
-                REDIP reads PDFs, images, spreadsheets, Word/PowerPoint, CSV/JSON and map files in English, Hindi &amp; Kannada. CAD, BIM, SketchUp and Primavera files are stored for the record but not auto-read.
+                Acureal reads PDFs, images, spreadsheets, Word/PowerPoint, CSV/JSON and map files in English, Hindi &amp; Kannada. CAD, BIM, SketchUp and Primavera files are stored for the record but not auto-read.
               </p>
             </div>
 
@@ -467,7 +467,7 @@ export default function DocumentsTab() {
                               {formatDocType(extraction.doc_type)}
                             </span>
                           )}
-                          {/* Coverage receipt — REDIP's account of what it did
+                          {/* Coverage receipt — Acureal's account of what it did
                               with every page. A doc-type chip says WHAT was
                               found; this says HOW MUCH of the document was
                               actually sent to the reader, which is the part a
@@ -514,7 +514,7 @@ export default function DocumentsTab() {
                           {!canExtract && (
                             <span
                               className="ml-2 inline-flex items-center gap-1 rounded-full border border-hairline bg-bg-secondary px-1.5 py-0.5 text-[10px] font-medium text-content-muted"
-                              title={`${docLabel(doc)} files are stored and downloadable, but REDIP cannot read them with AI yet.`}
+                              title={`${docLabel(doc)} files are stored and downloadable, but Acureal cannot read them with AI yet.`}
                             >
                               <FileText size={10} />
                               Stored · not AI-readable

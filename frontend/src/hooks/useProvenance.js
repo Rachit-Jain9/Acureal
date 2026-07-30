@@ -4,7 +4,7 @@ import { intelligenceAPI } from '../services/api';
 /**
  * The deterministic evidence ledger for a deal — every material figure the IC
  * decision rests on, each tagged with an honest typed source (kernel-computed /
- * analyst-set / REDIP benchmark / deal records / verified feed). Backs the
+ * analyst-set / Acureal benchmark / deal records / verified feed). Backs the
  * Provenance tab.
  *
  * Composed entirely server-side (icEvidence.service.getEvidenceLedger); the

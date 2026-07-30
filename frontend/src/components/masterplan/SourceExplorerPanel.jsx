@@ -133,7 +133,7 @@ export default function SourceExplorerPanel() {
       <SectionHeader
         eyebrow="Citation index"
         title="Source Explorer — every fact, mapped to its source page"
-        sub="Pick a source on the left to see every extracted fact grouped by the exact page it came from. Use this to defend any number REDIP shows: each row links back to a specific document and page, with the fact-type tag and confidence score."
+        sub="Pick a source on the left to see every extracted fact grouped by the exact page it came from. Use this to defend any number Acureal shows: each row links back to a specific document and page, with the fact-type tag and confidence score."
       />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

@@ -8,6 +8,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
 import { authAPI } from '../../services/api';
 import usePublicLightTheme from '../../hooks/usePublicLightTheme';
+import { AcurealWordmark } from '../../components/brand/AcurealBrand';
 
 const STATUSES = {
   pending: 'pending',
@@ -67,9 +68,7 @@ export default function VerifyEmailPage() {
             <ArrowLeft size={14} />
             Back
           </button>
-          <span className="font-serif text-lg font-semibold text-content-primary">
-            REDIP<span className="text-[#c2410c]">.</span>
-          </span>
+          <AcurealWordmark className="text-[14px]" />
         </div>
       </header>
 
@@ -96,8 +95,8 @@ export default function VerifyEmailPage() {
               </h1>
               <p className="text-sm text-content-secondary mt-2 max-w-sm">
                 {email
-                  ? `${email} is now confirmed as your REDIP account email.`
-                  : 'Your REDIP account email is now confirmed.'}
+                  ? `${email} is now confirmed as your Acureal account email.`
+                  : 'Your Acureal account email is now confirmed.'}
               </p>
               <Link
                 to="/login"

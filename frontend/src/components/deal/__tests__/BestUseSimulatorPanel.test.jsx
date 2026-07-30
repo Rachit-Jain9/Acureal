@@ -35,7 +35,7 @@ describe('BestUseSimulatorPanel', () => {
       reason: 'no_micro_market_match',
     });
     render(<BestUseSimulatorPanel />);
-    expect(screen.getByText(/outside REDIP's seeded Bengaluru micro-markets/)).toBeInTheDocument();
+    expect(screen.getByText(/outside Acureal's seeded Bengaluru micro-markets/)).toBeInTheDocument();
   });
 
   it('renders nothing when the migration is unavailable', () => {

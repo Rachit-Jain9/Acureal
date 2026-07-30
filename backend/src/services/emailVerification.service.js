@@ -48,12 +48,12 @@ const renderVerificationEmail = ({ name, verificationUrl }) => {
   const safeName = (name || 'there').replace(/[<>]/g, '');
   const html = `
     <div style="font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #1f2937;">
-      <h1 style="font-size: 18px; margin-bottom: 16px;">Verify your REDIP email</h1>
+      <h1 style="font-size: 18px; margin-bottom: 16px;">Verify your Acureal email</h1>
       <p>Hi ${safeName},</p>
       <p>Click the button below to confirm this is your email address. The link expires in 24 hours.</p>
       <p style="margin: 24px 0;">
         <a href="${verificationUrl}"
-           style="display: inline-block; padding: 10px 18px; background: #c2410c; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">
+           style="display: inline-block; padding: 10px 18px; background: #1E6FD0; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600;">
           Verify email
         </a>
       </p>
@@ -62,13 +62,13 @@ const renderVerificationEmail = ({ name, verificationUrl }) => {
         <span style="word-break: break-all;">${verificationUrl}</span>
       </p>
       <p style="font-size: 12px; color: #9ca3af; margin-top: 32px;">
-        You're receiving this because someone — likely you — created a REDIP account
+        You're receiving this because someone — likely you — created an Acureal account
         with this email. If you didn't, ignore this message; the link is unusable
         without your password.
       </p>
     </div>
   `;
-  const text = `Verify your REDIP email\n\nHi ${safeName},\n\nOpen this link to confirm your email (expires in 24 hours):\n${verificationUrl}\n\nIf you didn't sign up for REDIP, ignore this message.`;
+  const text = `Verify your Acureal email\n\nHi ${safeName},\n\nOpen this link to confirm your email (expires in 24 hours):\n${verificationUrl}\n\nIf you didn't sign up for Acureal, ignore this message.`;
   return { html, text };
 };
 
@@ -140,7 +140,7 @@ const sendVerificationEmail = async ({ userId, email, name, ipAddress, userAgent
   try {
     const result = await sendMail({
       to: email,
-      subject: 'Verify your REDIP email',
+      subject: 'Verify your Acureal email',
       html,
       text,
     });

@@ -298,7 +298,7 @@ export default function MapPage() {
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-premium">Precision Mode</p>
                   <h2 className="mt-2 text-base font-semibold text-premium">Only precise property pins appear on this map</h2>
                   <p className="mt-1 text-sm text-premium">
-                    REDIP now excludes low-confidence locations from nearby comps and deal heat layers.
+                    Acureal now excludes low-confidence locations from nearby comps and deal heat layers.
                     {approximateCount > 0 ? ` ${approximateCount} properties are approximate.` : ''}
                     {missingPinCount > 0 ? ` ${missingPinCount} still need coordinates.` : ''}
                   </p>

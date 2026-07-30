@@ -4,7 +4,7 @@
  * Deal-document format registry — the SINGLE source of truth for
  *   (a) which file types can be uploaded to a deal,
  *   (b) the server-derived MIME for each, and
- *   (c) whether REDIP can actually read the file with AI.
+ *   (c) whether Acureal can actually read the file with AI.
  *
  * Before this module the allow-list was duplicated in three places
  * (frontend DocumentsTab MIME list, multer middleware, document.service) which
@@ -13,18 +13,18 @@
  * ESM mirror locked by a parity test.
  *
  * ── Extraction tiers ────────────────────────────────────────────────────────
- * The tier is a claim about what REDIP can HONESTLY do with the bytes
+ * The tier is a claim about what Acureal can HONESTLY do with the bytes
  * (CLAUDE.md: never ship UI that looks production-ready over an unsupported
  * workflow):
  *
  *   'native'      — the provider reads the file directly (PDF + the image
  *                   formats Gemini documents support). Sent as inline base64.
- *   'parseable'   — REDIP deterministically parses the file to text/structure
+ *   'parseable'   — Acureal deterministically parses the file to text/structure
  *                   server-side FIRST, then sends that text to the model
  *                   (spreadsheets, CSV/TSV, JSON/GeoJSON, KML/KMZ, DOCX,
  *                   PPTX, plain text, XML).
  *   'stored_only' — the file is accepted, stored, versioned, and available to
- *                   download, but REDIP cannot read it. The UI says exactly
+ *                   download, but Acureal cannot read it. The UI says exactly
  *                   that and the extract endpoint refuses with the same copy.
  *                   Covers CAD (DWG/DXF), SketchUp, BIM/IFC, Primavera/MS
  *                   Project, shapefiles, legacy binary Office formats, and
@@ -50,7 +50,7 @@ const DOCUMENT_FORMATS = Object.freeze({
   '.heic':    { mime: 'image/heic',       tier: 'native', label: 'HEIC image' },
   '.heif':    { mime: 'image/heif',       tier: 'native', label: 'HEIF image' },
 
-  // ── Parseable: REDIP parses to text, then the model reads the text ────────
+  // ── Parseable: Acureal parses to text, then the model reads the text ────────
   '.xlsx':    { mime: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', tier: 'parseable', label: 'Excel workbook' },
   '.xlsm':    { mime: 'application/vnd.ms-excel.sheet.macroEnabled.12',                    tier: 'parseable', label: 'Excel workbook (macro-enabled)' },
   '.docx':    { mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', tier: 'parseable', label: 'Word document' },
@@ -67,7 +67,7 @@ const DOCUMENT_FORMATS = Object.freeze({
   '.md':      { mime: 'text/markdown',                tier: 'parseable', label: 'Markdown' },
 
   // ── Stored only: accepted + stored, honestly NOT AI-readable ──────────────
-  // CAD / BIM / scheduling / GIS binaries need specialist toolchains REDIP
+  // CAD / BIM / scheduling / GIS binaries need specialist toolchains Acureal
   // does not run. They upload, store, download, and version normally.
   '.dwg':     { mime: 'image/vnd.dwg',                tier: 'stored_only', label: 'AutoCAD drawing' },
   '.dxf':     { mime: 'image/vnd.dxf',                tier: 'stored_only', label: 'AutoCAD exchange drawing' },
@@ -153,7 +153,7 @@ const labelFor = (fileNameOrExt) => formatFor(fileNameOrExt)?.label || 'this fil
  * words everywhere so the product never implies a capability it lacks.
  */
 const unsupportedExtractionMessage = (fileNameOrExt) =>
-  `${labelFor(fileNameOrExt)} files are stored and downloadable, but REDIP cannot read them with AI yet. Export the content to PDF, Excel, or an image and upload that to extract fields.`;
+  `${labelFor(fileNameOrExt)} files are stored and downloadable, but Acureal cannot read them with AI yet. Export the content to PDF, Excel, or an image and upload that to extract fields.`;
 
 const EXTENSIONS_BY_TIER = Object.freeze({
   native: Object.freeze(ALLOWED_EXTENSIONS.filter((e) => DOCUMENT_FORMATS[e].tier === 'native')),

@@ -10,7 +10,7 @@ import { GuideHelp } from '../../design-system';
  * failure mode that sinks Indian real-estate deals it shows a posture —
  * cleared / not-verified / flagged — synthesised server-side from the deal's
  * risk flags, due-diligence items, and approvals. "Not verified" is a
- * first-class state: REDIP warns about what hasn't been checked, not just
+ * first-class state: Acureal warns about what hasn't been checked, not just
  * what has gone wrong.
  */
 

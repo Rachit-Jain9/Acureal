@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
  *
  * These assertions are deliberately BROAD (any stylesheet, any element): a
  * will-change:transform or a retained transform is only ever safe on leaf
- * elements that never host fixed descendants, and no current REDIP style
+ * elements that never host fixed descendants, and no current Acureal style
  * needs either. If a future animation genuinely does, it must scope the
  * transform to animation-time only (fill-mode `backwards`/`none`) and leave
  * will-change to `opacity` — then update this guard with that reasoning.
@@ -68,7 +68,7 @@ describe('fixed-overlay containment guard', () => {
   });
 
   it('no animation retains its end-state via fill-mode both/forwards (one audited exception)', () => {
-    // A retained keyframe transform is the second trigger. REDIP's entrance
+    // A retained keyframe transform is the second trigger. Acureal's entrance
     // animations use `backwards` (pre-start frame kept, end state released) —
     // visually identical because every 100% keyframe equals the natural state.
     //

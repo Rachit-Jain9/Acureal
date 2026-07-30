@@ -314,7 +314,7 @@ function OverviewSection() {
       />
       <div className="rounded-xl border border-hairline bg-accent-soft p-4">
         <p className="text-sm leading-relaxed text-content-secondary">
-          REDIP's Financial Engine is built on the same principles you'd find in an institutional IC memo:
+          Acureal's Financial Engine is built on the same principles you'd find in an institutional IC memo:
           <span className="font-semibold text-content-primary"> transparency over cleverness</span>. Every KPI card,
           cash-flow row, and waterfall tranche traces back to a published formula. There are no AI-generated numbers,
           no undisclosed assumptions, and no generic templates.
@@ -416,7 +416,7 @@ function CashflowSection() {
       <div className="rounded-xl border border-hairline bg-accent-soft p-4">
         <div className="text-xs font-semibold uppercase tracking-wide text-accent">S-Curve Construction Draws</div>
         <p className="mt-1 text-sm leading-relaxed text-content-secondary">
-          Construction doesn't draw linearly — it ramps. REDIP builds a <span className="font-semibold">Beta(2, 2) S-curve</span>
+          Construction doesn't draw linearly — it ramps. Acureal builds a <span className="font-semibold">Beta(2, 2) S-curve</span>
           across the construction window, with mass concentrated in the middle quarters. This is the institutional standard
           for cost-to-complete modeling.
         </p>
@@ -1009,7 +1009,7 @@ function TerminalValueSection() {
         <p className="mt-1 text-xs leading-relaxed text-content-secondary">
           On a 5–7 year hold, the discounted terminal value typically accounts for 45–65% of total NPV.
           Getting the exit assumption right matters more than squeezing an extra 10 bps of rent escalation.
-          REDIP supports four methods — pick the one that matches your market and thesis.
+          Acureal supports four methods — pick the one that matches your market and thesis.
         </p>
       </div>
 
@@ -1094,7 +1094,7 @@ function TerminalValueSection() {
         </div>
         <p className="mt-1 text-xs text-premium">
           If <code className="font-mono font-bold">r ≤ g</code> (discount rate not strictly greater than growth), the perpetuity
-          formula is mathematically invalid (division by zero or negative). REDIP falls back to the exit-cap method in that case
+          formula is mathematically invalid (division by zero or negative). Acureal falls back to the exit-cap method in that case
           rather than throwing, preserving auditability and preventing NaN propagation.
         </p>
       </div>

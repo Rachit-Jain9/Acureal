@@ -376,7 +376,7 @@ export default function RiskTab() {
       {/* Risk Radar — standing deterministic pre-mortem across failure modes. */}
       <RiskRadarPanel dealId={dealId} />
 
-      {/* REDIP Pending §5.8 — AI Deal Doctor: diagnostic findings grouped by
+      {/* Acureal Pending §5.8 — AI Deal Doctor: diagnostic findings grouped by
           theme (Underwriting, Market & comps, Execution & data, Legal carve-out).
           Same signal layer as the Recommendation Engine; different verbs. */}
       <DealDoctorPanel dealDoctor={dealDoctor} />

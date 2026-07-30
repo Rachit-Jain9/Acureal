@@ -956,7 +956,7 @@ function IntegrityPanel({ dealId, signedCount }) {
             </div>
             <div className="text-xs text-content-secondary mt-0.5 max-w-[52ch]">
               Every number in this deal came from a signed, replayable computation.
-              Verify it yourself — REDIP re-hashes each record, re-checks its signature,
+              Verify it yourself — Acureal re-hashes each record, re-checks its signature,
               and re-runs the kernel. Nothing is taken on trust.
             </div>
           </div>

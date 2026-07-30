@@ -11,7 +11,7 @@ import { isNavigableRef } from '../../utils/evidenceRef';
 import { formatRelativeTime } from '../../utils/format';
 
 /**
- * DealDoctorPanel — REDIP Pending §5.8.
+ * DealDoctorPanel — Acureal Pending §5.8.
  *
  * Diagnostic view over the same signal set the Recommendation Engine consumes.
  * Surfaced on the Risk tab. Findings grouped by diagnostic theme (Underwriting,

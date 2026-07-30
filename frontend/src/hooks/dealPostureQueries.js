@@ -1,7 +1,7 @@
 /**
  * Centralized invalidation for the "deal posture" query surface.
  *
- * REDIP renders a deal's risk posture in many places — the per-deal Risk
+ * Acureal renders a deal's risk posture in many places — the per-deal Risk
  * Radar, the Risk Score, the DD checklist, the Approvals tracker, the
  * professional sign-off board, the unified Deal Workspace payload (whose
  * K-RERA cockpit reads signed sign-offs as verified evidence), the

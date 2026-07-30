@@ -109,7 +109,7 @@ export function TemplateDownloadButton({ dealId, variant = 'secondary', size = '
       const res = await rentRollAPI.downloadTemplate(dealId);
       const cd = res.headers?.['content-disposition'] || '';
       const match = /filename="?([^";]+)"?/.exec(cd);
-      downloadAxiosResponse(res, (match && match[1]) || 'REDIP-register-template.xlsx');
+      downloadAxiosResponse(res, (match && match[1]) || 'Acureal-register-template.xlsx');
       toast.success('Template downloaded — fill one row per record in Excel, keeping the header row as-is.');
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Could not download the template.');

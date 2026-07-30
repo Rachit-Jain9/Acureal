@@ -5,6 +5,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, MapPin } from 'lucide-react';
 import usePublicLightTheme from '../../hooks/usePublicLightTheme';
+import { AcurealWordmark } from '../../components/brand/AcurealBrand';
 
 const Card = ({ className = '', children, eyebrow, title, ...rest }) => (
   <section
@@ -45,15 +46,13 @@ export default function GrievancePage() {
             <ArrowLeft size={14} />
             Back
           </button>
-          <span className="font-serif text-lg font-semibold text-content-primary">
-            REDIP<span className="text-[#c2410c]">.</span>
-          </span>
+          <AcurealWordmark className="text-[14px]" />
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <div className="text-[11px] uppercase tracking-[0.14em] text-content-muted mb-2 font-medium">
-          REDIP · Legal
+          Acureal · Legal
         </div>
         <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-content-primary tracking-tight">
           Grievance Officer
@@ -125,7 +124,7 @@ export default function GrievancePage() {
         <Card className="mt-6" eyebrow="Escalation" title="If unsatisfied">
           <p className="text-sm text-content-secondary leading-relaxed">
             You may approach the Data Protection Board of India (once constituted under the DPDP
-            Act, 2023) or the courts at Bengaluru, Karnataka. REDIP cooperates with lawful requests
+            Act, 2023) or the courts at Bengaluru, Karnataka. Acureal cooperates with lawful requests
             from competent Indian authorities.
           </p>
         </Card>

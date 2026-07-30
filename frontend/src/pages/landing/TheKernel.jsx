@@ -318,7 +318,7 @@ export default function TheKernel() {
             multiple, DSCR, scenarios, and a sensitivity tornado the same way every time — the
             same inputs always return the same answer. Drag Saleable % and Exit ₹/sqft below
             and watch the cash-flow J-curve and the returns recompute in front of you. When
-            DSCR slips under the covenant floor, REDIP says so in plain terms and keeps
+            DSCR slips under the covenant floor, Acureal says so in plain terms and keeps
             computing — it <span className="italic">re-examines</span>, it never decides for
             you, and it never tells you to buy or reject. This is the engine an investment
             committee can interrogate, line by line.

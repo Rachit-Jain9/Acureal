@@ -121,7 +121,7 @@ describe('ErrorBoundary', () => {
       </ErrorBoundary>
     );
     expect(screen.getByText('Refresh needed')).toBeInTheDocument();
-    expect(screen.getByText(/newer version of REDIP is deployed/i)).toBeInTheDocument();
+    expect(screen.getByText(/newer version of Acureal is deployed/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Try again/i })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Refresh page/i })).toBeInTheDocument();
   });

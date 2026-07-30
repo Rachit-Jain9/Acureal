@@ -105,7 +105,7 @@ export default function MasterPlanBbmpUavPanel() {
           </button>
         )}
       >
-        REDIP could not reach the BBMP UAV endpoint. Try again or check the master-plan service.
+        Acureal could not reach the BBMP UAV endpoint. Try again or check the master-plan service.
       </ErrorState>
     );
   }

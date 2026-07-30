@@ -4,7 +4,7 @@
 @tailwind utilities;
 
 /* ─────────────────────────────────────────────────────────────────────────
-   REDIP — Precision Analysis design tokens.
+   Acureal — Precision Analysis design tokens.
 
    Dark = default "work mode" for 8-hour underwriting sessions.
    Light = "report mode" for IC memos, PDFs, sharing outputs.
@@ -113,6 +113,37 @@ html[data-theme='light'] {
      product surfaces feel premium on white instead of flat-bordered. */
   --shadow-card:     0 1px 2px -1px rgb(15 23 42 / 0.10), 0 2px 6px -1px rgb(15 23 42 / 0.06);
   --shadow-elevated: 0 2px 4px -2px rgb(15 23 42 / 0.10), 0 8px 24px -6px rgb(15 23 42 / 0.12);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Acureal brand identity (design handoff 2026-07).
+   Wordmark colours reverse with the theme: navy ink + signal blue on light,
+   warm cream + sky signal on dark. Consumed by components/brand/.
+   ───────────────────────────────────────────────────────────────────────── */
+:root,
+html[data-theme='dark'] {
+  --brand-wordmark-ink: #F6EFE3;
+  --brand-wordmark-e:   #7FC0F5;
+}
+
+html[data-theme='light'] {
+  --brand-wordmark-ink: #0B2440;
+  --brand-wordmark-e:   #1E6FD0;
+}
+
+/* Jost, ALL CAPS, 0.2em tracking, line-height 1 — the four immutable
+   wordmark properties. Weight 300 by default (correct below 24px); the
+   --display modifier switches to 200 at display sizes. */
+.acureal-wordmark {
+  font-family: 'Jost', 'Inter', 'Segoe UI', sans-serif;
+  font-weight: 300;
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  line-height: 1;
+}
+
+.acureal-wordmark--display {
+  font-weight: 200;
 }
 
 @layer base {

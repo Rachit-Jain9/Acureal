@@ -225,7 +225,7 @@ export default function MicroMarketBriefingPanel() {
           Micro-Market Briefing
         </h3>
         <div className="text-sm text-content-muted py-2">
-          This parcel is outside REDIP's seeded Bengaluru micro-markets
+          This parcel is outside Acureal's seeded Bengaluru micro-markets
           {classification?.distance_km ? ` (~${classification.distance_km} km from nearest)` : ''}.
           Manual benchmarks required.
         </div>

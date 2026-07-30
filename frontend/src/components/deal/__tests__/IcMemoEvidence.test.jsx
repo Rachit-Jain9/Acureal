@@ -23,7 +23,7 @@ const sampleData = (overrides = {}) => ({
           unit: 'pct',
           source: {
             type: 'kernel',
-            label: 'REDIP deterministic kernel',
+            label: 'Acureal deterministic kernel',
             detail: 'Computed by the deterministic kernel from the saved model inputs.',
           },
           traced: true,
@@ -40,8 +40,8 @@ const sampleData = (overrides = {}) => ({
           unit: 'pct',
           source: {
             type: 'benchmark',
-            label: 'REDIP benchmark',
-            detail: 'On REDIP cited benchmark — WACC model.',
+            label: 'Acureal benchmark',
+            detail: 'On Acureal cited benchmark — WACC model.',
           },
           traced: true,
         },

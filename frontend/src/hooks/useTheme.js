@@ -2,14 +2,14 @@ import { useEffect, useState } from 'react';
 
 // Reactive read of the active dashboard theme.
 //
-// REDIP's themes flip via `document.documentElement.dataset.theme = 'dark'|'light'`.
+// Acureal's themes flip via `document.documentElement.dataset.theme = 'dark'|'light'`.
 // CSS custom properties handle 99% of restyling automatically — but a small
 // number of components need to switch *non-CSS* assets (map tiles, chart
 // canvases, third-party iframes) when the theme changes. Subscribe to the
 // `data-theme` attribute via MutationObserver so those components update
 // without a remount.
 //
-// Returns `'dark'` | `'light'`. Defaults to `'dark'` (REDIP's product default)
+// Returns `'dark'` | `'light'`. Defaults to `'dark'` (Acureal's product default)
 // when running in an SSR context or before the document is hydrated.
 export default function useTheme() {
   const [theme, setTheme] = useState(() => {

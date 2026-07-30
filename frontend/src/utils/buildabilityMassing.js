@@ -9,7 +9,7 @@
  * Pure, deterministic — no AI. Every figure traces to the verified
  * buildability values; this module only re-expresses them spatially.
  *
- * The diagram drawn from this is a *schematic*: REDIP holds the parcel's
+ * The diagram drawn from this is a *schematic*: Acureal holds the parcel's
  * area but not its surveyed shape, so the plot is rendered as a
  * representative square. The proportions that carry meaning — coverage,
  * floor count, FAR utilisation — are exact.

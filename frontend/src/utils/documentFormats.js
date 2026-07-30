@@ -13,7 +13,7 @@
  *
  * ── Extraction tiers ────────────────────────────────────────────────────────
  *   'native'      — the provider reads the file directly (PDF + supported images).
- *   'parseable'   — REDIP transcribes the file to text server-side first.
+ *   'parseable'   — Acureal transcribes the file to text server-side first.
  *   'stored_only' — stored + downloadable, honestly NOT AI-readable.
  */
 
@@ -110,7 +110,7 @@ export const isExtractable = (doc) => extractionTierFor(doc) !== 'stored_only';
 export const labelFor = (fileNameOrExt) => formatFor(fileNameOrExt)?.label || 'this file type';
 
 export const unsupportedExtractionMessage = (fileNameOrExt) =>
-  `${labelFor(fileNameOrExt)} files are stored and downloadable, but REDIP cannot read them with AI yet. Export the content to PDF, Excel, or an image and upload that to extract fields.`;
+  `${labelFor(fileNameOrExt)} files are stored and downloadable, but Acureal cannot read them with AI yet. Export the content to PDF, Excel, or an image and upload that to extract fields.`;
 
 export const EXTENSIONS_BY_TIER = Object.freeze({
   native: Object.freeze(ALLOWED_EXTENSIONS.filter((e) => DOCUMENT_FORMATS[e].tier === 'native')),

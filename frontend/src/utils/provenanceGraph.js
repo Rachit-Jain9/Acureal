@@ -29,7 +29,7 @@ const MERCHANT_SALE_CLASSES = new Set([
  * Build an asset-class-aware topology graph for the KPIs of a single deal.
  *
  * @param {object} opts
- * @param {string}   [opts.assetClass]   one of the REDIP asset classes
+ * @param {string}   [opts.assetClass]   one of the Acureal asset classes
  * @param {string[]} [opts.facilityIds]  one entry per debt facility
  * @param {string[]} [opts.tierIds]      one entry per waterfall tier
  * @param {boolean}  [opts.hasDSRA]

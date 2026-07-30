@@ -6,7 +6,7 @@ import { toast } from '../components/common/Toast';
 //
 // The backend (dealShare.service.js) is OWNER-ONLY: only the deal's
 // created_by can list / share / revoke, and the invitee must already be an
-// active REDIP user. A non-owner who calls listShares always gets `[]`, so
+// active Acureal user. A non-owner who calls listShares always gets `[]`, so
 // callers gate the query with `{ enabled: isOwner }` and render a
 // "managed by the owner" note instead of an empty list.
 export function useDealShares(dealId, { enabled = true } = {}) {

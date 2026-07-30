@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { AcurealWordmark, AcurealRule } from '../components/brand/AcurealBrand';
 import HeroParcelResolve from './landing/HeroParcelResolve';
 // The five below-fold scenes are code-split and mounted on scroll (see
 // <LazyScene> below), so the cold-cache first paint ships only the hero + shell
@@ -51,7 +52,7 @@ function LazyScene({ children, minHeight = '90vh' }) {
 }
 
 /**
- * LandingPage — REDIP public marketing surface.
+ * LandingPage — Acureal public marketing surface.
  *
  * This is an art-directed, SINGLE-MODE (warm light) page. It deliberately does
  * NOT consume the app's cool-themed semantic tokens and has NO dark-mode toggle.
@@ -160,22 +161,19 @@ export default function LandingPage() {
         }}
       >
         <div className="mx-auto flex max-w-[1180px] items-center justify-between px-5 py-4 sm:px-8">
-          {/* Wordmark — serif with a brass period */}
+          {/* Wordmark — Acureal identity, fixed light-surface colours on this
+              single-mode warm page */}
           <button
             type="button"
             onClick={() => navigate('/')}
-            className="flex items-baseline rounded-sm font-serif text-[22px] font-semibold tracking-tight focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+            className="rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
             style={{
-              color: '#1C1A16',
               '--tw-ring-color': '#1F4A3D',
               '--tw-ring-offset-color': '#F5F1E8',
             }}
-            aria-label="REDIP home"
+            aria-label="Acureal home"
           >
-            <span>REDIP</span>
-            <span aria-hidden="true" style={{ color: '#9C7A3C' }}>
-              .
-            </span>
+            <AcurealWordmark tone="ink" className="text-[17px]" />
           </button>
 
           {/* Actions */}
@@ -247,11 +245,9 @@ export default function LandingPage() {
         <div className="mx-auto max-w-[1180px] px-5 py-14 sm:px-8">
           <div className="flex flex-col gap-8 md:flex-row md:items-end md:justify-between">
             <div className="max-w-xl">
-              <div className="flex items-baseline font-serif text-[20px] font-semibold tracking-tight">
-                <span style={{ color: '#1C1A16' }}>REDIP</span>
-                <span aria-hidden="true" style={{ color: '#9C7A3C' }}>
-                  .
-                </span>
+              <div>
+                <AcurealWordmark tone="ink" className="text-[16px]" />
+                <AcurealRule className="mt-3 h-[22px] w-full max-w-[300px]" />
               </div>
               <p
                 className="mt-3 text-[13.5px] leading-relaxed"
@@ -274,7 +270,7 @@ export default function LandingPage() {
                 className="mt-2 font-mono text-[11px] tabular-nums"
                 style={{ color: '#8C8579' }}
               >
-                © {year} REDIP. All rights reserved.
+                © {year} Acureal. All rights reserved.
               </p>
             </div>
           </div>

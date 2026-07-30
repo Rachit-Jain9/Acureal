@@ -3,7 +3,7 @@
 /**
  * New-signup operator notification.
  *
- * REDIP registration is open to everyone (the invite gate was removed in
+ * Acureal registration is open to everyone (the invite gate was removed in
  * PR #507). Until now nothing told the operator when someone actually joined —
  * the only signup email went to the NEW USER (verify-your-email), never to us.
  * This service closes that gap: on every fresh account it emails the platform
@@ -73,18 +73,18 @@ const renderSignupEmail = ({ name, email, phone, company, jobTitle, city, method
 
   const html = `
     <div style="font-family: -apple-system, system-ui, Segoe UI, Roboto, sans-serif; max-width: 560px; margin: 0 auto; padding: 24px; color: #111827;">
-      <p style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #9ca3af; margin: 0 0 6px;">REDIP · New signup</p>
+      <p style="font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: #9ca3af; margin: 0 0 6px;">Acureal · New signup</p>
       <h1 style="font-size: 18px; margin: 0 0 16px;">${esc(dash(name))} just created an account</h1>
       <table style="border-collapse: collapse; width: 100%;">${tableRows}</table>
       <p style="font-size: 12px; color: #9ca3af; margin-top: 28px;">
-        You're getting this because you're a REDIP platform operator. See everyone who has
+        You're getting this because you're an Acureal platform operator. See everyone who has
         joined on the <strong>Signups</strong> page under Admin in the app.
       </p>
     </div>
   `;
 
   const text = [
-    'REDIP — New signup',
+    'Acureal — New signup',
     '',
     ...rows.map(([label, value]) => `${label}: ${value}`),
     '',
@@ -122,7 +122,7 @@ const sendNewSignupNotification = async (signup = {}) => {
 
     const result = await sendMail({
       to: recipients,
-      subject: `New REDIP signup — ${subjectName}`,
+      subject: `New Acureal signup — ${subjectName}`,
       html,
       text,
     });

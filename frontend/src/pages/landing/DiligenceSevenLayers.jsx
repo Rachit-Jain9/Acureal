@@ -745,11 +745,11 @@ export default function DiligenceSevenLayers() {
             transition: 'opacity 520ms ease-out 140ms, transform 520ms ease-out 140ms',
           }}
         >
-          Diligence is not a checklist; it is a weighting of consequences. REDIP scores seven layers —
+          Diligence is not a checklist; it is a weighting of consequences. Acureal scores seven layers —
           title chain, encumbrance, statutory approvals, RERA, promoter execution, market, and financial
           structure — by deal impact, and assembles them into a single stack you can read at a glance.
           The risk radar fills from extracted facts, not opinion. And on the four lanes where a wrong
-          word is a liability — title, encumbrance, RERA status, statutory approval — REDIP does not render
+          word is a liability — title, encumbrance, RERA status, statutory approval — Acureal does not render
           a verdict. It surfaces what the documents show and marks the lane{' '}
           <em style={{ fontStyle: 'italic' }}>human-verify</em>. The restraint is the point — it is what
           keeps the work defensible.
@@ -941,7 +941,7 @@ export default function DiligenceSevenLayers() {
             }}
           >
             On the legal four, the empty cell is the feature. Where a brochure would print a green tick,
-            REDIP prints an open circle and the word <em style={{ fontStyle: 'italic' }}>human-verify</em>.
+            Acureal prints an open circle and the word <em style={{ fontStyle: 'italic' }}>human-verify</em>.
             Confidence, here, is shown by what we decline to claim.
           </p>
         </div>

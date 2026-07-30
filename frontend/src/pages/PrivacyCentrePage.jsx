@@ -20,7 +20,7 @@ const CONSENT_COPY = {
   product_improvement: {
     label: 'Product improvement',
     description:
-      'Let REDIP analyse how the platform is used — anonymised diagnostics and usage patterns — to improve the product.',
+      'Let Acureal analyse how the platform is used — anonymised diagnostics and usage patterns — to improve the product.',
   },
   anonymized_benchmarking: {
     label: 'Anonymised benchmarking',
@@ -30,7 +30,7 @@ const CONSENT_COPY = {
   marketing: {
     label: 'Product updates & marketing',
     description:
-      'Receive occasional emails about new REDIP features. REDIP sends no marketing email today — this is consent for if that changes.',
+      'Receive occasional emails about new Acureal features. Acureal sends no marketing email today — this is consent for if that changes.',
   },
   ai_processing: {
     label: 'Optional AI features',
@@ -225,7 +225,7 @@ export default function PrivacyCentrePage() {
     <div className="space-y-6 max-w-3xl">
       <PageHeader
         title="Privacy & your data"
-        description="See what personal data REDIP holds about you, manage your consent, download a copy, and exercise your data-protection rights."
+        description="See what personal data Acureal holds about you, manage your consent, download a copy, and exercise your data-protection rights."
       />
 
       {loading && (
@@ -260,7 +260,7 @@ export default function PrivacyCentrePage() {
           {/* ── Your information ─────────────────────────────────────────── */}
           <Card icon={User} title="Your information">
             <p className="text-xs text-content-secondary mb-4 max-w-2xl">
-              The personal account data REDIP holds about you. To correct your name or
+              The personal account data Acureal holds about you. To correct your name or
               phone number, use{' '}
               <Link
                 to="/dashboard/settings"
@@ -324,7 +324,7 @@ export default function PrivacyCentrePage() {
             <p className="text-xs text-content-secondary mb-4 max-w-2xl">
               These choices are yours to make and change at any time, for each purpose
               separately, under §6 of the Digital Personal Data Protection Act, 2023.
-              Core REDIP features needed to run the service are always on and are not
+              Core Acureal features needed to run the service are always on and are not
               listed here.
             </p>
             {!consentAvailable ? (
@@ -404,7 +404,7 @@ export default function PrivacyCentrePage() {
           {/* ── Active sign-ins ─────────────────────────────────────────── */}
           <Card icon={Monitor} title="Active sign-ins">
             <p className="text-xs text-content-secondary mb-4 max-w-2xl">
-              Devices with a current REDIP session. To end every session everywhere,
+              Devices with a current Acureal session. To end every session everywhere,
               change your password in Settings.
             </p>
             {overview?.active_sessions?.length > 0 ? (
@@ -432,7 +432,7 @@ export default function PrivacyCentrePage() {
           {/* ── Download your data ──────────────────────────────────────── */}
           <Card icon={Download} title="Download your data">
             <p className="text-xs text-content-secondary mb-4 max-w-2xl">
-              Download a machine-readable copy of the personal data REDIP holds about
+              Download a machine-readable copy of the personal data Acureal holds about
               you — your profile, workspaces, consent history, and legal acceptances —
               under §11 of the Digital Personal Data Protection Act, 2023. Deal and
               document content lives in your workspace and is available inside the app.
@@ -499,7 +499,7 @@ export default function PrivacyCentrePage() {
           <Card icon={MessageSquare} title="Raise a privacy concern">
             <p className="text-xs text-content-secondary mb-4 max-w-2xl">
               For data-correction requests, complaints, or any privacy concern, contact
-              REDIP's Grievance Officer. Acknowledged within 24 hours.
+              Acureal's Grievance Officer. Acknowledged within 24 hours.
             </p>
             <a
               href="/grievance"

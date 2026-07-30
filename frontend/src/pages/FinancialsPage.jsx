@@ -246,7 +246,7 @@ export default function FinancialsPage() {
           />
 
           {/* Workstream A — how much of this model is set for the deal vs.
-              running on REDIP benchmark defaults. Hides itself when the model
+              running on Acureal benchmark defaults. Hides itself when the model
               class is not yet catalogued. */}
           <ModelConfidencePanel dealId={dealId} />
 

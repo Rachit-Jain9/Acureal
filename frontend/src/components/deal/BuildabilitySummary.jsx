@@ -178,7 +178,7 @@ export default function BuildabilitySummary({
                         Upload a sanctioned plan or RTC
                       </span>
                       <span className="block text-[11px] text-content-secondary leading-snug truncate">
-                        REDIP extracts FSI, road width, and land area from uploaded documents.
+                        Acureal extracts FSI, road width, and land area from uploaded documents.
                       </span>
                     </span>
                   </span>

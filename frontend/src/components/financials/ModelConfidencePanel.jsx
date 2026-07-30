@@ -7,7 +7,7 @@ import { useModelConfidence } from '../../hooks/useFinancials';
  * Model Confidence — Workstream A (Provenance Spine), read-side first slice.
  *
  * Shows, for a saved underwriting model, how many key inputs are set
- * specifically for this deal versus how many still run on REDIP's cited
+ * specifically for this deal versus how many still run on Acureal's cited
  * benchmark library. Pure display — the classification is computed
  * deterministically server-side; this component never does math.
  *
@@ -138,7 +138,7 @@ export default function ModelConfidencePanel({ dealId }) {
       </div>
       <p className="text-xs text-content-muted mt-1.5">
         {dealSetCount} set for this deal
-        {defaultCount > 0 ? ` · ${defaultCount} on REDIP benchmark defaults` : ' · every key input is deal-specific'}
+        {defaultCount > 0 ? ` · ${defaultCount} on Acureal benchmark defaults` : ' · every key input is deal-specific'}
       </p>
 
       {/* Breakdown toggle */}
@@ -174,7 +174,7 @@ export default function ModelConfidencePanel({ dealId }) {
 
       <p className="text-[11px] text-content-muted mt-3 leading-snug">
         Confidence reflects how many key inputs are set for this deal versus running on
-        REDIP&apos;s benchmark library. It is not a check that an input was verified
+        Acureal&apos;s benchmark library. It is not a check that an input was verified
         against a source document.
       </p>
     </div>

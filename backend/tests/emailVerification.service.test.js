@@ -76,7 +76,7 @@ describe('emailVerification.service.sendVerificationEmail', () => {
 
     const call = mailer.sendMail.mock.calls[0][0];
     expect(call.to).toBe('user@example.com');
-    expect(call.subject).toMatch(/verify your redip email/i);
+    expect(call.subject).toMatch(/verify your acureal email/i);
     expect(call.html).toMatch(/\/verify-email\?token=/);
     expect(call.text).toMatch(/\/verify-email\?token=/);
   });

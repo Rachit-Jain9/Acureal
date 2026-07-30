@@ -17,7 +17,7 @@ import { useReducedMotion } from '../../hooks/useReducedMotion';
  *
  * Surfaces the deterministic evidence ledger (icEvidence.getEvidenceLedger):
  * every material figure the IC decision rests on, each traced to an honest
- * TYPED source — kernel-computed, analyst-set, REDIP benchmark, deal records,
+ * TYPED source — kernel-computed, analyst-set, Acureal benchmark, deal records,
  * verified feed. The kernel-computed figures are additionally HMAC-signed and
  * replayable; a one-click seal verifies the whole signed computation chain
  * (reusing the shipped verify-chain primitive).
@@ -123,7 +123,7 @@ function VerifySeal({ dealId, signedCount }) {
             <div className="font-display text-sm font-semibold text-content-primary">Cryptographic seal</div>
             <div className="text-xs text-content-secondary mt-0.5 max-w-[56ch]">
               {signedCount > 0
-                ? `${signedCount} kernel-computed figure${signedCount === 1 ? '' : 's'} on this page ${signedCount === 1 ? 'is' : 'are'} HMAC-signed and replayable. Verify the whole signed chain — REDIP re-hashes every computation and re-runs the kernel.`
+                ? `${signedCount} kernel-computed figure${signedCount === 1 ? '' : 's'} on this page ${signedCount === 1 ? 'is' : 'are'} HMAC-signed and replayable. Verify the whole signed chain — Acureal re-hashes every computation and re-runs the kernel.`
                 : 'No signed computation yet — run the financial model to seal this deal’s figures.'}
             </div>
           </div>
@@ -306,7 +306,7 @@ export default function ProvenanceTab({ embedded = false }) {
       </div>
 
       <p className="text-[11px] text-content-muted leading-relaxed">
-        Deterministic ledger — composed from REDIP's financial kernel, the model-confidence classifier, the risk radar,
+        Deterministic ledger — composed from Acureal's financial kernel, the model-confidence classifier, the risk radar,
         the comp-reliance ledger and the deal record. Kernel figures are HMAC-signed and replayable; the full
         computation timeline lives on the Audit tab.
       </p>

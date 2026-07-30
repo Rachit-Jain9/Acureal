@@ -146,7 +146,7 @@ export default function ShareDealPanel({ dealId, dealName, isOwner, onClose, onS
               </button>
             </div>
             <p className="mt-2 text-xs text-content-muted">
-              The user must have a REDIP account. They will see this deal in their dashboard.
+              The user must have an Acureal account. They will see this deal in their dashboard.
             </p>
           </form>
         )}

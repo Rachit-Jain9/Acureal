@@ -411,7 +411,7 @@ export const financialsAPI = {
   // to user inputs. Use for "how was this number produced" drill-downs.
   financialGraph: (dealId) => api.get(`/financials/${dealId}/financial-graph`),
   // Workstream A (Provenance Spine) — read-side model-confidence summary:
-  // how many key inputs are set for THIS deal vs. on REDIP benchmark
+  // how many key inputs are set for THIS deal vs. on Acureal benchmark
   // defaults. Returns { available, dealSetCount, defaultCount, total,
   // confidencePct, band, inputs[] }. Never errors for a missing model.
   modelConfidence: (dealId) => api.get(`/financials/${dealId}/model-confidence`),

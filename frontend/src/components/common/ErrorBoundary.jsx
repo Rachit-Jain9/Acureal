@@ -134,7 +134,7 @@ export class ErrorBoundary extends Component {
             <div>
               <h2 className="text-base font-semibold text-content-primary">Loading the latest version…</h2>
               <p className="mt-1 text-sm text-content-secondary max-w-sm">
-                A newer version of REDIP was deployed since you opened this tab. Refreshing
+                A newer version of Acureal was deployed since you opened this tab. Refreshing
                 automatically — you'll be back in a second.
               </p>
             </div>
@@ -155,7 +155,7 @@ export class ErrorBoundary extends Component {
             </h2>
             <p className="mt-1 text-sm text-content-secondary max-w-sm">
               {isChunk
-                ? 'A newer version of REDIP is deployed and your tab needs to refresh to pick it up.'
+                ? 'A newer version of Acureal is deployed and your tab needs to refresh to pick it up.'
                 : message}
             </p>
           </div>

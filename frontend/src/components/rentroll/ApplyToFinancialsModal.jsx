@@ -224,7 +224,7 @@ export default function ApplyToFinancialsModal({
       )}
       <p className="text-xs text-content-muted mt-3">
         Rent figures are gross — for JDA/JV structures the model applies the ownership share downstream.
-        Applying freezes a register snapshot; the saved model cites it, and REDIP warns if the register changes afterwards.
+        Applying freezes a register snapshot; the saved model cites it, and Acureal warns if the register changes afterwards.
       </p>
     </Modal>
   );

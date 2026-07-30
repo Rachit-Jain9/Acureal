@@ -22,7 +22,7 @@ import { useProperties } from '../hooks/useProperties';
 // Smart Property Capture — inline create-new for the New Deal modal so
 // users don't have to save-as-draft, navigate to the deal, and only then
 // link a property. Paste a Maps link / Plus Code / address / coords /
-// survey number / broker narrative and REDIP creates the parcel inline.
+// survey number / broker narrative and Acureal creates the parcel inline.
 // Lazy-loaded: it (transitively) pulls in the Leaflet map vendor chunk via
 // ReadOnlyPropertyMap, and only ever renders inside the New-Deal modal's
 // capture branch — so code-splitting it keeps ~150KB of map JS + leaflet.css

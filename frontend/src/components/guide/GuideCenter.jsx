@@ -232,7 +232,7 @@ export default function GuideCenter() {
         ref={trapRef}
         role="dialog"
         aria-modal="true"
-        aria-label="REDIP Guide"
+        aria-label="Acureal Guide"
         className={
           'relative flex h-full w-full max-w-2xl flex-col border-l border-hairline bg-bg-elevated shadow-editorial-lg '
           + (animate ? 'transition-transform duration-[280ms] ease-[cubic-bezier(0.16,1,0.3,1)] will-change-transform ' : '')

@@ -1,4 +1,4 @@
-// Public sub-processor disclosure page. Lists the third-party services REDIP
+// Public sub-processor disclosure page. Lists the third-party services Acureal
 // relies on to deliver the platform, the data each handles, and where it runs.
 // A standard enterprise-diligence + DPDP-transparency artifact. Uses raw
 // light-theme classes (independent of the app theme switch), mirroring the
@@ -7,6 +7,7 @@
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Server } from 'lucide-react';
 import usePublicLightTheme from '../../hooks/usePublicLightTheme';
+import { AcurealWordmark } from '../../components/brand/AcurealBrand';
 import PublicFooter from '../../components/common/PublicFooter';
 
 // When this list changes materially, bump the date and announce the change to
@@ -78,25 +79,23 @@ export default function SubprocessorsPage() {
             <ArrowLeft size={14} />
             Back
           </button>
-          <span className="font-serif text-lg font-semibold text-content-primary">
-            REDIP<span className="text-[#c2410c]">.</span>
-          </span>
+          <AcurealWordmark className="text-[14px]" />
         </div>
       </header>
 
       <main className="max-w-3xl mx-auto px-4 sm:px-6 py-8 sm:py-12 flex-1 w-full">
         <div className="text-[11px] uppercase tracking-[0.14em] text-content-muted mb-2 font-medium">
-          REDIP · Legal
+          Acureal · Legal
         </div>
         <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-content-primary tracking-tight flex items-center gap-3">
           <Server size={26} className="text-[#c2410c] shrink-0" aria-hidden="true" />
           Sub-processors
         </h1>
         <p className="text-sm text-content-secondary mt-3 leading-relaxed max-w-2xl">
-          A sub-processor is a third-party service REDIP uses to deliver the platform. We
+          A sub-processor is a third-party service Acureal uses to deliver the platform. We
           keep this list current so customers and their reviewers can see exactly who
-          processes data on REDIP's behalf, what each one handles, and where it runs.
-          Each sub-processor is bound by its own data-protection terms, and REDIP
+          processes data on Acureal's behalf, what each one handles, and where it runs.
+          Each sub-processor is bound by its own data-protection terms, and Acureal
           transmits only the minimum data each needs to perform its function. For the
           full picture, see the{' '}
           <a

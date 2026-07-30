@@ -63,12 +63,12 @@ export const DEFAULT_MASTER_PLAN_OPACITY = 0.6;
 // community server blocks server-side / datacenter fetches, so the same-origin
 // proxy (backend/src/routes/masterPlanTiles.routes.js) can't reach it from
 // Vercel. The proxy + `MASTER_PLAN_RMP2015_TILE_BASE` remain the path for
-// REDIP-self-hosted tiles: host them, then set `VITE_MASTER_PLAN_TILE_URL` to
+// Acureal-self-hosted tiles: host them, then set `VITE_MASTER_PLAN_TILE_URL` to
 // `/api/master-plan-tiles/rmp2015/{z}/{x}/{y}.png`. (Map Warper is allow-listed
 // in vercel.json `img-src` for the direct load.)
 //
 // SELF-HOST TEMPORARILY PARKED (2026-06-22): the mirror Action uploaded 2,575
-// tiles into REDIP's existing private Vercel Blob store ("redip-documents"; the
+// tiles into Acureal's existing private Vercel Blob store ("redip-documents"; the
 // mirror auto-flipped to private to match it). Those 2,575 one-time writes blew
 // past the Hobby plan's 2,000 advanced-operations/month cap, so Vercel SUSPENDED
 // the store — access auto-resumes 2026-07-22 (or immediately on a Pro upgrade).

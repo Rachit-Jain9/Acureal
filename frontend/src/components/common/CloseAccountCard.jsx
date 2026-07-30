@@ -46,7 +46,7 @@ export default function CloseAccountCard() {
         </h3>
         <p className="text-xs text-content-secondary mb-4 max-w-2xl">
           Closing your account immediately logs you out of every device and prevents future sign-ins.
-          Your personal data (name, email, phone) is anonymized 90 days later, in line with REDIP's
+          Your personal data (name, email, phone) is anonymized 90 days later, in line with Acureal's
           Privacy Policy §7 and the Digital Personal Data Protection Act 2023 §8(7). Deal records
           attributable to your past activity are retained as evidence but stripped of your identifying
           fields. <strong>This cannot be reversed by self-service after the 90-day window.</strong>

@@ -49,7 +49,7 @@ export default function CookieBanner() {
     >
       <div className="flex items-start gap-3 rounded-editorial border border-hairline bg-bg-elevated shadow-editorial p-3 sm:p-4">
         <p className="text-sm text-content-secondary leading-relaxed flex-1">
-          REDIP uses only essential cookies to keep you signed in. No advertising, no third-party
+          Acureal uses only essential cookies to keep you signed in. No advertising, no third-party
           tracking.{' '}
           <a
             href="/cookies"
