@@ -227,7 +227,7 @@ router.get(
 
       const today = new Date().toISOString().slice(0, 10);
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="redip-deals-${today}.csv"`);
+      res.setHeader('Content-Disposition', `attachment; filename="acureal-deals-${today}.csv"`);
       res.send(csv);
     } catch (error) {
       next(error);
@@ -301,7 +301,7 @@ router.get(
       const today = new Date().toISOString().slice(0, 10);
 
       res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="redip-comps-${today}.csv"`);
+      res.setHeader('Content-Disposition', `attachment; filename="acureal-comps-${today}.csv"`);
       res.send(csv);
     } catch (error) {
       next(error);
@@ -462,7 +462,7 @@ router.get(
       const drawHeader = (page, title, subtitle) => {
         const { width, height } = page.getSize();
         page.drawRectangle({ x: 0, y: height - 56, width, height: 56, color: COLORS.navy });
-        page.drawText('REDIP', {
+        page.drawText('Acureal', {
           x: 34,
           y: height - 34,
           size: 16,
@@ -1013,7 +1013,7 @@ router.get(
       const safeName = (d.name || 'deal').replace(/[^a-z0-9]/gi, '-').toLowerCase();
 
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="redip-${safeName}-${new Date().toISOString().slice(0, 10)}.pdf"`);
+      res.setHeader('Content-Disposition', `attachment; filename="acureal-${safeName}-${new Date().toISOString().slice(0, 10)}.pdf"`);
       res.send(Buffer.from(pdfBytes));
       return;
       }
@@ -1067,7 +1067,7 @@ router.get(
 
       const ExcelJS = require('exceljs'); // lazy — off the cold-start path
       const workbook = new ExcelJS.Workbook();
-      workbook.creator = 'REDIP';
+      workbook.creator = 'Acureal';
       workbook.created = new Date();
       workbook.modified = new Date();
 
@@ -1079,14 +1079,14 @@ router.get(
         { Metric: 'Total Visible Deals', Value: dealsResult.rows.length },
         { Metric: 'Export Date', Value: new Date().toISOString().slice(0, 10) },
         { Metric: 'Exported By', Value: req.user.name },
-        { Metric: 'Platform', Value: 'REDIP — Real Estate Development Intelligence' },
+        { Metric: 'Platform', Value: 'Acureal — Real Estate Development Intelligence' },
       ];
       addJsonWorksheet(workbook, 'Summary', ['Metric', 'Value'], summaryData);
 
       const buffer = await workbook.xlsx.writeBuffer();
 
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="redip-deals-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+      res.setHeader('Content-Disposition', `attachment; filename="acureal-deals-${new Date().toISOString().slice(0, 10)}.xlsx"`);
       res.send(buffer);
     } catch (error) {
       next(error);
@@ -1143,8 +1143,8 @@ router.get(
       // (validateXlsxBufferForDownload) still run unconditionally, so a
       // genuinely corrupt buffer is refused.
       const buildOpts = {
-        brandName: 'REDIP',
-        userName: req.user?.name || 'REDIP',
+        brandName: 'Acureal',
+        userName: req.user?.name || 'Acureal',
         generatedAt: new Date().toISOString(),
       };
       let xlsxBuffer;
@@ -1173,7 +1173,7 @@ router.get(
         actorId: req.user?.id || null,
       });
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-      res.setHeader('Content-Disposition', `attachment; filename="redip-${xlsxSafeName}${variantSuffix}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
+      res.setHeader('Content-Disposition', `attachment; filename="acureal-${xlsxSafeName}${variantSuffix}-${new Date().toISOString().slice(0, 10)}.xlsx"`);
       return res.send(xlsxBuffer);
     } catch (error) {
       next(error);
@@ -1204,7 +1204,7 @@ router.get(
       if (!enabled && !isAdmin) {
         return res.status(403).json({
           success: false,
-          message: 'DOCX underwriting report is not yet available. Contact REDIP support to enable.',
+          message: 'DOCX underwriting report is not yet available. Contact Acureal support to enable.',
         });
       }
 
@@ -1219,8 +1219,8 @@ router.get(
       }
 
       const docxBuffer = await buildDealReportDocx(exportContext, {
-        brandName: 'REDIP',
-        userName: req.user?.name || 'REDIP',
+        brandName: 'Acureal',
+        userName: req.user?.name || 'Acureal',
         generatedAt: new Date().toISOString(),
       });
       const safeName = ((exportContext.deal && exportContext.deal.name) || 'deal')
@@ -1233,7 +1233,7 @@ router.get(
         actorId: req.user?.id || null,
       });
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      res.setHeader('Content-Disposition', `attachment; filename="redip-${safeName}-underwriting-${new Date().toISOString().slice(0, 10)}.docx"`);
+      res.setHeader('Content-Disposition', `attachment; filename="acureal-${safeName}-underwriting-${new Date().toISOString().slice(0, 10)}.docx"`);
       return res.send(docxBuffer);
     } catch (error) {
       next(error);
@@ -1296,7 +1296,7 @@ router.get(
       });
 
       const docxBuffer = await buildReraReadinessDocx(readiness, {
-        brandName: 'REDIP',
+        brandName: 'Acureal',
         userName: req.user?.name || null,
         generatedAt: new Date().toISOString(),
       });
@@ -1307,7 +1307,7 @@ router.get(
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="redip-${safeName}-rera-readiness-${new Date().toISOString().slice(0, 10)}.docx"`,
+        `attachment; filename="acureal-${safeName}-rera-readiness-${new Date().toISOString().slice(0, 10)}.docx"`,
       );
       return res.send(docxBuffer);
     } catch (error) {
@@ -1339,7 +1339,7 @@ router.get(
       }
 
       const docxBuffer = await buildIcReadinessDocx(readiness, {
-        brandName: 'REDIP',
+        brandName: 'Acureal',
         userName: req.user?.name || null,
         generatedAt: new Date().toISOString(),
       });
@@ -1349,7 +1349,7 @@ router.get(
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="redip-${safeName}-ic-readiness-${new Date().toISOString().slice(0, 10)}.docx"`,
+        `attachment; filename="acureal-${safeName}-ic-readiness-${new Date().toISOString().slice(0, 10)}.docx"`,
       );
       return res.send(docxBuffer);
     } catch (error) {
@@ -1386,7 +1386,7 @@ router.get(
 
       const packModel = composePack(workspace, audience);
       const docxBuffer = await buildReportPackDocx(packModel, {
-        brandName: 'REDIP',
+        brandName: 'Acureal',
         userName: req.user?.name || null,
         generatedAt: new Date().toISOString(),
       });
@@ -1396,7 +1396,7 @@ router.get(
       res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
       res.setHeader(
         'Content-Disposition',
-        `attachment; filename="redip-${safeName}-${audience}-pack-${new Date().toISOString().slice(0, 10)}.docx"`,
+        `attachment; filename="acureal-${safeName}-${audience}-pack-${new Date().toISOString().slice(0, 10)}.docx"`,
       );
       return res.send(docxBuffer);
     } catch (error) {
@@ -1431,7 +1431,7 @@ router.get(
     try {
       const { bytes, fileName } = await buildDealTearSheet({
         dealId: req.params.dealId,
-        generatedBy: req.user?.name || req.user?.email || 'REDIP user',
+        generatedBy: req.user?.name || req.user?.email || 'Acureal user',
       });
       res.setHeader('Content-Type', 'application/pdf');
       res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
@@ -1466,8 +1466,8 @@ router.get(
 
       {
         const pptxBuffer = await buildDealDeckPptx(exportContext, {
-          brandName: 'REDIP',
-          userName: req.user?.name || 'REDIP user',
+          brandName: 'Acureal',
+          userName: req.user?.name || 'Acureal user',
           generatedAt: new Date().toISOString(),
         });
 
@@ -1478,7 +1478,7 @@ router.get(
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
         res.setHeader(
           'Content-Disposition',
-          `attachment; filename="redip-${safeName}-${new Date().toISOString().slice(0, 10)}.pptx"`,
+          `attachment; filename="acureal-${safeName}-${new Date().toISOString().slice(0, 10)}.pptx"`,
         );
         res.send(pptxBuffer);
         return;

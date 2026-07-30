@@ -152,7 +152,7 @@ export default function ReportsPage() {
     setExportingDealsXlsx(true);
     try {
       const response = await exportsAPI.dealsXlsx();
-      downloadAxiosResponse(response, 'redip-deals.xlsx');
+      downloadAxiosResponse(response, 'acureal-deals.xlsx');
       toast.success('Deals workbook downloaded');
     } catch (err) {
       const msg = await getExportErrorMessage(err, 'Deals workbook export failed');
@@ -168,7 +168,7 @@ export default function ReportsPage() {
     try {
       const response = await exportsAPI.dealPptx(dealId);
       const safeName = (dealName || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-      downloadAxiosResponse(response, `redip-${safeName}.pptx`);
+      downloadAxiosResponse(response, `acureal-${safeName}.pptx`);
       toast.success('PPTX deck downloaded');
     } catch (err) {
       toast.error(await getExportErrorMessage(err, 'PPTX export failed'));
@@ -182,7 +182,7 @@ export default function ReportsPage() {
     try {
       const response = await exportsAPI.dealXlsx(dealId);
       const safeName = (dealName || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-      downloadAxiosResponse(response, `redip-${safeName}.xlsx`);
+      downloadAxiosResponse(response, `acureal-${safeName}.xlsx`);
       toast.success('Excel workbook downloaded');
     } catch (err) {
       toast.error(await getExportErrorMessage(err, 'Excel export failed'));
@@ -196,7 +196,7 @@ export default function ReportsPage() {
     try {
       const response = await exportsAPI.dealPdf(dealId);
       const safeName = (dealName || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-      downloadAxiosResponse(response, `redip-${safeName}.pdf`);
+      downloadAxiosResponse(response, `acureal-${safeName}.pdf`);
       toast.success('PDF report downloaded');
     } catch (err) {
       const msg = await getExportErrorMessage(err, 'PDF export failed');
@@ -218,7 +218,7 @@ export default function ReportsPage() {
       const response = await exportsAPI.dealDocx(dealId);
       const safeName = (dealName || 'deal').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
       const today = new Date().toISOString().slice(0, 10);
-      downloadAxiosResponse(response, `redip-${safeName}-underwriting-${today}.docx`);
+      downloadAxiosResponse(response, `acureal-${safeName}-underwriting-${today}.docx`);
       toast.success('Underwriting report (DOCX) downloaded');
     } catch (err) {
       const msg = await getExportErrorMessage(err, 'Underwriting report download failed');
@@ -252,7 +252,7 @@ export default function ReportsPage() {
       pipelineData.reduce((s, r) => s + r.count, 0),
       num(pipelineData.reduce((s, r) => s + r.totalValue, 0)),
     ]);
-    downloadCsv({ filename: `redip-pipeline-${today()}.csv`, headers, rows });
+    downloadCsv({ filename: `acureal-pipeline-${today()}.csv`, headers, rows });
     toast.success('Pipeline report downloaded');
   };
 
@@ -274,7 +274,7 @@ export default function ReportsPage() {
       num(getFinancialValue(d, 'npv_cr')),
       num(getFinancialValue(d, 'equity_multiple')),
     ]);
-    downloadCsv({ filename: `redip-financial-${today()}.csv`, headers, rows });
+    downloadCsv({ filename: `acureal-financial-${today()}.csv`, headers, rows });
     toast.success('Financial report downloaded');
   };
 
@@ -282,7 +282,7 @@ export default function ReportsPage() {
     if (!cityData.length) return;
     const headers = ['City', 'Deal Count', 'Avg IRR %'];
     const rows = cityData.map((r) => [r.city, r.count, r.avgIRR != null ? num(r.avgIRR) : '']);
-    downloadCsv({ filename: `redip-citywise-${today()}.csv`, headers, rows });
+    downloadCsv({ filename: `acureal-citywise-${today()}.csv`, headers, rows });
     toast.success('City-wise report downloaded');
   };
 
@@ -297,7 +297,7 @@ export default function ReportsPage() {
       d._irr == null ? '' : num(d._irr),
       num(getFinancialValue(d, 'npv_cr')),
     ]);
-    downloadCsv({ filename: `redip-performance-${today()}.csv`, headers, rows });
+    downloadCsv({ filename: `acureal-performance-${today()}.csv`, headers, rows });
     toast.success('Performance ranking downloaded');
   };
 

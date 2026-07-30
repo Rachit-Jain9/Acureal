@@ -163,7 +163,7 @@ const buildCoverPage = ({ readiness, deal, generatedAt, brandName, userName }) =
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 1200, after: 80 },
-      children: [text(brandName || 'REDIP', { bold: true, color: COLORS.navy, size: 40 })],
+      children: [text(brandName || 'Acureal', { bold: true, color: COLORS.navy, size: 40 })],
     }),
     new Paragraph({
       alignment: AlignmentType.CENTER,
@@ -639,7 +639,7 @@ const buildDisclaimerSection = (readiness) => {
 //  Public entry — assemble the full document
 // ─────────────────────────────────────────────────────────────────────────────
 
-const buildReraReadinessDocx = async (readiness, { brandName = 'REDIP', userName = null, generatedAt = null } = {}) => {
+const buildReraReadinessDocx = async (readiness, { brandName = 'Acureal', userName = null, generatedAt = null } = {}) => {
   if (!readiness) throw new Error('buildReraReadinessDocx: readiness payload is required.');
 
   // Not-applicable path: short document explaining why no pack is generated.

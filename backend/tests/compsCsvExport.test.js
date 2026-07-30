@@ -190,7 +190,7 @@ describe('GET /api/comps-review-queue/export.csv', () => {
     const { statusCode, headers, body } = await dispatch(app, '/api/comps-review-queue/export.csv');
     expect(statusCode).toBe(200);
     expect(headers['content-type']).toMatch(/text\/csv/i);
-    expect(headers['content-disposition']).toMatch(/redip-comps-queue-\d{4}-\d{2}-\d{2}\.csv/);
+    expect(headers['content-disposition']).toMatch(/acureal-comps-queue-\d{4}-\d{2}-\d{2}\.csv/);
     const lines = String(body).split('\n');
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatch(/^Subject,Source,Status/);

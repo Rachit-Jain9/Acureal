@@ -127,11 +127,11 @@ function Card({ icon: Icon, title, children, tone = 'default' }) {
 function CardSkeleton() {
   return (
     <div className="bg-bg-elevated rounded-xl shadow-sm border border-hairline-strong p-6">
-      <div className="redip-skeleton h-5 w-40 rounded-md mb-4" />
+      <div className="acureal-skeleton h-5 w-40 rounded-md mb-4" />
       <div className="space-y-2.5">
-        <div className="redip-skeleton h-3.5 w-full rounded-sm" />
-        <div className="redip-skeleton h-3.5 w-5/6 rounded-sm" />
-        <div className="redip-skeleton h-3.5 w-2/3 rounded-sm" />
+        <div className="acureal-skeleton h-3.5 w-full rounded-sm" />
+        <div className="acureal-skeleton h-3.5 w-5/6 rounded-sm" />
+        <div className="acureal-skeleton h-3.5 w-2/3 rounded-sm" />
       </div>
     </div>
   );
@@ -205,7 +205,7 @@ export default function PrivacyCentrePage() {
       const stamp = new Date().toISOString().slice(0, 10);
       downloadBlob(
         JSON.stringify(payload, null, 2),
-        `redip-my-data-${stamp}.json`,
+        `acureal-my-data-${stamp}.json`,
         'application/json',
       );
       toast.success('Your data export has downloaded.');

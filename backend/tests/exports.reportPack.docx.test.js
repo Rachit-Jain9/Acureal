@@ -37,7 +37,7 @@ const richWorkspace = () => ({
 describe('buildReportPackDocx — lender', () => {
   test('produces a non-empty Buffer', async () => {
     const model = composePack(richWorkspace(), 'lender');
-    const buffer = await buildReportPackDocx(model, { brandName: 'REDIP', userName: 'Rachit Jain', generatedAt: '2026-06-05T03:30:00Z' });
+    const buffer = await buildReportPackDocx(model, { brandName: 'Acureal', userName: 'Rachit Jain', generatedAt: '2026-06-05T03:30:00Z' });
     expect(Buffer.isBuffer(buffer)).toBe(true);
     expect(buffer.length).toBeGreaterThan(3000);
   });
@@ -45,7 +45,7 @@ describe('buildReportPackDocx — lender', () => {
   test('cover surfaces brand, deal name + lender framing', async () => {
     const buffer = await buildReportPackDocx(composePack(richWorkspace(), 'lender'), {});
     const xml = await extractDocumentXml(buffer);
-    expect(xml).toContain('REDIP');
+    expect(xml).toContain('Acureal');
     expect(xml).toContain('Whitefield Heights');
     expect(xml).toContain('Lender Briefing');
   });

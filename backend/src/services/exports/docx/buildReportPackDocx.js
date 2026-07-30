@@ -277,7 +277,7 @@ const renderSection = (section) => {
 
 // ─── Public entry ──────────────────────────────────────────────────────────
 
-const buildReportPackDocx = async (packModel, { brandName = 'REDIP', userName = null, generatedAt = null } = {}) => {
+const buildReportPackDocx = async (packModel, { brandName = 'Acureal', userName = null, generatedAt = null } = {}) => {
   if (!packModel || !packModel.meta) {
     throw new Error('buildReportPackDocx: a normalized pack model is required.');
   }

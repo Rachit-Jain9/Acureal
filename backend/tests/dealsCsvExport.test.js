@@ -107,7 +107,7 @@ describe('GET /exports/deals/csv', () => {
     const { statusCode, headers, body } = await requestCsv(app);
     expect(statusCode).toBe(200);
     expect(headers['content-type']).toMatch(/text\/csv/i);
-    expect(headers['content-disposition']).toMatch(/redip-deals-\d{4}-\d{2}-\d{2}\.csv/);
+    expect(headers['content-disposition']).toMatch(/acureal-deals-\d{4}-\d{2}-\d{2}\.csv/);
     const lines = String(body).split('\n');
     expect(lines.length).toBe(3); // header + 2 rows
     expect(lines[0]).toMatch(/^Deal Name,Type,Stage/);

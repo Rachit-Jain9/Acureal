@@ -1,6 +1,6 @@
 'use strict';
 
-// Deterministic deal-register IMPORTER — reads a filled REDIP template back in.
+// Deterministic deal-register IMPORTER — reads a filled Acureal template back in.
 //
 // Reads the hidden `redip_meta` contract a template stamps (version, family,
 // column-key ↔ sheet map), then parses each data sheet VALUE-BY-VALUE against
@@ -28,7 +28,7 @@
 const crypto = require('crypto');
 // exceljs is required at point of use below — off the serverless cold-start path.
 const { IMPORT_COLUMNS_BY_KIND, TEMPLATE_VERSION } = require('../constants/rentRollImportColumns');
-const { META_SHEET, HEADER_ROW } = require('./rentRollTemplate.service');
+const { META_SHEET, LEGACY_META_SHEET, HEADER_ROW } = require('./rentRollTemplate.service');
 const rentRollService = require('./rentRoll.service');
 
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB — a register template is a few KB; this is a generous guard.
@@ -127,11 +127,14 @@ const normalizeRecord = (kind, raw, rowRef) => {
   return { record, warnings };
 };
 
-// Read + validate the redip_meta contract. Throws a readable 422 on mismatch.
+// Read + validate the hidden template contract. Throws a readable 422 on
+// mismatch. Accepts the pre-rename sheet name too, so a template downloaded
+// before the Acureal rename still imports rather than reading as "not a
+// template" — the one thing that would look like data loss to the user.
 const readMeta = (workbook, expectedFamily) => {
-  const meta = workbook.getWorksheet(META_SHEET);
+  const meta = workbook.getWorksheet(META_SHEET) || workbook.getWorksheet(LEGACY_META_SHEET);
   if (!meta) {
-    throw err(422, 'This file is not a REDIP register template (its hidden template sheet is missing). '
+    throw err(422, 'This file is not an Acureal register template (its hidden template sheet is missing). '
       + 'Download a fresh template from the register tab and fill that.');
   }
   const version = String(meta.getCell('B2').value || '');

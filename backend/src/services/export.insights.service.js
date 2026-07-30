@@ -167,7 +167,7 @@ STRICT RULES:
 
 SCHEMA:
 {
-  "ic_opinion": "3-5 sentence investor-grade opinion. Lead with EXACTLY ONE stance from REDIP's closed vocabulary — Recommend proceeding / Recommend proceeding subject to conditions / Hold pending [items] / Re-examine [items] — and NEVER the words approve, approval, decline, reject, buy, sell, pass, or clear. Cite 2-3 specific KPIs from the payload. Name one material weakness.",
+  "ic_opinion": "3-5 sentence investor-grade opinion. Lead with EXACTLY ONE stance from Acureal's closed vocabulary — Recommend proceeding / Recommend proceeding subject to conditions / Hold pending [items] / Re-examine [items] — and NEVER the words approve, approval, decline, reject, buy, sell, pass, or clear. Cite 2-3 specific KPIs from the payload. Name one material weakness.",
   "top_risks": [
     { "title": "Short risk title (max 8 words)", "detail": "1-2 sentence explanation anchored in the data" }
   ],

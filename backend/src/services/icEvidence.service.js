@@ -8,10 +8,10 @@
  * deterministic claim layer beneath the memo: every material figure the IC
  * decision rests on, enumerated with an honest, typed, traceable source.
  *
- * It is a pure composer over engines REDIP already runs deterministically:
+ * It is a pure composer over engines Acureal already runs deterministically:
  *   - the financial kernel        → the headline KPIs and cost/revenue lines
  *   - Model Confidence            → each key input, classified analyst-set
- *                                   vs. on a cited REDIP benchmark
+ *                                   vs. on a cited Acureal benchmark
  *   - the Risk Radar              → the open-risk / diligence / approval counts
  *   - the comp-reliance ledger    → the comparables the analyst relied on
  *   - the deal record             → the site & price facts
@@ -46,7 +46,7 @@ const round = (v, dp = 2) => {
 const SOURCE = {
   kernel: (detail) => ({
     type: 'kernel',
-    label: 'REDIP deterministic kernel',
+    label: 'Acureal deterministic kernel',
     detail,
   }),
   analyst: (detail) => ({
@@ -56,8 +56,8 @@ const SOURCE = {
   }),
   benchmark: (detail) => ({
     type: 'benchmark',
-    label: 'REDIP benchmark',
-    detail: detail || 'Running on a cited REDIP benchmark default.',
+    label: 'Acureal benchmark',
+    detail: detail || 'Running on a cited Acureal benchmark default.',
   }),
   deterministic: (detail) => ({
     type: 'deterministic',
@@ -107,7 +107,7 @@ const financialClaims = (fin) => {
   const when = computedAt
     ? new Date(computedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
     : null;
-  const kernelDetail = `Computed by REDIP's deterministic financial kernel (${engineVersion})`
+  const kernelDetail = `Computed by Acureal's deterministic financial kernel (${engineVersion})`
     + `${when ? ` on ${when}` : ''} from the deal's saved model inputs. Every kernel run is `
     + 'HMAC-signed and replayable from those inputs — see the model’s audit trail.';
 
@@ -142,7 +142,7 @@ const assumptionClaims = (confidence) => {
         ? SOURCE.analyst(inp.basis)
         : SOURCE.benchmark(
             inp.benchmarkSource
-              ? `On REDIP's cited benchmark — ${inp.benchmarkSource}.`
+              ? `On Acureal's cited benchmark — ${inp.benchmarkSource}.`
               : inp.basis,
           );
     return claim(inp.key, inp.label, num(inp.value), unitForInputKey(inp.key), source);
@@ -232,7 +232,7 @@ const getEvidenceLedger = async (dealId) => {
         Array.isArray(reliedComps) ? reliedComps.length : 0,
         'count',
         SOURCE.feed(
-          'Verified comparables in the REDIP comps database that the analyst '
+          'Verified comparables in the Acureal comps database that the analyst '
           + 'explicitly marked as relied-on for this deal.',
         ),
       ),

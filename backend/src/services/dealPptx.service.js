@@ -323,8 +323,8 @@ const buildDealDeckPptx = async (exportContext, options = {}) => {
   context.precomputed = await precomputeDeckAssets(exportContext, context, options);
 
   pptx.layout = 'LAYOUT_WIDE';
-  pptx.author = options.userName || 'REDIP';
-  pptx.company = options.brandName || 'REDIP';
+  pptx.author = options.userName || 'Acureal';
+  pptx.company = options.brandName || 'Acureal';
   pptx.subject = `${context.assetClassLabel} investment deck`;
   pptx.title = `${context.dealTitle} | ${context.assetClassLabel}`;
   pptx.lang = 'en-IN';

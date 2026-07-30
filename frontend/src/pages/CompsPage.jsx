@@ -452,7 +452,7 @@ export default function CompsPage() {
       const link = document.createElement('a');
       link.href = url;
       const stamp = new Date().toISOString().slice(0, 10);
-      link.download = `redip-comps-${stamp}.csv`;
+      link.download = `acureal-comps-${stamp}.csv`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
