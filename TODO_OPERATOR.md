@@ -8,7 +8,9 @@ have. Everything else (the code, the database, the product) is built and verifie
 After each one, reply with the little "done" phrase shown — that's how I keep this
 list up to date. Everything is written step-by-step, no jargon.
 
-_Last updated: 2026-07-30 (Acureal rebrand — items 5, 6 and 6b are new/rewritten)._
+_Last updated: 2026-07-30 (Acureal rebrand. **Item 6 — the domain — is DONE and live.**
+Item 6b, turning on email sending, is now the top priority; item 5 is the receiving
+side of email.)_
 
 ---
 
@@ -97,66 +99,74 @@ right now those emails **bounce**. One of them, `grievance@`, is legally require
 in India (the Digital Personal Data Protection Act says a company must publish a
 working Grievance Officer contact).
 
-1. 🌐 Go to wherever you manage email for **acureal.in** (Google Workspace, Zoho,
-   or your domain provider's email settings).
-2. Create these two, both pointed at your own inbox:
-   - `security@acureal.in`
-   - `grievance@acureal.in`
-3. Send yourself a test email at each one and check it arrives.
-4. **Reply:** `mailboxes done`.
+These need to **receive** mail. That's a different thing from Resend in 6b, which
+only **sends**. You need both.
+
+### Which provider — checked 2026-07-30
+GoDaddy's own email (the "Set up Email" banner on your domain page) is a **paid
+subscription** — it offers Microsoft 365 or Titan, priced per mailbox per month,
+and its setup wizard currently errors out. For two addresses that will receive a
+handful of messages a year, that's poor value.
+
+| Option | Cost | Trade-off |
+|---|---|---|
+| **Zoho Mail free plan** ⭐ | Free — 5 users, 1 domain, 5 GB each | Webmail only (no Outlook/Apple Mail app). Fine for low-volume compliance inboxes. |
+| GoDaddy Titan / Microsoft 365 | Paid, per mailbox per month | Simplest, but a recurring bill for two rarely-used addresses |
+| Cloudflare Email Routing | Free, forwards into your Gmail | Requires moving the domain's nameservers to Cloudflare — **don't do this now**, it would disturb the DNS we just got working |
+
+**Recommendation: Zoho Mail's free plan.** Real mailboxes, no cost, and it works
+alongside the DNS we just set up (it only adds MX records).
+
+⚠️ Whichever you pick, adding its MX records at GoDaddy will ask for a fresh
+6-digit code texted to your phone — same as the domain setup.
+
+I can't do this part for you: it needs a new account signed up in your name and a
+mailbox password set, and I don't create accounts or enter passwords.
+
+1. Sign up at `https://www.zoho.com/mail/` → choose the **Forever Free** plan.
+2. Add `acureal.in` as your domain; Zoho gives you DNS records to add at GoDaddy.
+3. Create the two mailboxes: `security@acureal.in` and `grievance@acureal.in`.
+4. Send a test email to each from your Gmail and confirm they arrive.
+5. **Reply:** `mailboxes done` — and tell me if you'd rather I document a
+   different provider instead.
 
 ---
 
 # 🟡 NEEDS LEAD TIME — start soon
 
-## 6. 🔴 Point acureal.in at the site (do this FIRST — three other things wait on it)
-**Why:** You own **acureal.in** but the site still only answers at
-`redip.vercel.app`. Until the domain is connected, the product is called Acureal
-but lives at the old address — and email cannot be switched on at all.
+## 6. ✅ DONE (2026-07-30) — acureal.in is LIVE
+Nothing left to do here. The site now answers at **https://acureal.in** with a
+valid padlock, and the old address forwards to it.
 
-### Step A — tell Vercel about the domain
-1. 🌐 Open: `https://vercel.com/rachitjain348-4262s-projects/redip/settings/domains`
-2. In the box that says **Enter domain**, type exactly: `acureal.in`
-3. Click **Add**.
-4. If it offers **"Add www.acureal.in and redirect to acureal.in"**, choose that one.
-5. Vercel will now show the domain with an orange **Invalid Configuration** label and
-   list the DNS records it wants. That is expected — Step B fixes it.
+What was set up, for the record:
 
-### Step B — add two records at GoDaddy
-1. 🌐 Open: `https://dcc.godaddy.com/control/portfolio/acureal.in/settings`
-2. Find **DNS** and click **Manage DNS**.
-3. Click **Add New Record**. Fill in exactly:
-   - **Type:** `A`
-   - **Name:** `@`
-   - **Value:** `76.76.21.21`
-   - **TTL:** leave the default (1 hour)
-   - Click **Save**.
-4. Click **Add New Record** again. Fill in exactly:
-   - **Type:** `CNAME`
-   - **Name:** `www`
-   - **Value:** `cname.vercel-dns.com`
-   - **TTL:** leave the default
-   - Click **Save**.
-5. ⚠️ If GoDaddy already has an **A record** on `@` (often pointing at a GoDaddy
-   parking page), **edit that one** instead of adding a second. Two A records on
-   `@` will make the site load only half the time.
-6. **Success signal:** back on the Vercel page from Step A, the orange
-   **Invalid Configuration** turns into a green **Valid Configuration**, and a
-   padlock (HTTPS certificate) appears. This usually takes 10–30 minutes; it can
-   take a few hours.
-7. **Reply:** `domain live` (or send a screenshot if it still looks orange after
-   two hours).
+| Where | Setting | Value |
+|---|---|---|
+| GoDaddy DNS | `A` record on `@` | `216.150.1.1` (replaced the old WebsiteBuilder parking record) |
+| GoDaddy DNS | `CNAME` on `www` | left as `acureal.in.` — Vercel accepts it as valid |
+| Vercel Domains | `acureal.in` | Production · Valid Configuration |
+| Vercel Domains | `www.acureal.in` | 308 permanent redirect → `acureal.in` |
+| Vercel env | `CORS_ORIGINS` | `https://acureal.in,https://www.acureal.in,https://redip.vercel.app` |
+| Code | `vercel.json` | host-scoped 308 from `redip.vercel.app` → `acureal.in` |
 
-### Step C — one setting so the app trusts the new address
-1. 🌐 Open: `https://vercel.com/rachitjain348-4262s-projects/redip/settings/environment-variables`
-2. Find the row named **`CORS_ORIGINS`**. Click **⋯ → Edit**.
-3. Replace the value with exactly this:
-   `https://acureal.in,https://www.acureal.in,https://redip.vercel.app`
-4. Click **Save**. You'll see a green **Updated** message.
-5. **Reply:** `cors updated`. (Keeping the old address in the list on purpose —
-   it stays working until we confirm everything is fine on the new one.)
+Verified live: `acureal.in` → 200; `www.acureal.in` → 308 → apex; and every path
+on the old address forwards, including the homepage.
 
-## 6b. 🔴 Turn on email sending (after 6 is done)
+Two notes worth keeping:
+- Vercel's recommended apex IP is now **`216.150.1.1`**, not the older
+  `76.76.21.21`. Both work; the new one is what its dashboard asks for.
+- **Every DNS change at GoDaddy needs a fresh 6-digit code texted to your phone.**
+  Three wrong entries locks DNS editing for 24 hours. Budget for that on any
+  future record change — including the Resend records in 6b below.
+
+### ⚠️ One unrelated thing spotted on the GoDaddy page
+**Auto-renew is OFF** and `acureal.in` expires **29 Jul 2027** (₹899/yr). If it
+ever lapses, the domain — and with it the site and every email address on it —
+stops working, and someone else can buy the name. Worth turning on:
+`https://dcc.godaddy.com/control/portfolio/acureal.in/settings` → **Turn Auto-renew On**.
+
+## 6b. 🔴 Turn on email sending — **this is now the top priority**
+_(Item 6 is done, so nothing blocks this any more.)_
 **Why:** Right now **a new person who signs up never receives their verification
 email.** The app tries to send it and fails, because no email provider is
 connected. This also unlocks password-reset links and the K-RERA deadline
