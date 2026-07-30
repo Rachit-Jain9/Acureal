@@ -6,6 +6,46 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-07-30 (cont.) — **acureal.in is LIVE** — domain cutover executed in the operator's browser (#1039, #1041 merged)
+
+The operator granted browser access to their logged-in Vercel + GoDaddy and asked me to do the cutover directly. **Done: `https://acureal.in` serves the app with a valid certificate, and every path on `redip.vercel.app` now 308s to it.**
+
+### What was configured
+| Where | Change |
+|---|---|
+| Vercel Domains | `acureal.in` → Production; `www.acureal.in` → 308 → apex |
+| Vercel env | `CORS_ORIGINS` → `https://acureal.in,https://www.acureal.in,https://redip.vercel.app` (old host kept deliberately) |
+| GoDaddy DNS | `A @` **edited** from the WebsiteBuilder parking record → `216.150.1.1` |
+| Code | #1039 host-scoped 308; #1041 the root fix below |
+
+### Three things worth remembering
+1. **Vercel pre-ticks "Redirect apex domains to www (recommended)"** in the Add-Domain dialog. Leaving it checked would have inverted the operator's explicit apex-canonical decision (apex would bounce to www). Unticked both times — it re-checks itself on every dialog open.
+2. **Vercel's recommended apex IP is now `216.150.1.1`, not `76.76.21.21`.** The dashboard's own DNS panel is the source of truth; `TODO_OPERATOR.md` had documented the legacy IP (which still works, per Vercel's own note). Corrected. The `www` CNAME it recommends is a **per-project** hostname (`5287b733af877564.vercel-dns-017.com.`), not the generic `cname.vercel-dns.com`.
+3. **The pre-existing `CNAME www → acureal.in.` was left alone.** It resolves www to the apex A record → Vercel → which applies the 308. Vercel reports it **Valid Configuration**, so changing it would have cost another SMS verification for zero gain. Verified working end-to-end.
+
+### #1041 — the root-path bug my own PR shipped
+#1039 used a single `/:path*` rule. Live verification found **every path redirected except the bare root**:
+
+```
+/                  HTTP 200   (still served the app)
+/favicon.svg       HTTP 308 -> acureal.in/favicon.svg
+/login             HTTP 308 -> acureal.in/login
+/dashboard/deals   HTTP 308 -> acureal.in/dashboard/deals
+```
+
+Vercel's `/:path*` does not match the empty path at `/`. Ruled out CDN caching (cache-busting query + `Cache-Control: no-cache` both still 200) and ruled out filesystem-before-redirect ordering (`/favicon.svg` is a real static file and redirected fine). This left **the single most-typed address** un-redirected. Fixed with an explicit `"source": "/"` rule alongside the wildcard. **Lesson: `curl` the root explicitly — a wildcard redirect that works on five sub-paths can still miss `/`.**
+
+### Operator-gated, hit and respected
+GoDaddy requires a **fresh 6-digit SMS code per DNS change**. I stopped at that field both times rather than entering an auth credential, and did not ask for the code. The operator entered it; the A record saved. Also declined to complete GoDaddy's paid email purchase funnel.
+
+### Still open
+- **6b Resend is now the top priority and unblocked** — a new signup still never receives a verification email.
+- **Mailboxes (item 5)** — GoDaddy email is a paid subscription and its wizard errors; researched and recommended **Zoho Mail's Forever Free** plan (verified 2026-07-30: 5 users, 1 domain, 5 GB, webmail-only). Needs the operator — new account + mailbox password.
+- **Legal bodies** not yet published to the DB (28 `REDIP` mentions live in `legal_documents`).
+- **⚠️ `acureal.in` auto-renew is OFF**, expires 2027-07-29. Flagged.
+
+---
+
 ## 2026-07-30 — REDIP → **Acureal**: total rebrand, 5 PRs merged (#1034–#1038), 1 held (#1039)
 
 **The product is now called Acureal everywhere a user can see it.** REDIP is retired as a brand. Zero uppercase `REDIP` remains in the built frontend bundle, in any export template, or in any generated document.
