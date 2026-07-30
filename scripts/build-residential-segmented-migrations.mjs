@@ -1,4 +1,4 @@
-// Builds two migrations from REDIP-COMPS/redip_bengaluru_micro_market_rates_v0_2_2026Q1.json:
+// Builds two migrations from Acureal-COMPS/redip_bengaluru_micro_market_rates_v0_2_2026Q1.json:
 //   1. Schema:  database/migrations/20260508_residential_segmented_benchmarks_schema.sql
 //   2. Data:    database/migrations/20260508_residential_segmented_benchmarks_data.sql
 //
@@ -8,7 +8,7 @@
 // INR mn/acre for land, SRO PDF placeholder for guidance value).
 //
 // Per the methodology footnote in TODO_DATA.md:
-//   "Create separate tabs/layers in the REDIP UI: Listing Benchmarks, IPC Benchmarks,
+//   "Create separate tabs/layers in the Acureal UI: Listing Benchmarks, IPC Benchmarks,
 //    Guidance Value, Internal Deals. Blending them silently will destroy credibility."
 //
 // We honor that by tagging each row with `data_type` = 'listing_q1_2026_v0_2'
@@ -26,7 +26,7 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const ORG_ID  = 'd1218877-4d3a-4fe4-8d63-914fa8ffa94b';
 const AS_OF   = '2026-05-04';
-const SRC_JSON = path.resolve(repoRoot, '..', 'REDIP-COMPS', 'redip_bengaluru_micro_market_rates_v0_2_2026Q1.json');
+const SRC_JSON = path.resolve(repoRoot, '..', 'Acureal-COMPS', 'redip_bengaluru_micro_market_rates_v0_2_2026Q1.json');
 
 // asset_class values in the JSON → enum-friendly slugs
 const ASSET_CLASS_MAP = {
@@ -37,7 +37,7 @@ const ASSET_CLASS_MAP = {
   'Guidance value / circle rate':            'guidance_value',
 };
 
-// data_type values in the JSON → REDIP-internal data_type tags
+// data_type values in the JSON → Acureal-internal data_type tags
 const DATA_TYPE_MAP = {
   'Listing portal asking-price benchmark':                                'listing_q1_2026_v0_2',
   'Listing portal asking-price benchmark; converted from INR/sqyd':       'listing_q1_2026_v0_2',
@@ -65,7 +65,7 @@ const buildSchema = () => `-- 20260508_residential_segmented_benchmarks_schema.s
 -- =============================================================================
 --
 -- Methodology rule (TODO_DATA.md):
---   "Create separate tabs/layers in the REDIP UI: Listing Benchmarks, IPC
+--   "Create separate tabs/layers in the Acureal UI: Listing Benchmarks, IPC
 --    Benchmarks, Guidance Value, Internal Deals. Blending them silently will
 --    destroy credibility."
 --
@@ -147,7 +147,7 @@ const buildData = (records) => {
   lines.push(`-- 20260508_residential_segmented_benchmarks_data.sql`);
   lines.push(`-- =============================================================================`);
   lines.push(`-- Data load for residential_segmented_benchmarks — ${records.length} rows from`);
-  lines.push(`-- the v0.2 rate-pack (REDIP-COMPS/redip_bengaluru_micro_market_rates_v0_2_2026Q1.json).`);
+  lines.push(`-- the v0.2 rate-pack (Acureal-COMPS/redip_bengaluru_micro_market_rates_v0_2_2026Q1.json).`);
   lines.push(`-- Generated: ${new Date().toISOString()}`);
   lines.push(`-- =============================================================================`);
   lines.push(`--`);

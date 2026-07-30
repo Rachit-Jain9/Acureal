@@ -1,6 +1,6 @@
-# REDIP
+# Acureal
 
-REDIP is an AI-powered deal intelligence, due diligence, underwriting, and investor reporting platform for India, with Bengaluru as the priority market.
+Acureal is an AI-powered deal intelligence, due diligence, underwriting, and investor reporting platform for India, with Bengaluru as the priority market.
 
 ## What the app does
 
@@ -100,7 +100,7 @@ Backend env loading order:
 - `.env.local`
 - `.env.[NODE_ENV].local`
 
-For document storage, REDIP prefers Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set and automatically falls back to Supabase Storage when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured.
+For document storage, Acureal prefers Vercel Blob when `BLOB_READ_WRITE_TOKEN` is set and automatically falls back to Supabase Storage when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are configured.
 
 Frontend:
 
@@ -131,7 +131,7 @@ npm run build
 
 ## Deployment
 
-- GitHub remote: `https://github.com/Rachit-Jain9/REDIP.git`
+- GitHub remote: `https://github.com/Rachit-Jain9/Acureal.git`
 - Vercel project metadata: `.vercel/project.json`
 - Production app: `https://redip.vercel.app/`
 - Daily FX refresh is scheduled in `vercel.json` at `03:05 UTC` via `/api/fx/refresh/daily`

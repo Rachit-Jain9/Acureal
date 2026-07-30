@@ -1,5 +1,5 @@
 /**
- * Mixed-use — routed to the residential model by default (existing REDIP
+ * Mixed-use — routed to the residential model by default (existing Acureal
  * convention). A future iteration should layer income-asset NOI on the
  * commercial portion of the stack; when that lands, replace this adapter
  * with a dedicated weighted-blend implementation.

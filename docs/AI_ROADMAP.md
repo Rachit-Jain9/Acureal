@@ -1,10 +1,10 @@
 # AI Roadmap — Institutional Analyst, not a Chatbot
 
 **Last reviewed:** 2026-05-17 (after PR-NX25 + PR-NX26 shipped Document Ingestion auto-fill end-to-end — canonical ontology package + apply-extractions endpoint + AutoFillFromDocumentsModal frontend — closing the flagship priority from the 2026-05-15 Strategic Review §III.1).
-**Owner:** REDIP core
+**Owner:** Acureal core
 **Status:** Tiers 0–2 LANDED in full. Tier 4.1 LANDED. Tier 3 foundation LANDED (registry only). The 4-of-4 AI artifact suite is fully wired (deal_analysis, risk_brief, ic_memo, parcel_narrative all share persistence + numerical verifier + Copy/Download exports). **Document Ingestion + auto-fill LANDED 2026-05-17** (Strategic Review §III.1 flagship — PR-NX25 #345 + PR-NX26 #346): operator uploads sale deed → Gemini extracts → modal proposes → operator approves → deal + property populated with full audit trail via `@redip/real-estate-ontology` v1.0.0 single source of truth. Open Tier work: Tier 2.1 (Vercel AI SDK migration — bundled with Tier 3.2 agent runner whenever that ships) and Tier 5 reliability items.
 
-This is the canonical, single-source roadmap for AI work in REDIP. It supersedes any earlier plan doc that named individual prompts or models. Whenever something here changes, update this file in the same PR.
+This is the canonical, single-source roadmap for AI work in Acureal. It supersedes any earlier plan doc that named individual prompts or models. Whenever something here changes, update this file in the same PR.
 
 ### Operator-locked deferrals / skips (2026-05-09)
 
@@ -26,9 +26,9 @@ Items the operator (Rachit) explicitly chose NOT to pursue from the 2026-05-08 p
 
 ## 1. Mission
 
-REDIP's AI does **not** chat with a deal. It reviews a deal the way an institutional analyst would — by reading uploaded documents, calling deterministic underwriting tools, comparing outputs against verified comps, surfacing weak assumptions with citations, and drafting an IC-grade memo for human approval.
+Acureal's AI does **not** chat with a deal. It reviews a deal the way an institutional analyst would — by reading uploaded documents, calling deterministic underwriting tools, comparing outputs against verified comps, surfacing weak assumptions with citations, and drafting an IC-grade memo for human approval.
 
-The winning UX is one button: **"Have REDIP review this deal."** Output: a structured memo with evidence, downside scenarios, missing diligence items, and a recommendation — never a free-form chat reply.
+The winning UX is one button: **"Have Acureal review this deal."** Output: a structured memo with evidence, downside scenarios, missing diligence items, and a recommendation — never a free-form chat reply.
 
 If a feature could be called "chat with your deal", we don't ship it. That's the bright line.
 
@@ -119,7 +119,7 @@ Agent Personas (one coherent layer; no five-agent fragmentation)
 
 ## 4. What's already shipped (reality check)
 
-This section exists because external advice tends to prescribe things REDIP already does. Cross-check before "adding" any of these.
+This section exists because external advice tends to prescribe things Acureal already does. Cross-check before "adding" any of these.
 
 | Capability | Status | Where |
 |---|---|---|
@@ -156,7 +156,7 @@ Lowest-effort, highest-immediate-ROI hardening. Each item is 1–2 PRs.
 | # | Task | Effort | Status |
 |---|---|---:|:---|
 | 1.1 | Anthropic ephemeral prompt caching on stable prefixes | 1 PR | ✅ LANDED PR #152 |
-| 1.2 | Gemini context caching for the master-plan corpus | 1 PR | DEFERRED — REDIP doesn't attach a single huge corpus per call; low ROI |
+| 1.2 | Gemini context caching for the master-plan corpus | 1 PR | DEFERRED — Acureal doesn't attach a single huge corpus per call; low ROI |
 | 1.3 | Streaming for IC memo generation (SSE → progressive UI) | 1 PR | ✅ LANDED PR #154 |
 | 1.4 | Zod validation at provider boundary (reprompt-on-parse-fail) | 1 PR | ✅ LANDED PR #153 |
 | 1.5 | OpenAI as third available provider (reasoning + embeddings) | 1 PR | ✅ LANDED PR #153 |
@@ -186,7 +186,7 @@ The "Deal Analyst" workflow. Multi-PR; full agent gated by entry criterion.
 | 3.5 | Agent persona: **Doc Q&A** (answers from one deal's evidence only) | 2 PRs | DEFERRED until entry criterion |
 
 **Entry criterion for 3.2/3.3/3.5:** Tier 2 shipped + at least 50 real deals in production with full evidence chains.
-**Exit criterion:** "Have REDIP review this deal" produces a draft IC memo from real inputs, with citations to specific uploaded pages and underwriting tool outputs, gated by user approval before any persistence.
+**Exit criterion:** "Have Acureal review this deal" produces a draft IC memo from real inputs, with citations to specific uploaded pages and underwriting tool outputs, gated by user approval before any persistence.
 
 ### Tier 4 — Semantic + Indic layer (DEFERRED, parallel)
 Independent of Tiers 2–3 — can run in parallel once Tier 1 ships.
@@ -343,7 +343,7 @@ These extend `docs/FRONTEND_GUIDELINES.md` for AI-specific affordances:
 2. **Confidence is rendered as a band, not a percentage.** "High / Medium / Low" with an explanation tooltip. Raw confidence numbers go into the source-explorer drawer, not on the surface.
 3. **Citations are clickable.** Every AI fact opens the `EvidenceDrawer` deep-linked to the exact `source_document_pages` row.
 4. **Streaming uses skeleton-then-stream.** Show the SkeletonCard for the first 200ms, then begin streaming chunks into a typing-indicator state. Never a spinner.
-5. **Cost is invisible by default.** Operators see cost on the admin AI dashboard. Regular users see "Generated by REDIP" with no cost surfacing — would only confuse without context.
+5. **Cost is invisible by default.** Operators see cost on the admin AI dashboard. Regular users see "Generated by Acureal" with no cost surfacing — would only confuse without context.
 6. **Draft state is visually distinct.** AI drafts have a `border-amber-300` left edge until approved. After approval, the edge becomes neutral.
 
 ---

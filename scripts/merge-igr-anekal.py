@@ -17,7 +17,7 @@ agent name, or an agent row with no deterministic value) for a targeted re-check
 """
 import io, os, json
 
-TMP = r'C:\Users\rachi\OneDrive - UW\Desktop\REDIP\backend\_pdf_tmp'
+TMP = r'C:\Users\rachi\OneDrive - UW\Desktop\Acureal\backend\_pdf_tmp'
 DET = os.path.join(TMP, 'igr_anekal_belt.json')           # deterministic rows
 VIS = os.path.join(TMP, 'igr_vision_names.json')          # workflow result.pages
 OUT = os.path.join(TMP, 'igr_anekal_merged.json')

@@ -1,4 +1,4 @@
-# `database/` — REDIP schema, migrations & seeds
+# `database/` — Acureal schema, migrations & seeds
 
 One place that explains every file here and how a database gets built. Production
 is **fully applied and current**; this folder is the source of truth + the
@@ -11,7 +11,7 @@ fresh-environment recipe.
 | **`migrations/`** | The **source of truth** — 123 ordered, idempotent `.sql` migrations (`YYYYMMDD_name.sql`). Every change to the schema or reference data lands here. Each is guarded (`IF NOT EXISTS` / `DROP ... IF EXISTS` / guarded `DO` blocks), so re-running one is a safe no-op. |
 | **`current_schema.sql`** | The **authoritative manifest** — a single ordered index of every migration, grouped by month, with the fresh-env recipe. Regenerated from the real files (not hand-kept). Read this first. |
 | **`schema.sql`** | The **base schema** (extensions, functions, enums, core tables). `npm run migrate` in `backend/` applies it. A convenience starting point that the migrations extend. |
-| **`seed.sql`** | Intentional **no-op** — REDIP ships without demo/mock data (`npm run seed`). Add real data through the app. |
+| **`seed.sql`** | Intentional **no-op** — Acureal ships without demo/mock data (`npm run seed`). Add real data through the app. |
 | **`seeds/`** | Standalone reference-data seed(s). |
 
 ## How migrations are applied

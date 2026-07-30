@@ -1,6 +1,6 @@
 name: Mirror RMP 2015 tiles → Blob (manual)
 
-# Copies the BDA RMP 2015 Proposed-Land-Use tiles from Map Warper into REDIP's
+# Copies the BDA RMP 2015 Proposed-Land-Use tiles from Map Warper into Acureal's
 # own Vercel Blob storage, so the master-plan overlay stops depending on the
 # free community tile server at runtime (it becomes same-origin + CDN-cached).
 # Driver: backend/scripts/mirror-rmp2015-tiles.js. Manual-only — never runs on

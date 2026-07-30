@@ -188,7 +188,7 @@ describe('@redip/real-estate-ontology', () => {
         expect(spec).toHaveProperty('column');
         expect(spec).toHaveProperty('value_type');
         expect(spec).toHaveProperty('description');
-        // Routing must point at a real REDIP table
+        // Routing must point at a real Acureal table
         expect(['deals', 'properties']).toContain(spec.table);
         // Numbers carry min/max guardrails; strings carry max_length
         if (spec.value_type === 'number') {

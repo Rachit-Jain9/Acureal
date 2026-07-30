@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * @redip/real-estate-ontology — single source of truth for REDIP's
+ * @redip/real-estate-ontology — single source of truth for Acureal's
  * real-estate taxonomies + extraction field mappings + unit conversions.
  *
  * Why a separate package: same shape consumed by backend (Node CommonJS

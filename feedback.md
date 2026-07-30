@@ -1,7 +1,7 @@
-# REDIP — Operator Feedback (Rachit)
+# Acureal — Operator Feedback (Rachit)
 
 Extracted from the 2026-05-10 session. Read this before doing autonomous
-work on REDIP. Supplements `CLAUDE.md` (project rules) and the user-side
+work on Acureal. Supplements `CLAUDE.md` (project rules) and the user-side
 `MEMORY.md` index (cross-project rules).
 
 ---
@@ -176,7 +176,7 @@ work on REDIP. Supplements `CLAUDE.md` (project rules) and the user-side
   the LLM. Every market / GIS / financial fact must trace to a verified
   source. "We don't know" is always a valid answer; a confidently-wrong
   number is never.
-- **No defensive UI copy.** No "REDIP is correctly withholding…", no
+- **No defensive UI copy.** No "Acureal is correctly withholding…", no
   migration filenames in user-facing copy. Hide empty sections cleanly.
 - **Bloomberg / Stripe / Linear register.** Flat by default, hairline
   borders, semantic tokens, restrained accent use. No decorative emojis,

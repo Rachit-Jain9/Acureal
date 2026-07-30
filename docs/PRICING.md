@@ -1,4 +1,4 @@
-# REDIP Export Pricing — Decisions, Tiers, Rationale
+# Acureal Export Pricing — Decisions, Tiers, Rationale
 
 _Last reviewed: 2026-05-10. Review when DOCX generator ships, when first paid
 download lands, and at every quarter end. Owner: Rachit._
@@ -57,7 +57,7 @@ INR.
 - **Price**: ₹14,999 per deal per report
 - **What's included**:
   - Everything in Standard
-  - REDIP-curated comp set: a REDIP analyst hand-picks the 8–10 most
+  - Acureal-curated comp set: an Acureal analyst hand-picks the 8–10 most
     relevant verified comps for this exact micro-market and asset class
     (replaces auto-selected comps)
   - Analyst risk overlay: a senior analyst reads the auto-generated risk
@@ -75,7 +75,7 @@ INR.
 - **Price**: ₹49,999+ per deal per report (custom)
 - **What's included**:
   - Everything in Premium
-  - On-ground DD verification by REDIP field team (Bengaluru only for
+  - On-ground DD verification by Acureal field team (Bengaluru only for
     MVP): site visit, anchor tenant interviews, comp vetting in person,
     title verification cross-check at Bhoomi / Kaveri portal
   - 2–3 week turnaround
@@ -132,7 +132,7 @@ download data first. Revisit after 30 paid downloads land.
 ## Operational notes
 
 - Currency: INR only at MVP. USD pricing for international users
-  deferred — REDIP is Bengaluru-first per CLAUDE.md.
+  deferred — Acureal is Bengaluru-first per CLAUDE.md.
 - GST: 18% added at checkout for Indian buyers. Display price excludes
   GST (industry convention).
 - Payment provider: TBD (Razorpay vs Stripe). Razorpay is the obvious

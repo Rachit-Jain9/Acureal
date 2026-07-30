@@ -75,7 +75,7 @@ async function geocode(query) {
     encodeURIComponent(query);
   const res = await fetch(url, {
     headers: {
-      'User-Agent': 'REDIP-geocoder/1.0 (rachitjain348@gmail.com)',
+      'User-Agent': 'Acureal-geocoder/1.0 (rachitjain348@gmail.com)',
       Accept: 'application/json',
     },
     signal: AbortSignal.timeout(10_000),

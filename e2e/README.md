@@ -1,4 +1,4 @@
-# REDIP E2E smoke tests
+# Acureal E2E smoke tests
 
 Playwright click-tests that run against a **live deployment** — the PR's Vercel
 preview in CI, production when run locally. Every assertion maps to a bug that

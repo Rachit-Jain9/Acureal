@@ -1,14 +1,14 @@
-# REDIP Data Governance — The Five-Layer Data Model
+# Acureal Data Governance — The Five-Layer Data Model
 
 **Status date:** 2026-05-20
-**Audience:** REDIP engineering; security / privacy reviewers
-**Owner:** REDIP engineering
+**Audience:** Acureal engineering; security / privacy reviewers
+**Owner:** Acureal engineering
 **Maintained in:** version control — see the git history of this file
 
 ## 1. Why this document exists
 
-REDIP holds three very different kinds of data in one PostgreSQL database: a
-tenant's raw confidential deal material, REDIP's own analysis of it, and
+Acureal holds three very different kinds of data in one PostgreSQL database: a
+tenant's raw confidential deal material, Acureal's own analysis of it, and
 operational telemetry. Treating them all as "the database" is how cross-tenant
 leaks happen — and it is also why a "market benchmark built from everyone's
 deals" feature is dangerous if built without a model.
@@ -34,7 +34,7 @@ layer whose data is built across tenants — and only behind a consent gate. Lay
 |---|---|---|---|
 | 1 | Raw Tenant Vault | Documents and raw fields exactly as the tenant supplied them | **Never** |
 | 2 | Structured Extraction | Machine-readable data extracted from Layer 1 | **Never** |
-| 3 | Derived Private Intelligence | REDIP's analysis, models, and audit trail for one tenant | **Never** |
+| 3 | Derived Private Intelligence | Acureal's analysis, models, and audit trail for one tenant | **Never** |
 | 4 | Anonymized Benchmark | De-identified, aggregated facts contributed by many tenants | **Only this layer**, and only with consent |
 | 5 | Telemetry & Operations | Cost, performance, security, and routing exhaust | Pseudonymous; no deal content |
 
@@ -84,12 +84,12 @@ sensitive — a vector is a lossy but real projection of the source text.
 
 ### Layer 3 — Derived Private Intelligence
 
-**Definition.** REDIP's own computed and synthesised output **for a single
+**Definition.** Acureal's own computed and synthesised output **for a single
 tenant**: financial models, the due-diligence and approvals workflow, risk
 assessment, generated narratives, and the immutable audit trail. This is the
-platform's value-add layer — REDIP's analysis of the tenant's own data.
+platform's value-add layer — Acureal's analysis of the tenant's own data.
 
-**Sensitivity:** high. Knowing REDIP's risk scoring or underwriting of a deal is
+**Sensitivity:** high. Knowing Acureal's risk scoring or underwriting of a deal is
 as commercially sensitive as the deal itself.
 
 **Who can see it:** owning organization only; deal-level sharing is explicit and
@@ -107,8 +107,8 @@ append-only — no UPDATE or DELETE RLS policy.
 ### Layer 4 — Anonymized Benchmark
 
 **Definition.** The **only** cross-tenant layer: de-identified, aggregated deal
-facts contributed by many tenants so that REDIP can show "how does this deal
-compare to the market" using REDIP's *own* deal flow rather than only external
+facts contributed by many tenants so that Acureal can show "how does this deal
+compare to the market" using Acureal's *own* deal flow rather than only external
 feeds.
 
 **Status: the consent gate is built; the statistics are deferred.** Both halves
@@ -193,7 +193,7 @@ self-read-scoped.
 
 ### 5b. Reference data (externally sourced)
 
-Verified market and regulatory data that REDIP ingests from **external** sources.
+Verified market and regulatory data that Acureal ingests from **external** sources.
 It is critical not to confuse this with Layer 4: Reference data comes from
 outside and is the same for every tenant; Layer 4 is built *from* tenant data.
 They look similar ("benchmarks") but have opposite provenance.
@@ -227,7 +227,7 @@ When a migration adds a table, classify it before merge:
 
 1. Does it hold content a tenant uploaded or typed, verbatim? → **Layer 1.**
 2. Is it a machine-readable extraction of Layer-1 content? → **Layer 2.**
-3. Is it REDIP's analysis/model/audit for one tenant? → **Layer 3.**
+3. Is it Acureal's analysis/model/audit for one tenant? → **Layer 3.**
 4. Is it a de-identified aggregate built across tenants? → **Layer 4** — and it
    must be gated per §4.3.
 5. Is it cost / performance / security / routing exhaust? → **Layer 5.**

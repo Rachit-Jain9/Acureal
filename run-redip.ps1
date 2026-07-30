@@ -129,7 +129,7 @@ function Ensure-BackendRunning {
 
   $backendPid = Get-ListeningPid -Port 5000
   if ($backendPid) {
-    throw "Port 5000 is already in use by PID $backendPid, but REDIP backend health is not responding. Stop it with Stop-Process -Id $backendPid -Force or close the other terminal, then rerun the command."
+    throw "Port 5000 is already in use by PID $backendPid, but Acureal backend health is not responding. Stop it with Stop-Process -Id $backendPid -Force or close the other terminal, then rerun the command."
   }
 
   Write-Host 'Backend is not running. Starting it in the background...'
@@ -210,7 +210,7 @@ switch ($Task) {
 
     Ensure-BackendRunning
 
-    if (Test-HttpEndpoint -Url 'http://127.0.0.1:5173/' -ContentPattern 'REDIP') {
+    if (Test-HttpEndpoint -Url 'http://127.0.0.1:5173/' -ContentPattern 'Acureal') {
       Write-Host 'Frontend already running at http://127.0.0.1:5173/'
       break
     }
@@ -227,7 +227,7 @@ switch ($Task) {
     Require-Command $npm 'npm' 'Install Node.js or add C:\Program Files\nodejs to PATH.'
     Ensure-BackendRunning
 
-    if (Test-HttpEndpoint -Url 'http://127.0.0.1:5173/' -ContentPattern 'REDIP') {
+    if (Test-HttpEndpoint -Url 'http://127.0.0.1:5173/' -ContentPattern 'Acureal') {
       Write-Host 'Frontend already running at http://127.0.0.1:5173/'
       break
     }

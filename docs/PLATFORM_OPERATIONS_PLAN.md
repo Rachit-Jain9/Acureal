@@ -1,4 +1,4 @@
-# REDIP Platform Operations Plan — "never again" + Vercel Pro / Supabase Pro maximization
+# Acureal Platform Operations Plan — "never again" + Vercel Pro / Supabase Pro maximization
 
 _Established 2026-07-08 after the three-round quality sweep (PRs #941/#943/#945). This is the
 standing plan for (a) preventing the bug classes the operator hit from recurring, and (b) getting

@@ -15,10 +15,10 @@ property's city, 'Bengaluru' for the Anekal-belt deals — resolves them).
 """
 import io, os, json, re
 
-TMP = r'C:\Users\rachi\OneDrive - UW\Desktop\REDIP\backend\_pdf_tmp'
+TMP = r'C:\Users\rachi\OneDrive - UW\Desktop\Acureal\backend\_pdf_tmp'
 MERGED = os.path.join(TMP, 'igr_anekal_merged.json')
 RESOLUTION = os.path.join(TMP, 'igr_resolution.json')
-OUT = r'C:\Users\rachi\OneDrive - UW\Desktop\REDIP\database\migrations\20260718_igr_anekal_belt_guidance_values_seed.sql'
+OUT = r'C:\Users\rachi\OneDrive - UW\Desktop\Acureal\database\migrations\20260718_igr_anekal_belt_guidance_values_seed.sql'
 
 SQM_TO_SQFT = 10.76391041671
 

@@ -34,7 +34,7 @@ on:
       base_url:
         description: 'URL to test (defaults to production)'
         required: false
-        default: 'https://redip.vercel.app'
+        default: 'https://acureal.in'
 
 permissions:
   contents: read
@@ -79,7 +79,7 @@ jobs:
             echo "url=${{ github.event.inputs.base_url }}" >> "$GITHUB_OUTPUT"
           else
             # schedule + production deploy → the stable, public production alias.
-            echo "url=https://redip.vercel.app" >> "$GITHUB_OUTPUT"
+            echo "url=https://acureal.in" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Preflight — is the target reachable?

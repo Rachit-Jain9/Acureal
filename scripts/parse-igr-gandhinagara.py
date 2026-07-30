@@ -21,7 +21,7 @@ import io, os, json, re
 import fitz
 
 SRC = r'C:\Users\rachi\OneDrive - UW\Desktop\Masterplan 2015 - Copy\Gandhinagara_compressed.pdf'
-OUT = r'C:\Users\rachi\OneDrive - UW\Desktop\REDIP\backend\_pdf_tmp\igr_gandhinagara.json'
+OUT = r'C:\Users\rachi\OneDrive - UW\Desktop\Acureal\backend\_pdf_tmp\igr_gandhinagara.json'
 
 VALUE_MIN = 10000          # a number >= this is a rate (Rs/sq.m); else a Sl.No
 SQM_TO_SQFT = 10.76391041671

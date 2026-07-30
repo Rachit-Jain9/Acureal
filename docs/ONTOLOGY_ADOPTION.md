@@ -5,7 +5,7 @@ Operationalises Strategic Review §VI ("reconcile the taxonomies")._
 
 ## TL;DR
 
-`@redip/real-estate-ontology` (package, `v1.0.0`) is REDIP's canonical taxonomy —
+`@redip/real-estate-ontology` (package, `v1.0.0`) is Acureal's canonical taxonomy —
 asset classes, deal structures, exit strategies, zoning, ownership types, area /
 pricing units, the extraction field map, and confidence bands. The **backend
 already adopts it** for the extraction → deal write path. The **frontend does
@@ -86,7 +86,7 @@ all three sources. The detailed RMP 2031 zones live separately in
 
 ## The product decision required
 
-> **For Rachit:** Which deal-structure taxonomy is canonical — REDIP's existing
+> **For Rachit:** Which deal-structure taxonomy is canonical — Acureal's existing
 > **8-key** list (what every live deal uses, what the database enforces), or the
 > ontology's tidier **4-key** list?
 >

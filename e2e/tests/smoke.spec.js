@@ -1,6 +1,6 @@
 'use strict';
 
-// REDIP production smoke suite.
+// Acureal production smoke suite.
 //
 // Every assertion here maps to a bug that actually shipped to the operator in
 // July 2026 and would have been caught before merge if this ran on the PR
@@ -28,7 +28,7 @@ async function expectAuthenticatedShell(page) {
   await expect(page.getByText(/something went wrong/i)).toHaveCount(0);
 }
 
-test.describe('REDIP production smoke', () => {
+test.describe('Acureal production smoke', () => {
   test('dashboard renders WITH data — org-context race guard (#951)', async ({ page }) => {
     await page.goto('/dashboard', { waitUntil: 'domcontentloaded' });
 

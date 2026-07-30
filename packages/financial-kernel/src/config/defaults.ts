@@ -169,14 +169,14 @@ export const GLOBAL_DEFAULTS_META: DefaultsBlock = Object.freeze({
   developerMarginPct: M(
     20, 'pct',
     'Target developer margin — used for RLV back-solve when unset by deal.',
-    'REDIP merchant-sale underwriting target.',
+    'Acureal merchant-sale underwriting target.',
     { range: [10, 35] },
   ),
   discountRatePct: M(
     14, 'pct',
     'DCF discount rate (annual). Hospitality overrides to 15; all other '
       + 'asset classes use this 14% global default.',
-    'REDIP WACC model — unlevered 12-16% band for India RE.',
+    'Acureal WACC model — unlevered 12-16% band for India RE.',
     { range: [8, 22] },
   ),
   loadingFactor: M(
@@ -220,19 +220,19 @@ export const GLOBAL_DEFAULTS_META: DefaultsBlock = Object.freeze({
   entryCapRatePct: M(
     8, 'pct',
     'Entry cap rate when back-solving land value from stabilised NOI.',
-    'REDIP RLV convention — mirrors exit unless stated otherwise.',
+    'Acureal RLV convention — mirrors exit unless stated otherwise.',
     { range: [6, 12] },
   ),
   holdPeriodYears: M(
     5, 'years',
     'Income-asset hold period. Hospitality overrides to 10 years.',
-    'REDIP standard underwriting — 5 year hold for core/core-plus.',
+    'Acureal standard underwriting — 5 year hold for core/core-plus.',
     { range: [3, 15] },
   ),
   propertyTaxPctOfRevenue: M(
     INDIA_CONFIG.PROPERTY_TAX_PCT_OF_REVENUE * 100, 'pct',
     'Annual property tax as % of gross revenue. BBMP UAV-system proxy.',
-    'BBMP property tax calculator + REDIP revenue conversion.',
+    'BBMP property tax calculator + Acureal revenue conversion.',
     { range: [0.5, 4] },
   ),
   buildingInsurancePctOfRevenue: M(
@@ -543,7 +543,7 @@ const HOSPITALITY_META: DefaultsBlock = Object.freeze({
   discountRatePct: M(
     15, 'pct',
     'Hospitality DCF discount — reflects higher op risk + stabilisation ramp.',
-    'REDIP WACC model — hospitality band.',
+    'Acureal WACC model — hospitality band.',
     { range: [10, 22] },
   ),
   // NB: These values are aligned with the legacy hospitality kernel's
@@ -784,7 +784,7 @@ const LAND_PARCEL_META: DefaultsBlock = Object.freeze({
   holdPeriodYears: M(
     3, 'years',
     'Default land-hold horizon before flip.',
-    'REDIP raw-land underwriting.',
+    'Acureal raw-land underwriting.',
     { range: [1, 10] },
   ),
   landAppreciationPct: M(
@@ -796,7 +796,7 @@ const LAND_PARCEL_META: DefaultsBlock = Object.freeze({
   holdingCostPctOfLand: M(
     1.5, 'pct',
     'Annual carry cost (taxes, security, interest) as % of land cost.',
-    'REDIP raw-land carry convention.',
+    'Acureal raw-land carry convention.',
     { range: [0.5, 4] },
   ),
 });

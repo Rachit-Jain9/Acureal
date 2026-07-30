@@ -1,5 +1,5 @@
 """
-Build REDIP_RE_Model.xlsx — investor-grade, IC-ready, 4-sheet real estate
+Build Acureal_RE_Model.xlsx — investor-grade, IC-ready, 4-sheet real estate
 development model (Bengaluru-first).
 
 Structure:
@@ -25,7 +25,7 @@ from openpyxl.chart.label import DataLabelList
 from openpyxl.worksheet.table import Table, TableStyleInfo
 from openpyxl.formatting.rule import CellIsRule
 
-OUT_PATH = r"c:\Users\rachi\OneDrive - UW\Desktop\REDIP\REDIP_RE_Model.xlsx"
+OUT_PATH = r"c:\Users\rachi\OneDrive - UW\Desktop\Acureal\Acureal_RE_Model.xlsx"
 
 # ---------------------------------------------------------------------------
 # Style kit
@@ -131,7 +131,7 @@ ws.column_dimensions["D"].width = 40
 for c in "EFGH":
     ws.column_dimensions[c].width = 12
 
-title_bar(ws, "REDIP — Real Estate Development Model | INPUTS (all blue cells are hardcoded)", "D")
+title_bar(ws, "Acureal — Real Estate Development Model | INPUTS (all blue cells are hardcoded)", "D")
 
 def input_row(sheet, r, label, value, unit, note="", nf=NF_NUM2):
     put(sheet, f"A{r}", label, font=F_LABEL,   align=ALIGN_L)
@@ -221,7 +221,7 @@ ws.freeze_panes = "B27"
 NUM_P = 20  # must match Inputs!B44
 
 last_col = get_column_letter(1 + NUM_P + 1)  # A + NUM_P data cols + 1 pad
-title_bar(ws, "REDIP — Model Engine | all formulas, no hardcoding", last_col)
+title_bar(ws, "Acureal — Model Engine | all formulas, no hardcoding", last_col)
 
 for i in range(NUM_P):
     ws.column_dimensions[get_column_letter(2 + i)].width = 12
@@ -484,7 +484,7 @@ ws.column_dimensions["A"].width = 38
 for c_ in "BCDEFGHIJKLMN":
     ws.column_dimensions[c_].width = 14
 
-title_bar(ws, "REDIP — Returns & Sensitivity", "N")
+title_bar(ws, "Acureal — Returns & Sensitivity", "N")
 
 hdr(ws, "A3", "PROJECT RETURNS", span=4)
 
@@ -706,7 +706,7 @@ for c_ in "ABCDEFGHIJKLMN":
     ws.column_dimensions[c_].width = 14
 ws.column_dimensions["A"].width = 26
 
-title_bar(ws, "REDIP — Deal Dashboard", "N")
+title_bar(ws, "Acureal — Deal Dashboard", "N")
 
 put(ws, "A3", "Scenario:", font=F_LABELB, align=ALIGN_R)
 put(ws, "B3", "='Model Engine'!B4",

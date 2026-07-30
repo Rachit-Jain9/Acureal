@@ -1,5 +1,5 @@
 /**
- * Canonical types for the REDIP financial kernel.
+ * Canonical types for the Acureal financial kernel.
  *
  * All calculations run on monthly periods internally. Money values use
  * fixed-precision BigInt-backed `Decimal` instances; UI-facing conversions
@@ -25,7 +25,7 @@ export type AssetClass =
 export type FlowSign = 'inflow' | 'outflow';
 
 /**
- * Raw deal inputs as they arrive from the REDIP app. Free-form so legacy
+ * Raw deal inputs as they arrive from the Acureal app. Free-form so legacy
  * payloads don't need a schema migration to start flowing through the kernel.
  * Numeric coercion is handled in the asset adapter.
  */

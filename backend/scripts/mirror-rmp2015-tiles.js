@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * Mirror the BDA RMP 2015 Proposed-Land-Use tiles into REDIP-owned storage.
+ * Mirror the BDA RMP 2015 Proposed-Land-Use tiles into Acureal-owned storage.
  *
  * WHY: today the frontend loads these tiles CLIENT-SIDE from Map Warper's
  * community server (Map Warper 403s Vercel's egress, so the same-origin proxy
@@ -41,7 +41,7 @@ const {
 
 const SOURCE_BASE = (process.env.MASTER_PLAN_MIRROR_SOURCE_BASE
   || 'https://mapwarper.net/layers/tile/2147').replace(/\/+$/, '');
-const UA = 'Mozilla/5.0 (compatible; REDIP-tile-mirror/1.0; +https://redip.vercel.app)';
+const UA = 'Mozilla/5.0 (compatible; Acureal-tile-mirror/1.0; +https://redip.vercel.app)';
 const FETCH_TIMEOUT_MS = 15000;
 
 // Blob store access. Starts 'public', but auto-flips to 'private' the first time

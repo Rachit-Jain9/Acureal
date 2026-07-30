@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * download-and-inspect-xlsx.js — bypass Excel to capture pristine REDIP output.
+ * download-and-inspect-xlsx.js — bypass Excel to capture pristine Acureal output.
  *
  * Why this script exists:
  *   The Pointec Pens hospitality Dashboard bug evaded 4 rounds of fixes
  *   (#327, #329, #332, #333) because Excel auto-repairs the file on open
- *   AND saves the repaired version. We can never see what REDIP actually
+ *   AND saves the repaired version. We can never see what Acureal actually
  *   shipped — only what Excel left after repair.
  *
  *   This script downloads the workbook directly via HTTP (no Excel involved),
@@ -29,8 +29,8 @@
  *   deploying your latest commit, this will hit the previous deploy.
  *
  * What it CAN do:
- *   Show whether the empty-Dashboard bug is server-side (REDIP ships empty)
- *   or client-side (REDIP ships full, Excel scrubs on open). That alone
+ *   Show whether the empty-Dashboard bug is server-side (Acureal ships empty)
+ *   or client-side (Acureal ships full, Excel scrubs on open). That alone
  *   tells us where to focus the next fix.
  */
 
@@ -167,7 +167,7 @@ const downloadBuffer = (url) => new Promise((resolve, reject) => {
     const cellCount = (xml.match(/<c\s+r="/g) || []).length;
     console.log('=== VERDICT ===');
     if (cellCount === 0) {
-      console.log('  ⛔ DASHBOARD SHIPS EMPTY FROM REDIP — server-side bug.');
+      console.log('  ⛔ DASHBOARD SHIPS EMPTY FROM Acureal — server-side bug.');
       console.log('     The fix needs to happen in the build pipeline.');
       console.log('     Share this output with the dev so they can pinpoint the corruption.');
     } else if (cellCount < 100) {
@@ -176,7 +176,7 @@ const downloadBuffer = (url) => new Promise((resolve, reject) => {
     } else {
       console.log(`  ✓ DASHBOARD SHIPS RENDERED (${cellCount} cells).`);
       console.log('     If you opened this file in Excel and saw an empty Dashboard, the bug is');
-      console.log('     EXCEL-SIDE — something in REDIP\'s XML triggers Excel\'s auto-repair.');
+      console.log('     EXCEL-SIDE — something in Acureal\'s XML triggers Excel\'s auto-repair.');
       console.log('     The fix needs strict XML validation that mimics Excel\'s parser.');
     }
   } else {

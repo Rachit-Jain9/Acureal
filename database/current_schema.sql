@@ -1,5 +1,5 @@
 -- ============================================================================
--- REDIP - Database Setup Manifest (authoritative index of every migration)
+-- Acureal - Database Setup Manifest (authoritative index of every migration)
 -- Regenerated: 2026-07-05. Reflects all 123 migrations through 20260724.
 -- ============================================================================
 --
@@ -35,7 +35,7 @@
 --   - schema.sql   Base schema (extensions, functions, enums, core tables).
 --                  `npm run migrate` (backend) applies it - a convenience start
 --                  point that the migrations below extend.
---   - seed.sql     Intentional NO-OP (REDIP ships without demo data; `npm run seed`).
+--   - seed.sql     Intentional NO-OP (Acureal ships without demo data; `npm run seed`).
 --   - seeds/       Standalone reference-data seed(s).
 --
 -- TO BUILD A FRESH DATABASE (dev / preview / staging)

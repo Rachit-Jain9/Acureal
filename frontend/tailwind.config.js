@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 /**
- * REDIP — Precision Analysis design system.
+ * Acureal — Precision Analysis design system.
  *
  * All color classes resolve to CSS variables, so the whole site repaints
  * on a single `data-theme="light" | "dark"` attribute flip. Named groups:

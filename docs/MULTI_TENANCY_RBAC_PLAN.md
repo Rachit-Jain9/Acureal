@@ -1,4 +1,4 @@
-# REDIP — Multi-Tenancy, Roles & Organization Onboarding Plan
+# Acureal — Multi-Tenancy, Roles & Organization Onboarding Plan
 
 _Authored 2026-06-02. Grounded entirely in the live Supabase production database (`niamgjbxxgmmffggumvj`, ap-south-1, Postgres 17) and the current `master`/branch source. No assumptions — every claim below was verified against the real schema, real RLS policies, and real source files._
 
@@ -6,7 +6,7 @@ _Authored 2026-06-02. Grounded entirely in the live Supabase production database
 
 ## 0. TL;DR (the one-paragraph version)
 
-REDIP is **already a multi-tenant, role-isolated platform** — not a single-admin app. It has organizations, per-organization roles (`owner / admin / editor / viewer`), invitations, FORCED Row-Level Security on 49 tenant tables, a platform-operator (super-admin) concept gated by an email allowlist, a three-tier data model (org-private / platform-shared reference / cross-org deal-share), per-org AI cost caps, and document access logging. **The thing that is actually missing — and the thing your question is really about — is _domain-based onboarding_: a way for everyone at one company to land in one shared workspace with a sensible role, instead of each person creating a lonely solo workspace.** That, plus a Team-management UI and an org switcher, is the core of this plan. A short security/ledger-hygiene pass comes first.
+Acureal is **already a multi-tenant, role-isolated platform** — not a single-admin app. It has organizations, per-organization roles (`owner / admin / editor / viewer`), invitations, FORCED Row-Level Security on 49 tenant tables, a platform-operator (super-admin) concept gated by an email allowlist, a three-tier data model (org-private / platform-shared reference / cross-org deal-share), per-org AI cost caps, and document access logging. **The thing that is actually missing — and the thing your question is really about — is _domain-based onboarding_: a way for everyone at one company to land in one shared workspace with a sensible role, instead of each person creating a lonely solo workspace.** That, plus a Team-management UI and an org switcher, is the core of this plan. A short security/ledger-hygiene pass comes first.
 
 ---
 
@@ -44,7 +44,7 @@ Two independent gates, both defaulting to `rachitj579@gmail.com`:
 
 The Admin nav group (operator-only, from `frontend/src/components/layout/Sidebar.jsx`): **Master Plan · Parcel Intelligence · Comps Review Queue · AI Usage & Cost · A/B Evaluations · Learning Signals · Audit Trail**. Everyone else sees only the five primary items + Settings.
 
-> **Key distinction to lock in:** "Platform Admin / Operator" (you, runs REDIP, curates shared data across all orgs) is a **different axis** from "Organization Owner/Admin" (a customer who runs their own workspace). Today they're conflated in the word "admin." The plan keeps them cleanly separate.
+> **Key distinction to lock in:** "Platform Admin / Operator" (you, runs Acureal, curates shared data across all orgs) is a **different axis** from "Organization Owner/Admin" (a customer who runs their own workspace). Today they're conflated in the word "admin." The plan keeps them cleanly separate.
 
 ### 1.4 Data isolation — three tiers, all real and enforced
 
@@ -98,7 +98,7 @@ Total: **4 owners, 2 editors.** When Rahul and Adit registered, the current logi
 
 ```
             ┌───────────────────────────────────────────────┐
-            │  AXIS 1 — Platform role (who runs REDIP)        │
+            │  AXIS 1 — Platform role (who runs Acureal)        │
             │  • Platform Operator  → you (email allowlist)   │
             │  • Everyone else      → customer                │
             └───────────────────────────────────────────────┘

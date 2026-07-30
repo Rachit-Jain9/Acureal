@@ -1,15 +1,15 @@
-# REDIP Regulatory & Zoning Intelligence — Architecture
+# Acureal Regulatory & Zoning Intelligence — Architecture
 
 > **Status:** Architecture proposal (design-only). No migrations applied, no code shipped by this document.
 > **Scope:** The regulatory / zoning / FAR / overlay intelligence subsystem that feeds the deal Zoning tab, the Financial Engine, and IC memos.
 > **Stance:** Extend the existing `regulatory_data` schema and `parcel*` services. This is a **progressive refactor, not a rewrite**. Every primitive below either reuses or wraps something already in production.
-> **Liability frame:** REDIP produces **regulatory intelligence for underwriting screening**. It never produces "instant zoning certainty," and it never narrates a statutory conclusion on the legal-four lanes (title chain, encumbrance, RERA status, statutory approval status).
+> **Liability frame:** Acureal produces **regulatory intelligence for underwriting screening**. It never produces "instant zoning certainty," and it never narrates a statutory conclusion on the legal-four lanes (title chain, encumbrance, RERA status, statutory approval status).
 
 ---
 
 ## ⚠️ What we got wrong and corrected (read first)
 
-This document is itself a correction of a wrong-premise that was seeded into REDIP's data. Two earlier drafts of this very document also introduced **fabricated statutory dates** — exactly the failure the hard rules forbid. Both classes of error are corrected here. The standard going forward: **no statutory date, status, or instrument is stated in this document or in any seeded row unless it traces to a source verdict or a primary citation.** Where the precise date is not in a verdict, we say "(verify gazette/notification date)" rather than invent one.
+This document is itself a correction of a wrong-premise that was seeded into Acureal's data. Two earlier drafts of this very document also introduced **fabricated statutory dates** — exactly the failure the hard rules forbid. Both classes of error are corrected here. The standard going forward: **no statutory date, status, or instrument is stated in this document or in any seeded row unless it traces to a source verdict or a primary citation.** Where the precise date is not in a verdict, we say "(verify gazette/notification date)" rather than invent one.
 
 **The RMP 2015 / RMP 2031 correction.**
 
@@ -31,7 +31,7 @@ The rest of this document is built so that each of these facts is a **versioned,
 
 ## 0. The single most important code-correction (Phase 0)
 
-REDIP's seeded data and code carry the refuted RMP-2031 framing in load-bearing places. Phase 0 re-labels them. **This re-labelling is itself a "material change" under CLAUDE.md's audit mandate, so it must be captured in the regulatory-reference audit trail defined in §2.4 — not applied silently.**
+Acureal's seeded data and code carry the refuted RMP-2031 framing in load-bearing places. Phase 0 re-labels them. **This re-labelling is itself a "material change" under CLAUDE.md's audit mandate, so it must be captured in the regulatory-reference audit trail defined in §2.4 — not applied silently.**
 
 | File / object | Current (wrong-premise) value | Required correction |
 |---|---|---|
@@ -97,9 +97,9 @@ The accurate mental model is a **resolution chain**, not a flat lookup. Every li
  NET BUILDABLE ENVELOPE  (nominal FAR → net-of-overlay buildable)  →  Financial Engine
 ```
 
-### 1.1 Authorities (the layer REDIP is missing)
+### 1.1 Authorities (the layer Acureal is missing)
 
-REDIP is currently **BBMP/BDA-centric with the authority test hardcoded**. In `parcelContext.service.js`, jurisdiction is decided by a `BBMP_BBOX` rectangle plus a hand-maintained `NON_BBMP_TALUKS` Set (`anekal`, `hosakote`, `nelamangala`, `magadi`, `kanakapura`, `devanahalli`, `doddaballapur`, `ramanagara`, `bidadi`). That Set is the **conceptual seed of the missing `planning_authorities` table** — it already enumerates the right authorities; it just lives in code as a deny-list instead of in data as a positive jurisdiction lookup. Its honest behaviour (it *skips* a BBMP lookup rather than guessing when a non-BBMP taluk is detected) is the template for the new pipeline.
+Acureal is currently **BBMP/BDA-centric with the authority test hardcoded**. In `parcelContext.service.js`, jurisdiction is decided by a `BBMP_BBOX` rectangle plus a hand-maintained `NON_BBMP_TALUKS` Set (`anekal`, `hosakote`, `nelamangala`, `magadi`, `kanakapura`, `devanahalli`, `doddaballapur`, `ramanagara`, `bidadi`). That Set is the **conceptual seed of the missing `planning_authorities` table** — it already enumerates the right authorities; it just lives in code as a deny-list instead of in data as a positive jurisdiction lookup. Its honest behaviour (it *skips* a BBMP lookup rather than guessing when a non-BBMP taluk is detected) is the template for the new pipeline.
 
 ### 1.2 The KIADB override (genuinely two-layer)
 
@@ -109,7 +109,7 @@ For the Jigani / Bommasandra / Attibele / Hosur-Road belt, a parcel can simultan
 
 A `rulebook` (e.g. "BDA RMP 2015 Zonal Regulations") has ordered `rule_versions` (e.g. the 2026 Zonal Regulations amendment is a new version of the same rulebook). `far_rules`, `overlays`, and zones key to a `rule_version_id`, with `effective_from`/`effective_to`. This is what lets the platform answer **"what was the FAR on the date this deal was underwritten?"**
 
-**The pinning rule (gap-fix).** Answering that question is only honest if the *resolved version is frozen into the snapshot at compute time*. Therefore every `parcel_intelligence_snapshots.output_json` citation must record the **immutable `rule_version_id` (and overlay version ids) that actually fired**, per FAR/overlay figure — not just the rulebook name. When a `rule_version.effective_to` is later closed off (because an amendment lands), historical snapshots are unaffected: they cite the version id that was current on their compute date. A snapshot is a frozen record of "the law as REDIP held it on date X," and the pinned `rule_version_id` is what makes that frozen record verifiable later. **A snapshot must never resolve its FAR by re-reading a possibly-mutated reference table; it reads its own pinned version ids.**
+**The pinning rule (gap-fix).** Answering that question is only honest if the *resolved version is frozen into the snapshot at compute time*. Therefore every `parcel_intelligence_snapshots.output_json` citation must record the **immutable `rule_version_id` (and overlay version ids) that actually fired**, per FAR/overlay figure — not just the rulebook name. When a `rule_version.effective_to` is later closed off (because an amendment lands), historical snapshots are unaffected: they cite the version id that was current on their compute date. A snapshot is a frozen record of "the law as Acureal held it on date X," and the pinned `rule_version_id` is what makes that frozen record verifiable later. **A snapshot must never resolve its FAR by re-reading a possibly-mutated reference table; it reads its own pinned version ids.**
 
 ### 1.4 FAR is zone-specific, not a single ladder (verdict-corrected)
 
@@ -355,11 +355,11 @@ Verb per data type — **UPLOAD** (operator brings the file), **EXTRACT** (Gemin
 | Bhoomi RTC / e-Khata (e-Aasthi) / EC | MANUAL (upload + extract) | Portal/PDF only, no API. Upload → Gemini extract → **legal-four Flag card only** | "extraction aid, human-verify" |
 | K-RERA registration status | MANUAL (upload cert) | No official API; CAPTCHA portal. Manual lookup + certificate upload | "legal-four — never AI-narrated 'RERA-compliant'" |
 
-**No live statutory monitoring exists.** There is no gazette / BDA / GBA / RERA API. A new amendment becomes known to REDIP **only when an operator uploads it.** This limitation is recorded in `TODO_DATA.md` and shapes the What-Changed feature copy (§6 idea 7).
+**No live statutory monitoring exists.** There is no gazette / BDA / GBA / RERA API. A new amendment becomes known to Acureal **only when an operator uploads it.** This limitation is recorded in `TODO_DATA.md` and shapes the What-Changed feature copy (§6 idea 7).
 
 ### 4.1 Minimum viable corpus (seed first — narrow, not broad)
 
-To make the engine *correct before broad*, seed **only the authorities with live deal flow** and add others on demand. Seeding eleven authorities with no geometry (most of which would never see a deal) creates stale reference rows REDIP cannot yet resolve to a parcel — so the MVP is deliberately smaller than the full authority list in §1:
+To make the engine *correct before broad*, seed **only the authorities with live deal flow** and add others on demand. Seeding eleven authorities with no geometry (most of which would never see a deal) creates stale reference rows Acureal cannot yet resolve to a parcel — so the MVP is deliberately smaller than the full authority list in §1:
 
 1. **`planning_authorities`** rows for **BDA, GBA (transitioning), and Anekal PA** only — seeded from the relevant `NON_BBMP_TALUKS` aliases. No geometry yet; taluk-alias resolution is the MVP path. **Other authorities (BIAAPA, Hoskote, Nelamangala, Magadi, Kanakapura, Doddaballapura, Ramanagara, Bidadi) are added when a real deal lands in their jurisdiction**, not pre-seeded.
 2. **`rulebooks` + `rule_versions`:** BDA→RMP 2015 (operative, base + amendment); BDA→RMP 2031 (**withdrawn**, for honest re-labelling of legacy rows); Anekal PA→Anekal MP 2031. (BIAAPA MP 2021 added with its authority on demand.)
@@ -403,7 +403,7 @@ Each idea classified **EXTEND** (build on an existing primitive) or **NET-NEW**,
 | **4. Assumption sliders (FAR / road-width / use)** | EXTEND | Generalize `BuildabilityLab` / `DecisionStrip`. Sliders feed the deterministic kernel; results labelled "screening assumption, not assigned." **Never persist a slider value as a verified fact** |
 | **5. Known / Assumed / Missing / Risky panel** | EXTEND | Re-skin existing `Evidence Buckets` into a 4-state classifier; it is the drill-down behind the Fitness pillar (§3 anti-proliferation). Drives the fitness "missing" inputs |
 | **6. Approval Path Builder** | EXTEND | Compose from `SignoffsSection` + `karnatakaReraReadiness` + overlay NOC list (AAI/fire/EC/KIADB). **Reframe:** "documents/NOCs typically required" checklist, NOT "approval will be granted" |
-| **7. What-Changed alerts** | EXTEND **with honesty guard** | `rule_versions` + snapshot diffing. ⚠️ **Framed strictly as "fires when REDIP ingests a newer version," NOT live statutory monitoring.** Banner copy: *"REDIP ingested a newer Zonal-Regs version (uploaded {date}) — setback basis changed; re-run. (REDIP does not monitor the gazette live; this reflects what we have loaded.)"* Limitation recorded in `TODO_DATA.md` |
+| **7. What-Changed alerts** | EXTEND **with honesty guard** | `rule_versions` + snapshot diffing. ⚠️ **Framed strictly as "fires when Acureal ingests a newer version," NOT live statutory monitoring.** Banner copy: *"Acureal ingested a newer Zonal-Regs version (uploaded {date}) — setback basis changed; re-run. (Acureal does not monitor the gazette live; this reflects what we have loaded.)"* Limitation recorded in `TODO_DATA.md` |
 | **8. Source drawer** | EXTEND | `SourceExplorerDrawer` already exists; wire to every new authority/rulebook/overlay number, including last-verified date |
 | **9. Regulatory Kill Switches** | EXTEND **with hard-rule guard** | Analyst "exclude this input / I trust it less" override. **Allowed on financial/market/FAR-quality inputs.** **FORBIDDEN as a verdict — AI or manual — on the legal-four:** title/encumbrance/RERA/approval-status cards can only change state via a deterministic Flag transition, never a "clear/approve" toggle (no analyst manual "clear" either). ⚠️ **Every override — AI-suggested or manual — writes to `deal_audit_log`, absolutely, including manual ones** |
 | **10. Role views** | EXTEND | Existing `EDITOR_ROLES` / `canEdit` gate. Analyst → fitness deep-dive; underwriter → IC-readiness; reviewer → approval queue |
@@ -464,7 +464,7 @@ Ship: retrieval-grounded Q&A (§7.3); snapshot-diff What-Changed alerts (ingest-
 ## 9. Risks & anti-goals
 
 **Do NOT build:**
-- A "zoning certainty" / "instant approvability" product. REDIP is **regulatory intelligence for underwriting screening**; the legal-four stay human-verified.
+- A "zoning certainty" / "instant approvability" product. Acureal is **regulatory intelligence for underwriting screening**; the legal-four stay human-verified.
 - Live connectivity to Bhoomi / Kaveri / K-RERA / BDA / GBA / AAI where no lawful stable API exists. Build adapters + manual upload lanes; record blockers in `TODO_DATA.md` / `TODO_LEGAL.md`. Do not scrape CAPTCHA/login portals. **What-Changed alerts must never imply live statutory monitoring** (§6 idea 7).
 - AI-narrated legal conclusions, or AI in any math/scoring path.
 - A single hardcoded buffer/FAR/authority number, or **any statutory date asserted without a verdict/primary source** (the failure this document's correction callout exists to prevent). Every fast-moving fact carries instrument + effective date + measurement-ref + stay status + **last-verified date** + "verify live."
