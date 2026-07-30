@@ -1,19 +1,19 @@
-# REDIP — Privacy Policy
+# Acureal — Privacy Policy
 
 **Effective Date:** [DATE TO BE FILLED BY OPERATOR AT PUBLISH TIME]
 **Version:** 2.0
 
-> **DRAFT — LAWYER REVIEW REQUIRED before opening REDIP to any user other than the founder.** This text is structured around the **Digital Personal Data Protection Act, 2023**, the **Information Technology Act, 2000**, the **Information Technology (Reasonable Security Practices and Procedures and Sensitive Personal Data or Information) Rules, 2011** ("SPDI Rules"), and the **Information Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021**. Engage a Bengaluru technology / data-protection lawyer for red-line review and to fill in the placeholders before publishing.
+> **DRAFT — LAWYER REVIEW REQUIRED before opening Acureal to any user other than the founder.** This text is structured around the **Digital Personal Data Protection Act, 2023**, the **Information Technology Act, 2000**, the **Information Technology (Reasonable Security Practices and Procedures and Sensitive Personal Data or Information) Rules, 2011** ("SPDI Rules"), and the **Information Technology (Intermediary Guidelines and Digital Media Ethics Code) Rules, 2021**. Engage a Bengaluru technology / data-protection lawyer for red-line review and to fill in the placeholders before publishing.
 
-This Privacy Policy describes how REDIP ("we", "us") collects, uses, discloses, and protects personal data of Users ("you") of the REDIP platform.
+This Privacy Policy describes how Acureal ("we", "us") collects, uses, discloses, and protects personal data of Users ("you") of the Acureal platform.
 
 ## 1. Roles and definitions
 
 Under the Digital Personal Data Protection Act, 2023:
 
-- REDIP is the **Data Fiduciary** for personal data of registered Users.
+- Acureal is the **Data Fiduciary** for personal data of registered Users.
 - You are a **Data Principal**.
-- Personal data uploaded by you that relates to third parties (counterparties, brokers, lawyers in deal documents) is processed by REDIP as a **Data Processor** on your instructions; you remain the Data Fiduciary for that data and are responsible for the lawful basis of its collection.
+- Personal data uploaded by you that relates to third parties (counterparties, brokers, lawyers in deal documents) is processed by Acureal as a **Data Processor** on your instructions; you remain the Data Fiduciary for that data and are responsible for the lawful basis of its collection.
 
 ## 2. What we collect
 
@@ -59,7 +59,7 @@ We use the following sub-processors. Some are based outside India; the Digital P
 | Supabase Inc. | Database, storage, auth | USA | SOC 2 Type II; data-region pinning available |
 | Vercel Inc. | Hosting, edge runtime, blob storage | USA | SOC 2 Type II |
 | Google LLC (Gemini API) | Document extraction (OCR / structured-field) | USA / multi-region | Google Cloud DPA; **no training on submitted prompts when accessed via API** |
-| Google LLC (Identity Services) | Federated sign-in only ("Continue with Google"). Receives the email address you authorise during the sign-in handshake; returns an identity token to REDIP. Used only when you choose this method. | USA / multi-region | Google OAuth 2.0; account-linking requires explicit user consent at the Google account picker. |
+| Google LLC (Identity Services) | Federated sign-in only ("Continue with Google"). Receives the email address you authorise during the sign-in handshake; returns an identity token to Acureal. Used only when you choose this method. | USA / multi-region | Google OAuth 2.0; account-linking requires explicit user consent at the Google account picker. |
 | Anthropic PBC (Claude API) | Reasoning, narrative synthesis | USA | Anthropic Commercial DPA; **no training on submitted prompts** |
 | OpenStreetMap Foundation | Map tiles | Multi-region | ODbL public data |
 
@@ -67,7 +67,7 @@ We disclose: the AI providers process the *content of documents you upload* to e
 
 If you require India-region-only processing, contact our Grievance Officer. This may limit available features.
 
-REDIP is in the process of executing Data Processing Agreements (DPAs) with each sub-processor. Until the DPA portfolio is complete, the Platform is operated only by the founder.
+Acureal is in the process of executing Data Processing Agreements (DPAs) with each sub-processor. Until the DPA portfolio is complete, the Platform is operated only by the founder.
 
 ## 7. Retention
 

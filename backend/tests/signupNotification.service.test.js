@@ -32,7 +32,7 @@ beforeEach(() => {
 
 describe('sendNewSignupNotification', () => {
   test('emails all platform admins with the new account digest', async () => {
-    getPlatformAdminEmails.mockReturnValue(['ops@redip.in', 'founder@redip.in']);
+    getPlatformAdminEmails.mockReturnValue(['ops@acureal.in', 'founder@acureal.in']);
     sendMail.mockResolvedValue({ provider: 'resend', id: 'msg_1' });
 
     const result = await sendNewSignupNotification({
@@ -49,7 +49,7 @@ describe('sendNewSignupNotification', () => {
     expect(result).toEqual({ delivered: true, provider: 'resend' });
     expect(sendMail).toHaveBeenCalledTimes(1);
     const msg = sendMail.mock.calls[0][0];
-    expect(msg.to).toEqual(['ops@redip.in', 'founder@redip.in']);
+    expect(msg.to).toEqual(['ops@acureal.in', 'founder@acureal.in']);
     expect(msg.subject).toContain('Asha Rao');
     // Body carries the volunteered profile detail.
     expect(msg.text).toContain('Acme Realty');
@@ -68,7 +68,7 @@ describe('sendNewSignupNotification', () => {
   });
 
   test('swallows a mailer failure and never throws into the signup path', async () => {
-    getPlatformAdminEmails.mockReturnValue(['ops@redip.in']);
+    getPlatformAdminEmails.mockReturnValue(['ops@acureal.in']);
     sendMail.mockRejectedValue(new Error('Email provider is not configured.'));
 
     const result = await sendNewSignupNotification({ name: 'Asha', email: 'asha@acme.com' });
@@ -81,7 +81,7 @@ describe('sendNewSignupNotification', () => {
   });
 
   test('labels the sign-up method (Google vs email)', async () => {
-    getPlatformAdminEmails.mockReturnValue(['ops@redip.in']);
+    getPlatformAdminEmails.mockReturnValue(['ops@acureal.in']);
     sendMail.mockResolvedValue({ provider: 'resend', id: 'm' });
 
     await sendNewSignupNotification({ name: 'G User', email: 'g@x.com', method: 'google' });

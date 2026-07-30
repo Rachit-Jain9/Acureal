@@ -1,13 +1,13 @@
 # Record of Processing Activities (RoPA)
 
 **Status date:** 2026-05-20
-**Owner:** REDIP engineering / Privacy Contact
+**Owner:** Acureal engineering / Privacy Contact
 **Review cadence:** annual, plus an out-of-band review on any new sub-processor or new category of personal data
 **Maintained in:** version control — see the git history of this file for revision dates
 
 ## Purpose of this document
 
-This is REDIP's internal Record of Processing Activities. It maps every way the
+This is Acureal's internal Record of Processing Activities. It maps every way the
 platform handles personal data: the purpose, the lawful basis, the categories of
 data and of data principals, who receives the data, whether it crosses a border,
 how long it is kept, and the safeguards applied.
@@ -24,21 +24,21 @@ of Service, Privacy Policy, or a negotiated Data Processing Agreement.
 
 ## Controller / processor split (DPDP roles)
 
-REDIP operates in two distinct roles, and the distinction governs every entry
+Acureal operates in two distinct roles, and the distinction governs every entry
 below:
 
-- **REDIP as Data Fiduciary** (controller). For *account and identity data* — the
+- **Acureal as Data Fiduciary** (controller). For *account and identity data* — the
   name, email, phone, credentials, and session/security records of the people
-  who hold REDIP logins — REDIP determines the purpose and means of processing
+  who hold Acureal logins — Acureal determines the purpose and means of processing
   and is the Data Fiduciary.
-- **REDIP as Data Processor.** For *customer-uploaded deal content* — deal
+- **Acureal as Data Processor.** For *customer-uploaded deal content* — deal
   records, uploaded documents, and anything inside them — the customer
   organisation decides what to upload and why. The customer organisation is the
-  Data Fiduciary; REDIP processes that content on the customer's behalf and on
+  Data Fiduciary; Acureal processes that content on the customer's behalf and on
   the customer's instructions. Personal data of third parties named in uploaded
   documents (promoters, sellers, landowners, their representatives) falls in this
   category: the customer is accountable for the lawful basis of collecting it;
-  REDIP's obligation is to process it securely and only as instructed.
+  Acureal's obligation is to process it securely and only as instructed.
 
 A negotiated Data Processing Agreement formalises the processor-role obligations;
 publishing one is tracked in `docs/SECURITY.md` §16.
@@ -48,7 +48,7 @@ publishing one is tracked in `docs/SECURITY.md` §16.
 Each processing activity below records:
 
 - **Purpose** — why the data is processed.
-- **REDIP role** — Fiduciary or Processor.
+- **Acureal role** — Fiduciary or Processor.
 - **Lawful basis** — under DPDP §4 (consent, or a "legitimate use" such as
   performance of a contract / compliance with law).
 - **Data principals** — whose data it is.
@@ -65,11 +65,11 @@ Each processing activity below records:
 
 - **Purpose:** create and operate user accounts; authenticate sign-in; protect
   accounts against unauthorised access.
-- **REDIP role:** Data Fiduciary.
+- **Acureal role:** Data Fiduciary.
 - **Lawful basis:** legitimate use — necessary to perform the service contract
   with the user; account-security processing is necessary for compliance with the
   reasonable-security-practices obligation under IT Act §43A.
-- **Data principals:** registered users (staff of REDIP customer organisations).
+- **Data principals:** registered users (staff of Acureal customer organisations).
 - **Categories of personal data:** name; email address; phone number (optional);
   bcrypt password hash; TOTP multi-factor secret and one-time recovery codes;
   Google OAuth identity claims (subject id, email, name) where federated sign-in
@@ -100,7 +100,7 @@ Each processing activity below records:
 
 - **Purpose:** deliver the core product — let customers create deals, upload deal
   documents, and run due-diligence, approvals, risk, and underwriting workflows.
-- **REDIP role:** Data Processor (the customer organisation is the Data
+- **Acureal role:** Data Processor (the customer organisation is the Data
   Fiduciary for the content it uploads).
 - **Lawful basis:** processed on the customer's instruction under the service
   contract; the customer organisation is responsible for the lawful basis of the
@@ -132,7 +132,7 @@ Each processing activity below records:
 
 - **Purpose:** compute deal financials deterministically and keep an immutable,
   investor-grade audit trail of every material change to a deal.
-- **REDIP role:** Data Processor (on behalf of the customer organisation).
+- **Acureal role:** Data Processor (on behalf of the customer organisation).
 - **Lawful basis:** performance of the service contract; supports the customer's
   own compliance and evidentiary needs (IT Act §65B norms for electronic
   records).
@@ -156,7 +156,7 @@ Each processing activity below records:
   extraction, classification, translation) and synthesise interpretive prose
   (summaries, risk narratives, IC-style memos). AI never performs financial
   mathematics — that is always deterministic code.
-- **REDIP role:** Data Processor.
+- **Acureal role:** Data Processor.
 - **Lawful basis:** performance of the service contract for core extraction;
   optional AI features beyond core extraction are additionally gated by the
   `ai_processing` purpose in the consent ledger (activity 5).
@@ -167,7 +167,7 @@ Each processing activity below records:
 - **Storage:** AI request/response metadata (provider, model, latency, cost,
   cache key) in `ai_call_logs` and `ai_response_cache` — Supabase, India.
   Document content is transmitted to the provider for the single request and is
-  not stored by REDIP outside the customer's own workspace.
+  not stored by Acureal outside the customer's own workspace.
 - **Recipients / sub-processors:** Google (Gemini — extraction, OCR,
   translation); Anthropic (Claude — synthesis, reasoning); OpenAI (reasoning,
   embeddings). All are accessed over paid API endpoints whose terms state that
@@ -191,7 +191,7 @@ Each processing activity below records:
 
 - **Purpose:** record that each user accepted the current Terms of Service and
   Privacy Policy, and capture granular, per-purpose consent decisions.
-- **REDIP role:** Data Fiduciary.
+- **Acureal role:** Data Fiduciary.
 - **Lawful basis:** compliance with a legal obligation — DPDP §6 requires
   consent to be recorded against a specific notice version; the Indian Contract
   Act makes a clear assent record necessary for enforceability.
@@ -213,7 +213,7 @@ Each processing activity below records:
 
 - **Purpose:** detect, record, and respond to security-relevant events; meet the
   reasonable-security-practices and incident-reporting obligations.
-- **REDIP role:** Data Fiduciary.
+- **Acureal role:** Data Fiduciary.
 - **Lawful basis:** legitimate use and compliance with a legal obligation —
   CERT-In incident-reporting Directions and IT Act §43A.
 - **Data principals:** registered users; any individual implicated in a security
@@ -239,27 +239,27 @@ Each processing activity below records:
 
 - **Purpose:** send account email — verification, password, and workspace
   invitations.
-- **REDIP role:** Data Fiduciary.
+- **Acureal role:** Data Fiduciary.
 - **Lawful basis:** legitimate use — necessary to deliver the service the user
   requested.
 - **Data principals:** registered users and invited prospective users.
 - **Categories of personal data:** recipient email address; message content
   (verification links, invitation details).
-- **Storage:** message dispatch is handled by the email provider; REDIP stores
+- **Storage:** message dispatch is handled by the email provider; Acureal stores
   the underlying account/invitation records in Supabase, India.
 - **Recipients / sub-processors:** Resend (email delivery).
 - **Cross-border transfer:** email dispatch is handled by a non-India provider.
-- **Retention:** dispatch records per the provider's retention; REDIP-side
+- **Retention:** dispatch records per the provider's retention; Acureal-side
   invitation tokens expire and are cleaned up with account housekeeping.
 - **Safeguards:** TLS in transit; tokens are single-purpose and time-limited.
-- **Note:** REDIP sends no marketing email today. If marketing email is
+- **Note:** Acureal sends no marketing email today. If marketing email is
   introduced, it will be gated on the `marketing` purpose in the consent ledger
   (activity 5).
 
 ## 8. Account closure & scheduled erasure
 
 - **Purpose:** honour account closure and the DPDP erasure principle.
-- **REDIP role:** Data Fiduciary.
+- **Acureal role:** Data Fiduciary.
 - **Lawful basis:** compliance with a legal obligation — DPDP §8(7) requires
   erasure once the purpose is fulfilled and no statutory retention applies.
 - **Data principals:** users who have closed their account.
@@ -283,7 +283,7 @@ Each processing activity below records:
 
 - **Purpose:** track AI spend and feature usage for cost control and billing
   accuracy.
-- **REDIP role:** Data Fiduciary.
+- **Acureal role:** Data Fiduciary.
 - **Lawful basis:** legitimate use — operating the service sustainably — and,
   where it informs billing, performance of the contract.
 - **Data principals:** customer-organisation users.
@@ -294,12 +294,12 @@ Each processing activity below records:
 - **Cross-border transfer:** none.
 - **Retention:** 12 months (`ai_call_logs`).
 - **Safeguards:** Row-Level Security; no payment-card data is processed by
-  REDIP.
+  Acureal.
 
 ## 10. Geocoding & map display
 
 - **Purpose:** resolve property addresses to coordinates and render maps.
-- **REDIP role:** Data Processor (operating on deal/property data).
+- **Acureal role:** Data Processor (operating on deal/property data).
 - **Lawful basis:** performance of the service contract.
 - **Data principals:** not directed at individuals — the inputs are property
   addresses and coordinates, not personal data. Listed here for completeness of
@@ -310,7 +310,7 @@ Each processing activity below records:
   receive coordinates only.
 - **Cross-border transfer:** geocoding and tile requests are served by non-India
   providers; no personal or deal-party data is included.
-- **Retention:** none held by REDIP beyond the resolved coordinates stored
+- **Retention:** none held by Acureal beyond the resolved coordinates stored
   against the property record.
 - **Safeguards:** only addresses/coordinates are sent — never names, ownership
   details, or document content.
@@ -328,7 +328,7 @@ review of both documents.
 
 | Date | Reviewer | Change |
 |---|---|---|
-| 2026-05-20 | REDIP engineering | Initial RoPA authored and verified against the codebase. |
+| 2026-05-20 | Acureal engineering | Initial RoPA authored and verified against the codebase. |
 
 ---
 

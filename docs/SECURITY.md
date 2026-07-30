@@ -1,12 +1,12 @@
-# REDIP — Security & Privacy Overview
+# Acureal — Security & Privacy Overview
 
-**Status date:** 2026-07-28
+**Status date:** 2026-07-30
 **Audience:** prospective customers, institutional investors, and their security / privacy reviewers
-**Owner:** REDIP engineering
+**Owner:** Acureal engineering
 
 ## How to use this document
 
-This is a plain, factual description of how REDIP protects customer data. It is
+This is a plain, factual description of how Acureal protects customer data. It is
 written to answer the questions a security or privacy diligence questionnaire
 (SIG-Lite / CAIQ style) asks, without requiring a separate call. Every control
 described below is implemented in the codebase today unless it appears in
@@ -18,9 +18,9 @@ Policy, or a negotiated Data Processing Agreement.
 
 ---
 
-## 1. What REDIP is
+## 1. What Acureal is
 
-REDIP is a real-estate deal-intelligence, due-diligence, underwriting, and
+Acureal is a real-estate deal-intelligence, due-diligence, underwriting, and
 investor-reporting platform focused on Bengaluru and India. Customers create
 private workspaces, upload deal documents, run financial models, and generate
 reports. The platform is a decision-support tool — it is not a broker, valuer,
@@ -158,7 +158,7 @@ so a regression is observed rather than assumed.
 
 ## 9. Audit logging
 
-REDIP keeps two complementary, append-only audit trails per deal:
+Acureal keeps two complementary, append-only audit trails per deal:
 
 - **Financial computations** — every model run is recorded with HMAC-signed
   input and output hashes, so a reported number can be cryptographically tied to
@@ -189,7 +189,7 @@ routing audit.
   restricted to interpretive prose (summaries, narratives, risk framing) around
   numbers it does not generate.
 - AI features use **paid provider API endpoints**, whose terms state that API
-  inputs and outputs are not used to train provider models by default. REDIP
+  inputs and outputs are not used to train provider models by default. Acureal
   does not use consumer AI products for customer data.
 - AI provider routing is configurable per task and recorded for audit.
 - A configurable **daily cost cap** blocks AI spend beyond a set ceiling.
@@ -210,7 +210,7 @@ routing audit.
 
 ## 13. Incident response
 
-REDIP maintains an internal breach-notification runbook covering detection,
+Acureal maintains an internal breach-notification runbook covering detection,
 containment, credential rotation, and notification. It reconciles two regulatory
 clocks:
 
@@ -242,7 +242,7 @@ receive personal or deal data.
 
 ## 16. Known gaps and remediation roadmap
 
-REDIP is on an active security and privacy hardening program. The following
+Acureal is on an active security and privacy hardening program. The following
 items are tracked; status is current as of the date above:
 
 | Item | Status |
@@ -262,7 +262,7 @@ items are tracked; status is current as of the date above:
 
 ## 17. Reporting a security issue
 
-Please report suspected vulnerabilities to **security@redip.in**. We aim to
+Please report suspected vulnerabilities to **security@acureal.in**. We aim to
 acknowledge reports promptly and ask that you give us a reasonable window to
 remediate before any public disclosure.
 

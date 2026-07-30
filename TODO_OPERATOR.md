@@ -91,14 +91,19 @@ Just **reply** with these two names:
 - **Incident Lead** — the person in charge if something goes wrong (probably you).
 - **Legal Liaison** — the person who'd contact the lawyer (probably you, for now).
 
-## 5. Create a security@ email address
-**Why:** Your documents tell security researchers to email `security@redip.in`, but
-that mailbox doesn't exist yet — so any such email would bounce.
+## 5. 🔴 Create TWO email addresses on acureal.in — one is required by law
+**Why:** The site tells people to write to two addresses. Neither exists yet, so
+right now those emails **bounce**. One of them, `grievance@`, is legally required
+in India (the Digital Personal Data Protection Act says a company must publish a
+working Grievance Officer contact).
 
-1. 🌐 Go to wherever you manage email for **redip.in** (Google Workspace, Zoho, or
-   your domain provider's email settings).
-2. Create a mailbox or alias **security@redip.in**, pointed to your own inbox.
-3. **Reply:** `security mailbox done`.
+1. 🌐 Go to wherever you manage email for **acureal.in** (Google Workspace, Zoho,
+   or your domain provider's email settings).
+2. Create these two, both pointed at your own inbox:
+   - `security@acureal.in`
+   - `grievance@acureal.in`
+3. Send yourself a test email at each one and check it arrives.
+4. **Reply:** `mailboxes done`.
 
 ---
 

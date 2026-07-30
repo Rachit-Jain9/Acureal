@@ -69,10 +69,10 @@ export default function GrievancePage() {
               <div className="flex items-start gap-2">
                 <Mail size={14} className="text-content-muted mt-0.5 shrink-0" />
                 <a
-                  href="mailto:grievance@redip.in"
+                  href="mailto:grievance@acureal.in"
                   className="text-[#c2410c] underline underline-offset-2 break-all hover:text-[#9a3412]"
                 >
-                  grievance@redip.in
+                  grievance@acureal.in
                 </a>
               </div>
               <div className="flex items-start gap-2">
