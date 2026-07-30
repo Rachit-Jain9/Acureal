@@ -50,6 +50,14 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "redip.vercel.app" }],
+      "destination": "https://acureal.in/:path*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     { "source": "/api/investor-package(/.*)?", "destination": "/api/intelligence/investor-package" },
     { "source": "/api/(.*)", "destination": "/api" },
