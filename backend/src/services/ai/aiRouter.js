@@ -391,7 +391,7 @@ const runAI = async (args) => {
   );
 };
 
-const runAIInternal = async ({ task, provider, model, attach = {}, metadata = {}, cache, retry, run, _span }) => {
+const runAIInternal = async ({ task, provider, model, attach = {}, metadata = {}, cache, retry, run, failover = null, _span }) => {
 
   // Routing resolution: explicit provider arg wins; otherwise consult the
   // runtime ai_routing_config table (cached 60s) which itself falls back
@@ -534,91 +534,160 @@ const runAIInternal = async ({ task, provider, model, attach = {}, metadata = {}
   // dashboards that want to track retry rates per provider/task.
   let attemptsMade = 0;
 
-  try {
-    const invokeOnce = async () => {
-      attemptsMade += 1;
-      return run({
-        providers: providerRegistry,
-        provider: resolvedProvider,
-        model: resolvedModel,
+  // ── Execution plans: primary, then the configured cross-provider fallback ─
+  //
+  // The admin Routing page has offered `fallbackProvider` / `fallbackModel`
+  // since it shipped, and resolveTaskRouting has faithfully returned them —
+  // to nobody. No consumer existed, so when a primary provider broke, the
+  // affected features simply stopped while the configured fallback sat
+  // unused. That is exactly the July 2026 outage: a week of export-insights
+  // and narration failures with a working fallback in the table.
+  //
+  // Retry-vs-failover boundary: `withRetry` handles TRANSIENT faults of the
+  // SAME provider (429s, timeouts, 5xx). Failover is for the primary being
+  // WRONG — a retired model 404ing, an expired key, a provider outage — where
+  // retrying the same thing three times cannot help. So the fallback engages
+  // on ANY primary failure after retries are exhausted, not only retriable
+  // ones: July's model-404 was precisely a non-retriable error.
+  //
+  // The fallback is OPT-IN via the `failover` arg because only the wrapper
+  // knows which providers its `run` callback can actually execute — the
+  // callback receives `provider` but nothing forces it to branch on it, and
+  // "silently re-ran the same provider under a different label" would be
+  // worse than no failover. Wrappers whose callbacks genuinely dispatch
+  // (runClaudeReasoning: openai|claude) pass it; single-provider wrappers
+  // don't. Extraction keeps its own bespoke Gemini→Claude document fallback —
+  // routing failover here would stack a second layer on top of it.
+  const plans = [{ provider: resolvedProvider, model: resolvedModel, failedOverFrom: null }];
+  if (
+    failover
+    && failover.provider
+    && failover.provider !== resolvedProvider
+  ) {
+    plans.push({
+      provider: failover.provider,
+      model: failover.model || resolveDefaultModel(failover.provider),
+      failedOverFrom: resolvedProvider,
+    });
+  }
+
+  // The plan that actually produced the result — success telemetry, cost
+  // attribution and the response cache must all describe THIS provider, not
+  // the one we started with.
+  let active = plans[0];
+
+  for (let planIndex = 0; planIndex < plans.length; planIndex += 1) {
+    active = plans[planIndex];
+    const isLastPlan = planIndex === plans.length - 1;
+    try {
+      const invokeOnce = async () => {
+        attemptsMade += 1;
+        return run({
+          providers: providerRegistry,
+          provider: active.provider,
+          model: active.model,
+          task,
+        });
+      };
+
+      const raw = retryEnabled
+        ? await withRetry(invokeOnce, {
+            ...retryConfig,
+            isRetriable: retry?.isRetriable || isRetriableProviderError,
+            onRetry: ({ err, attempt, delayMs }) => {
+              log.info('ai_call_retrying', {
+                task,
+                provider: active.provider,
+                model: active.model,
+                attempt,
+                next_delay_ms: delayMs,
+                error_code: err.code || err.name || null,
+                error_status: err.status || err.statusCode || null,
+              });
+            },
+          })
+        : await invokeOnce();
+
+      // Allow the run callback to return either a plain value or
+      // { result, raw } so token usage can be lifted from SDK responses.
+      if (raw && typeof raw === 'object' && 'result' in raw && 'raw' in raw) {
+        result = raw.result;
+        tokens = extractTokenUsage(raw.raw);
+      } else if (raw && typeof raw === 'object' && (raw.usageMetadata || raw.usage)) {
+        tokens = extractTokenUsage(raw);
+        result = raw;
+      } else {
+        result = raw;
+      }
+      break; // this plan succeeded — do not run the next one
+    } catch (err) {
+      status = err?.code === 'ETIMEDOUT' || err?.name === 'TimeoutError' ? 'timeout' : 'error';
+      errorCode = err?.code || err?.name || null;
+      errorMessage = err?.message ? err.message.slice(0, 500) : 'Unknown AI provider error';
+
+      const latencyMs = Date.now() - start;
+      // Every failed plan gets its own log row — the dashboards must show the
+      // primary's failure even when the fallback then rescues the call.
+      const callId = await persistCallLog({
         task,
+        provider: active.provider,
+        model: active.model,
+        status,
+        latencyMs,
+        tokens,
+        cost: null,
+        attach,
+        metadata: {
+          ...(metadata || {}),
+          attempts: attemptsMade,
+          ...(active.failedOverFrom ? { failed_over_from: active.failedOverFrom } : {}),
+          ...(!isLastPlan ? { failing_over_to: plans[planIndex + 1].provider } : {}),
+          ...(_span ? { trace_id: _span.traceId, span_id: _span.spanId } : {}),
+        },
+        errorCode,
+        errorMessage,
       });
-    };
 
-    const raw = retryEnabled
-      ? await withRetry(invokeOnce, {
-          ...retryConfig,
-          isRetriable: retry?.isRetriable || isRetriableProviderError,
-          onRetry: ({ err, attempt, delayMs }) => {
-            log.info('ai_call_retrying', {
-              task,
-              provider: resolvedProvider,
-              model: resolvedModel,
-              attempt,
-              next_delay_ms: delayMs,
-              error_code: err.code || err.name || null,
-              error_status: err.status || err.statusCode || null,
-            });
-          },
-        })
-      : await invokeOnce();
+      if (isLastPlan) {
+        if (_span) {
+          _span.setAttribute('provider', active.provider);
+          _span.setAttribute('model', active.model);
+          _span.setAttribute('latency_ms', latencyMs);
+          _span.setAttribute('attempts', attemptsMade);
+          _span.setAttribute('status', status);
+        }
+        log.error('ai_call_failed', err, {
+          task,
+          provider: active.provider,
+          model: active.model,
+          call_id: callId,
+          latency_ms: latencyMs,
+          attempts: attemptsMade,
+        });
+        throw err;
+      }
 
-    // Allow the run callback to return either a plain value or
-    // { result, raw } so token usage can be lifted from SDK responses.
-    if (raw && typeof raw === 'object' && 'result' in raw && 'raw' in raw) {
-      result = raw.result;
-      tokens = extractTokenUsage(raw.raw);
-    } else if (raw && typeof raw === 'object' && (raw.usageMetadata || raw.usage)) {
-      tokens = extractTokenUsage(raw);
-      result = raw;
-    } else {
-      result = raw;
+      log.warn('ai_call_failing_over', {
+        task,
+        from_provider: active.provider,
+        from_model: active.model,
+        to_provider: plans[planIndex + 1].provider,
+        to_model: plans[planIndex + 1].model,
+        call_id: callId,
+        error_code: errorCode,
+      });
+      // Reset per-plan error state before the fallback runs.
+      status = 'success';
+      errorCode = null;
+      errorMessage = null;
     }
-  } catch (err) {
-    status = err?.code === 'ETIMEDOUT' || err?.name === 'TimeoutError' ? 'timeout' : 'error';
-    errorCode = err?.code || err?.name || null;
-    errorMessage = err?.message ? err.message.slice(0, 500) : 'Unknown AI provider error';
-
-    const latencyMs = Date.now() - start;
-    const callId = await persistCallLog({
-      task,
-      provider: resolvedProvider,
-      model: resolvedModel,
-      status,
-      latencyMs,
-      tokens,
-      cost: null,
-      attach,
-      metadata: {
-        ...(metadata || {}),
-        attempts: attemptsMade,
-        ...(_span ? { trace_id: _span.traceId, span_id: _span.spanId } : {}),
-      },
-      errorCode,
-      errorMessage,
-    });
-
-    if (_span) {
-      _span.setAttribute('provider', resolvedProvider);
-      _span.setAttribute('model', resolvedModel);
-      _span.setAttribute('latency_ms', latencyMs);
-      _span.setAttribute('attempts', attemptsMade);
-      _span.setAttribute('status', status);
-    }
-
-    log.error('ai_call_failed', err, {
-      task,
-      provider: resolvedProvider,
-      model: resolvedModel,
-      call_id: callId,
-      latency_ms: latencyMs,
-      attempts: attemptsMade,
-    });
-    throw err;
   }
 
   const latencyMs = Date.now() - start;
-  const cost = estimateCost({ provider: resolvedProvider, model: resolvedModel, ...tokens });
+  // Cost, cache and telemetry attribute to the plan that actually produced
+  // the result — after a failover that is the FALLBACK provider, and billing
+  // the primary for the fallback's tokens would corrupt the cost ledger.
+  const cost = estimateCost({ provider: active.provider, model: active.model, ...tokens });
   // Recovery flag — call ultimately succeeded but only after at least one
   // retry. Useful for cost/quality dashboards: "what % of successful calls
   // required a retry?" is a leading indicator of provider degradation.
@@ -636,8 +705,8 @@ const runAIInternal = async ({ task, provider, model, attach = {}, metadata = {}
     : {};
   const callId = await persistCallLog({
     task,
-    provider: resolvedProvider,
-    model: resolvedModel,
+    provider: active.provider,
+    model: active.model,
     status,
     latencyMs,
     tokens,
@@ -647,8 +716,9 @@ const runAIInternal = async ({ task, provider, model, attach = {}, metadata = {}
       ...(metadata || {}),
       attempts: attemptsMade,
       ...(recoveredViaRetry ? { recovered_via_retry: true } : {}),
+      ...(active.failedOverFrom ? { failed_over_from: active.failedOverFrom } : {}),
       ...cacheTelemetry,
-      ...unpricedMeta(resolvedProvider, resolvedModel, tokens),
+      ...unpricedMeta(active.provider, active.model, tokens),
       ...(_span ? { trace_id: _span.traceId, span_id: _span.spanId } : {}),
     },
     errorCode,
@@ -661,11 +731,29 @@ const runAIInternal = async ({ task, provider, model, attach = {}, metadata = {}
   // cache. The store is fire-and-forget at the await level — store errors
   // are logged inside the helper and never bubble.
   if (cacheEnabled && cacheKey && status === 'success' && result !== null && result !== undefined) {
-    await responseCache.store({
-      cacheKey,
+    // After a failover the answer came from a different provider+model than
+    // the key that was looked up. Re-derive the key for the plan that actually
+    // answered — storing the fallback's response under the primary's key would
+    // serve provider A's cached answer as provider B's forever after.
+    let storeKey = cacheKey;
+    if (active.failedOverFrom) {
+      try {
+        storeKey = responseCache.buildCacheKey({
+          task,
+          provider: active.provider,
+          model: active.model,
+          promptSha256: cache.promptSha256 || null,
+          inputSha256: cache.inputSha256,
+        });
+      } catch {
+        storeKey = null; // no key, no store — never poison the cache
+      }
+    }
+    if (storeKey) await responseCache.store({
+      cacheKey: storeKey,
       task,
-      provider: resolvedProvider,
-      model: resolvedModel,
+      provider: active.provider,
+      model: active.model,
       promptVersion: cache.promptVersion || null,
       promptSha256: cache.promptSha256 || null,
       inputSha256: cache.inputSha256,
@@ -680,25 +768,27 @@ const runAIInternal = async ({ task, provider, model, attach = {}, metadata = {}
   }
 
   if (_span) {
-    _span.setAttribute('provider', resolvedProvider);
-    _span.setAttribute('model', resolvedModel);
+    _span.setAttribute('provider', active.provider);
+    _span.setAttribute('model', active.model);
     _span.setAttribute('latency_ms', latencyMs);
     _span.setAttribute('total_tokens', tokens.totalTokens || 0);
     _span.setAttribute('cost_usd', cost || 0);
     _span.setAttribute('attempts', attemptsMade);
     _span.setAttribute('cache_hit', false);
     _span.setAttribute('call_id', callId || null);
+    if (active.failedOverFrom) _span.setAttribute('failed_over_from', active.failedOverFrom);
   }
 
   log.info('ai_call_completed', {
     task,
-    provider: resolvedProvider,
-    model: resolvedModel,
+    provider: active.provider,
+    model: active.model,
     latency_ms: latencyMs,
     total_tokens: tokens.totalTokens,
     cost_usd: cost,
     call_id: callId,
     cache: cacheEnabled ? 'miss_stored' : 'disabled',
+    ...(active.failedOverFrom ? { failed_over_from: active.failedOverFrom } : {}),
   });
 
   return { result, callId, status, latencyMs, tokens, cost, cached: false };
@@ -750,6 +840,20 @@ const runGeminiInline = async (args = {}) => {
  * silently ignored on OpenAI (which has its own automatic caching and
  * different ergonomics).
  */
+// The cross-provider fallback this wrapper can honour. Only 'openai' and
+// 'claude' are executable by the run callback below, so anything else the
+// operator configured (e.g. 'gemini') is ignored rather than silently
+// remapped — remapping would run a provider the operator did not name. A
+// fallback equal to the primary is likewise dropped: retry already covers
+// same-provider transience, and "fail over to yourself" is a fourth retry
+// wearing a trench coat.
+const reasoningFailoverPlan = (routed, primaryProvider) => {
+  const candidate = routed?.fallbackProvider;
+  if (candidate !== 'openai' && candidate !== 'claude') return null;
+  if (candidate === primaryProvider) return null;
+  return { provider: candidate, model: routed.fallbackModel || null };
+};
+
 const runClaudeReasoning = async (args = {}) => {
   const { task = 'reasoning', attach, metadata, retry, cache, ...passthrough } = args;
   // Resolve routing UP FRONT and constrain it to the providers this wrapper
@@ -767,6 +871,11 @@ const runClaudeReasoning = async (args = {}) => {
     metadata,
     retry,
     cache,
+    // Cross-provider failover — the run callback genuinely dispatches on
+    // `provider`, which is the eligibility bar (see runAIInternal). This is
+    // the surface the July 2026 outage took down for a week while a
+    // configured fallback sat unread in ai_routing_config.
+    failover: reasoningFailoverPlan(routed, provider),
     run: async ({ providers, provider: runProvider, model: runModel }) => {
       if (runProvider === 'openai') {
         // OpenAI doesn't support Anthropic's ephemeral prompt cache.
@@ -1146,5 +1255,6 @@ module.exports = {
   resolveProviderForTask,
   resolveTaskRouting,
   constrainReasoningRouting,
+  reasoningFailoverPlan,
   resolveDefaultModel,
 };
