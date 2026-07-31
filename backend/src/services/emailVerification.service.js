@@ -37,7 +37,22 @@ const sha256Hex = (text) =>
 const generateRawToken = () =>
   crypto.randomBytes(TOKEN_BYTES).toString('base64url');
 
+// Production OR any Vercel deployment — a preview that emails a localhost link
+// is just as broken as production doing it.
+const isDeployed = () => process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
+
 const buildVerificationUrl = (rawToken) => {
+  // SECURITY/UX: fail CLOSED when deployed. The localhost default is a dev
+  // convenience, but on a deploy it produces the worst kind of failure — the
+  // send SUCCEEDS, the user receives a well-formed email, and the link is dead
+  // (ERR_CONNECTION_REFUSED). Nothing errors, nothing is logged, and the
+  // account can never be verified. Refuse to build the link instead; the
+  // caller surfaces a retryable failure and the operator sees a real error.
+  if (isDeployed() && !process.env.APP_BASE_URL) {
+    throw new Error(
+      'APP_BASE_URL is not configured — refusing to send a verification email whose link would point at localhost.'
+    );
+  }
   const base = process.env.APP_BASE_URL || 'http://localhost:5173';
   const url = new URL('/verify-email', base);
   url.searchParams.set('token', rawToken);

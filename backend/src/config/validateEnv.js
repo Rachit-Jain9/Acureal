@@ -32,6 +32,10 @@ const RECOMMENDED = [
   // now fails closed (no token is logged), so verification/reset email simply
   // won't send until this is configured.
   { key: 'RESEND_API_KEY', why: 'transactional email (verification + password reset)' },
+  // Without this the verification link falls back to http://localhost:5173 —
+  // the email sends fine and the link is dead in the recipient's inbox. The
+  // send path now refuses outright when deployed; this surfaces it at boot.
+  { key: 'APP_BASE_URL', why: 'the origin used to build verification/reset links (email links are DEAD without it)' },
 ];
 
 // Recognizable key prefixes per AI provider — used for a boot-time sanity

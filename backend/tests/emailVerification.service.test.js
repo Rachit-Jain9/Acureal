@@ -81,6 +81,47 @@ describe('emailVerification.service.sendVerificationEmail', () => {
     expect(call.text).toMatch(/\/verify-email\?token=/);
   });
 
+  // Regression: production shipped verification emails whose link pointed at
+  // http://localhost:5173 because APP_BASE_URL was never set on the deploy.
+  // The send SUCCEEDED, so nothing errored and nothing was logged — the link
+  // was simply dead on arrival and no account could be verified. A deploy must
+  // refuse to send rather than emit an unusable link.
+  describe('APP_BASE_URL guard', () => {
+    const ORIGINAL = { ...process.env };
+    afterEach(() => { process.env = { ...ORIGINAL }; });
+
+    test('refuses to send when deployed without APP_BASE_URL', async () => {
+      delete process.env.APP_BASE_URL;
+      process.env.VERCEL = '1';
+      query
+        .mockResolvedValueOnce({ rows: [{ recent: 0 }] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [] });
+
+      await expect(
+        svc.sendVerificationEmail({ userId: 'user-1', email: 'user@example.com', name: 'User One' })
+      ).rejects.toThrow();
+      expect(mailer.sendMail).not.toHaveBeenCalled();
+    });
+
+    test('uses the configured origin for the link when deployed', async () => {
+      process.env.VERCEL = '1';
+      process.env.APP_BASE_URL = 'https://acureal.in';
+      query
+        .mockResolvedValueOnce({ rows: [{ recent: 0 }] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [] })
+        .mockResolvedValueOnce({ rowCount: 1, rows: [] });
+      mailer.sendMail.mockResolvedValueOnce({ provider: 'resend', id: 'abc' });
+
+      await svc.sendVerificationEmail({ userId: 'user-1', email: 'user@example.com', name: 'User One' });
+
+      const call = mailer.sendMail.mock.calls[0][0];
+      expect(call.html).toContain('https://acureal.in/verify-email?token=');
+      expect(call.html).not.toContain('localhost');
+      expect(call.text).not.toContain('localhost');
+    });
+  });
+
   test('translates mailer failure into a 502 with a friendly message', async () => {
     query
       .mockResolvedValueOnce({ rows: [{ recent: 0 }] })
