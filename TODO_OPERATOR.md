@@ -159,6 +159,22 @@ Two notes worth keeping:
   Three wrong entries locks DNS editing for 24 hours. Budget for that on any
   future record change — including the Resend records in 6b below.
 
+### ✅ Google sign-in on the new domain — fixed 2026-07-31
+Signing in with Google on `acureal.in` failed with **"Access blocked: Authorization
+Error · Error 400: origin_mismatch"**. The Google OAuth client's *Authorized
+JavaScript origins* still listed only `https://redip.vercel.app` and
+`http://localhost:5173`, so Google refused to issue a token to the new domain.
+`https://acureal.in` and `https://www.acureal.in` have been added (old entries
+kept). Verified persisted in Google Cloud Console.
+
+**Remember for any future domain change:** a new domain needs to be registered in
+THREE independent places, and each fails differently and silently —
+1. **Vercel → Domains** (else the site does not answer),
+2. **`CORS_ORIGINS`** in Vercel env (else the browser blocks API calls),
+3. **Google Cloud → OAuth client → Authorized JavaScript origins** (else Google
+   sign-in dies with `origin_mismatch` while password sign-in keeps working, so
+   it looks like the domain is fine).
+
 ### ⚠️ One unrelated thing spotted on the GoDaddy page
 **Auto-renew is OFF** and `acureal.in` expires **29 Jul 2027** (₹899/yr). If it
 ever lapses, the domain — and with it the site and every email address on it —
