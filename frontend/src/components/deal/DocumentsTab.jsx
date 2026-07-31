@@ -107,6 +107,46 @@ function formatDocType(docType) {
  * (spreadsheets, CSV) where "pages" are not a meaningful unit. Silence beats a
  * guess.
  */
+/**
+ * Whether this document is actually findable by search and citable by Deal Q&A.
+ *
+ * This is deliberately visible even when the answer is "no". Until 2026-07-31
+ * the indexing step never ran — every document in the workspace was invisible
+ * to search while the UI showed a green extraction chip, so the product looked
+ * like it had read a file it could not then find. A silent gap is exactly what
+ * produced that, so the negative state gets a chip too.
+ *
+ * `source` distinguishes what was indexed. For a machine-parseable file it is
+ * the document's own transcribed text; for a scan or native PDF only the
+ * model's structured reading exists. Both are useful, they are not the same
+ * claim, and the tooltip says which — the same discipline as coverageLabel's
+ * "sent, never read".
+ *
+ * Returns null when there is nothing true to say yet (never extracted) — the
+ * extraction chips already tell that part of the story.
+ */
+export function searchIndexState(doc, extraction) {
+  const passages = Number(doc?.search_passages) || 0;
+  if (passages > 0) {
+    const fromDocument = doc.search_text_source === 'document_transcription';
+    return {
+      indexed: true,
+      label: `Searchable · ${passages.toLocaleString('en-IN')} passage${passages === 1 ? '' : 's'}`,
+      title: fromDocument
+        ? "Indexed from the document's own text. Deal Q&A can quote it and it appears in search."
+        : "Indexed from Acureal's structured reading of this document, not its raw text — the source for a scan or native PDF. Deal Q&A can cite it.",
+    };
+  }
+  // Nothing indexed. Only worth saying once the document has been read at all.
+  if (!extraction) return null;
+  return {
+    indexed: false,
+    label: 'Not searchable',
+    title:
+      'This document has been read, but no passages are indexed — it will not appear in search and Deal Q&A cannot cite it. Re-running extraction indexes it.',
+  };
+}
+
 export function coverageLabel(extraction) {
   const c = extraction?.coverage;
   if (!c || c.method === 'parsed_text' || c.method === 'image') return null;
@@ -508,6 +548,28 @@ export default function DocumentsTab() {
                               Extracting…
                             </span>
                           )}
+                          {/* Whether the document can actually be found by
+                              search and cited by Q&A — shown in BOTH states,
+                              because the failure mode this replaces was an
+                              invisible one. */}
+                          {(() => {
+                            const search = searchIndexState(doc, extraction);
+                            if (!search) return null;
+                            return (
+                              <span
+                                className={clsx(
+                                  'ml-2 inline-flex items-center gap-1 rounded-full border border-hairline px-1.5 py-0.5 text-[10px] font-medium tabular-nums',
+                                  search.indexed
+                                    ? 'bg-bg-secondary text-content-secondary'
+                                    : 'bg-bg-secondary text-content-muted',
+                                )}
+                                title={search.title}
+                              >
+                                <FileSearch size={10} />
+                                {search.label}
+                              </span>
+                            );
+                          })()}
                           {/* Stored-only formats carry no extract button —
                               explain the absence honestly rather than leaving
                               a mystery. */}

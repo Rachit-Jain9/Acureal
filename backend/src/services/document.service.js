@@ -304,6 +304,12 @@ const getDocuments = async (dealId, category = null) => {
     values.push(category);
   }
 
+  // `search_passages` / `search_text_source` are DERIVED from the embedding
+  // rows — deliberately not stored on `documents`, so the count can never
+  // drift from the index it describes and no migration is needed to report it.
+  // The Documents tab uses them to tell the truth about whether a file is
+  // actually findable by search and citable by Q&A: before 2026-07-31 the
+  // indexing step never ran, and nothing in the UI revealed that.
   const result = await query(
     `SELECT
        d.*,
@@ -313,9 +319,18 @@ const getDocuments = async (dealId, category = null) => {
        d.file_size_bytes AS file_size,
        d.doc_category AS category,
        d.created_at AS uploaded_at,
-       u.name as uploaded_by_name
+       u.name as uploaded_by_name,
+       COALESCE(idx.passages, 0)::int AS search_passages,
+       idx.text_source AS search_text_source
      FROM documents d
      LEFT JOIN users u ON d.uploaded_by = u.id
+     LEFT JOIN LATERAL (
+       SELECT count(*) AS passages,
+              (array_agg(e.metadata->>'text_source'
+                         ORDER BY e.created_at DESC))[1] AS text_source
+         FROM document_embeddings e
+        WHERE e.document_id = d.id
+     ) idx ON TRUE
      WHERE ${conditions.join(' AND ')}
      ORDER BY d.doc_category, d.created_at DESC`,
     values
