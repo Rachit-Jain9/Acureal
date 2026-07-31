@@ -9,7 +9,7 @@
  * Why not use a full library:
  *   - franc / cld3 / fasttext-langid would add 5-30 MB to the bundle
  *     for a problem we can solve with character-set coverage.
- *   - REDIP only needs to populate the `language` column on
+ *   - Acureal only needs to populate the `language` column on
  *     `ai_call_logs` for the cost/quality dashboard. It's directional
  *     telemetry, not a hard classifier.
  *   - Our documents are mixed-script (Kannada + English in the same

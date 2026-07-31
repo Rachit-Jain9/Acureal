@@ -45,7 +45,7 @@
  *
  * healthBand thresholds (per-provider, 7d window). successRate is computed
  * over provider-outcome calls only — success + error + timeout + cache_hit.
- * cost_capped and skipped rows are REDIP's own throttle decisions, not
+ * cost_capped and skipped rows are Acureal's own throttle decisions, not
  * provider outcomes, so they are excluded from the rate's denominator.
  *   - 'healthy'    — configured AND successRate ≥ 0.90
  *   - 'degraded'   — configured AND 0.50 ≤ successRate < 0.90
@@ -147,7 +147,7 @@ const fetchProviderStats = async (provider) => {
     const cacheHitCount = Number(agg.cache_hit_count) || 0;
     const costCappedCount = Number(agg.cost_capped_count) || 0;
     // Provider health reflects calls that actually exercised the provider (or
-    // its cache). cost_capped (daily-budget throttle) and skipped are REDIP's
+    // its cache). cost_capped (daily-budget throttle) and skipped are Acureal's
     // own decisions — folding them in would make a healthy provider look
     // broken every time the cost cap fires — so they stay out of the rate.
     const providerCalls = successCount + errorCount + timeoutCount + cacheHitCount;

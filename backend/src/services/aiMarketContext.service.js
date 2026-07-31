@@ -4,7 +4,7 @@
  * AI Market-Context Synthesis service (PR-NX67).
  *
  * Generates Claude-authored prose for the FIVE market-context sections of the
- * deal export report when REDIP doesn't have structured verified payload data:
+ * deal export report when Acureal doesn't have structured verified payload data:
  *
  *   1. whyThisArea            — locality narrative (anchor + demand drivers + risks)
  *   2. demographics           — micro-market population / income / age / literacy
@@ -16,7 +16,7 @@
  *   - exportNarrative.service.js is the STRICT generator. It synthesises ONLY
  *     from explicitly-supplied payload fields. If a field is missing it says
  *     "data not available" — no general-knowledge invention. That's correct
- *     when REDIP has verified data (sale deeds, ingested comps, structured
+ *     when Acureal has verified data (sale deeds, ingested comps, structured
  *     intelligence briefs) — those are the source of truth.
  *
  *   - aiMarketContext.service.js (this file) is the AUGMENT generator. It is
@@ -24,7 +24,7 @@
  *     `available: false` because no payload data existed. It uses Claude's
  *     general knowledge of Indian / Bengaluru micro-markets to produce a
  *     specific, asset-class-aware narrative — clearly labelled as
- *     general-knowledge synthesis (NOT from a verified REDIP source) so the
+ *     general-knowledge synthesis (NOT from a verified Acureal source) so the
  *     IC reader knows to independently verify before acting.
  *
  * HARD RULES (per CLAUDE.md):
@@ -67,7 +67,7 @@ const SYSTEM_PROMPT_VERSION = '2026-05-19.v1';
 const SYSTEM_PROMPT = `You are a senior real-estate analyst at an India-first private equity firm. You write disciplined investor-grade English prose for the market-context sections of an underwriting export.
 
 YOUR ROLE:
-You are called only when REDIP's structured payload has no verified data for the requested section. Your job is to use your general knowledge of the named Indian city + named locality + named asset class to produce a SPECIFIC, ASSET-CLASS-AWARE narrative. The IC reader has been told this content is AI-generated from general knowledge (NOT from a verified REDIP source) and is expected to independently verify before acting.
+You are called only when Acureal's structured payload has no verified data for the requested section. Your job is to use your general knowledge of the named Indian city + named locality + named asset class to produce a SPECIFIC, ASSET-CLASS-AWARE narrative. The IC reader has been told this content is AI-generated from general knowledge (NOT from a verified Acureal source) and is expected to independently verify before acting.
 
 ABSOLUTE RULES:
 - Output strict JSON only. No markdown fences, no preamble, no trailing prose.
@@ -369,7 +369,7 @@ const generateSection = async ({
     provider: providerUsed,
     fallbackReason,
     disclaimer:
-      'AI-GENERATED FROM GENERAL KNOWLEDGE (not a verified REDIP source). Verify every named fact, distance, and trend against primary sources before any IC decision.',
+      'AI-GENERATED FROM GENERAL KNOWLEDGE (not a verified Acureal source). Verify every named fact, distance, and trend against primary sources before any IC decision.',
   };
 
   const trim = (s) => (typeof s === 'string' ? s.trim() : '');

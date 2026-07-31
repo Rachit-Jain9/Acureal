@@ -14,14 +14,14 @@
  * spelling matched the field name*.
  *
  * ── The replacement ──────────────────────────────────────────────────────────
- * No probability is invented here. Every field is judged by rules REDIP can
+ * No probability is invented here. Every field is judged by rules Acureal can
  * execute and explain, and each answer maps to a reason string the operator
  * can act on:
  *
  *   GROUNDING  — does the value literally appear in the source document text?
  *                This is the only non-probabilistic way to separate a real
  *                read from a fluent guess. Available for the 'parseable' tier
- *                (spreadsheet / doc / deck / CSV / KML), where REDIP holds a
+ *                (spreadsheet / doc / deck / CSV / KML), where Acureal holds a
  *                verbatim transcription. For native scans (PDF / image) there
  *                is no separate source text, so grounding reports `null`
  *                (unknown) — never a fabricated pass.
@@ -245,8 +245,8 @@ const isOriginalKey = (key) => key.endsWith('_original');
 const REASONS = Object.freeze({
   source_verified: 'Found verbatim in the document text.',
   format_checked: 'Matches the expected format, but could not be checked against the document text (scanned source).',
-  unverified: 'Read by AI. REDIP could not verify it against the document text — check it against the source.',
-  not_in_source: 'REDIP read the document text and could NOT find this value in it — it may be inferred rather than stated. Verify against the source.',
+  unverified: 'Read by AI. Acureal could not verify it against the document text — check it against the source.',
+  not_in_source: 'Acureal read the document text and could NOT find this value in it — it may be inferred rather than stated. Verify against the source.',
   format_mismatch: 'Does not match the format this field expects — likely misread. Verify against the source.',
   absent: 'Not found in this document.',
 });
@@ -297,7 +297,7 @@ const assessField = (fieldName, value, ctx) => {
     const basis = grounded === true
       ? 'Found verbatim in the document text, but '
       : '';
-    reason = `${basis}${basis ? 'this' : 'This'} is a ${laneLabel.toLowerCase()} fact — REDIP never fills these automatically. Verify against the source document before applying.`;
+    reason = `${basis}${basis ? 'this' : 'This'} is a ${laneLabel.toLowerCase()} fact — Acureal never fills these automatically. Verify against the source document before applying.`;
   } else {
     reason = REASONS[status];
   }

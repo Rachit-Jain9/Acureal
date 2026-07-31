@@ -83,7 +83,7 @@ router.get('/comps-queue/process-pending', requireCronAuth, async (req, res, nex
 // a baseline of the current production reasoning model against the held-out
 // fixtures for each monitored task and persists it, so the quality trend
 // accrues a fresh data point every day. Cron-secret-gated; the run is
-// attributed to the oldest organisation (the eval measures REDIP's own AI,
+// attributed to the oldest organisation (the eval measures Acureal's own AI,
 // not tenant data). Fail-soft per task — runScheduledBaselines never throws.
 router.get('/quality-baseline/daily', requireCronAuth, async (req, res, next) => {
   try {

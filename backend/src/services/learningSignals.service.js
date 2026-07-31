@@ -4,7 +4,7 @@
  * Learning-signal service — the writer for the Phase 5 "learning loop".
  *
  * Appends, into public.improvement_signals (Layer-5 telemetry), the feedback
- * REDIP already generates as it is worked but does not otherwise keep as a
+ * Acureal already generates as it is worked but does not otherwise keep as a
  * learning signal. Today two signal types flow through here:
  *
  *   - `comp_reliance`            — an analyst marked / unmarked a comp as

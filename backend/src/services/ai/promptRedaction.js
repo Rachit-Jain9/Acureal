@@ -19,7 +19,7 @@
  *   - PAN — five letters, four digits, one letter. Structurally unambiguous.
  *   - Aadhaar in the standard 4-4-4 spaced display format.
  *   - Email addresses — structurally unambiguous (local@domain.tld); contact
- *     PII, never a target field in REDIP's property/legal doctypes.
+ *     PII, never a target field in Acureal's property/legal doctypes.
  *   - Mobile numbers ONLY when +91-anchored (the country code disambiguates a
  *     phone from a khata / survey / registration number).
  * A bare unspaced 12-digit run and a bare 10-digit number are NOT masked in

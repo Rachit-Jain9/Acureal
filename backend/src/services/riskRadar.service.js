@@ -6,7 +6,7 @@
  * A standing, deterministic pre-mortem. For each failure mode that actually
  * sinks Indian real-estate deals, it synthesises a posture from facts already
  * in the deal — risk flags, due-diligence items, and statutory approvals —
- * and surfaces **"not yet verified" as a first-class state**. REDIP warns
+ * and surfaces **"not yet verified" as a first-class state**. Acureal warns
  * before it is asked.
  *
  * No AI: this is pure deterministic synthesis over existing tables, so every

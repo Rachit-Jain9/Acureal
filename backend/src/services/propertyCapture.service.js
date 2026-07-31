@@ -137,7 +137,7 @@ const resolveGoogleMapsUrl = async (parsed, stepLog) => {
  *
  * Google's Geocoding API accepts Plus Codes as the `address` parameter.
  * Short codes (e.g. "3JV8+P4W") need an area context to disambiguate;
- * we default to "Bengaluru, Karnataka" since REDIP is Bengaluru-priority.
+ * we default to "Bengaluru, Karnataka" since Acureal is Bengaluru-priority.
  */
 const resolvePlusCode = async (parsed, stepLog) => {
   if (!hasGoogleKey()) {

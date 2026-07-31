@@ -16,7 +16,7 @@
  *   1. Google Cloud Console → APIs & Services → Credentials.
  *   2. Create an OAuth 2.0 Client ID (type: Web application).
  *   3. Authorized JavaScript origins:
- *        - https://redip.vercel.app
+ *        - https://acureal.in
  *        - http://localhost:5173 (dev)
  *   4. Authorized redirect URIs: not used (we use ID token mode, not
  *      authorization-code mode — frontend never redirects to Google's

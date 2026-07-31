@@ -14,7 +14,7 @@
  *
  * Fail-open: every public function logs + returns empty/null on DB or
  * provider failure rather than throwing into a request handler. Semantic
- * search is an enhancement; absent it, the rest of REDIP keeps working.
+ * search is an enhancement; absent it, the rest of Acureal keeps working.
  */
 
 const { query } = require('../config/database');

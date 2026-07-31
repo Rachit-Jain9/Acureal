@@ -358,7 +358,7 @@ router.get(
 //
 // The deterministic evidence ledger beneath the IC memo: every material number
 // the IC decision rests on, each with an honest typed source (kernel-computed,
-// analyst-set, REDIP benchmark, deal records, verified feed). No AI — this is
+// analyst-set, Acureal benchmark, deal records, verified feed). No AI — this is
 // the auditable claim layer the AI narrative sits on top of. Soft-fails to
 // { available: false } so the panel can hide.
 router.get(

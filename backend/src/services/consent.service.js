@@ -19,7 +19,7 @@ const { createError } = require('../middleware/errorHandler');
 const log = require('../lib/logger').child({ module: 'consent.service' });
 
 // The optional, separately-withdrawable processing purposes. Essential
-// service is implied by using REDIP and is deliberately NOT in this list.
+// service is implied by using Acureal and is deliberately NOT in this list.
 // Order is the canonical display order for the Privacy Centre.
 const CONSENT_PURPOSES = Object.freeze([
   'product_improvement',

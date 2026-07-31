@@ -54,7 +54,7 @@ const { withAiSpan } = require('../../lib/aiTrace');
 //
 // Override any of these live via AI_COST_OVERRIDES_JSON — no deploy needed —
 // e.g. for an enterprise/negotiated rate. Pro models (Gemini 2.5/3.x) have a
-// higher >200k-token tier; the ≤200k base rate is used (REDIP prompts are small).
+// higher >200k-token tier; the ≤200k base rate is used (Acureal prompts are small).
 const DEFAULT_COSTS_PER_M_TOKENS = {
   // ── Claude (Anthropic) — verified 2026-06-30 ──
   'claude:claude-fable-5':     { input: 10.0, output: 50.0 },

@@ -55,7 +55,7 @@ const log = require('../lib/logger').child({ module: 'extraction' });
 // ── Two limits, deliberately independent ──────────────────────────────────────
 //
 // STORAGE and READING are different questions and were previously one number.
-//   MAX_FILE_SIZE_MB                     — what REDIP will accept and store.
+//   MAX_FILE_SIZE_MB                     — what Acureal will accept and store.
 //                                          Ours to choose (Supabase Pro allows
 //                                          far more); a product decision.
 //   DOCUMENT_EXTRACTION_MAX_FILE_SIZE_MB — what the document READER can take.
@@ -128,7 +128,7 @@ async function fetchFileBuffer(fileUrl) {
   const buffer = Buffer.from(response.data);
 
   if (buffer.length > MAX_FILE_BYTES) {
-    // An oversize file is not a failure — it is a document REDIP stores but
+    // An oversize file is not a failure — it is a document Acureal stores but
     // cannot read. Carry the machine reason so the caller writes an honest
     // coverage receipt instead of a red "extraction failed".
     const err = new Error(
@@ -339,7 +339,7 @@ function parseJsonResponse(text) {
 // pre-approved for bulk apply.
 //
 // Replaced by `utils/extractionFieldQuality.assessExtractionFields`, which
-// invents no probability and judges each field only by rules REDIP can execute
+// invents no probability and judges each field only by rules Acureal can execute
 // and explain: grounding against the document's own text, schema shape, and
 // the legal-four lane cap. See that module's header for the full rationale.
 
@@ -368,7 +368,7 @@ function hasExtractedValue(fields) {
 //     'extraction_normalization') across its whole life: every call succeeded
 //     at the provider, but the FASTEST was 5,988 ms — against a 5,000 ms
 //     deadline. Median ~17 s; two calls took 205 s and 602 s. It timed out on
-//     100% of calls, so REDIP paid ~$0.011–0.016 per document for a result it
+//     100% of calls, so Acureal paid ~$0.011–0.016 per document for a result it
 //     always discarded, and spent 5 s of every extraction waiting for it.
 //
 //  2. IT WAS THE WRONG TOOL. Its entire mandate — normalise dates, number
@@ -399,7 +399,7 @@ async function classifyDocumentContent(base64Data, mimeType, options = {}) {
   // inline attachment is sent (runGeminiInline handles a text-only call).
   const documentText = options.documentText || null;
   const prompt = documentText
-    ? `${buildClassifyPrompt(options)}\n\n--- DOCUMENT CONTENT (transcribed by REDIP) ---\n${documentText}`
+    ? `${buildClassifyPrompt(options)}\n\n--- DOCUMENT CONTENT (transcribed by Acureal) ---\n${documentText}`
     : buildClassifyPrompt(options);
   const fileSha256 = options.fileSha256 || null;
 
@@ -528,7 +528,7 @@ async function canStoreFieldQuality() {
 }
 
 // Feature-detect document_extractions.page_coverage (migration 20260729).
-// Holds the coverage receipt — REDIP's account of what it did with every page.
+// Holds the coverage receipt — Acureal's account of what it did with every page.
 // Same pre-migration-safe pattern as doc_type / extraction_started_at /
 // field_quality: absent column → omitted, and the receipt still reaches the API
 // response from the in-memory result.
@@ -577,7 +577,7 @@ async function extractStoredFileFields({
   const effectiveMime = inferMimeType(fileName, mimeType);
   const tier = extractionTierFor({ fileName, fileType: effectiveMime });
 
-  // Fail CLOSED on formats REDIP genuinely cannot read (CAD, BIM, SketchUp,
+  // Fail CLOSED on formats Acureal genuinely cannot read (CAD, BIM, SketchUp,
   // Primavera, shapefiles, legacy binary Office). These upload and store
   // fine; refusing here — with the same sentence the UI shows — is the honest
   // alternative to shipping them to a provider that would garble or reject
@@ -608,8 +608,8 @@ async function extractStoredFileFields({
       // "extraction failed".
       const err = new Error(
         preflight.reason === 'password_protected'
-          ? 'This PDF is password-protected, so REDIP could not open it. Upload an unlocked copy to have it read.'
-          : `REDIP could not open this PDF${preflight.detail ? ` (${preflight.detail})` : ''}. It is stored as uploaded.`,
+          ? 'This PDF is password-protected, so Acureal could not open it. Upload an unlocked copy to have it read.'
+          : `Acureal could not open this PDF${preflight.detail ? ` (${preflight.detail})` : ''}. It is stored as uploaded.`,
       );
       err.statusCode = 422;
       err.code = 'EXTRACTION_UNREADABLE_PDF';
@@ -635,7 +635,7 @@ async function extractStoredFileFields({
 
   // Two shapes from here on:
   //  • native    → base64 bytes ride to the provider (PDF / image), as before.
-  //  • parseable → REDIP transcribes the file to text deterministically and
+  //  • parseable → Acureal transcribes the file to text deterministically and
   //                the TEXT rides in the prompt. Same prompts, same review
   //                path; the model never sees bytes it cannot decode.
   let base64 = null;
@@ -654,8 +654,8 @@ async function extractStoredFileFields({
       parsed = await parseDocumentToText(buffer, fileName);
     } catch (parseErr) {
       const err = new Error(
-        `REDIP could not read the contents of this file — it is stored as uploaded. `
-        + `This usually means the file is corrupt or was written by a tool REDIP's reader `
+        `Acureal could not read the contents of this file — it is stored as uploaded. `
+        + `This usually means the file is corrupt or was written by a tool Acureal's reader `
         + `does not fully understand. Re-saving it from Excel (or exporting to PDF) and `
         + `re-uploading normally fixes it.`,
       );
@@ -744,7 +744,7 @@ async function extractStoredFileFields({
     context: options.context,
   });
   const prompt = documentText
-    ? `${basePrompt}\n\n--- DOCUMENT CONTENT (transcribed by REDIP from the uploaded ${formatFor(fileName)?.label || 'file'}) ---\n${documentText}`
+    ? `${basePrompt}\n\n--- DOCUMENT CONTENT (transcribed by Acureal from the uploaded ${formatFor(fileName)?.label || 'file'}) ---\n${documentText}`
     : basePrompt;
   const promptInfo = getExtractionPromptVersion(docType);
   const extractionCache = {
@@ -866,7 +866,7 @@ async function extractStoredFileFields({
   });
 
   // ── The coverage receipt ──────────────────────────────────────────────────
-  // What REDIP did with every page — stated in terms it can PROVE. Note the
+  // What Acureal did with every page — stated in terms it can PROVE. Note the
   // vocabulary: `submitted_pages`, never "read". A 200 from the provider is
   // not evidence that a model attended to page 847, and this product does not
   // claim what it cannot show.
@@ -916,7 +916,7 @@ async function extractDocument(
   options = {}
 ) {
   // Refuse unreadable formats BEFORE creating the extraction row: a CAD or
-  // Primavera file is not a failed extraction, it is a file REDIP was never
+  // Primavera file is not a failed extraction, it is a file Acureal was never
   // able to read, and a 'failed' row would put a red error chip on a document
   // that is behaving exactly as documented. The message is the same sentence
   // the Documents tab shows on the disabled extract affordance.
@@ -1052,7 +1052,7 @@ async function extractDocument(
     return updatedExtraction;
   } catch (err) {
     // ── Refusal is not failure ────────────────────────────────────────────
-    // A document REDIP DECLINES to read — too large, too many pages,
+    // A document Acureal DECLINES to read — too large, too many pages,
     // password-protected, an unreadable format — behaved exactly as
     // documented. It is not a failed extraction, and a red "failed" chip on a
     // perfectly good 61 MB deed tells the operator nothing about what to do.
@@ -1296,7 +1296,7 @@ async function getDealExtractions(dealId) {
       // schemaValid}) — the WHY the review UI shows instead of a bare
       // percentage. Empty object pre-migration.
       field_quality: row.field_quality || {},
-      // Coverage receipt — what REDIP did with every page. Null pre-migration
+      // Coverage receipt — what Acureal did with every page. Null pre-migration
       // (and on rows extracted before it existed), which the UI states rather
       // than guessing at.
       coverage: row.page_coverage || null,

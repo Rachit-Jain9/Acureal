@@ -36,7 +36,7 @@ const deriveWorkspaceName = ({ name, email, organizationName } = {}) => {
     return `${emailPrefix}'s Workspace`;
   }
 
-  return 'REDIP Workspace';
+  return 'Acureal Workspace';
 };
 
 const listMembershipsForUser = async (userId, client = { query }) => {
@@ -271,7 +271,7 @@ const inviteOrganizationMember = async ({ organizationId, email, role, invitedBy
 
   const normalizedEmail = String(email || '').trim().toLowerCase();
 
-  // If the invitee already has a REDIP account, add them to the workspace
+  // If the invitee already has an Acureal account, add them to the workspace
   // directly. An emailed invitation token is only consumable at registration,
   // so it would never reach someone who already signed up. This is admin-
   // initiated (the route gates it to admin/owner) and grants the user access to

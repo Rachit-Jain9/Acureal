@@ -13,7 +13,7 @@ let openaiClient = null;
 
 // 2026-05-15 upgrade: Gemini 3.1 Flash-Lite GA'd 2026-05-07 (8 days ago).
 // 2.5× faster Time-to-First-Token + 45% faster output vs 2.5 Flash, at
-// $0.25 / $1.50 per M tokens — best fit for REDIP's extraction +
+// $0.25 / $1.50 per M tokens — best fit for Acureal's extraction +
 // classification workloads (high-volume, low-latency, cost-sensitive).
 const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite';
 

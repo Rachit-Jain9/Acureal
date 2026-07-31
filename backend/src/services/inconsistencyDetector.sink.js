@@ -44,7 +44,7 @@ const getDetector = () => require('./inconsistencyDetector.service');
 const DEBOUNCE_MS = 90 * 1000;
 
 // In-process debounce map: deal_id → { timer, latestUserId, latestEventTs }.
-// Multi-process deploys would need a Redis-backed debounce, but at REDIP's
+// Multi-process deploys would need a Redis-backed debounce, but at Acureal's
 // current scale (single Vercel function instance per request) in-memory is
 // the right complexity.
 const pending = new Map();

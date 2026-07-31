@@ -6,7 +6,7 @@ const connectionString = normalizeDatabaseUrl(process.env.DATABASE_URL);
 
 if (!connectionString && process.env.NODE_ENV !== 'test') {
   console.error(
-    '[REDIP] DATABASE_URL is not set. Add it to backend/.env (local) or Vercel environment variables (production).'
+    '[Acureal] DATABASE_URL is not set. Add it to backend/.env (local) or Vercel environment variables (production).'
   );
   if (process.env.NODE_ENV === 'production') {
     process.exit(1);

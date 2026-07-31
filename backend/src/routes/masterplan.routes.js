@@ -334,7 +334,7 @@ router.get('/corpus', authenticate, requireAdminOrAnalyst, async (req, res, next
 // Returns the BMA land-use intelligence (2015 baseline vs 2031 proposed)
 // extracted from Existing/Proposed Land Use maps and Volume 4 PDR.
 // GET /api/master-plan/coverage
-// Regulatory coverage read model — the operative planning authorities REDIP
+// Regulatory coverage read model — the operative planning authorities Acureal
 // holds a rulebook for (BDA/RMP 2015 + the LPAs), with FAR-rule/zone counts and
 // whether a georeferenced map overlay exists. Powers the Master Plan Explorer
 // "Regulatory coverage" panel. Global reference data; any authenticated user.

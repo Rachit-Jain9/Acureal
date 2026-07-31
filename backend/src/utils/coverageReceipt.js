@@ -1,11 +1,11 @@
 'use strict';
 
 /**
- * The coverage receipt — REDIP's account of what it did with every page of a
+ * The coverage receipt — Acureal's account of what it did with every page of a
  * document.
  *
  * ── The promise this implements ─────────────────────────────────────────────
- *   "Upload the whole pack. REDIP tells you exactly what it processed, page by
+ *   "Upload the whole pack. Acureal tells you exactly what it processed, page by
  *    page, and precisely what it did not."
  *
  * A green "Extraction completed" badge is not that. It says a network call
@@ -22,7 +22,7 @@
  *
  *   detected_pages   pdf-lib counted them in the file
  *   decoded_pages    pdf-lib opened them without error
- *   submitted_pages  REDIP sent them to a provider
+ *   submitted_pages  Acureal sent them to a provider
  *
  * `evidence_pages` — pages actually cited by an extracted fact — is the honest
  * fourth measure and is NOT available yet: it needs per-field page citations,
@@ -32,7 +32,7 @@
  * measure is a fact; a fabricated one is a lie.
  *
  * ── Why receipts exist even for refusals ────────────────────────────────────
- * A document REDIP declines to read still gets a receipt. "0 of 327 pages
+ * A document Acureal declines to read still gets a receipt. "0 of 327 pages
  * submitted — the file is 61 MB and the reader's limit is 50 MB" is a useful,
  * actionable, TRUE statement. Refusing silently, or saying "failed", is not.
  */
@@ -45,16 +45,16 @@ const REASON_COPY = Object.freeze({
   too_large_and_too_many_pages: (c) =>
     `This document is ${fmtMb(c.sizeBytes)} across ${fmtNum(c.detectedPages)} pages — beyond both the ${c.maxExtractionMb} MB and ${fmtNum(c.providerPageCap)}-page limits of the document reader. It is stored in full, but no page was sent for reading.`,
   password_protected: () =>
-    'This PDF is password-protected, so REDIP could not open it. Upload an unlocked copy to have it read.',
+    'This PDF is password-protected, so Acureal could not open it. Upload an unlocked copy to have it read.',
   unreadable_file: (c) =>
-    `REDIP could not open this PDF${c.detail ? ` (${c.detail})` : ''}. The file is stored as uploaded; a re-export from the source may read cleanly.`,
+    `Acureal could not open this PDF${c.detail ? ` (${c.detail})` : ''}. The file is stored as uploaded; a re-export from the source may read cleanly.`,
   // A parseable-tier file (spreadsheet / doc / csv) whose reader threw. The
   // file type IS supported — this specific file could not be transcribed —
   // so the copy must not imply the format is unsupported.
   unreadable_source: (c) =>
-    `REDIP could not read the contents of this file${c.detail ? ` (${c.detail})` : ''}. It is stored as uploaded — re-saving it from the source application, or exporting to PDF, normally reads cleanly.`,
+    `Acureal could not read the contents of this file${c.detail ? ` (${c.detail})` : ''}. It is stored as uploaded — re-saving it from the source application, or exporting to PDF, normally reads cleanly.`,
   unsupported_format: () =>
-    'REDIP cannot read this file type. It is stored, versioned and downloadable.',
+    'Acureal cannot read this file type. It is stored, versioned and downloadable.',
   not_a_pdf: () => null, // handled by tier routing; no receipt copy needed
 });
 
@@ -70,7 +70,7 @@ const fmtMb = (bytes) =>
  *        How the document reached the provider — the receipt means different
  *        things per route, and saying which is part of being honest:
  *          native_pdf   the PDF bytes went to the model (page-addressable)
- *          parsed_text  REDIP transcribed it first; "pages" are not meaningful
+ *          parsed_text  Acureal transcribed it first; "pages" are not meaningful
  *          image        a single-image document; one page by definition
  *          not_submitted nothing was sent — `reason` says why
  * @param {number|null} input.detectedPages
@@ -125,7 +125,7 @@ const buildCoverageReceipt = ({
     // citations. Reported as null WITH its reason, never approximated.
     evidence_pages: null,
     evidence_pages_unavailable_because:
-      'Per-field page citations are not yet captured, so REDIP cannot say which pages a value came from.',
+      'Per-field page citations are not yet captured, so Acureal cannot say which pages a value came from.',
     // ── Why nothing (or only part) was sent ───────────────────────────────
     reason,
     summary,
@@ -146,7 +146,7 @@ const buildCoverageReceipt = ({
   }
   if (!reason && method === 'parsed_text') {
     receipt.summary =
-      'REDIP transcribed this file to text and sent the transcription to the document reader. Page numbers do not apply to this format.';
+      'Acureal transcribed this file to text and sent the transcription to the document reader. Page numbers do not apply to this format.';
   }
   if (!reason && method === 'image') {
     receipt.summary = 'This image was sent to the document reader in full.';

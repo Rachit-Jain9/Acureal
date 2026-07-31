@@ -49,20 +49,20 @@ const MAX_SHEET_COLS = 200;
 const MAX_JSON_DEPTH_CHARS = MAX_TEXT_CHARS;
 
 const TRUNCATION_NOTICE = (what) =>
-  `\n\n[REDIP: output truncated — this document is larger than the ${MAX_TEXT_CHARS.toLocaleString('en-IN')}-character read limit. ${what} beyond this point were NOT read. Treat any "total" or "count" as covering only the rows shown above.]`;
+  `\n\n[Acureal: output truncated — this document is larger than the ${MAX_TEXT_CHARS.toLocaleString('en-IN')}-character read limit. ${what} beyond this point were NOT read. Treat any "total" or "count" as covering only the rows shown above.]`;
 
 const capText = (text, what = 'Rows') =>
   (text.length <= MAX_TEXT_CHARS ? text : text.slice(0, MAX_TEXT_CHARS) + TRUNCATION_NOTICE(what));
 
 /**
- * Assemble a parser's output: REDIP's explanatory preamble + the document's
+ * Assemble a parser's output: Acureal's explanatory preamble + the document's
  * own content, capped.
  *
  * Returns '' when the document contributed NOTHING, which is what makes the
  * empty-document guard in parseDocumentToText work. Composing the preamble
  * unconditionally would make every result non-empty, so a blank .docx / .csv
  * / .txt would sail through as a "successful" extraction whose entire content
- * was REDIP's own header — and the model would answer from nothing.
+ * was Acureal's own header — and the model would answer from nothing.
  */
 const compose = (preamble, body, what = 'Rows') => {
   const trimmed = String(body || '').trim();
@@ -132,10 +132,10 @@ const parseSpreadsheet = async (buffer) => {
   });
 
   const body = blocks.join('\n\n')
-    + (truncated && blocks.length ? `\n\n[REDIP: some sheets exceeded ${MAX_SHEET_ROWS.toLocaleString('en-IN')} rows and were cut off.]` : '');
+    + (truncated && blocks.length ? `\n\n[Acureal: some sheets exceeded ${MAX_SHEET_ROWS.toLocaleString('en-IN')} rows and were cut off.]` : '');
   return {
     text: compose(
-      'Spreadsheet transcribed by REDIP. Each sheet below is tab-separated; the first row of a block is usually its header.',
+      'Spreadsheet transcribed by Acureal. Each sheet below is tab-separated; the first row of a block is usually its header.',
       body,
       'Rows',
     ),
@@ -149,7 +149,7 @@ const parseDelimitedText = (buffer, ext) => {
   const text = buffer.toString('utf8');
   const label = ext === '.tsv' ? 'tab-separated' : 'comma-separated';
   return {
-    text: compose(`Delimited data file (${label}), transcribed verbatim by REDIP.`, text, 'Rows'),
+    text: compose(`Delimited data file (${label}), transcribed verbatim by Acureal.`, text, 'Rows'),
     kind: 'delimited',
     meta: { bytes: buffer.length },
   };
@@ -169,7 +169,7 @@ const parseJsonDocument = (buffer, ext) => {
   }
   const label = ext === '.geojson' ? 'GeoJSON' : 'JSON';
   const preamble = valid
-    ? `${label} document, transcribed by REDIP.`
+    ? `${label} document, transcribed by Acureal.`
     : `${label} document that does NOT parse as valid ${label} — transcribed as raw text. Do not assume any structure.`;
   return {
     text: compose(preamble, text.slice(0, MAX_JSON_DEPTH_CHARS), 'Elements'),
@@ -196,7 +196,7 @@ const parseXmlLike = (buffer, ext, label) => {
   });
   const flattened = lines.length ? lines.join('\n') : raw;
   return {
-    text: compose(`${label} document, transcribed by REDIP (element: value, one per line).`, flattened, 'Elements'),
+    text: compose(`${label} document, transcribed by Acureal (element: value, one per line).`, flattened, 'Elements'),
     kind: 'xml',
     meta: { elements: lines.length, extension: ext },
   };
@@ -207,7 +207,7 @@ const readZipSafely = async (buffer) => {
   const zip = await JSZip.loadAsync(buffer);
   const entries = Object.values(zip.files).filter((f) => !f.dir);
   if (entries.length > MAX_ZIP_ENTRIES) {
-    throw new Error(`Archive has ${entries.length} entries, above the ${MAX_ZIP_ENTRIES} REDIP reads.`);
+    throw new Error(`Archive has ${entries.length} entries, above the ${MAX_ZIP_ENTRIES} Acureal reads.`);
   }
   return { zip, entries };
 };
@@ -252,7 +252,7 @@ const parseDocx = async (buffer) => {
   const body = out.length ? out.join('\n') : $.text().trim();
   return {
     text: compose(
-      'Word document transcribed by REDIP. Tables appear as tab-separated rows.',
+      'Word document transcribed by Acureal. Tables appear as tab-separated rows.',
       body,
       'Paragraphs and rows',
     ),
@@ -293,7 +293,7 @@ const parsePptx = async (buffer) => {
   }
 
   return {
-    text: compose('PowerPoint deck transcribed by REDIP, one block per slide.', blocks.join('\n\n'), 'Slides'),
+    text: compose('PowerPoint deck transcribed by Acureal, one block per slide.', blocks.join('\n\n'), 'Slides'),
     kind: 'pptx',
     meta: { slides: blocks.length },
   };
@@ -358,7 +358,7 @@ const parseDocumentToText = async (buffer, fileName) => {
 
   if (!result.text || !result.text.trim()) {
     throw new Error(
-      `No readable text found in this ${format.label}. If it is a scan, upload it as a PDF or image instead so REDIP can read it visually.`,
+      `No readable text found in this ${format.label}. If it is a scan, upload it as a PDF or image instead so Acureal can read it visually.`,
     );
   }
   return result;

@@ -10,7 +10,7 @@ const log = require('../lib/logger').child({ module: 'privacy.routes' });
 const router = express.Router();
 
 // GET /api/privacy/overview
-// Authenticated. The Privacy Centre read model: the personal data REDIP holds
+// Authenticated. The Privacy Centre read model: the personal datan Acureal holds
 // about the caller — profile, organisation memberships, legal acceptances, and
 // an active-session summary. Consent toggles are loaded separately from
 // GET /api/consent (the editable surface).

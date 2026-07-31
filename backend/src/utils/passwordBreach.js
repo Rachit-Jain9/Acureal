@@ -13,7 +13,7 @@ const log = require('../lib/logger').child({ module: 'password-breach' });
 // No auth required for the range endpoint.
 const HIBP_RANGE_URL = 'https://api.pwnedpasswords.com/range/';
 const HIBP_TIMEOUT_MS = 3000;
-const USER_AGENT = 'REDIP-signup-breach-check';
+const USER_AGENT = 'Acureal-signup-breach-check';
 
 const isDisabled = () =>
   process.env.NODE_ENV === 'test' ||

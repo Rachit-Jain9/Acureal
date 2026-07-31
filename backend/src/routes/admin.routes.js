@@ -5,7 +5,7 @@
  *
  * Two gating tiers live here, deliberately:
  *
- *   1. `requirePlatformAdmin` — REDIP operator only (email allowlist). Used for
+ *   1. `requirePlatformAdmin` — Acureal operator only (email allowlist). Used for
  *      anything that mutates GLOBAL state (AI provider routing config), spends
  *      shared platform AI budget (A/B eval runs), or is an operator-only
  *      analytics surface with no customer consumer (audit-trail page,

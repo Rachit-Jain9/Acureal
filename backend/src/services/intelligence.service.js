@@ -122,7 +122,7 @@ const generateClaudeBrief = async (dealData, pipelineStats, notes, benchmarks, r
   const microMarketAdminNotes = Array.isArray(notes?.micro_market) ? notes.micro_market : [];
   const hasNotes = microMarketAdminNotes.length > 0;
 
-  const systemPrompt = `You are a senior buy-side real estate investment analyst at REDIP, a Bengaluru-focused real estate development intelligence platform. You report directly to the investment review team.
+  const systemPrompt = `You are a senior buy-side real estate investment analyst at Acureal, a Bengaluru-focused real estate development intelligence platform. You report directly to the investment review team.
 
 Your job is to generate a precise, data-driven ANALYSIS — not a summary. Cross-reference everything provided.
 
@@ -292,7 +292,7 @@ const buildBrief = async (briefDate) => {
     hasVerifiedMarketData: false,
     hasManualNotes,
     claudeBrief,
-    notes: 'REDIP will not generate external market claims until verified data sources are connected. Sections below reflect real internal pipeline data, admin-entered observations, or an explicit not-configured state.',
+    notes: 'Acureal will not generate external market claims until verified data sources are connected. Sections below reflect real internal pipeline data, admin-entered observations, or an explicit not-configured state.',
     verifiedSourceRequirements: VERIFIED_SOURCE_REQUIREMENTS,
     dealOfDay: topDeal
       ? {
@@ -302,7 +302,7 @@ const buildBrief = async (briefDate) => {
           irrPct: topDeal.irr_pct,
           totalRevenueCr: topDeal.total_revenue_cr,
           assetClass: topDeal.asset_class,
-          whyItMatters: 'Strongest live opportunity in the current REDIP pipeline based on available modeled returns.',
+          whyItMatters: 'Strongest live opportunity in the current Acureal pipeline based on available modeled returns.',
         }
       : null,
     keyDevelopments: developmentsResult.rows.map((entry) => ({
@@ -315,18 +315,18 @@ const buildBrief = async (briefDate) => {
     marketSignals: {
       bullish: liveDeals > 0
         ? [
-            `${liveDeals} live internal deal${liveDeals !== 1 ? 's' : ''} currently active in REDIP.`,
+            `${liveDeals} live internal deal${liveDeals !== 1 ? 's' : ''} currently active in Acureal.`,
             avgIrr !== null
               ? `Average modeled IRR across live pipeline: ${avgIrr.toFixed(1)}%.`
               : 'IRR coverage incomplete across live pipeline.',
             totalPipelineCr ? `Total tracked pipeline value: ₹${totalPipelineCr.toFixed(1)} Cr.` : null,
           ].filter(Boolean)
-        : ['No live opportunities currently tracked in REDIP.'],
+        : ['No live opportunities currently tracked in Acureal.'],
       risk: [
         deadDeals > 0
           ? `${deadDeals} inactive deal${deadDeals !== 1 ? 's remain' : ' remains'} hidden from pipeline views — review sourcing quality and archive hygiene separately.`
           : 'No inactive dead deals are currently hidden from the pipeline.',
-        'Verified external Bengaluru market feeds not configured — REDIP is intentionally withholding market-level pricing and demand claims.',
+        'Verified external Bengaluru market feeds not configured — Acureal is intentionally withholding market-level pricing and demand claims.',
       ],
       sourceType: 'internal_pipeline_only',
     },
@@ -338,7 +338,7 @@ const buildBrief = async (briefDate) => {
     // and the rendered IntelligencePage.
     bottomLine: hasManualNotes
       ? 'This brief combines real internal pipeline data with admin-entered market observations. External verified feeds are not yet connected.'
-      : 'No verified external market feeds configured — REDIP is correctly withholding market intelligence rather than fabricating it.',
+      : 'No verified external market feeds configured — Acureal is correctly withholding market intelligence rather than fabricating it.',
   };
 };
 
@@ -402,7 +402,7 @@ const buildDealAnalysisInput = async (dealId) => {
   const fin = finResult.rows[0] || null;
   const kpis = fin?.model_params?.kpis || {};
 
-  const systemPrompt = `You are a senior real estate investment analyst at REDIP, a Bengaluru-focused platform. Your role is to generate a concise, investor-grade deal analysis.
+  const systemPrompt = `You are a senior real estate investment analyst at Acureal, a Bengaluru-focused platform. Your role is to generate a concise, investor-grade deal analysis.
 
 Rules:
 - 180–240 words, exactly 4 sections: Deal Overview, Market Positioning, Risk Flags, Recommendation
@@ -691,7 +691,7 @@ const saveMarketNotes = async (section, items, userId) => {
 // ─── Platform-shared verified-market reads ────────────────────────────────
 //
 // Every benchmark / transaction / macro-KPI table is curated centrally by
-// the REDIP platform admin. Every workspace — including brand-new ones —
+// the Acureal platform admin. Every workspace — including brand-new ones —
 // should see those rows alongside any per-org rows they themselves
 // captured. The pattern below is the same one PR #512 introduced for the
 // brief, the Comps service, and the market_notes reader:

@@ -3,7 +3,7 @@
 /**
  * Liveness watchdog — the one thing that watches everything else.
  *
- * WHY THIS EXISTS. REDIP's most expensive incidents have not been crashes —
+ * WHY THIS EXISTS. Acureal's most expensive incidents have not been crashes —
  * they have been SILENCE. Three separate critical paths ran dead for weeks
  * before anyone noticed, because nothing was watching them:
  *   • the Gemini default model was retired by Google and every narration /
@@ -71,7 +71,7 @@ const pct = (n) => `${Math.round(n * 100)}%`;
  * Catches a retired / renamed model in ~1h instead of the week the July outage
  * actually ran. Error share = (error + timeout) / (success + error + timeout +
  * cache_hit) per model over the window — matching aiHealth.service's denominator
- * convention (cost_capped / skipped are REDIP's own throttle decisions, not
+ * convention (cost_capped / skipped are Acureal's own throttle decisions, not
  * provider outcomes, so they're excluded). A min-sample guard stops a single
  * failed call flipping a low-volume model to 100%.
  */

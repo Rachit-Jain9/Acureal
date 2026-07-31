@@ -84,7 +84,7 @@ const deriveConfidenceTier = ({ overall, zone, buildability, jurisdiction } = {}
  *
  * Source hierarchy (best → worst): site survey / authority road register ('official')
  * > operator-entered ('user') > satellite/OSM ('inferred') > none ('missing').
- * REDIP has no authority road register or survey feed yet, so today we emit
+ * Acureal has no authority road register or survey feed yet, so today we emit
  * 'user' | 'inferred' | 'missing'. The honest point: FAR bands pivot on road
  * width, and an operator-entered or inferred width is NOT authority-verified —
  * never present inferred-width FAR as official.

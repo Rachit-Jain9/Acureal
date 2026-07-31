@@ -59,7 +59,7 @@ const setAccessCookie = (res, token) => {
 /**
  * `persistent` is the "Remember me" tier, and this is where the checkbox
  * finally becomes REAL. Until 2026-07-17 the refresh cookie was
- * unconditionally Max-Age 30 days — the login page promised "REDIP signs you
+ * unconditionally Max-Age 30 days — the login page promised "Acureal signs you
  * out when the browser closes" while a month-long httpOnly cookie sat in the
  * jar regardless. Now:
  *   persistent  → Max-Age 30 days (survives restarts, the ticked-box promise)

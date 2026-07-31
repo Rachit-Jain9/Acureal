@@ -59,7 +59,7 @@ const RERA_FEE_SCHEDULE = Object.freeze({
   }),
 });
 
-// Maps a REDIP asset_class onto a fee category. Asset classes that are not
+// Maps an Acureal asset_class onto a fee category. Asset classes that are not
 // project-registration unit sales (hospitality, raw_land) have no category.
 const ASSET_CLASS_FEE_CATEGORY = Object.freeze({
   residential_apartments: 'group_housing',

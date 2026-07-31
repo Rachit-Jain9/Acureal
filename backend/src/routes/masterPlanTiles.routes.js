@@ -4,7 +4,7 @@
  * Master-Plan tile proxy (Master-Plan Map integration — 2026-06-15).
  *
  * Serves the Bengaluru RMP 2015 Proposed-Land-Use raster as same-origin XYZ
- * tiles so REDIP's existing Leaflet maps can render it as a labeled REFERENCE
+ * tiles so Acureal's existing Leaflet maps can render it as a labeled REFERENCE
  * overlay. This is a thin, public, cached passthrough — NOT an authoritative
  * zone source (CLAUDE.md: master-plan visuals are reference, verify against the
  * official sheet; the deterministic resolver remains the source of truth).
@@ -15,8 +15,8 @@
  * the browser fetches them from the user's own IP, which Map Warper serves). Map
  * Warper is allow-listed in vercel.json `img-src` for that direct load.
  *
- * This proxy remains the path for REDIP-SELF-HOSTED tiles: host the rectified
- * tiles on REDIP storage (Supabase Storage / Vercel Blob — which Vercel CAN
+ * This proxy remains the path for Acureal-SELF-HOSTED tiles: host the rectified
+ * tiles on Acureal storage (Supabase Storage / Vercel Blob — which Vercel CAN
  * fetch), set `MASTER_PLAN_RMP2015_TILE_BASE` to that base, and point the
  * frontend `VITE_MASTER_PLAN_TILE_URL` at `/api/master-plan-tiles/rmp2015/...`.
  * Its advantages then: same-origin (CSP-clean), CDN `s-maxage` caching, and a
@@ -43,7 +43,7 @@ const router = express.Router();
 
 // Swappable upstream base. Default = Map Warper layer 2147 ("Bengaluru RMP 2015
 // PLU" — BDA Revised Master Plan 2015 Proposed Land Use, base year 2007, 77
-// rectified sheets). To self-host later, set this env to a REDIP-owned XYZ base.
+// rectified sheets). To self-host later, set this env to a Acureal-owned XYZ base.
 const RMP2015_TILE_BASE = (process.env.MASTER_PLAN_RMP2015_TILE_BASE
   || 'https://mapwarper.net/layers/tile/2147').replace(/\/+$/, '');
 
@@ -52,7 +52,7 @@ const UPSTREAM_TIMEOUT_MS = 8000;
 // Map Warper returns 403 to the default Node/undici `User-Agent: node`. A polite,
 // identifying Mozilla-compatible UA is accepted (verified) — we are proxying
 // public reference tiles on behalf of a browser map.
-const UPSTREAM_USER_AGENT = 'Mozilla/5.0 (compatible; REDIP-tile-proxy/1.0; +https://redip.vercel.app)';
+const UPSTREAM_USER_AGENT = 'Mozilla/5.0 (compatible; Acureal-tile-proxy/1.0; +https://acureal.in)';
 
 // Tile geometry (coverage bbox, zoom band, coord validation) is shared with the
 // mirror script via ../utils/rmp2015Tiles so the two can never drift. Tiles
@@ -93,7 +93,7 @@ router.get('/rmp2015/:z/:x/:y.png', async (req, res) => {
   const timer = setTimeout(() => controller.abort(), UPSTREAM_TIMEOUT_MS);
   try {
     const upstreamHeaders = { Accept: 'image/png,image/*', 'User-Agent': UPSTREAM_USER_AGENT };
-    // When the upstream is REDIP-self-hosted tiles on a (private) Vercel Blob
+    // When the upstream is Acureal-self-hosted tiles on a (private) Vercel Blob
     // store, authenticate with the Blob token. This runs server-side only — the
     // browser receives the bytes same-origin and never sees the token.
     if (/\.blob\.vercel-storage\.com/i.test(RMP2015_TILE_BASE) && process.env.BLOB_READ_WRITE_TOKEN) {

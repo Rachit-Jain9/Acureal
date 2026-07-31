@@ -28,7 +28,7 @@
  *   - Score never goes below 0 or above 100.
  */
 
-// Asset-class benchmarks. Source: REDIP underwriting handbook §2.4. These
+// Asset-class benchmarks. Source: Acureal underwriting handbook §2.4. These
 // are the *ungeared* cross-cycle expectations — sensitivity / scenario
 // outputs may legitimately fall outside.
 const BENCHMARKS = Object.freeze({
