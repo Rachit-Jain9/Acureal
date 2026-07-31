@@ -42,7 +42,7 @@ const log = require('../lib/logger').child({ module: 'mfa' });
 // brute-force code guessing meaningfully (10⁶ space is the protection).
 authenticator.options = { window: 1 };
 
-const ISSUER = 'REDIP';
+const ISSUER = 'Acureal';
 const CHALLENGE_TTL_MINUTES = 5;
 const RECOVERY_CODE_COUNT = 8;
 

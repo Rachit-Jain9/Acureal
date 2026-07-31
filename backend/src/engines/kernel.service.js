@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * REDIP Financial Engine — kernel-native service adapter.
+ * Acureal Financial Engine — kernel-native service adapter.
  *
  * Single entry point for the backend service layer. Replaces the 2,767-line
  * `financial.engine.js` by composing the TypeScript kernel (`@redip/financial-kernel`)

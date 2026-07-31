@@ -3,7 +3,7 @@
 /**
  * Deterministic comp-provenance deriver (2026-06-25).
  *
- * REDIP hard rule (CLAUDE.md): "Never expose unverified market intelligence or
+ * Acureal hard rule (CLAUDE.md): "Never expose unverified market intelligence or
  * comps as authoritative. Always surface source, freshness, and confidence
  * level — or 'No verified feed available.'"
  *
@@ -41,7 +41,7 @@ const SOURCE_TYPES = {
   none: { key: 'none', label: 'No verified feed', tone: 'muted' },
 };
 
-// data_type prefixes are the authoritative signal when present (REDIP sets them
+// data_type prefixes are the authoritative signal when present (Acureal sets them
 // at ingest). Checked before the free-text source heuristics.
 const DATA_TYPE_RULES = [
   [/^ipc/i, 'research'],

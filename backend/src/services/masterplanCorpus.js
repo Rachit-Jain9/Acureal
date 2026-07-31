@@ -10,7 +10,7 @@
 // their legal_status is 'withdrawn' and no number from them is operative.
 //
 // The 12 entries below are the authoritative classification for the official
-// regulatory inputs that feed REDIP's parcel-intelligence and rule extraction.
+// regulatory inputs that feed Acureal's parcel-intelligence and rule extraction.
 // Each entry carries the canonical role, legal status, authority, processing
 // mode, and reviewer notes — but never any extracted facts. When an admin
 // uploads a file whose name matches one of the manifest aliases, the upload

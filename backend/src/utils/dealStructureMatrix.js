@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * (asset_class, deal_structure) behavior matrix — REDIP Pending review §5.1.
+ * (asset_class, deal_structure) behavior matrix — Acureal Pending review §5.1.
  *
  * The deal page used to be "static labels". Picking `residential_apartments + jda`
  * looked the same as `residential_apartments + outright`: same form, same

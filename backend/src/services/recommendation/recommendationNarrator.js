@@ -88,7 +88,7 @@ const buildPrompt = (card, ctx) => {
     .map((e, i) => `  ${i + 1}. ${e.label}${e.ref ? ` [ref:${e.ref}]` : ''}`)
     .join('\n');
 
-  return `You are REDIP — an India-first, Bengaluru-priority deal intelligence platform.
+  return `You are Acureal — an India-first, Bengaluru-priority deal intelligence platform.
 
 Rephrase the following recommendation card so the prose is sharper, more
 institutional, and easier for a senior deal professional to act on. You may

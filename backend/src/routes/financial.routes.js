@@ -442,7 +442,7 @@ router.get('/:dealId/financial-graph', authenticate, async (req, res, next) => {
 //
 // Deterministic, read-side summary of how much of the saved underwriting
 // rests on inputs set specifically for THIS deal versus inputs still on
-// REDIP's cited benchmark library. Changes no math, touches no kernel.
+// Acureal's cited benchmark library. Changes no math, touches no kernel.
 //
 // Returns either { available: true, dealSetCount, defaultCount, total,
 // confidencePct, band, inputs[] } or { available: false, reason } — the

@@ -2415,7 +2415,7 @@ async function getReviewQueue() {
 
 // Source explorer — returns every evidence_source with its facts grouped by
 // page_number. Lets the UI render a "what facts came from which page of which
-// document?" browser. Critical for IC defensibility: every number REDIP shows
+// document?" browser. Critical for IC defensibility: every number Acureal shows
 // must be one click away from the exact PDF page it was extracted from.
 async function getSourceExplorer() {
   const sourcesResult = await query(
@@ -2734,7 +2734,7 @@ async function importZoneGeoJSON({
 }
 
 // ── Regulatory coverage read model ──────────────────────────────────────────
-// The operative planning authorities REDIP holds a rulebook for, with FAR-rule +
+// The operative planning authorities Acureal holds a rulebook for, with FAR-rule +
 // zone counts and whether a georeferenced land-use MAP overlay exists. Powers the
 // Master Plan Explorer "Regulatory coverage" panel so the RMP-2015-only visual
 // reads as ONE layer of a broader, deliberate system — not "coverage stops at the

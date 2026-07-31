@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * AI Deal Doctor — REDIP Pending review §5.8, operator override §0.
+ * AI Deal Doctor — Acureal Pending review §5.8, operator override §0.
  *
  * The Deal Doctor is a **diagnostic view over the same signal set** the
  * Recommendation Engine consumes. Where the Recommendation Engine asks

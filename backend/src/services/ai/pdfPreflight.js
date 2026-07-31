@@ -5,7 +5,7 @@
  * document.
  *
  * WHY THIS EXISTS
- * Until now REDIP judged a document by ONE number: its byte size. That is the
+ * Until now Acureal judged a document by ONE number: its byte size. That is the
  * wrong measure, and it hid two genuinely different failure modes behind a
  * single 50 MB threshold:
  *
@@ -36,7 +36,7 @@ const log = require('../../lib/logger').child({ module: 'pdf.preflight' });
 
 /**
  * Gemini's hard PDF ceiling: a PDF is accepted only when BOTH hold.
- * These are the PROVIDER's limits, not REDIP's product policy — they are not
+ * These are the PROVIDER's limits, not Acureal's product policy — they are not
  * configurable and no paid plan raises them, so they live in code as facts.
  * https://ai.google.dev/gemini-api/docs/document-processing
  */
@@ -52,7 +52,7 @@ const looksLikePdf = (buffer) =>
 /**
  * Inspect a PDF without interpreting it.
  *
- * Never throws: a document REDIP cannot open is a fact to report, not an
+ * Never throws: a document Acureal cannot open is a fact to report, not an
  * exception to propagate. Callers branch on `readable` + `reason`.
  *
  * @param {Buffer} buffer raw file bytes

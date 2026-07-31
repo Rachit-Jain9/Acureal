@@ -327,7 +327,7 @@ const buildSubjectFromDealRow = (row) => ({
   city: row.city,
   asset_class: row.asset_class || row.financial_asset_class || null,
   // BHK config / launch_year / total_units / amenities are usually not on a
-  // deal in REDIP — keep them null and rely on the comp's BHK side; the
+  // deal in Acureal — keep them null and rely on the comp's BHK side; the
   // similarity scorer drops factors that lack subject data.
   bhk_config: null,
   launch_year: null,

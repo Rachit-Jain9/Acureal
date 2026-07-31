@@ -2,7 +2,7 @@
 
 // Deterministic site-yield engine — the "programme producer".
 //
-// Pure deterministic JS — NO AI involvement, per the REDIP hard rule that all
+// Pure deterministic JS — NO AI involvement, per the Acureal hard rule that all
 // area/yield/financial math is computed by code, never by a model. AI may only
 // PROPOSE the editable assumptions fed in here and EXPLAIN the result; it may
 // never compute a number in this file.

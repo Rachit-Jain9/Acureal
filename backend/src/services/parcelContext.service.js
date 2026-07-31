@@ -4,7 +4,7 @@
  * Parcel Context Auto-Derive Orchestrator
  * ---------------------------------------
  * Single-call backend that takes either an address or (lat, lng) and
- * fans out to every authoritative dataset already loaded in REDIP:
+ * fans out to every authoritative dataset already loaded in Acureal:
  *
  *   1. Coordinates       — geocodeAddress() (Google + Nominatim fallback)
  *   2. K-GIS hierarchy   — fetchKgisContext()  (taluk/village/survey + geometry)

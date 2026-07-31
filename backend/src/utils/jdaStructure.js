@@ -6,7 +6,7 @@
 // Agreement (JDA) — the most common Bengaluru deal structure — does NOT buy the
 // land. The landowner CONTRIBUTES it in exchange for a share of the project's
 // revenue (revenue-share) or built-up area (area-share). Every generic model
-// (and, until now, REDIP's kernel) charges the developer the full land cost, as
+// (and, until now, Acureal's kernel) charges the developer the full land cost, as
 // if they bought it — which overstates project uses and understates the
 // developer's return, often massively.
 //

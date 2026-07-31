@@ -186,7 +186,7 @@ describe('parseDocumentToText — KML / KMZ', () => {
     const zip = new JSZip();
     for (let i = 0; i < 600; i += 1) zip.file(`f${i}.kml`, '<kml/>');
     const buffer = await zip.generateAsync({ type: 'nodebuffer' });
-    await expect(parseDocumentToText(buffer, 'bomb.kmz')).rejects.toThrow(/above the 512 REDIP reads/);
+    await expect(parseDocumentToText(buffer, 'bomb.kmz')).rejects.toThrow(/above the 512 Acureal reads/);
   });
 });
 

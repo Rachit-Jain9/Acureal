@@ -28,7 +28,7 @@ const { LEGAL_VERDICT_PATTERNS } = require('../services/ai/toneClassifier');
 // Concise inline marker left where a statutory-verdict sentence was removed, so
 // the reader knows something was redacted and why (rather than a silent gap).
 const LEGAL_REDACTION_MARKER =
-  '[legal-status statement removed — REDIP does not assert title / RERA / encumbrance / approval conclusions; verify against the source documents]';
+  '[legal-status statement removed — Acureal does not assert title / RERA / encumbrance / approval conclusions; verify against the source documents]';
 
 // Sentence-ish split that keeps trailing punctuation/newlines so re-joining is
 // loss-less. Good enough for prose scrubbing (we are not parsing grammar).

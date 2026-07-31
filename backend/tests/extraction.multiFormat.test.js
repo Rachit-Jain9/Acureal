@@ -86,7 +86,7 @@ describe('parseable formats transcribe to text, then extract from the text', () 
     expect(extractionCalls.length).toBeGreaterThan(0);
     for (const [args] of extractionCalls) {
       expect(args.base64Data == null).toBe(true);
-      expect(args.prompt).toMatch(/DOCUMENT CONTENT \(transcribed by REDIP/);
+      expect(args.prompt).toMatch(/DOCUMENT CONTENT \(transcribed by Acureal/);
       expect(args.prompt).toMatch(/Anchor/);
     }
   });

@@ -435,7 +435,7 @@ router.get('/geocode/search', authenticate, async (req, res, next) => {
       // Fallback to Nominatim when Google not configured
       const resp = await axios.get('https://nominatim.openstreetmap.org/search', {
         params: { q: `${q}, India`, format: 'json', limit: 5, countrycodes: 'in', addressdetails: 1 },
-        headers: { 'User-Agent': 'REDIP/1.0' },
+        headers: { 'User-Agent': 'Acureal/1.0' },
         timeout: 8000,
       });
       const suggestions = (resp.data || []).map((r) => ({

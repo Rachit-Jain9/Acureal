@@ -6,7 +6,7 @@
  * Answers one honest question about a saved financial model:
  *
  *   "How much of this underwriting rests on numbers set specifically for
- *    THIS deal, versus numbers still running on REDIP's benchmark library?"
+ *    THIS deal, versus numbers still running on Acureal's benchmark library?"
  *
  * It is a *read-side* classifier. It changes no math, touches no kernel, and
  * stores nothing. It reads the persisted `model_params.inputs` (exactly the
@@ -16,8 +16,8 @@
  *
  *   - 'deal-set'  — a deal-specific fact the analyst entered (plot area, land
  *                   cost, selling rate …), OR a benchmark assumption the
- *                   analyst moved off REDIP's cited default.
- *   - 'default'   — a benchmark assumption still sitting on REDIP's cited
+ *                   analyst moved off Acureal's cited default.
+ *   - 'default'   — a benchmark assumption still sitting on Acureal's cited
  *                   default (or left blank, so the kernel will default it).
  *
  * Honesty boundaries — deliberately conservative:
@@ -180,7 +180,7 @@ function classifyInput(spec, inputs, modelClass) {
   const benchmarkValue = meta ? meta.value : null;
   const benchmarkSource = meta ? meta.source : null;
 
-  // Blank, or matches the benchmark → still on the REDIP default.
+  // Blank, or matches the benchmark → still on the Acureal default.
   if (value === null) {
     return {
       key: spec.key,
@@ -192,8 +192,8 @@ function classifyInput(spec, inputs, modelClass) {
       benchmarkValue,
       benchmarkSource,
       basis: benchmarkSource
-        ? `On the REDIP benchmark default — ${benchmarkSource}`
-        : 'On the REDIP benchmark default',
+        ? `On the Acureal benchmark default — ${benchmarkSource}`
+        : 'On the Acureal benchmark default',
     };
   }
   if (meta && Math.abs(value - benchmarkValue) < EPSILON) {
@@ -207,8 +207,8 @@ function classifyInput(spec, inputs, modelClass) {
       benchmarkValue,
       benchmarkSource,
       basis: benchmarkSource
-        ? `Matches the REDIP benchmark — ${benchmarkSource}`
-        : 'Matches the REDIP benchmark default',
+        ? `Matches the Acureal benchmark — ${benchmarkSource}`
+        : 'Matches the Acureal benchmark default',
     };
   }
   // We could not prove a departure from the benchmark — under-claim and keep
@@ -236,7 +236,7 @@ function classifyInput(spec, inputs, modelClass) {
     value,
     benchmarkValue,
     benchmarkSource,
-    basis: 'Adjusted for this deal, off the REDIP benchmark',
+    basis: 'Adjusted for this deal, off the Acureal benchmark',
   };
 }
 

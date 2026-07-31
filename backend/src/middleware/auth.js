@@ -154,7 +154,7 @@ const requirePlatformAdmin = (req, res, next) => {
 
   return res.status(403).json({
     success: false,
-    message: 'Access denied. This is a REDIP platform-operator surface.',
+    message: 'Access denied. This is an Acureal platform-operator surface.',
   });
 };
 

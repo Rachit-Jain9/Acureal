@@ -3,7 +3,7 @@
 /**
  * IC stance-verb policy (CLAUDE.md).
  *
- * REDIP forbids the absolute decision verbs — Buy, Sell, Reject, Approve,
+ * Acureal forbids the absolute decision verbs — Buy, Sell, Reject, Approve,
  * Decline, Clear, Pass — on any recommendation surface, and restricts stances
  * to the closed dictionary (Recommend / Consider / Re-examine / Flag /
  * Stress-test, plus the neutral "Hold pending …" and "proceed / proceed with

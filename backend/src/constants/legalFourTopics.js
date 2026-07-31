@@ -2,7 +2,7 @@
 
 /**
  * Canonical "legal four" denylist — the SINGLE source of truth for the four
- * statutory lanes REDIP must never AI-narrate, re-rank, or learn-adjust
+ * statutory lanes Acureal must never AI-narrate, re-rank, or learn-adjust
  * (CLAUDE.md hard rule). Every learning / aggregation / recommendation /
  * diagnostic path that must EXCLUDE the legal four imports `isLegalFourTopic`
  * from here, so the four lanes can never drift apart across modules or be

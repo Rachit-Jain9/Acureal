@@ -701,7 +701,7 @@ const exportFinancialCSV = async (dealId) => {
   const row = (...cols) => cols.map(esc).join(',');
 
   return [
-    row('REDIP Financial Model Export'),
+    row('Acureal Financial Model Export'),
     row('Deal ID', dealId),
     row('Asset Class', fin.asset_class),
     row('Generated', new Date().toISOString()),

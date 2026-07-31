@@ -404,7 +404,7 @@ const COST_PER_CALL_HEURISTIC_USD = 0.012;
 const MAX_FIXTURES_PER_RUN = 50; // hard cap to keep web requests bounded
 
 // A baseline run scores the current production reasoning config. Claude is
-// REDIP's reasoning provider (CLAUDE.md AI routing); the bare 'claude' spec
+// Acureal's reasoning provider (CLAUDE.md AI routing); the bare 'claude' spec
 // resolves through resolveRunner to the env-configured model, so a baseline
 // always tracks whatever production is actually running.
 const BASELINE_CANDIDATE_SPEC = 'claude';
@@ -528,7 +528,7 @@ const runBaselineAndPersist = async ({
 
 /**
  * Resolve the organisation a scheduled (cron) baseline is attributed to.
- * The quality baseline measures REDIP's own production AI, which is
+ * The quality baseline measures Acureal's own production AI, which is
  * identical for every tenant — it is not per-tenant data. It is recorded
  * once, against the oldest organisation (the operator's primary workspace).
  * Soft-fails to null if the table is unavailable.

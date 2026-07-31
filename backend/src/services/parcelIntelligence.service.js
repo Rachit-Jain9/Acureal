@@ -980,7 +980,7 @@ const composeParcelIntelligence = async ({ propertyId, userId = null, refresh = 
             && zone?.zone_code
             && farRules.length === 0
             && jurisdiction.plan?.legal_status === 'operative'
-              ? `${jurisdiction.plan?.name} is operative but its zoning/FAR rules are not yet loaded into REDIP — FAR cannot be computed against this rulebook yet.`
+              ? `${jurisdiction.plan?.name} is operative but its zoning/FAR rules are not yet loaded into Acureal — FAR cannot be computed against this rulebook yet.`
               : null,
           alternates: jurisdiction.alternates || [],
         }

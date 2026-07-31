@@ -4,7 +4,7 @@
  * RMP 2015 tile geometry — pure, deterministic, no network.
  *
  * Shared by the master-plan tile proxy (which serves tiles) and the mirror
- * script (which populates REDIP-owned storage from Map Warper). Keeping the
+ * script (which populates Acureal-owned storage from Map Warper). Keeping the
  * Web-Mercator math + the coverage bbox in one place means the proxy's bbox
  * cull and the mirror's work-list can never drift apart.
  *

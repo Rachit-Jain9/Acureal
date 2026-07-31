@@ -245,7 +245,7 @@ const geocodeWithNominatim = async (address, city, state, pincode) => {
   try {
     const response = await axios.get('https://nominatim.openstreetmap.org/search', {
       params: { q: fullAddress, format: 'json', limit: 1, countrycodes: 'in' },
-      headers: { 'User-Agent': 'REDIP/1.0 (Real Estate Development Intelligence Platform)' },
+      headers: { 'User-Agent': 'Acureal/1.0 (Real Estate Development Intelligence Platform)' },
       timeout: 10000,
     });
 
@@ -265,7 +265,7 @@ const geocodeWithNominatim = async (address, city, state, pincode) => {
     if (city || state) {
       const fallbackResponse = await axios.get('https://nominatim.openstreetmap.org/search', {
         params: { city, state, country: 'India', format: 'json', limit: 1 },
-        headers: { 'User-Agent': 'REDIP/1.0 (Real Estate Development Intelligence Platform)' },
+        headers: { 'User-Agent': 'Acureal/1.0 (Real Estate Development Intelligence Platform)' },
         timeout: 10000,
       });
 

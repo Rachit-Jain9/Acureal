@@ -1,7 +1,7 @@
 const log = require('../lib/logger').child({ module: 'http.error' });
 
 const errorHandler = (err, req, res, next) => {
-  // Body is intentionally omitted from logs — request bodies on REDIP routes
+  // Body is intentionally omitted from logs — request bodies on Acureal routes
   // routinely contain financial assumptions, RERA numbers, and ownership PII.
   // The request id + path + method + status are enough to trace; the body lives
   // on the client and the snapshot tables.

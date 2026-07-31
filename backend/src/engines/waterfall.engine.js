@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * REDIP Waterfall Engine — Backend / Institutional Grade
+ * Acureal Waterfall Engine — Backend / Institutional Grade
  *
  * Supports:
  *   • JDA (Joint Development Agreement): area_share or revenue_share split

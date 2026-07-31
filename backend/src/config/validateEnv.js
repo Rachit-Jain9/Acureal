@@ -125,12 +125,12 @@ const validateEnv = ({ exitOnFailure = true } = {}) => {
   }
 
   for (const warning of warnings) {
-    console.warn(`[REDIP env] WARNING: ${warning}`);
+    console.warn(`[Acureal env] WARNING: ${warning}`);
   }
 
   if (errors.length > 0) {
     const banner = [
-      '[REDIP env] FATAL: required environment is not configured.',
+      '[Acureal env] FATAL: required environment is not configured.',
       ...errors.map((e) => `  - ${e}`),
       'Set these in backend/.env (local) or Vercel environment variables (production).',
     ].join('\n');
@@ -143,7 +143,7 @@ const validateEnv = ({ exitOnFailure = true } = {}) => {
       if (exitOnFailure && !process.env.VERCEL) {
         process.exit(1);
       }
-      throw new Error('REDIP startup aborted: missing critical environment variables.');
+      throw new Error('Acureal startup aborted: missing critical environment variables.');
     }
 
     // Development — loud, but never block local iteration.
