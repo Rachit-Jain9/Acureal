@@ -36,6 +36,10 @@ const RECOMMENDED = [
   // the email sends fine and the link is dead in the recipient's inbox. The
   // send path now refuses outright when deployed; this surfaces it at boot.
   { key: 'APP_BASE_URL', why: 'the origin used to build verification/reset links (email links are DEAD without it)' },
+  // The legacy email lookup this replaces cannot work post-M1: the app runs as
+  // a NOBYPASSRLS role and RLS on `users` hides the operator row from everyone
+  // else, so platform comps + benchmarks render EMPTY for every non-operator.
+  { key: 'PLATFORM_ORG_ID', why: 'the shared comps/benchmark workspace pin (platform data shows EMPTY for other users without it)' },
 ];
 
 // Recognizable key prefixes per AI provider — used for a boot-time sanity
