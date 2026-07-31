@@ -31,7 +31,13 @@ const parseSensitivityMatrix = (raw) => {
   };
 };
 
+const { exportAudit } = require('../middleware/exportAudit');
+
 const router = express.Router();
+
+// Attachment responses here (the financial-model CSV export) land in the
+// export_events audit ledger, same as everything under /api/exports.
+router.use(exportAudit);
 
 const baseValidation = [
   body('assetClass').optional().isIn(ASSET_CLASSES).withMessage('Invalid asset class'),
