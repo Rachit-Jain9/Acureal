@@ -6,6 +6,36 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-07-31 (deep-work block) — Document intelligence made real, AI failover consumed, export ledger written (#1045–#1049)
+
+A focused engineering block on the highest-impact verified items from the pending-work audit. Five PRs, each closing a silent-failure gap where the product claimed a capability that did not exist.
+
+### #1045 — 56 backend runtime strings still said REDIP
+The rebrand sweep had covered the built frontend bundle and `services/exports/**` but NOT backend runtime strings: API errors, upload feedback, coverage receipts, model-confidence bases ("On the REDIP benchmark default"), the CSV export header, the default workspace name, the TOTP issuer, and the AI system prompts. All renamed; protected lowercase identifiers verified untouched **by count** (redip_app 1→1, cookies 3→3/2→2, bucket 2→2). Checked before renaming stored-state items: zero orgs use the default name; TOTP enrolments keep their baked-in label and secret.
+
+### #1047 — document search had NEVER worked
+`document_embeddings`: zero rows against 24 documents / 50 extractions. Three stacked defects:
+1. **Unsatisfiable guard** — indexing gated on `options.organizationId && options.documentId`; no caller ever passed either (documentId is a positional param; organizationId was never threaded). Now: param + request-context, loud skip when tenant unresolvable.
+2. **Wrong text** — it would have indexed the model's JSON reply even when the real transcribed document prose (`documentText`) sat in scope. Now: prefer the transcription, and record `metadata.text_source` (`document_transcription` | `model_reading`) so a citation never claims to quote a document it is only paraphrasing.
+3. **Fire-and-forget dies on serverless** — bare unawaited promise post-response. Now: `lib/backgroundTask.js` (the masterplan `waitUntil` idiom extracted + Sentry-loud failures; masterplan now consumes it too).
+Recovery: the documented reindex endpoint SELECTed from **`evidence_sources` — a table that does not exist** (every call 404'd). It now reads `document_extractions.raw_extraction->>'raw_text'`, plus a new bounded/resumable `POST /api/search/reindex-all` (22 prod docs backfillable). Documents tab gains an honest chip: "Searchable · N passages" / "Not searchable" — the negative state deliberately visible. Also corrected two "the pooled role bypasses RLS" comments, false since the M1 flip.
+**Backfill still pending**: needs an operator login on acureal.in (session cookies died with the old domain).
+
+### #1048 — the configured AI failover finally has a consumer
+`fallbackProvider`/`fallbackModel` were configurable and resolved — and consumed by NOTHING; July's outage ran a week with a working fallback in the table. `runAIInternal` now takes an explicit failover plan (opt-in per wrapper, because only the wrapper knows which providers its callback executes; auto-failover on a single-provider callback would re-run the same provider under a different name). Engages on ANY primary failure post-retry, non-retriable included (July was a 404). Eligibility strict: unexecutable fallbacks ignored (never remapped), self-fallback dropped, model names never cross provider boundaries. Ledger honesty: primary failure row persists with `failing_over_to`; success row carries the FALLBACK's provider + `failed_over_from`; cost attributes to who answered; the response cache re-keys for the answering provider. Streaming excluded by design.
+
+### #1049 — the export audit ledger gets its missing writer
+`export_events` (shipped 2026-05-17, "records every export" per three docs) held zero rows — no writer ever existed. One router-level middleware now records any 2xx attachment response: org/user/deal/format, bytes COUNTED from written chunks, generation ms; handlers enrich AI usage via `res.locals.exportAudit`. The insert re-enters the captured tenant context explicitly (`runWithRequestContext`) because RLS checks `current_organization_id()` and ALS is not guaranteed inside a 'finish' listener — a test pins the context at insert time. Mounted on all four attachment-bearing routers. Tests run a real ephemeral-port Express server (no supertest in repo; finish/write semantics are the subject).
+
+### Also this block
+- `PLATFORM_ORG_ID` pinned in Vercel (#1046): shared comps/benchmarks were EMPTY for every non-operator user since the M1 flip — the email-lookup fallback cannot work under RLS (users policy hides the operator row). Chain verified link-by-link against prod.
+- Ran the deploy-and-verify loop end to end on every PR; suites at **262/4253 backend, 170/1374 frontend** at block end.
+
+### Deliberately not attempted (stay honest on the backlog)
+JDA land treatment in the exported workbook (NUL-byte file, kernel semantics — own PR with Excel-COM verification), migration runner, DB round-trip collapse (tenant-invariant risk), constraint overlays, per-field page citations.
+
+---
+
 ## 2026-07-31 — Transactional email live on acureal.in, and the dead-link bug it exposed (#1043)
 
 Email sending now works end-to-end. Resend configured and `acureal.in` **Verified**; the first real verification email arrived correctly branded from `Acureal <noreply@acureal.in>`.
