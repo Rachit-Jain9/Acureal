@@ -6,6 +6,42 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-07-31 — Transactional email live on acureal.in, and the dead-link bug it exposed (#1043)
+
+Email sending now works end-to-end. Resend configured and `acureal.in` **Verified**; the first real verification email arrived correctly branded from `Acureal <noreply@acureal.in>`.
+
+### Configured (in the operator's browser, with their approval)
+- **Resend**: domain `acureal.in`, region **Tokyo (ap-northeast-1)** — Resend has no India region; DB/storage stay in Mumbai, only outbound mail transits Tokyo.
+- **GoDaddy DNS**: DKIM `TXT resend._domainkey`, SPF `TXT send`, `MX send` (prio 10). All three staged together via **Add More Records** so the operator needed only ONE SMS code instead of three.
+- **Vercel env**: `MAIL_FROM`, `RESEND_API_KEY` (operator pasted — I don't type credentials), `APP_BASE_URL`.
+
+### Two Resend defaults deliberately refused
+1. **The 4th DNS record** — `MX @ inbound-smtp…`, under a section headed *"Enable Receiving"*. Adding it routes **every** mail to `@acureal.in` into a Resend webhook, which would silently swallow `grievance@` / `security@` (the DPDP statutory contacts) and block any mailbox provider. Skipped; only the 3 sending records added. Verified apex MX is still absent.
+2. **"Auto configure"** over Manual setup — it uses GoDaddy Domain Connect, granting Resend *persistent DNS write access* to the domain the whole product runs on, to save one SMS code. Not a trade worth making.
+
+### #1043 — the bug only a real email could find
+The first delivered email's link was `http://localhost:5173/verify-email?token=…` → `ERR_CONNECTION_REFUSED`. **No account could ever have been verified.**
+
+Cause: `emailVerification.service.js` did `process.env.APP_BASE_URL || 'http://localhost:5173'`, and `APP_BASE_URL` was never set on Vercel.
+
+Why it stayed invisible — the canonical silent-failure shape for this repo:
+- the send **succeeds**; Resend logs delivery as fine
+- the recipient gets a well-formed, correctly branded email
+- nothing throws, nothing logs, no alert fires
+- the link is simply dead
+
+And it was unreachable by normal use: **the operator's own account reads verified because Google sign-in auto-verifies and never sends this email.** The only way to catch it was to send one and click the link.
+
+Fix: `buildVerificationUrl` now **fails closed** when `NODE_ENV=production || VERCEL` and `APP_BASE_URL` is unset (mirroring `lib/mailer.js`'s no-provider stance) — a visible 502 beats a silent dead link; `APP_BASE_URL` added to validateEnv RECOMMENDED so it warns at cold start; `.env.example` documents it. Two regression tests: must throw **and** must not call the mailer; and the built link must contain no `localhost` in either HTML or text part. Backend 259 suites / **4229** green.
+
+**Lesson worth keeping: "the email sent" is not "the email works." Read the delivered message and click the link.** Every layer above the link reported success.
+
+### Still operator-gated
+- Mailboxes to *receive* at `security@` / `grievance@` (Zoho Mail free recommended — GoDaddy's own email is a paid per-mailbox subscription and its wizard errors out). Needs a new account + mailbox password.
+- Legal doc bodies still unpublished to the DB (28 `REDIP` mentions live in `legal_documents`).
+
+---
+
 ## 2026-07-30 (cont.) — **acureal.in is LIVE** — domain cutover executed in the operator's browser (#1039, #1041 merged)
 
 The operator granted browser access to their logged-in Vercel + GoDaddy and asked me to do the cutover directly. **Done: `https://acureal.in` serves the app with a valid certificate, and every path on `redip.vercel.app` now 308s to it.**
