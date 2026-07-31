@@ -46,6 +46,8 @@ const { buildCoverageReceipt, pagesProcessedFromReceipt } = require('../utils/co
 const { redactText, redactFields } = require('./ai/promptRedaction');
 const embeddingsService = require('./embeddings.service');
 const { EVENTS, publish } = require('../lib/eventBus');
+const { runInBackground } = require('../lib/backgroundTask');
+const { getRequestContext } = require('../lib/requestContext');
 const log = require('../lib/logger').child({ module: 'extraction' });
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -795,24 +797,52 @@ async function extractStoredFileFields({
     log.warn('language_detect_failed', { error: err.message, doc_type: docType });
   }
 
-  // Best-effort: index the extracted text into pgvector so the document
-  // becomes semantic-search-able. Fire-and-forget — embedding failures
-  // never block the extraction return. The service swallows errors and
-  // logs them; we don't even await the result on the hot path.
-  if (rawText && options.organizationId && options.documentId) {
-    Promise.resolve()
-      .then(() => embeddingsService.indexDocumentText({
-        organizationId: options.organizationId,
-        documentId: options.documentId,
-        text: rawText,
+  // Index the document into pgvector so it becomes semantic-search-able and
+  // can be cited by Deal Q&A.
+  //
+  // This guard used to read `options.organizationId && options.documentId`.
+  // NO caller has ever passed either (documentId is a positional PARAMETER,
+  // and organizationId was never threaded through at all), so the condition
+  // was unsatisfiable and not one document was ever indexed — while every
+  // upload still reported success and Q&A still described its answers as
+  // grounded in the user's files. Read both from where they actually live.
+  //
+  // Source preference mirrors the language-detection choice made just above,
+  // and for the same reason: for a parseable file `documentText` is the real
+  // transcribed prose, whereas `rawText` is the model's JSON reply and is
+  // "mostly English keys". A native PDF/scan has no transcription, so the
+  // model's reading is all there is. Which one was used is recorded in the
+  // chunk metadata so a citation can be honest about whether it quotes the
+  // document or Acureal's reading of it — never conflate the two.
+  const indexOrganizationId = options.organizationId || getRequestContext().organizationId || null;
+  const indexSource = documentText ? 'document_transcription' : 'model_reading';
+  const indexText = documentText || rawText;
+
+  if (indexText && indexOrganizationId && documentId) {
+    runInBackground(
+      'document_embedding_index',
+      embeddingsService.indexDocumentText({
+        organizationId: indexOrganizationId,
+        documentId,
+        text: indexText,
         sourceKind: 'document_chunk',
         metadata: {
           doc_type: docType,
           language: detectedLanguage,
+          text_source: indexSource,
           extraction_at: new Date().toISOString(),
         },
-      }))
-      .catch((err) => log.warn('embedding_pipeline_dispatch_failed', { error: err.message }));
+      }),
+      { document_id: documentId, doc_type: docType, text_source: indexSource },
+    );
+  } else if (indexText) {
+    // Reaching here means the tenant could not be resolved — the chunks would
+    // be rejected by the RLS INSERT policy anyway. Say so loudly rather than
+    // leaving another document silently missing from search.
+    log.warn('document_embedding_skipped_no_tenant', {
+      document_id: documentId || null,
+      has_organization_id: Boolean(indexOrganizationId),
+    });
   }
 
   let structuredFields = null;

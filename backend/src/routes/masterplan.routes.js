@@ -6,31 +6,14 @@ const masterplanService = require('../services/masterplan.service');
 
 const router = express.Router();
 
-// Vercel serverless functions stay alive for `waitUntil`-bound work even
-// after the response is sent. Locally / outside Vercel, the import is a
-// no-op and we just let the promise run unawaited (Express won't exit
-// before the event loop drains).
-let waitUntil = null;
-try {
-  // eslint-disable-next-line global-require
-  waitUntil = require('@vercel/functions').waitUntil;
-} catch {
-  // Package not installed in this environment — fine, fall back to unawaited promise.
-}
+// Post-response background work. This file owned the only copy of the
+// `waitUntil` idiom; it now lives in lib/backgroundTask so the extraction
+// pipeline shares one implementation — and one place to get the failure
+// reporting right (this copy only console.error'd, so a failed job never
+// reached Sentry).
+const { runInBackground } = require('../lib/backgroundTask');
 
-function fireAndForget(promise) {
-  if (typeof waitUntil === 'function') {
-    try {
-      waitUntil(promise);
-    } catch {
-      // waitUntil unavailable at runtime (e.g. cold-start error) — let it run unawaited.
-    }
-  }
-  promise.catch((err) => {
-    // eslint-disable-next-line no-console
-    console.error('[masterplan.extract] background job error:', err);
-  });
-}
+const fireAndForget = (promise) => runInBackground('masterplan_extract', promise);
 
 // T3 — Zoning overlay GeoJSON for the deal map.
 // Returns a FeatureCollection of master_plan_zones whose `geom` is non-null,
