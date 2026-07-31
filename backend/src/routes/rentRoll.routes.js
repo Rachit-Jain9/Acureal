@@ -13,7 +13,13 @@ const rentRollTemplate = require('../services/rentRollTemplate.service');
 const rentRollImport = require('../services/rentRollImport.service');
 const rentRollExtract = require('../services/rentRollExtract.service');
 
+const { exportAudit } = require('../middleware/exportAudit');
+
 const router = express.Router();
+
+// Attachment responses here (the register-template XLSX download) land in the
+// export_events audit ledger, same as everything under /api/exports.
+router.use(exportAudit);
 
 const decodeUpload = (body) => {
   const fileBase64 = body && body.fileBase64;

@@ -18,7 +18,13 @@ const { uploadSingle } = require('../middleware/upload');
 const { handleValidation } = require('../middleware/validate');
 const queueService = require('../services/compsReviewQueue.service');
 
+const { exportAudit } = require('../middleware/exportAudit');
+
 const router = express.Router();
+
+// Attachment responses here (the comps-review-queue CSV export) land in the
+// export_events audit ledger, same as everything under /api/exports.
+router.use(exportAudit);
 
 const QUEUE_STATUSES = [
   'pending_extraction',

@@ -40,7 +40,15 @@ const documentService = require('../services/document.service');
 const { buildIntelligenceTearSheet } = require('../services/intelligenceExport.service');
 const { buildDealTearSheet } = require('../services/dealTearSheet.service');
 
+const { exportAudit } = require('../middleware/exportAudit');
+
 const router = express.Router();
+
+// Every artifact this router sends with a Content-Disposition attachment
+// lands in the export_events audit ledger — who, what deal, which format,
+// how big, how long it took. Router-level so a NEW export endpoint is
+// audited by existing, not by remembering.
+router.use(exportAudit);
 
 const escapeCsvField = (value) => {
   if (value === null || value === undefined) return '';
