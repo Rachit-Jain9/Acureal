@@ -14,6 +14,7 @@ import CookieBanner from './components/common/CookieBanner';
 import LegalReAcceptanceModal from './components/common/LegalReAcceptanceModal';
 import useLegalPending from './hooks/useLegalPending';
 import RequirePlatformAdmin from './components/auth/RequirePlatformAdmin';
+import { AcurealGlyph } from './components/brand/AcurealBrand';
 
 // Neutralize scroll-wheel on focused number inputs. Browsers increment/decrement
 // <input type="number"> values on wheel when focused, which is a common footgun
@@ -78,14 +79,39 @@ const GrievancePage = lazy(() => import('./pages/legal/GrievancePage'));
 const SubprocessorsPage = lazy(() => import('./pages/legal/SubprocessorsPage'));
 const VerifyEmailPage = lazy(() => import('./pages/legal/VerifyEmailPage'));
 
+// Shown only while the cold-boot session probe is in flight, and only for
+// visitors with no cached profile (the common signed-in reload never sees
+// it). Deliberately near-blank: the brand glyph fades in after 300ms, so a
+// fast probe (~1 RTT) resolves before anything paints — no flash — while a
+// slow network gets a quiet signal that the app is alive, not hung.
+function SessionBootGate() {
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-bg-primary"
+      role="status"
+      aria-busy="true"
+      aria-label="Restoring your session"
+    >
+      <div className="acureal-boot-in text-content-muted">
+        <AcurealGlyph size={28} />
+      </div>
+    </div>
+  );
+}
+
 function ProtectedRoute({ children }) {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, authReady } = useAuthStore();
   // `useLegalPending` no-ops while unauthenticated; once auth lands it fetches
   // /api/legal/me and surfaces any current Terms/Privacy versions the user has
   // not yet accepted. The modal is rendered inline (above `children`) so it
   // overlays whatever protected page the router resolves — the user cannot
   // reach any protected surface without resolving the prompt.
   const { pending, refresh } = useLegalPending();
+  // Boot order matters: until the session probe settles, we do not know
+  // whether this visitor is signed out or merely lost their cached profile
+  // while holding a live refresh cookie. Redirecting early forced a manual
+  // sign-in on every storage loss — the exact complaint this fixes.
+  if (!authReady) return <SessionBootGate />;
   if (!isAuthenticated) return <Navigate to="/login" replace />;
   return (
     <>
@@ -129,14 +155,12 @@ function LegacyPropertyDetailRedirect() {
 
 export default function App() {
   useDisableNumberInputScroll();
-  // One-time boot refresh of the cached profile: sessions persist the user in
-  // local/session storage, so server-added fields (e.g. is_platform_admin)
-  // would otherwise stay absent until the next re-login. Cheap (one GET
-  // /auth/me), and also re-syncs role / MFA state after a long-lived tab.
+  // One-time boot session resolution. With a cached profile this re-syncs the
+  // canonical user (role / is_platform_admin / MFA state) exactly as before;
+  // without one it probes the httpOnly refresh cookie and silently resurrects
+  // the session, so losing web storage no longer means signing in again.
   useEffect(() => {
-    if (useAuthStore.getState().isAuthenticated) {
-      useAuthStore.getState().refreshUser();
-    }
+    useAuthStore.getState().bootstrap();
   }, []);
   return (
     <BrowserRouter>

@@ -13,6 +13,11 @@ vi.mock('../../store/authStore', () => ({
     loading: false,
     error: null,
     clearError: vi.fn(),
+    // A settled, signed-out visitor. Without authReady the page correctly
+    // paints the bare "checking your session" canvas instead of the form —
+    // that gate is what makes auto-sign-in flicker-free in production.
+    isAuthenticated: false,
+    authReady: true,
   }),
 }));
 

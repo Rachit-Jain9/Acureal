@@ -146,6 +146,18 @@ html[data-theme='light'] {
   font-weight: 200;
 }
 
+/* Session-boot gate: invisible for the first 300ms so a fast session probe
+   never paints anything, then a quiet fade for slow networks. Opacity-only —
+   safe under prefers-reduced-motion. */
+@keyframes acureal-boot-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.acureal-boot-in {
+  animation: acureal-boot-in 200ms ease-out 300ms backwards;
+}
+
 @layer base {
   :root {
     --tnum: "tnum" 1, "cv11" 1, "ss01" 1;

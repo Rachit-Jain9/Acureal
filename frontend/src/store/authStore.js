@@ -62,12 +62,51 @@ const persistUser = (user) => {
 
 const getSessionPersistence = () => (localStorage.getItem(USER_KEY) ? 'persistent' : 'session');
 
-const useAuthStore = create((set) => ({
+const useAuthStore = create((set, get) => ({
   user: getStoredUser(),
   isAuthenticated: !!getStoredUser(),
+  // Whether the boot-time session check has settled. With a cached profile it
+  // is true immediately (the UI renders signed-in with zero flash, exactly as
+  // before); without one it stays false until bootstrap() has asked the
+  // server whether an httpOnly refresh cookie is still alive. Route guards
+  // must not redirect to /login before this is true — doing so was the bug
+  // that forced a manual sign-in whenever web storage was lost even though a
+  // valid 30-day session cookie sat in the jar the whole time.
+  authReady: !!getStoredUser(),
   loading: false,
   error: null,
   sessionPersistence: getSessionPersistence(),
+
+  // One-time cold-boot session resolution. The cached profile in web storage
+  // is a RENDERING convenience; the session's source of truth is the httpOnly
+  // refresh cookie, which only the server can read. Reconcile the two:
+  //   cached profile present → session assumed live (the 401 interceptor
+  //     handles renewal), just re-sync the canonical user so server-added
+  //     fields (role changes, is_platform_admin, MFA state) catch up.
+  //   no cached profile → probe /auth/refresh through the interceptor-free
+  //     client. 200 resurrects the session (the endpoint returns the full
+  //     user); any failure settles the app as signed-out WITHOUT a redirect —
+  //     the visitor may be on a public page.
+  // Storage tier on resurrection is localStorage deliberately: a refresh
+  // cookie that outlived the storage was a persistent ("Remember me") one —
+  // session-tier cookies die with the browser that lost the storage.
+  bootstrap: async () => {
+    if (get().isAuthenticated) {
+      get().refreshUser();
+      return true;
+    }
+    try {
+      const { data } = await authAPI.bootstrapRefresh();
+      const user = data?.data?.user;
+      if (!user) throw new Error('no user in refresh response');
+      saveSession(user, true);
+      set({ user, isAuthenticated: true, sessionPersistence: 'persistent', authReady: true });
+      return true;
+    } catch {
+      set({ authReady: true });
+      return false;
+    }
+  },
 
   // rememberMe rides in EVERY sign-in request body — the backend uses it to
   // choose between a 30-day persistent refresh cookie and a browser-session

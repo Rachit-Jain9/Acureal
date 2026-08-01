@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams, Navigate } from 'react-router-dom';
 import { LogIn, UserPlus, Eye, EyeOff } from 'lucide-react';
 import useAuthStore from '../store/authStore';
 import { useLegalActive } from '../hooks/useLegalActive';
@@ -13,7 +13,10 @@ export default function LoginPage() {
   usePublicLightTheme();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login, register, googleSignIn, completeMfaLogin, loading, error, clearError } = useAuthStore();
+  const {
+    login, register, googleSignIn, completeMfaLogin, loading, error, clearError,
+    isAuthenticated, authReady,
+  } = useAuthStore();
   const { data: legalDocs, loading: legalLoading, error: legalError } = useLegalActive();
 
   // Deep-link: `/login?mode=register` (or `?register=1`) opens the page
@@ -191,6 +194,19 @@ export default function LoginPage() {
   const linkClass =
     'text-accent underline underline-offset-2 transition-opacity hover:opacity-80 rounded ' +
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40';
+
+  // Auto-sign-in: a visitor holding a live session never sees this form.
+  // Until the boot probe settles we paint the bare canvas instead of the
+  // form — flashing inputs at someone about to be redirected reads as a
+  // glitch, and the probe is a single round-trip. MFA is the exception:
+  // mid-challenge the user is deliberately on this page while their old
+  // session may still be winding down.
+  if (!authReady && !mfa) {
+    return <div className="min-h-screen bg-bg-secondary" role="status" aria-busy="true" aria-label="Checking your session" />;
+  }
+  if (isAuthenticated && !mfa) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-bg-secondary">
