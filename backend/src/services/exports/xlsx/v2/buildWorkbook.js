@@ -988,6 +988,20 @@ const getCoreInputSnapshot = (ctx) => {
     0,
   ));
 
+  // JDA mirror (2026-08-01): the kernel zeroes upfront land whenever a
+  // valid landowner share is present (utils/jdaStructure.js) - the share
+  // IS the JDA signal, the structure label is informational. The live
+  // engine now applies the same treatment: `landCostCr` is what the model
+  // CHARGES (0 when land is contributed); `grossLandCostCr` preserves the
+  // operator's entry for provenance and the landowner-contribution line.
+  // Income deals are exempt: their sheets carry no landowner-share
+  // netting, so zeroing land there would overstate returns, not fix them.
+  const grossLandCostCr = firstNumber(
+    ctx.inputs.landCostCr, ctx.deal.land_cost_cr, ctx.engineAssumptions?.landCostCr, 0,
+  );
+  const isLandContributed = ctx.dealFamily !== 'income'
+    && landownerSharePct > 0 && landownerSharePct < 1;
+
   return {
     assetClass: ctx.assetClass,
     dealFamily: ctx.dealFamily,
@@ -1001,7 +1015,9 @@ const getCoreInputSnapshot = (ctx) => {
     baseRentPerSqftMonth: baseRentPerSqftMonthFor(ctx),
     occupancyPct: occupancyPctFor(ctx),
     exitCapRate: exitCapRateFor(ctx),
-    landCostCr: firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, 0),
+    landCostCr: isLandContributed ? 0 : grossLandCostCr,
+    grossLandCostCr,
+    isLandContributed,
     constructionCostPerSqft: constructionCostPerSqftFor(ctx),
     approvalCostCr: approvalCostCrFor(ctx),
     premiumFsiCostCr: firstNumber(ctx.inputs.premiumFSICostCr, ctx.inputs.tdrCostCr, 0),
@@ -1413,7 +1429,7 @@ const buildExportQa = (ctx, options = {}) => {
   } else {
     positive('SellRatePerSqft', core.sellRatePerSqft, 'Selling rate per sqft', 'Fill SellRatePerSqft so sales and margin can compute.', 'development asset classes');
     if (ctx.assetClass === 'raw_land') {
-      positive('LandCostCr', core.landCostCr, 'Land cost', 'Fill LandCostCr so raw-land entitlement economics are grounded.', 'raw_land');
+      positive('LandCostCr', core.grossLandCostCr ?? core.landCostCr, 'Land cost', 'Fill LandCostCr so raw-land entitlement economics are grounded.', 'raw_land');
     } else {
       positive('ConstructionCostPerSqft', core.constructionCostPerSqft, 'Construction cost per sqft', 'Fill ConstructionCostPerSqft so development costs are grounded.', 'development asset classes');
     }
@@ -1438,13 +1454,13 @@ const buildExportQa = (ctx, options = {}) => {
     const jdaConstructionBaseCr = (asFiniteNumber(core.constructionCostPerSqft) > 0 && asFiniteNumber(core.saleableAreaSqft) > 0)
       ? (core.constructionCostPerSqft * core.saleableAreaSqft) / 1e7
       : 0;
-    const jdaLandCr = asFiniteNumber(core.landCostCr) || 0;
+    const jdaLandCr = asFiniteNumber(core.grossLandCostCr ?? core.landCostCr) || 0;
     if (core.dealStructureLabel !== 'outright_purchase'
       && jdaLandCr > 5
       && (jdaConstructionBaseCr <= 0 || jdaLandCr > 0.10 * jdaConstructionBaseCr)) {
-      addIssue('warn', 'Structure consistency', 'LandCostCr',
-        `This ${core.dealStructureLabel.replace(/_/g, ' ')} deal contributes land for a landowner share, yet carries a land cost of INR ${jdaLandCr.toFixed(2)} Cr — likely the full land value, not a refundable deposit. In a JDA the developer contributes land (no purchase), so a material land cost double-counts it: it overstates project uses and understates the developer's return.`,
-        'Set LandCostCr to the actual deposit (often ~0) and rely on the landowner share, or reclassify the deal as an outright purchase if the land was genuinely bought.',
+      addIssue('warn', 'Structure treatment', 'LandCostCr',
+        `This ${core.dealStructureLabel.replace(/_/g, ' ')} deal records a land value of INR ${jdaLandCr.toFixed(2)} Cr with a landowner share — the model treats the land as CONTRIBUTED: no purchase is charged, and the value appears as the landowner's contribution (GrossLandValueCr). Verify that this is a contribution, not a genuine purchase.`,
+        'If the land was genuinely bought, reclassify the deal as an outright purchase (the model will then charge it); if it is a refundable deposit, enter the deposit alone.',
         core.dealStructureLabel);
     }
     // Converse — an outright purchase should not also carry a landowner share.
@@ -1927,10 +1943,17 @@ const buildInputsSheet = (workbook, ctx) => {
     ],
   };
 
+  // Land is seeded from the snapshot so the JDA treatment (charged = 0,
+  // gross preserved) has exactly one home. The gross row is emitted only
+  // when land is contributed - outright workbooks are byte-identical.
+  const landCore = getCoreInputSnapshot(ctx);
   const costSection = {
     title: 'Cost Structure',
     rows: [
-      ['Land Cost',               'LandCostCr',          firstNumber(ctx.inputs.landCostCr, ctx.deal.land_cost_cr, ctx.engineAssumptions?.landCostCr, 0),                                  'INR Cr', NUMBER_FORMATS.currency],
+      ['Land Cost',               'LandCostCr',          landCore.landCostCr,               landCore.isLandContributed ? 'INR Cr - 0: land contributed under JDA' : 'INR Cr', NUMBER_FORMATS.currency],
+      ...(landCore.isLandContributed ? [
+        ['Land Value (Contributed)', 'GrossLandValueCr', landCore.grossLandCostCr,         'INR Cr - landowner contribution, not a project cost', NUMBER_FORMATS.currency],
+      ] : []),
       ['Construction Cost / sqft','ConstructionCostPerSqft',
         constructionCostPerSqftFor(ctx),
         'INR/sqft', NUMBER_FORMATS.integer],
@@ -4055,6 +4078,7 @@ const buildModelIntegritySheet = (workbook, ctx) => {
     { label: 'Construction debt retired', actual: `=SUM(${monthlyRef}!$B$18:$${lastMonthCol}$18)+ABS(SUM(${monthlyRef}!$B$19:$${lastMonthCol}$19))+SUM(${monthlyRef}!$B$20:$${lastMonthCol}$20)`, expected: 0, tol: 0.01, mode: 'diff', fmt: NUMBER_FORMATS.currency, note: 'Draws + capitalised interest less repayments must return to zero. CHECK = sales cash cannot retire the facility inside the model window.' },
     { label: 'Equity cash flow valid for IRR', actual: `=COUNTIF(${monthlyRef}!$B$21:$${lastMonthCol}$21,">0")*COUNTIF(${monthlyRef}!$B$21:$${lastMonthCol}$21,"<0")`, expected: 1, tol: 0, mode: 'gte', fmt: NUMBER_FORMATS.integer, note: 'IRR / XIRR need at least one outflow and one inflow. CHECK = the equity row never changes sign — returns are not computable.' },
     { label: 'Sources equal uses', actual: `=${dashRef}!$B$12+${dashRef}!$B$13-SUM(${dashRef}!$B$14:$B$18)`, expected: 0, tol: 0.01, mode: 'diff', fmt: NUMBER_FORMATS.currency, note: 'Equity + debt on the Dashboard must fund exactly the summed uses.' },
+    { label: 'JDA land treatment (charged land is zero when contributed)', actual: `=IF(LandownerSharePct>0,LandCostCr,0)`, expected: 0, tol: 0, mode: 'diff', fmt: NUMBER_FORMATS.currency, note: 'Under a JDA the developer contributes land for a share of revenue — the model must charge no land purchase. CHECK = a land cost re-entered on Inputs is double-counting the contribution.' },
     { label: 'Kernel vs modeled IRR divergence', actual: `=IFERROR(ABS(${dashRef}!$B$21-${dashRef}!$B$20),"n/a")`, expected: 0, tol: 0.05, mode: 'advisory', fmt: NUMBER_FORMATS.percent, note: 'Advisory only. Divergence is expected once Inputs are edited; a large at-rest gap merits a review of the committed kernel inputs.' },
   ];
   const incomeChecks = [
@@ -4631,7 +4655,10 @@ const buildPhasingSheet = (workbook, ctx) => {
     {
       label: 'Marketing & Sales spend (INR Cr)',
       // Row position shifted from 11 → 16 due to PR-I2 RERA block.
-      formula: (q) => `=${colLetter(q + 1)}9*MarketingCostPct`,
+      // Marketing rides the developer's share of sales - under a JDA the
+      // landowner's slice never touches the developer's P&L. Share 0
+      // collapses the factor to 1 for outright deals.
+      formula: (q) => `=${colLetter(q + 1)}9*MarketingCostPct*(1-LandownerSharePct)`,
       format: NUMBER_FORMATS.currency,
     },
     {
@@ -6402,7 +6429,11 @@ const buildDashboardSheet = (workbook, ctx) => {
     const noi = `(${egr}-${opex})`;
     return annualized ? `(${noi}*4)` : noi;
   };
-  const developmentRevenueCrFormula = (rateVariance) => `((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${rateVariance}))`;
+    // Developer-NET revenue: the landowner's share never reaches the
+  // developer, so margins and the sensitivity grid must not count it.
+  // (The prob-weighted scenario column applies the factor on its own
+  // separately-built ref - do not add it there twice.)
+  const developmentRevenueCrFormula = (rateVariance) => `((SaleableAreaSqft*SellRatePerSqft*(1+EscalationPct)^(TotalQuarters/4/2)/10000000)*(1+${rateVariance})*(1-LandownerSharePct))`;
   const sensitivityFormula = (columnVariance, rowVariance) => {
     if (isIncomeDashboard) {
       return `=IFERROR(${incomeNoiCrFormula(columnVariance, rowVariance, true)}/${totalProjectCostRef},0)`;
@@ -6890,7 +6921,12 @@ const buildDashboardSheet = (workbook, ctx) => {
     },
     {
       label: 'Landowner Contribution (JDA)',
-      cr: isJv ? `=LandCostCr` : `=0`,
+      // The landowner's contribution is the land's VALUE. Charged land is
+      // 0 under the JDA mirror, so referencing LandCostCr here would
+      // render the contribution as nothing - the opposite of the truth.
+      cr: (isJv && getCoreInputSnapshot(ctx).isLandContributed)
+        ? `=GrossLandValueCr`
+        : (isJv ? `=LandCostCr` : `=0`),
       color: 'accentSoft',
     },
   ];
@@ -8599,8 +8635,8 @@ const buildCalculationsSheet = (workbook, ctx) => {
     ['Insurance during construction (INR Cr)','=B13*InsuranceConstPct',                                           'Construction × InsuranceConstPct'],
     ['Property taxes during construction',   '=LandCostCr*PropTaxConstPct',                                       'Land × PropTaxConstPct (Karnataka method)'],
     ['Developer overhead (INR Cr)',          '=B13*DeveloperOverheadPct',                                         'Construction × DeveloperOverheadPct'],
-    ['Marketing & sales (INR Cr)',           '=B8*MarketingCostPct',                                              'Total revenue × MarketingCostPct'],
-    ['Finance / treasury (INR Cr)',          '=B8*FinanceCostPct',                                                'Total revenue × FinanceCostPct'],
+    ['Marketing & sales (INR Cr)',           '=B8*MarketingCostPct*(1-LandownerSharePct)',                        'Developer-net revenue × MarketingCostPct'],
+    ['Finance / treasury (INR Cr)',          '=B8*FinanceCostPct*(1-LandownerSharePct)',                          'Developer-net revenue × FinanceCostPct'],
     ['Soft cost subtotal',                   '=B16+B17+B18+B19+B20+B21+B22+B23',                                  'All 8 soft cost line items'],
     ['Stamp Duty + Registration on Land',    '=LandCostCr*StampRegPct',                                            'Karnataka default 6.6% × Land (PR-I1)'],
     ['GST on Construction (Net of ITC)',     '=B13*GstPct',                                                        'Asset-class-aware net cost (PR-I1)'],
