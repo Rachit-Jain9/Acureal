@@ -6,6 +6,33 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-01 (second block) — The platform answers to its name, and the error log pays out again (#1059–#1063)
+
+Operator reversed the earlier decision and directed the remaining platform renames; then a production-error sweep found one defect family and closed it. Six deliverables: 2 renames + 4 PRs + 1 operator migration.
+
+### Renames — GitHub, Vercel, Supabase are all "Acureal" now
+- **GitHub**: `Rachit-Jain9/REDIP` → **`Rachit-Jain9/Acureal`** (old URLs 301; local remote updated; verified by fetching and by PR #1060's own creation).
+- **Vercel**: project `redip` → **`acureal`**. Critical detail: `redip.vercel.app` STAYED attached through the rename (old bookmarks keep 308-ing), and **`acureal.vercel.app` was claimed defensively** and given its own host-scoped 308 pair in vercel.json — without that it would have served the app on a non-canonical host. All four hosts verified live post-deploy (200 / 3×308, paths preserved).
+- **Supabase**: display name → **Acureal** (project ref untouched, per the do-not-rename list).
+- #1060 (reference sweep: docs, deep-links, edge-function fallback, UA strings, test fixtures — its own preview deployment was the proof the GitHub↔Vercel integration survived both renames). #1059 fixed TODO 6b claiming email was still pending.
+
+### #1061 — migration-status grew up on its first live run
+Three bugs the reconciler's own production run exposed: (1) **comment prose parsed as DDL** — "-- Idempotent: CREATE TABLE IF NOT EXISTS," backtracked into a phantom `{name:'IF'}` probe that dragged fully-applied files into PARTIAL; (2) **index probes assumed schema public** — Postgres puts an index in its TABLE's schema (all 20 regulatory_data indexes false-negatived); (3) **same-day version collision** — two 20260602 files → identical ledger PKs → second row silently dropped by ON CONFLICT. Final verdict after fixes: 58 RECORDED / 41 LIVE-UNRECORDED / 34 UNVERIFIABLE / 1 PARTIAL (two indexes on an empty table — the June apply predates the file's final form) / 1 NOT APPLIED (5b, expected). **TODO 5c is now a single reviewed paste** — catch-up indexes + 42-row ledger backfill; no command left on the operator.
+
+### The error-log sweep (5 investigators + adversarial verifiers): what the RLS flip quietly broke
+Method per the standing memory: start from what production LOGS. One family + two independents, all confirmed:
+- **#1062 — /auth/refresh 404'd every silent renewal since the flip** (16/16). The one identity-bearing pre-auth path never stamped the request context before hydrate → users self-read policy saw zero rows → 404 AFTER the grant was consumed. The server-side half of the auto-sign-in complaint (#1053 was the client half). Fix mirrors middleware/auth.js; 404 now sweeps cookies (with a distinct log first); hydrate's 403 revokes the just-rotated family. 5 mechanism-pinning tests.
+- **#1063 — the phantom-GUC family**: 20260508/20260525/20260526 policies gated on `current_setting('redip.organization_id')` — a namespace NOTHING writes. Benchmarks panels silently empty, A/B eval 42501 (operator hit it 07-31), improvement_signals discarded (no write policy at all), /admin/signups roster silently org-scoped. Repair migration **20260804** (TODO **5d**) + definer pair for the roster + 42883 fallback until applied.
+- **#1063 also** — `activity_type='document_upload'` existed in exactly ONE line of the repo and never in the DB enum: every document upload 07-17→08-01 lost its timeline row (22P02, fail-soft). Now 'note' + a coercion guard + a test iterating every registered handler against ACTIVITY_TYPES. eventBus.publish now registers its fanout with waitUntil — every fire-and-forget publish was racing serverless freeze. And /admin/users referenced `users.organization_id` — a column that never existed; the comps-queue assignee picker had never worked once since 2026-06-16. Plus: the three file-less registry entries (RMP 2015 Vol III / BIAAPA / Hoskote) no longer offer an Extract button that can only 400.
+
+### Verified end-state
+Backend 267 suites / 4,314 tests; frontend suites + build green; production healthy on all four hosts. Open PRs: 0.
+
+### Operator-gated
+5d (apply 20260804 — reactivates benchmarks/A-B/signals/roster) · 5b · 5c (now one paste) · mailboxes (5) · names (4) · lawyer (7).
+
+---
+
 ## 2026-08-01 (deep-work block) — Sessions that survive, a hero that assembles itself, and three honesty fixes (#1053–#1057)
 
 Five PRs in one block: the recurring "I have to sign in manually" complaint fixed at the foundation, the landing hero rebuilt as the identity's own motion signature, and the three top audit engineering items shipped (JDA workbook mirror, "since your last visit", migration-ledger reconciliation).
