@@ -51,6 +51,19 @@ describe('extractProbes', () => {
     expect(probes).toContainEqual({ kind: 'column', schema: 'public', name: 'users', column: 'is_platform_admin' });
   });
 
+  test('an index inherits its table\'s schema from the ON clause — never a public default', () => {
+    // Postgres puts an index in the table's schema and forbids qualifying
+    // the index name itself. Assuming public false-negatived all 20
+    // regulatory_data indexes on the first live run.
+    const sql = `
+      CREATE INDEX IF NOT EXISTS idx_guidance_taluk
+        ON regulatory_data.guidance_values (taluk);
+    `;
+    expect(extractProbes(sql)).toEqual([
+      { kind: 'index', schema: 'regulatory_data', name: 'idx_guidance_taluk' },
+    ]);
+  });
+
   test('a pure seed file yields zero probes — UNVERIFIABLE, never guessed', () => {
     const sql = `
       INSERT INTO regulatory_data.guidance_values (street, band) VALUES ('X', 1);
@@ -65,6 +78,27 @@ describe('extractProbes', () => {
       CREATE TABLE IF NOT EXISTS a (id INT);
     `;
     expect(extractProbes(sql)).toHaveLength(1);
+  });
+
+  test('prose in comments never becomes a probe — the phantom-IF bug from the first live run', () => {
+    // Real header text from 20260525/20260720: DDL keywords in a comment,
+    // followed by a comma. Pre-fix this produced { name: 'IF' } probes that
+    // can never pass and dragged fully-applied files into PARTIAL.
+    const sql = `
+      -- Idempotent: CREATE TABLE IF NOT EXISTS, DROP POLICY IF EXISTS.
+      /* Also idempotent: CREATE INDEX IF NOT EXISTS, re-runnable. */
+      CREATE TABLE IF NOT EXISTS public.real_table (id BIGINT);
+    `;
+    expect(extractProbes(sql)).toEqual([
+      { kind: 'table', schema: 'public', name: 'real_table' },
+    ]);
+  });
+
+  test('a backtracked keyword capture is rejected even outside comments', () => {
+    // Dynamic DDL leaves a non-identifier where the name should be; the
+    // regex backtracks and captures the keyword instead. Guard drops it.
+    const sql = "DO $$ BEGIN EXECUTE format('CREATE INDEX IF NOT EXISTS %I ON t(c)', name); END $$;";
+    expect(extractProbes(sql)).toEqual([]);
   });
 });
 
@@ -107,5 +141,17 @@ describe('backfill emission', () => {
 
   test('nothing to backfill → null, so the caller prints the honest message', () => {
     expect(buildBackfillSql([])).toBeNull();
+  });
+
+  test('same-day migrations get distinct versions — collision would be silently dropped', () => {
+    // version is the ledger PK and the INSERT ends with ON CONFLICT DO
+    // NOTHING: two rows sharing 20260602000000 means the second never
+    // lands and the ledger stays quietly wrong. First live run hit this.
+    const sql = buildBackfillSql([
+      { version: '20260602', slug: 'document_extractions_reaper' },
+      { version: '20260602', slug: 'properties_auto_derived_context_columns' },
+    ]);
+    expect(sql).toContain("('20260602000000', 'document_extractions_reaper')");
+    expect(sql).toContain("('20260602000001', 'properties_auto_derived_context_columns')");
   });
 });
