@@ -278,6 +278,10 @@ export const dealsAPI = {
   // Unified workspace read-model. Composes deal + financials + scenarios +
   // graph + DD/risk scores + audit events + documents + activities +
   // waterfall so the deal page loads from a single round-trip.
+  // Stamp this user's visit watermark; returns { since, first_visit, total,
+  // changes } — what moved since their PREVIOUS visit. POST by design (it
+  // writes the watermark); never call it from a hover/prefetch path.
+  visitDeal: (id) => api.post(`/deals/${id}/visit`),
   // `options.lite` fetches the deterministic payload without the slow AI
   // narration — the deal page uses it for an instant first paint.
   getWorkspace: (id, options = {}) =>

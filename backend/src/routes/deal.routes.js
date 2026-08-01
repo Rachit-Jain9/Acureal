@@ -2,6 +2,8 @@ const express = require('express');
 const { body, query: qv, param } = require('express-validator');
 const dealService = require('../services/deal.service');
 const dealWorkspaceService = require('../services/dealWorkspace.service');
+const dealVisitsService = require('../services/dealVisits.service');
+const { query } = require('../config/database');
 const dealShareService = require('../services/dealShare.service');
 const dealApplyExtractionsService = require('../services/dealApplyExtractions.service');
 const { authenticate, requireRole } = require('../middleware/auth');
@@ -708,6 +710,52 @@ router.get(
       res.json({ success: true, data: workspace });
     } catch (error) {
       next(error);
+    }
+  }
+);
+
+// POST /deals/:id/visit — stamp this user's visit watermark and return what
+// changed since their PREVIOUS visit. Deliberately its own route rather than
+// a side-effect of the workspace read: the composer is a no-write read model,
+// and the dashboard prefetches the lite workspace on hover — recording visits
+// there would clear a user's own "what's new" by mousing over the deals list.
+// Degrades to { since: null } until the 20260801 migration is applied.
+router.post(
+  '/:id/visit',
+  authenticate,
+  [param('id').isUUID().withMessage('Deal id must be a UUID.')],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      // Visibility first: RLS scopes deals to the caller's workspace, so an
+      // id outside it reads as absent — no watermark row for foreign deals.
+      const visible = await query(
+        'SELECT 1 FROM public.deals WHERE id = $1 LIMIT 1',
+        [req.params.id],
+      );
+      if (visible.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Deal not found.' });
+      }
+
+      const visit = await dealVisitsService.recordVisit(req.params.id);
+      if (!visit) {
+        // Table not migrated yet — the feature is dark, not broken.
+        return res.json({ success: true, data: { since: null, first_visit: null, changes: null } });
+      }
+      const delta = visit.since
+        ? await dealVisitsService.getChangesSince(req.params.id, visit.since)
+        : null;
+      return res.json({
+        success: true,
+        data: {
+          since: visit.since,
+          first_visit: visit.first_visit,
+          total: delta?.total ?? 0,
+          changes: delta?.changes ?? null,
+        },
+      });
+    } catch (error) {
+      return next(error);
     }
   }
 );
