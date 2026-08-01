@@ -133,5 +133,5 @@ npm run build
 
 - GitHub remote: `https://github.com/Rachit-Jain9/Acureal.git`
 - Vercel project metadata: `.vercel/project.json`
-- Production app: `https://redip.vercel.app/`
+- Production app: `https://acureal.in/` (legacy hosts `redip.vercel.app` and `acureal.vercel.app` 308-redirect here)
 - Daily FX refresh is scheduled in `vercel.json` at `03:05 UTC` via `/api/fx/refresh/daily`

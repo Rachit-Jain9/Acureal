@@ -62,6 +62,18 @@
       "has": [{ "type": "host", "value": "redip.vercel.app" }],
       "destination": "https://acureal.in/:path*",
       "permanent": true
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "acureal.vercel.app" }],
+      "destination": "https://acureal.in/",
+      "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "acureal.vercel.app" }],
+      "destination": "https://acureal.in/:path*",
+      "permanent": true
     }
   ],
   "rewrites": [

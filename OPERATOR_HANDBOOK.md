@@ -23,7 +23,7 @@ This file aggregates from the working TODO files. It is the **first** place to l
 
 | System | Status | Notes |
 |---|---|---|
-| Production app | Live at https://redip.vercel.app | |
+| Production app | Live at https://acureal.in (custom domain since 2026-07-30; `redip.vercel.app` 308-redirects) | |
 | Database (Supabase project `niamgjbxxgmmffggumvj`) | Free tier, ap-south-1 (Mumbai) ✅ migrated to Mumbai 2026-05-04 (was Tokyo `lsbhrbvuynzqhdtzczco`) | See §3.2 |
 | Vercel hosting | Hobby tier | See §3.1 |
 | Auth — password sign-up | Live, open registration | Anyone can register; new accounts get their own isolated workspace as owner. Invitation tokens (if present) join the inviting workspace at the encoded role. |
@@ -31,9 +31,9 @@ This file aggregates from the working TODO files. It is the **first** place to l
 | Auth — token storage | httpOnly cookies + 15-min access / 30-day refresh, rotated on each use (PR #142) | Reuse detection kills the family on replay; legacy `Authorization: Bearer` header still accepted for back-compat |
 | Auth — set-first-password (OAuth-only users) | Live (PR #145) | Settings → Security flips to "Set a password" card when `user.password_set === false` |
 | Legal — re-acceptance gate | Live (PR #144) | Modal blocks protected app until user re-accepts current Terms/Privacy. Founder will see this on next prod login (Privacy v2 not yet accepted) |
-| Email verification | Live (PR #138), dev-mode delivery | Links surface in Vercel logs until Resend is wired |
+| Email verification | Live end-to-end (Resend on `acureal.in` since 2026-07-31) | Real emails from `Acureal <noreply@acureal.in>`; verified landing in a real inbox |
 | Legal docs | Terms v1, Privacy v2, Cookies v1 — published, DRAFT | **Not lawyer-reviewed.** Do not onboard user #2 until reviewed. |
-| Domain | None (using `redip.vercel.app`) | See §3.3 |
+| Domain | `acureal.in` live with HTTPS (GoDaddy DNS → Vercel, 2026-07-30); `www` + legacy hosts 308-redirect to it | See §3.3 |
 
 ---
 
