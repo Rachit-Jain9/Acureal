@@ -87,6 +87,10 @@ CREATE POLICY deal_user_visits_self_update ON public.deal_user_visits
     AND organization_id = (SELECT public.current_organization_id())
   );
 
+-- DROP-then-CREATE keeps the file's idempotency promise true (CREATE TRIGGER
+-- alone errors 42710 on a re-run). This matches the exact SQL applied to
+-- production on 2026-08-01.
+DROP TRIGGER IF EXISTS deal_user_visits_updated_at ON public.deal_user_visits;
 CREATE TRIGGER deal_user_visits_updated_at BEFORE UPDATE ON public.deal_user_visits
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 

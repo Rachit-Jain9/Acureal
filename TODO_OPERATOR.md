@@ -8,9 +8,9 @@ have. Everything else (the code, the database, the product) is built and verifie
 After each one, reply with the little "done" phrase shown — that's how I keep this
 list up to date. Everything is written step-by-step, no jargon.
 
-_Last updated: 2026-08-01 (**Items 6 and 6b are both DONE** — the domain is live and
-email sending is verified working. What's left: 5 (mailboxes — the legally required
-one), 5b + 5c (two quick database pastes), 4 (two names), and 7 (the lawyer).)_
+_Last updated: 2026-08-01 evening (**5b, 5c and 5d are all DONE** — you ran all three
+database pastes and every one is verified live. What's left: 5 (mailboxes — the
+legally required one), 4 (two names), and 7 (the lawyer).)_
 
 ---
 
@@ -132,123 +132,25 @@ mailbox password set, and I don't create accounts or enter passwords.
 
 ---
 
-## 5b. Apply one database update — turns on "since your last visit"
-**Why:** The site can now show you exactly what changed on a deal since YOU
-last opened it (new documents, new risks, diligence progress). The code is
-live but stays invisible until this one database update is applied. Nothing
-breaks while you wait — the feature simply doesn't show.
+## 5b. ✅ DONE (2026-08-01 — operator ran it; verified live)
+"Since your last visit" is ON: open a deal you haven't touched in a while and
+the top of the Overview says what changed without you (new documents, new
+risks, diligence progress). The first paste failed amusingly — a browser
+extension smuggled the words "Adobe Acrobat" into the copied text and the
+database refused the lot — the clean re-paste succeeded and was verified.
 
-1. 🌐 Open the database editor:
-   `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
-2. 🌐 In another tab, open this exact file and copy ALL of its text:
-   `https://github.com/Rachit-Jain9/Acureal/raw/master/database/migrations/20260801_deal_user_visits.sql`
-3. Paste it into the big text box from step 1.
-4. Click the green **Run** button (bottom-right).
-5. **Success signal:** it says `Success. No rows returned`.
-6. **Reply:** `visits migration done` — I'll verify it end-to-end.
+## 5c. ✅ DONE (2026-08-01 — operator ran it; verified live)
+The database's applied-updates diary is complete again: 42 catch-up entries
+written, the two missing June index entries created, and the checker now
+reports **zero unrecorded, zero partial, zero unapplied** across all 136
+update files. From here on, one command re-checks it any time.
 
-## 5c. Fix the database's record of what's been applied — ONE paste (I did the checking for you)
-**Why:** The database keeps a diary of which update files have been run. That
-diary stopped being written in mid-July, while updates kept being applied — so
-nobody could tell from the diary what's live. On 2026-08-01 I ran the checker
-against the real database myself (read-only), reviewed every result, and found:
-**41 updates are live but missing from the diary**, and **2 tiny speed-up
-entries from a June update never got created** (on a table that's still empty,
-so adding them is instant and harmless). The block below fixes all of it.
-
-1. 🌐 Open `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
-2. 📋 Copy EVERYTHING in the grey box below — from `CREATE` down to the final
-   semicolon — and paste it into the big text box:
-
-```sql
--- Part 1: two indexes the June 'organization domains' update missed
--- (table is empty — these complete instantly)
-CREATE UNIQUE INDEX IF NOT EXISTS organization_domains_domain_uidx
-  ON public.organization_domains (lower(domain));
-CREATE INDEX IF NOT EXISTS organization_domains_autojoin_idx
-  ON public.organization_domains (lower(domain)) WHERE verified = TRUE;
-
--- Part 2: diary catch-up for every update verified LIVE in production
--- (safe to run twice — duplicates are ignored)
-INSERT INTO supabase_migrations.schema_migrations (version, name)
-VALUES
-  ('20260505000000', 'market_data_q1_2026_refresh'),
-  ('20260507000000', 'named_premium_comps_q1_2026'),
-  ('20260508000000', 'residential_segmented_benchmarks_schema'),
-  ('20260515000000', 'comps_review_queue'),
-  ('20260516000000', 'comps_geocode_quality'),
-  ('20260517000000', 'ai_artifacts_numerical_drifts'),
-  ('20260518000000', 'deal_qa_history'),
-  ('20260520000000', 'comps_queue_assignment'),
-  ('20260524000000', 'deal_audit_log'),
-  ('20260525000000', 'niche_asset_class_benchmarks'),
-  ('20260526000000', 'ab_eval_runs'),
-  ('20260527000000', 'export_events'),
-  ('20260530000000', 'document_access_log'),
-  ('20260602000000', 'document_extractions_reaper'),
-  ('20260602000001', 'properties_auto_derived_context_columns'),
-  ('20260603000000', 'domain_claim_verified_uniqueness'),
-  ('20260604000000', 'ai_augment_usage_quota'),
-  ('20260605000000', 'security_events'),
-  ('20260607000000', 'user_consents'),
-  ('20260608000000', 'improvement_signals'),
-  ('20260609000000', 'deal_promoter_profiles'),
-  ('20260610000000', 'deal_comp_reliance'),
-  ('20260611000000', 'extraction_field_verdicts'),
-  ('20260612000000', 'organization_consents'),
-  ('20260614000000', 'deal_recommendation_runs'),
-  ('20260615000000', 'deal_recommendation_verdicts'),
-  ('20260616000000', 'micro_market_intelligence'),
-  ('20260617000000', 'karnataka_rera_tracker'),
-  ('20260618000000', 'promoter_rera_link'),
-  ('20260619000000', 'district_localities'),
-  ('20260620000000', 'deals_list_perf_indexes'),
-  ('20260625000000', 'organization_domains_and_audit'),
-  ('20260630000000', 'deal_rera_inputs'),
-  ('20260701000000', 'deal_signoffs'),
-  ('20260712000000', 'statutory_plan_registry'),
-  ('20260713000000', 'guidance_values_field_completion'),
-  ('20260720000000', 'yield_studio_persistence'),
-  ('20260726000000', 'deal_registers'),
-  ('20260730000000', 'user_signup_profile_fields'),
-  ('20260801000000', 'auth_bootstrap_security_definer'),
-  ('20260802000000', 'rls_flip_hardening'),
-  ('20260803000000', 'users_platform_admin_flag')
-ON CONFLICT (version) DO NOTHING;
-```
-
-3. Click the green **Run** button (bottom-right).
-4. **Success signal:** `Success. No rows returned`.
-5. **Reply:** `ledger fixed` — I'll re-run the checker to confirm the diary
-   is complete.
-
-_(The only update the checker found genuinely NOT applied is 5b above —
-"since your last visit" — which is exactly why 5b is its own item.)_
-
-## 5d. 🔴 One more database paste — fixes four things the July security upgrade quietly broke
-**Why:** On 28 July the app was moved onto a stricter database-security mode
-(a good thing — the database itself now enforces that workspaces can't see
-each other). But a review of this week's production errors found four older
-corners that were never written to work under the stricter rules:
-1. **Benchmark panels** on the Market Intelligence page silently show nothing.
-2. **The A/B quality-testing tool** in Admin errors when you run it (you hit
-   this yourself on 31 July).
-3. **Usage-learning signals** (which fields users correct, etc.) are being
-   silently thrown away instead of recorded.
-4. **Admin › Signups** quietly shows only your own workspace instead of
-   everyone who signed up.
-
-The paste below fixes all four. It's safe to run twice by design.
-
-1. 🌐 Open `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
-2. 🌐 In another tab, open this file and copy ALL of its text:
-   `https://github.com/Rachit-Jain9/Acureal/raw/master/database/migrations/20260804_rls_flip_repair.sql`
-3. Paste into the big text box, click the green **Run** button (bottom-right).
-4. **Success signal:** `Success. No rows returned`.
-5. **Reply:** `flip repair done` — I'll verify all four fixes end-to-end.
-
-_(Do this one AFTER 5c, or in the same sitting — order between 5b/5c/5d
-doesn't matter, they're independent.)_
+## 5d. ✅ DONE (2026-08-01 — operator ran it; verified live)
+The four things July's security upgrade quietly broke are repaired: benchmark
+panels read again, the A/B quality tool works, usage-learning signals are
+being recorded again, and Admin › Signups shows everyone across all
+workspaces (not just yours). Verified live: the repair functions exist in
+production and no security rule references the phantom setting any more.
 
 ---
 
