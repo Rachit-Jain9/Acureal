@@ -9,8 +9,35 @@ import { ArrowRight, ArrowUpRight } from 'lucide-react';
 const SERIF = "'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif";
 const SANS = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif";
 const MONO = "'JetBrains Mono', 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace";
+const JOST = "'Jost', 'Inter', 'Segoe UI', sans-serif";
 
 const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
+
+// Identity palette for the hero lockup (design handoff 2026-07). These sit
+// comfortably on the landing's warm bone — the handoff's own parchment is a
+// near neighbour of #F5F1E8 — and are the ONLY place the identity colours
+// enter this otherwise evergreen/brass page: the logo keeps its own colours.
+const NAVY = '#0B2440';
+const SIGNAL = '#1E6FD0';
+const ROSE = '#C08D7C';
+
+// The measure rule's canonical geometry — copied from the handoff, never
+// redrawn. The node sits at 62.5% of the span; off-centre is what makes it
+// read as measured rather than decorative.
+const RULE_MINOR =
+  'M12 20V26M24 20V26M36 20V26M48 20V26M72 20V26M84 20V26M96 20V26M108 20V26'
+  + 'M132 20V26M144 20V26M156 20V26M168 20V26M192 20V26M204 20V26M216 20V26M228 20V26'
+  + 'M252 20V26M264 20V26M276 20V26M288 20V26M312 20V26M324 20V26M336 20V26M348 20V26'
+  + 'M372 20V26M384 20V26M396 20V26M408 20V26M432 20V26M444 20V26M456 20V26M468 20V26';
+const RULE_MAJOR =
+  'M0 12V26M60 12V26M120 12V26M180 12V26M240 12V26M300 12V26M360 12V26M420 12V26M480 12V26';
+
+// Chip spec from the handoff: mono, 0.22em tracking, square corners.
+const HERO_CHIPS = [
+  { label: 'Underwriting', color: '#1B5FB8', bg: '#E2EDFA' },
+  { label: 'Diligence', color: '#1B5FB8', bg: '#E2EDFA' },
+  { label: 'IC Reporting', color: '#8A5C4F', bg: '#F4E1D8' },
+];
 
 // Parcel boundary polygon (irregular, surveyor-sketch feel) in the 720x520 viewBox.
 const PARCEL_PTS = [
@@ -246,85 +273,157 @@ export default function HeroParcelResolve() {
               maxWidth: 560,
             }}
           >
-            {/* Eyebrow + one hairline rule under it */}
+            {/* The identity lockup, animated with the brand's motion
+                signature (timings from the handoff, keyframes in index.css):
+                eyebrow rises → letters land one by one → the rule scales out
+                from the left → the node slides in and settles at 62.5% → the
+                plumb draws down → the halo breathes forever. Every element's
+                resting CSS is its final state, so prefers-reduced-motion
+                simply presents the finished composition. */}
+
+            {/* Eyebrow */}
             <div
+              className="acureal-hero-eyebrow"
               style={{
-                opacity: textIn ? 1 : 0,
-                transform: textIn ? 'translateY(0)' : 'translateY(8px)',
-                transition: reduceMotion.current
-                  ? undefined
-                  : `opacity 260ms ease-out, transform 260ms ${EASE}`,
+                fontFamily: MONO,
+                fontSize: 11.5,
+                letterSpacing: '0.3em',
+                textTransform: 'uppercase',
+                color: '#8C8579',
+                fontFeatureSettings: "'tnum' 1",
               }}
             >
-              <div
-                style={{
-                  fontFamily: MONO,
-                  fontSize: 11.5,
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  color: '#8C8579',
-                  fontFeatureSettings: "'tnum' 1",
-                }}
-              >
-                Acureal · Real estate deal intelligence · Bengaluru-first
-              </div>
-              <div
-                style={{
-                  height: 1,
-                  backgroundColor: '#E2DACB',
-                  marginTop: 16,
-                  marginBottom: 32,
-                }}
-              />
+              Deal Intelligence · India
             </div>
 
-            {/* Headline — Source Serif 4, large, left; 'should' in true italic */}
+            {/* Wordmark — live text, one letter at a time, the E in signal */}
             <h1
+              aria-label="Acureal — the intelligence layer for Indian real estate"
               style={{
-                fontFamily: SERIF,
-                fontWeight: 500,
-                fontSize: 'clamp(34px, 4.4vw, 56px)',
-                lineHeight: 1.08,
-                letterSpacing: '-0.012em',
-                color: '#1C1A16',
-                margin: 0,
-                opacity: textIn ? 1 : 0,
-                transform: textIn ? 'translateY(0)' : 'translateY(8px)',
-                transition: reduceMotion.current
-                  ? undefined
-                  : `opacity 260ms ease-out 40ms, transform 260ms ${EASE} 40ms`,
+                fontFamily: JOST,
+                fontWeight: 200,
+                fontSize: 'clamp(44px, 6vw, 84px)',
+                lineHeight: 0.98,
+                letterSpacing: '0.2em',
+                color: NAVY,
+                whiteSpace: 'nowrap',
+                margin: '28px 0 0',
               }}
             >
-              The discipline to underwrite Indian real estate the way an
-              institution{' '}
-              <span style={{ fontStyle: 'italic' }}>should.</span>
+              {'ACUREAL'.split('').map((ch, i) => (
+                <span
+                  key={i}
+                  aria-hidden="true"
+                  className="acureal-hero-letter"
+                  style={{
+                    animationDelay: `${60 + i * 50}ms`,
+                    ...(i === 4 ? { color: SIGNAL } : {}),
+                  }}
+                >
+                  {ch}
+                </span>
+              ))}
             </h1>
 
-            {/* Body — Inter, secondary ink */}
-            <p
+            {/* The measure rule — scale draws out, node arrives, plumb drops */}
+            <svg
+              viewBox="0 0 480 34"
+              aria-hidden="true"
               style={{
+                display: 'block',
+                width: '100%',
+                maxWidth: 520,
+                height: 'auto',
+                marginTop: 30,
+                overflow: 'visible',
+              }}
+            >
+              <defs>
+                <linearGradient id="acuHeroRose" x1="0" y1="0" x2="1" y2="0">
+                  <stop offset="0" stopColor="#B9836F" stopOpacity="0.35" />
+                  <stop offset="0.28" stopColor="#C08D7C" />
+                  <stop offset="0.62" stopColor="#DDB4A4" />
+                  <stop offset="1" stopColor="#A6705F" stopOpacity="0.5" />
+                </linearGradient>
+              </defs>
+              <g className="acureal-hero-rule">
+                <g stroke={ROSE} strokeOpacity="0.5" strokeWidth="1">
+                  <path d={RULE_MINOR} />
+                </g>
+                <g stroke={ROSE} strokeWidth="1.6">
+                  <path d={RULE_MAJOR} />
+                </g>
+                <path d="M0 26H480" stroke="url(#acuHeroRose)" strokeWidth="1.6" fill="none" />
+              </g>
+              <g className="acureal-hero-node">
+                <circle className="acureal-hero-halo" cx="300" cy="5" r="9" fill={SIGNAL} />
+                <path className="acureal-hero-plumb" d="M300 4V26" stroke={SIGNAL} strokeWidth="1.4" fill="none" />
+                <rect x="295" y="0" width="10" height="10" fill={SIGNAL} />
+              </g>
+            </svg>
+
+            {/* Tagline */}
+            <p
+              className="acureal-hero-after"
+              style={{
+                animationDelay: '1000ms',
+                fontFamily: SERIF,
+                fontWeight: 500,
+                fontSize: 'clamp(22px, 2.3vw, 30px)',
+                lineHeight: 1.3,
+                letterSpacing: '-0.008em',
+                color: NAVY,
+                margin: '34px 0 0',
+              }}
+            >
+              The intelligence layer for Indian real estate.
+            </p>
+
+            {/* Supporting line */}
+            <p
+              className="acureal-hero-after"
+              style={{
+                animationDelay: '1150ms',
                 fontFamily: SANS,
                 fontSize: 16.5,
                 lineHeight: 1.62,
                 color: '#57514A',
                 maxWidth: 520,
-                marginTop: 26,
-                marginBottom: 0,
-                opacity: textIn ? 1 : 0,
-                transform: textIn ? 'translateY(0)' : 'translateY(8px)',
-                transition: reduceMotion.current
-                  ? undefined
-                  : `opacity 260ms ease-out 90ms, transform 260ms ${EASE} 90ms`,
+                margin: '18px 0 0',
               }}
             >
-              A parcel off Sarjapur Road, the way a deal usually arrives — a survey
-              sketch, a builder&rsquo;s word, a folder of scans forwarded on
-              WhatsApp. Acureal takes it from there: ingest the documents, structure
-              the facts, score the diligence, run the numbers in deterministic
-              code, and trace every figure back to the page it came from. From
-              first look to a defensible IC position, with the blind spots that
-              sink Indian deals surfaced early — not after the cheque clears.
+              Underwriting, diligence and IC-ready reporting for GPs, lenders and
+              institutional investors — built on evidence, not sentiment.
             </p>
+
+            {/* Discipline chips */}
+            <div
+              className="acureal-hero-after"
+              style={{
+                animationDelay: '1300ms',
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: 10,
+                marginTop: 26,
+              }}
+            >
+              {HERO_CHIPS.map((chip) => (
+                <span
+                  key={chip.label}
+                  style={{
+                    fontFamily: MONO,
+                    fontSize: 10,
+                    letterSpacing: '0.22em',
+                    textTransform: 'uppercase',
+                    color: chip.color,
+                    backgroundColor: chip.bg,
+                    padding: '10px 13px',
+                  }}
+                >
+                  {chip.label}
+                </span>
+              ))}
+            </div>
 
             {/* CTAs */}
             <div
