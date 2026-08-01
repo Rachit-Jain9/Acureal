@@ -28,6 +28,7 @@
  */
 
 const log = require('./logger').child({ module: 'event.bus' });
+const { runInBackground } = require('./backgroundTask');
 
 const subscribers = new Map();
 
@@ -50,9 +51,9 @@ const subscribe = (eventName, handler) => {
   };
 };
 
-const publish = async (eventName, payload = {}) => {
+const publish = (eventName, payload = {}) => {
   const handlers = subscribers.get(eventName);
-  if (!handlers || handlers.size === 0) return { delivered: 0 };
+  if (!handlers || handlers.size === 0) return Promise.resolve({ delivered: 0 });
 
   const enriched = {
     ...payload,
@@ -60,7 +61,7 @@ const publish = async (eventName, payload = {}) => {
     emittedAt: new Date().toISOString(),
   };
 
-  const results = await Promise.all(
+  const fanout = Promise.all(
     Array.from(handlers).map(async (handler) => {
       try {
         await handler(enriched);
@@ -74,10 +75,21 @@ const publish = async (eventName, payload = {}) => {
         return { ok: false, error: err.message };
       }
     })
-  );
+  ).then((results) => {
+    const delivered = results.filter((r) => r.ok).length;
+    return { delivered, failed: handlers.size - delivered };
+  });
 
-  const delivered = results.filter((r) => r.ok).length;
-  return { delivered, failed: handlers.size - delivered };
+  // Publishers are fire-and-forget by design — which on Vercel means the
+  // fanout races instance freeze the moment the HTTP response is sent, and
+  // sink writes (deal timeline rows, access logs) silently vanish on fast
+  // responses. Registering the fanout with the platform (waitUntil via
+  // runInBackground) keeps the instance alive until every handler settles.
+  // Awaiting callers see the identical promise and result. The promise is
+  // created HERE, inside the publisher's request scope, so AsyncLocalStorage
+  // tenant context still flows into every handler's SET LOCAL (the PR #951
+  // invariant) — do not move fanout creation behind a queue or timer.
+  return runInBackground(`event-bus:${eventName}`, fanout);
 };
 
 const list = () => {

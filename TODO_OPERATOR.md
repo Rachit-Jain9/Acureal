@@ -225,6 +225,31 @@ ON CONFLICT (version) DO NOTHING;
 _(The only update the checker found genuinely NOT applied is 5b above —
 "since your last visit" — which is exactly why 5b is its own item.)_
 
+## 5d. 🔴 One more database paste — fixes four things the July security upgrade quietly broke
+**Why:** On 28 July the app was moved onto a stricter database-security mode
+(a good thing — the database itself now enforces that workspaces can't see
+each other). But a review of this week's production errors found four older
+corners that were never written to work under the stricter rules:
+1. **Benchmark panels** on the Market Intelligence page silently show nothing.
+2. **The A/B quality-testing tool** in Admin errors when you run it (you hit
+   this yourself on 31 July).
+3. **Usage-learning signals** (which fields users correct, etc.) are being
+   silently thrown away instead of recorded.
+4. **Admin › Signups** quietly shows only your own workspace instead of
+   everyone who signed up.
+
+The paste below fixes all four. It's safe to run twice by design.
+
+1. 🌐 Open `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
+2. 🌐 In another tab, open this file and copy ALL of its text:
+   `https://github.com/Rachit-Jain9/Acureal/raw/master/database/migrations/20260804_rls_flip_repair.sql`
+3. Paste into the big text box, click the green **Run** button (bottom-right).
+4. **Success signal:** `Success. No rows returned`.
+5. **Reply:** `flip repair done` — I'll verify all four fixes end-to-end.
+
+_(Do this one AFTER 5c, or in the same sitting — order between 5b/5c/5d
+doesn't matter, they're independent.)_
+
 ---
 
 # 🟡 NEEDS LEAD TIME — start soon

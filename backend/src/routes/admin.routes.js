@@ -33,6 +33,7 @@ const abEvalPersistence = require('../services/ai/abEvalPersistence.service');
 const learningSignalsAdminReport = require('../services/learningSignals.adminReport.service');
 const { runHealthCheck } = require('../services/healthCheck.service');
 const { query } = require('../config/database');
+const log = require('../lib/logger').child({ module: 'admin.routes' });
 
 const router = express.Router();
 
@@ -44,12 +45,19 @@ const router = express.Router();
 // leave the server.
 router.get('/users', authenticate, requireRole('admin', 'analyst'), async (req, res, next) => {
   try {
+    // Org membership lives in organization_members — users has NO
+    // organization_id column and never did. The original query here
+    // referenced one anyway, so this picker 42703'd on every call from the
+    // day it shipped (2026-06-16) until the 2026-08-01 error-log sweep
+    // caught it. Role comes from the membership row (the org-scoped role),
+    // which is what an assignee picker actually needs.
     const result = await query(
-      `SELECT id, name, email, role
-         FROM users
-        WHERE organization_id = current_organization_id()
-          AND COALESCE(is_active, true) = true
-        ORDER BY name ASC, email ASC
+      `SELECT u.id, u.name, u.email, om.role
+         FROM users u
+         JOIN organization_members om ON om.user_id = u.id
+        WHERE om.organization_id = current_organization_id()
+          AND COALESCE(u.is_active, true) = true
+        ORDER BY u.name ASC, u.email ASC
         LIMIT 200`,
       [],
     );
@@ -63,11 +71,15 @@ router.get('/users', authenticate, requireRole('admin', 'analyst'), async (req, 
 //
 // Platform-wide roster of everyone who has signed up — the operator's
 // "who has joined the open beta" view. Deliberately CROSS-ORG (unlike
-// `/users` above, which is org-scoped for the assignee picker): this is the
-// sole platform operator's oversight surface, gated by `requirePlatformAdmin`
-// (the email allowlist — NOT reachable by an ordinary org admin). Because the
-// pooled DB role bypasses RLS, the ABSENCE of an org filter here is the
-// intended behaviour and `requirePlatformAdmin` is the only access boundary.
+// `/users` above, which is org-scoped for the assignee picker).
+//
+// Post-flip mechanics (2026-08-01): the app role no longer bypasses RLS, and
+// users' SELECT policies are self + org-mates — a plain cross-org read here
+// silently shrank to the operator's own workspace. The read now goes through
+// the SECURITY DEFINER pair admin_list_signups / admin_signup_summary
+// (migration 20260804), which re-checks users.is_platform_admin INSIDE the
+// function. `requirePlatformAdmin` (flag OR env allowlist) stays as the
+// route gate; the definer gate is the DB-side floor beneath it.
 //
 // Returns descriptive profile fields + account timestamps only — never
 // password hashes, tokens, or any secret. Read-only.
@@ -76,38 +88,60 @@ router.get('/signups', authenticate, requirePlatformAdmin, async (req, res, next
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 1000);
     const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
 
-    const params = [];
-    let whereSql = '';
-    if (search) {
-      params.push(`%${search}%`);
-      whereSql = 'WHERE (u.name ILIKE $1 OR u.email ILIKE $1 OR u.company ILIKE $1 OR u.city ILIKE $1)';
+    let rowsResult;
+    let summaryResult;
+    try {
+      [rowsResult, summaryResult] = await Promise.all([
+        query('SELECT * FROM admin_list_signups($1, $2)', [search || null, limit]),
+        query('SELECT * FROM admin_signup_summary()', []),
+      ]);
+      if (rowsResult.rows.length === 0) {
+        // The definer gates on the PERSISTED is_platform_admin flag; an
+        // allowlist-only admin (env break-glass, no flag) reads zero rows.
+        // The platform always contains at least the caller, so an empty
+        // roster here is a flag gap, not an empty platform — say so.
+        log.warn('signups_roster_empty_flag_gap_suspected', {
+          user_id: req.user?.id || null,
+        });
+      }
+    } catch (error) {
+      if (error?.code !== '42883') throw error;
+      // Function missing → migration 20260804 not applied yet. Fall back to
+      // the direct read so the page keeps working, knowing that post-flip it
+      // shows only the caller's own workspace — warn so the gap is visible.
+      log.warn('signups_definer_missing_apply_20260804', {});
+      const params = [];
+      let whereSql = '';
+      if (search) {
+        params.push(`%${search}%`);
+        whereSql = 'WHERE (u.name ILIKE $1 OR u.email ILIKE $1 OR u.company ILIKE $1 OR u.city ILIKE $1)';
+      }
+      params.push(limit);
+      [rowsResult, summaryResult] = await Promise.all([
+        query(
+          `SELECT u.id, u.name, u.email, u.phone, u.company, u.job_title, u.city,
+                  u.created_at, u.last_login_at, u.email_verified_at,
+                  u.oauth_provider, u.is_active, u.account_closed_at,
+                  o.name AS workspace_name
+             FROM users u
+             LEFT JOIN organizations o ON o.id = u.default_organization_id
+             ${whereSql}
+            ORDER BY u.created_at DESC
+            LIMIT $${params.length}`,
+          params,
+        ),
+        query(
+          `SELECT
+             COUNT(*)::int AS total,
+             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int  AS last_7_days,
+             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS last_30_days,
+             COUNT(*) FILTER (WHERE email_verified_at IS NOT NULL)::int           AS verified,
+             COUNT(*) FILTER (WHERE oauth_provider IS NOT NULL)::int              AS via_google
+           FROM users`,
+          [],
+        ),
+      ]);
     }
-    params.push(limit);
-
-    const [rowsResult, summaryResult] = await Promise.all([
-      query(
-        `SELECT u.id, u.name, u.email, u.phone, u.company, u.job_title, u.city,
-                u.created_at, u.last_login_at, u.email_verified_at,
-                u.oauth_provider, u.is_active, u.account_closed_at,
-                o.name AS workspace_name
-           FROM users u
-           LEFT JOIN organizations o ON o.id = u.default_organization_id
-           ${whereSql}
-          ORDER BY u.created_at DESC
-          LIMIT $${params.length}`,
-        params,
-      ),
-      query(
-        `SELECT
-           COUNT(*)::int AS total,
-           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')::int  AS last_7_days,
-           COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS last_30_days,
-           COUNT(*) FILTER (WHERE email_verified_at IS NOT NULL)::int           AS verified,
-           COUNT(*) FILTER (WHERE oauth_provider IS NOT NULL)::int              AS via_google
-         FROM users`,
-        [],
-      ),
-    ]);
 
     res.json({
       success: true,
