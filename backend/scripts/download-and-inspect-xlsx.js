@@ -17,7 +17,7 @@
  * Usage:
  *   1. Open a deal in your browser, log in, copy the auth cookie.
  *   2. Run:
- *      DEAL_URL='https://redip.vercel.app/api/exports/xlsx/v2/<deal-id>' \
+ *      DEAL_URL='https://acureal.in/api/exports/xlsx/v2/<deal-id>' \
  *      AUTH_COOKIE='session=...' \
  *      node backend/scripts/download-and-inspect-xlsx.js
  *
@@ -46,7 +46,7 @@ const authCookie = process.env.AUTH_COOKIE;
 
 if (!dealUrl) {
   console.error('Set DEAL_URL env var to the deal export URL.');
-  console.error('Example: DEAL_URL="https://redip.vercel.app/api/exports/xlsx/v2/8548ba23-625b-40c5-8c47-6a6a74fdc082"');
+  console.error('Example: DEAL_URL="https://acureal.in/api/exports/xlsx/v2/8548ba23-625b-40c5-8c47-6a6a74fdc082"');
   process.exit(1);
 }
 

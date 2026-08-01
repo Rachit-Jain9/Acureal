@@ -112,9 +112,9 @@ deployment, not generic advice._
 
 ## 6. Operator quick-reference (the only manual steps)
 
-1. **Fluid Compute** — https://vercel.com/rachitjain348-4262s-projects/redip/settings/functions →
+1. **Fluid Compute** — https://vercel.com/rachitjain348-4262s-projects/acureal/settings/functions →
    "Fluid Compute" toggle ON (it may already be) → Save.
-2. **Skew Protection** — https://vercel.com/rachitjain348-4262s-projects/redip/settings/advanced →
+2. **Skew Protection** — https://vercel.com/rachitjain348-4262s-projects/acureal/settings/advanced →
    "Skew Protection" → Enable.
 3. **Spend cap** — https://vercel.com/teams/rachitjain348-4262s-projects/settings/billing →
    Spend Management → set alert (e.g. $30) + pause threshold (e.g. $50).
@@ -126,5 +126,5 @@ deployment, not generic advice._
    `x-vercel-protection-bypass`). It got the smoke suite *past* the preview SSO wall, but the login flow
    is flaky through the protected-preview edge, so the automated gate runs against **production** instead
    (§2). The secret is kept for a manual `workflow_dispatch` against a specific preview URL. To rotate:
-   regenerate at https://vercel.com/rachitjain348-4262s-projects/redip/settings/deployment-protection and
+   regenerate at https://vercel.com/rachitjain348-4262s-projects/acureal/settings/deployment-protection and
    update the GitHub secret. Nothing more needed from the operator here.

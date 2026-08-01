@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
   // immediately usable without `supabase secrets set KERNEL_URL=...`.
   const KERNEL_URL = Deno.env.get('KERNEL_URL')
     || Deno.env.get('FASTAPI_URL')
-    || 'https://redip.vercel.app/api/investor-package';
+    || 'https://acureal.in/api/investor-package';
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
   const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || Deno.env.get('SUPABASE_KEY') || '';
   if (!KERNEL_URL) return json(500, { error: 'kernel_url_not_configured' });

@@ -74,7 +74,7 @@ but **the old leaked key still works until you delete it** in Google Cloud.
 **Why:** This puts a hard daily dollar limit on the AI features so they can never
 overspend, no matter what.
 
-1. 🌐 Open: `https://vercel.com/rachitjain348-4262s-projects/redip/settings/environment-variables`
+1. 🌐 Open: `https://vercel.com/rachitjain348-4262s-projects/acureal/settings/environment-variables`
 2. Click **Add New** (or **Add Another**).
 3. Name (Key): `AI_DAILY_COST_CAP_USD`  ·  Value: `25` (or whatever daily US-dollar
    ceiling you're comfortable with).
@@ -141,7 +141,7 @@ breaks while you wait — the feature simply doesn't show.
 1. 🌐 Open the database editor:
    `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
 2. 🌐 In another tab, open this exact file and copy ALL of its text:
-   `https://github.com/Rachit-Jain9/REDIP/raw/master/database/migrations/20260801_deal_user_visits.sql`
+   `https://github.com/Rachit-Jain9/Acureal/raw/master/database/migrations/20260801_deal_user_visits.sql`
 3. Paste it into the big text box from step 1.
 4. Click the green **Run** button (bottom-right).
 5. **Success signal:** it says `Success. No rows returned`.

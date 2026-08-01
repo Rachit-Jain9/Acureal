@@ -41,7 +41,7 @@ const {
 
 const SOURCE_BASE = (process.env.MASTER_PLAN_MIRROR_SOURCE_BASE
   || 'https://mapwarper.net/layers/tile/2147').replace(/\/+$/, '');
-const UA = 'Mozilla/5.0 (compatible; Acureal-tile-mirror/1.0; +https://redip.vercel.app)';
+const UA = 'Mozilla/5.0 (compatible; Acureal-tile-mirror/1.0; +https://acureal.in)';
 const FETCH_TIMEOUT_MS = 15000;
 
 // Blob store access. Starts 'public', but auto-flips to 'private' the first time

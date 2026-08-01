@@ -24,7 +24,7 @@ describe('loadEnv', () => {
       fs.writeFileSync(path.join(tempDir, '.env'), 'PORT=5000\n');
       fs.writeFileSync(
         path.join(tempDir, '.env.local'),
-        'NODE_ENV=production\nCORS_ORIGINS=https://redip.vercel.app\nPORT=6000\n'
+        'NODE_ENV=production\nCORS_ORIGINS=https://acureal.in\nPORT=6000\n'
       );
 
       const { loadEnv } = require('../src/config/loadEnv');
@@ -36,7 +36,7 @@ describe('loadEnv', () => {
       loadEnv(tempDir);
 
       expect(process.env.NODE_ENV).toBe('development');
-      expect(process.env.CORS_ORIGINS).toBe('https://redip.vercel.app');
+      expect(process.env.CORS_ORIGINS).toBe('https://acureal.in');
       expect(process.env.PORT).toBe('6000');
     } finally {
       fs.rmSync(tempDir, { recursive: true, force: true });

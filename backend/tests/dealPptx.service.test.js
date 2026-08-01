@@ -701,7 +701,7 @@ describe('dealPptx.service', () => {
       const assets = await __testables.precomputeDeckAssets(
         exportContext,
         baseContext,
-        { publicUrl: 'https://redip.vercel.app' },
+        { publicUrl: 'https://acureal.in' },
       );
       expect(assets.scoreGaugeDataUri).toMatch(/^data:image\/svg\+xml;base64,/);
       expect(assets.dealScore).toBeDefined();
@@ -727,7 +727,7 @@ describe('dealPptx.service', () => {
       const assets = await __testables.precomputeDeckAssets(
         exportContext,
         baseContext,
-        { publicUrl: 'https://redip.vercel.app' },
+        { publicUrl: 'https://acureal.in' },
       );
       expect(assets.scoreGaugeDataUri).toMatch(/^data:image\/svg\+xml;base64,/);
       expect(assets.dealScore).toBeDefined();
@@ -762,7 +762,7 @@ describe('dealPptx.service', () => {
         brandName: 'REDIP', generatedAt: '2026-05-16T10:00:00Z',
       });
       const assets = await __testables.precomputeDeckAssets(
-        exportContext, baseContext, { publicUrl: 'https://redip.vercel.app' },
+        exportContext, baseContext, { publicUrl: 'https://acureal.in' },
       );
       expect(assets.briefing).toBeTruthy();
       expect(assets.briefing.bullets).toHaveLength(4);
@@ -776,7 +776,7 @@ describe('dealPptx.service', () => {
         brandName: 'REDIP', generatedAt: '2026-05-16T10:00:00Z',
       });
       const assets = await __testables.precomputeDeckAssets(
-        exportContext, baseContext, { publicUrl: 'https://redip.vercel.app' },
+        exportContext, baseContext, { publicUrl: 'https://acureal.in' },
       );
       const allText = `${assets.briefing.summary} ${assets.briefing.bullets.join(' ')} ${assets.briefing.riskNote}`;
       // Industrial economics bullet should mention warehouse / logistics
@@ -793,7 +793,7 @@ describe('dealPptx.service', () => {
         brandName: 'REDIP', generatedAt: '2026-05-16T10:00:00Z',
       });
       const assets = await __testables.precomputeDeckAssets(
-        exportContext, baseContext, { publicUrl: 'https://redip.vercel.app' },
+        exportContext, baseContext, { publicUrl: 'https://acureal.in' },
       );
       expect(assets.briefing).toBeTruthy();
       expect(assets.briefing.bullets).toHaveLength(4);
