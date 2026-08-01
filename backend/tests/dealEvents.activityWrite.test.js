@@ -142,6 +142,64 @@ describe('the sink stays fail-soft but LOUD', () => {
   });
 });
 
+describe('every emitted activity_type is a member of the closed enum (the 22P02 class)', () => {
+  // The sibling defect to 42P08: 'document_upload' existed in exactly ONE
+  // line of the entire repository — this sink. Not in the Postgres enum, not
+  // in ACTIVITY_TYPES, not in any migration. Every document upload from
+  // 2026-07-17 (when the 42P08 fix brought the sink alive) to 2026-08-01
+  // lost its timeline row at bind time, fail-soft, one error log per upload.
+  // This test iterates the REGISTERED handlers so a future handler with an
+  // invented type fails here, not in production.
+  const { ACTIVITY_TYPES } = require('../src/constants/domain');
+
+  // One synthetic payload per event. Every payload carries dealId so no
+  // handler early-returns (a vacuous pass would defeat the test); the
+  // PARCEL_INTELLIGENCE payload uses dealId directly so the handler's
+  // property→deals SELECT never runs.
+  const PAYLOADS = {
+    [EVENTS.DEAL_STAGE_CHANGED]: { dealId: 'd1', fromStage: 'a', toStage: 'b', userId: 'u1' },
+    [EVENTS.DEAL_CREATED]: { dealId: 'd1', dealName: 'X', userId: 'u1' },
+    [EVENTS.DEAL_ARCHIVED]: { dealId: 'd1', reason: 'r', userId: 'u1' },
+    [EVENTS.DOCUMENT_UPLOADED]: { dealId: 'd1', documentName: 'deed.pdf', documentCategory: 'legal', userId: 'u1' },
+    [EVENTS.DOCUMENT_EXTRACTED]: { dealId: 'd1', documentName: 'deed.pdf', docType: 'sale_deed', status: 'completed', userId: 'u1' },
+    [EVENTS.DD_ITEM_STATUS_CHANGED]: { dealId: 'd1', itemName: 'i', status: 'completed', severity: 'high', userId: 'u1' },
+    [EVENTS.APPROVAL_STATUS_CHANGED]: { dealId: 'd1', approvalName: 'a', status: 'approved', userId: 'u1' },
+    [EVENTS.RISK_FLAG_STATUS_CHANGED]: { dealId: 'd1', title: 't', severity: 'high', status: 'open', userId: 'u1' },
+    [EVENTS.PARCEL_INTELLIGENCE_REFRESHED]: { dealId: 'd1', userId: 'u1', summary: 's' },
+    [EVENTS.EVIDENCE_LINKED]: { dealId: 'd1', ownerKind: 'dd_item', linkKind: 'document', userId: 'u1' },
+    [EVENTS.FINANCIAL_SCENARIO_SAVED]: { dealId: 'd1', scenarioName: 's', userId: 'u1' },
+  };
+
+  test('a payload exists for every registered handler (no handler escapes the sweep)', () => {
+    const registeredEvents = dealEvents._handlers.map(([event]) => event);
+    for (const event of registeredEvents) {
+      expect(PAYLOADS[event]).toBeDefined();
+    }
+  });
+
+  test.each(dealEvents._handlers.map(([event, handler]) => [event, handler]))(
+    '%s emits a type the live enum accepts',
+    async (event, handler) => {
+      dbCfg.query.mockClear();
+      await handler({ ...PAYLOADS[event], event, emittedAt: new Date().toISOString() });
+      const insert = findInsert(dbCfg.query.mock.calls);
+      expect(insert).toBeTruthy(); // the handler must actually write
+      const [, params] = insert;
+      expect(ACTIVITY_TYPES).toContain(params[1]);
+    },
+  );
+
+  test('an invented type is coerced to note so the audit row still lands', async () => {
+    await dealEvents._writeActivity({
+      dealId: 'd1',
+      type: 'not_a_real_enum_member',
+      description: 'drift probe',
+    });
+    const [, params] = findInsert(dbCfg.query.mock.calls);
+    expect(params[1]).toBe('note'); // row lands instead of dying 22P02
+  });
+});
+
 describe('the audit trail actually reaches the timeline', () => {
   // One row per material change — the CLAUDE.md non-negotiable. Each of these
   // wrote nothing at all before the fix.

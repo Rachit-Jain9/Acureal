@@ -162,21 +162,48 @@ describe('masterPlanHelpers — readiness normalisation', () => {
     expect(r.canExtract).toBe(false);
   });
 
+  // These fixtures carry file_name because every UPLOADED source has one in
+  // production — the file-less shape is reserved for migration-seeded
+  // registry entries (tested below), which must never offer Extract.
   it('getSourceReadiness flags failed extractions as retry-able', () => {
-    const r = getSourceReadiness({ extraction_status: 'failed' });
+    const r = getSourceReadiness({ file_name: 'vol3.pdf', extraction_status: 'failed' });
     expect(r.key).toBe('failed');
     expect(r.actionLabel).toBe('Retry');
     expect(r.canExtract).toBe(true);
   });
 
   it('getSourceReadiness reports missing-metadata gaps', () => {
-    const r = getSourceReadiness({ processing_mode: 'text_extraction' });
+    const r = getSourceReadiness({ file_name: 'vol3.pdf', processing_mode: 'text_extraction' });
     expect(r.key).toBe('metadata');
     expect(r.missingFields.length).toBe(3);
   });
 
+  it('getSourceReadiness treats a file-less registry entry as non-extractable', () => {
+    // The three prod rows that produced the 2026-07-29 400s: seeded by the
+    // zonal-regulation migrations, extraction_status 'completed', no file.
+    // Pre-fix they read as "Review queued / Re-extract" and offered a live
+    // button whose only possible outcome was a confusing 400.
+    const r = getSourceReadiness({
+      plan_name: 'Hoskote LPA Master Plan 2031 — Zonal Regulations',
+      source_role: 'operative_regulation',
+      legal_status: 'gazetted',
+      authority_name: 'Hoskote LPA',
+      extraction_status: 'completed',
+    });
+    expect(r.key).toBe('manual');
+    expect(r.label).toBe('Registry entry');
+    expect(r.canExtract).toBe(false);
+    expect(r.blockReason).toMatch(/seeded directly/i);
+  });
+
+  it('an explicit processing mode wins over the missing-file inference', () => {
+    const r = getSourceReadiness({ processing_mode: 'manual_entry' });
+    expect(r.label).toBe('Manual entry');
+  });
+
   it('getSourceReadiness reports a fully-populated doc as ready', () => {
     const r = getSourceReadiness({
+      file_name: 'vol3.pdf',
       processing_mode: 'text_extraction',
       source_role: 'operative_regulation',
       legal_status: 'gazetted',
@@ -188,6 +215,7 @@ describe('masterPlanHelpers — readiness normalisation', () => {
 
   it('getSourceReadiness flags a completed extraction as review-queued', () => {
     const r = getSourceReadiness({
+      file_name: 'vol3.pdf',
       processing_mode: 'text_extraction',
       source_role: 'operative_regulation',
       legal_status: 'gazetted',

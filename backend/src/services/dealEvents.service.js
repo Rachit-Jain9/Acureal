@@ -20,14 +20,18 @@
 
 const { query } = require('../config/database');
 const { EVENTS, subscribe } = require('../lib/eventBus');
+const { ACTIVITY_TYPES } = require('../constants/domain');
 const log = require('../lib/logger').child({ module: 'deal.events' });
 
 // Insert directly rather than going through activity.service.logActivity:
 // - logActivity does its own deal-visibility check via current_organization_id(),
 //   which fires under whatever request context the originating call ran in.
 //   That's exactly what we want here — same RLS scope, no privilege escalation.
-// - The activity service validates the activity_type against ACTIVITY_TYPES.
-//   We use only validated values below.
+// - Because this sink bypasses the activity service's validation, writeActivity
+//   below enforces ACTIVITY_TYPES itself. (An earlier version of this comment
+//   claimed "we use only validated values below" while a handler emitted
+//   'document_upload' — a value the DB enum never had. Every document upload
+//   from 2026-07-17 to 2026-08-01 lost its timeline row to that 22P02.)
 const writeActivity = async ({
   dealId,
   type,
@@ -67,6 +71,20 @@ const writeActivity = async ({
   const completedAt = isCompleted ? new Date() : null;
   const completedBy = isCompleted ? performedBy : null;
 
+  // activities.activity_type is a CLOSED Postgres enum. A value outside it
+  // fails at bind time (22P02) and the audit row is lost — the exact way
+  // document uploads vanished from timelines for two weeks. Coerce to
+  // 'note' so the row always lands, and log at ERROR so the drift still
+  // reaches the production dashboard instead of hiding behind the coercion.
+  let safeType = type;
+  if (!ACTIVITY_TYPES.includes(safeType)) {
+    log.error('auto_activity_unknown_type_coerced', {
+      deal_id: dealId,
+      emitted_type: safeType,
+    });
+    safeType = 'note';
+  }
+
   try {
     const result = await query(
       `INSERT INTO activities (
@@ -77,7 +95,7 @@ const writeActivity = async ({
        RETURNING id`,
       [
         dealId,
-        type,
+        safeType,
         description.length > 1000 ? description.slice(0, 997) + '...' : description,
         performedBy,
         isImportant,
@@ -153,7 +171,11 @@ const handlers = [
       if (!dealId) return;
       await writeActivity({
         dealId,
-        type: 'document_upload',
+        // 'note' like every other system-generated row — the enum has no
+        // 'document_upload' member and never did; emitting one cost every
+        // upload its timeline row (22P02, 2026-07-17 → 2026-08-01). The
+        // specifics live in the description, per this file's own contract.
+        type: 'note',
         description: `Document uploaded: ${trim(documentName)}${documentCategory ? ` (${documentCategory})` : ''}`,
         performedBy: userId,
         priority: 'low',
@@ -328,4 +350,5 @@ module.exports = {
   unregister,
   // Exposed for tests and dashboards.
   _handlers: handlers,
+  _writeActivity: writeActivity,
 };

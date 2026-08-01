@@ -217,6 +217,27 @@ export function getSourceReadiness(doc) {
       missingFields: [],
     };
   }
+  // A registry entry with NO source file (file-less rows seeded directly by
+  // the zonal-regulation migrations — RMP 2015 Vol III, BIAAPA MP 2021,
+  // Hoskote LPA MP 2031) has nothing to run extraction against. Its
+  // extraction_status reads 'completed' (the facts were seeded), so without
+  // this branch it fell into "Review queued / Re-extract" and offered a live
+  // button that could only ever 400 with a confusing "Only PDF and image..."
+  // technicality — the operator hit exactly that three times on 2026-07-29.
+  // Sits AFTER the explicit-mode branches: an operator-set mode always wins
+  // over a missing-file inference.
+  if (!doc?.file_name && !doc?.file_url && !doc?.storage_path) {
+    return {
+      key: 'manual',
+      label: 'Registry entry',
+      tone: 'neutral',
+      description: 'Seeded directly from the gazetted regulations — no source file attached.',
+      canExtract: false,
+      actionLabel: 'Registry',
+      blockReason: 'This entry\'s regulations were seeded directly; there is no attached file to extract.',
+      missingFields: [],
+    };
+  }
   if (doc?.extraction_status === 'failed') {
     return {
       key: 'failed',

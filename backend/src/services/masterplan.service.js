@@ -1436,6 +1436,12 @@ async function listBbmpUavEntries({ documentId, city, status = 'pending', search
 async function queueExtractionJob(id, { docType } = {}) {
   const doc = await getSourceDocumentById(id);
   if (!doc) throw createError('Masterplan source document not found.', 404);
+  if (!doc.file_url && !doc.storage_path && !doc.file_name) {
+    // Registry-seeded entry (zonal regulations loaded by migration) — there
+    // is no file to extract, and its facts are already in the database. The
+    // old generic message read as a format problem and got retried.
+    throw createError('This is a registry entry without an attached source file — its regulations were seeded directly, so there is nothing to extract.', 400);
+  }
   if (!isExtractableSource(doc)) {
     throw createError('Only PDF and image source documents can be extracted in this intake flow.', 400);
   }
