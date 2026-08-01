@@ -147,23 +147,83 @@ breaks while you wait — the feature simply doesn't show.
 5. **Success signal:** it says `Success. No rows returned`.
 6. **Reply:** `visits migration done` — I'll verify it end-to-end.
 
-## 5c. Fix the database's record of what's been applied — one command + one paste
+## 5c. Fix the database's record of what's been applied — ONE paste (I did the checking for you)
 **Why:** The database keeps a diary of which update files have been run. That
 diary stopped being written in mid-July, while updates kept being applied — so
-today nobody can tell from the diary what's live. A new tool checks each file
-against the real database and writes the catch-up entries for you.
+nobody could tell from the diary what's live. On 2026-08-01 I ran the checker
+against the real database myself (read-only), reviewed every result, and found:
+**41 updates are live but missing from the diary**, and **2 tiny speed-up
+entries from a June update never got created** (on a table that's still empty,
+so adding them is instant and harmless). The block below fixes all of it.
 
-1. 🖥 In your terminal (VS Code), from the project folder, run:
-   `node backend/scripts/migration-status.js --sql`
-2. It prints a table (which files are recorded / live-but-unrecorded /
-   genuinely not applied) and, at the bottom, a block of SQL starting with
-   `INSERT INTO supabase_migrations...`.
-3. Copy that SQL block only.
-4. 🌐 Open `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`,
-   paste, click **Run**. Success signal: `Success. No rows returned`.
-5. **Reply:** `ledger fixed` — and paste the table from step 2 so I can see
-   the verdicts too.
-⚠️ If any line says `PARTIAL`, don't paste anything — send me the table first.
+1. 🌐 Open `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
+2. 📋 Copy EVERYTHING in the grey box below — from `CREATE` down to the final
+   semicolon — and paste it into the big text box:
+
+```sql
+-- Part 1: two indexes the June 'organization domains' update missed
+-- (table is empty — these complete instantly)
+CREATE UNIQUE INDEX IF NOT EXISTS organization_domains_domain_uidx
+  ON public.organization_domains (lower(domain));
+CREATE INDEX IF NOT EXISTS organization_domains_autojoin_idx
+  ON public.organization_domains (lower(domain)) WHERE verified = TRUE;
+
+-- Part 2: diary catch-up for every update verified LIVE in production
+-- (safe to run twice — duplicates are ignored)
+INSERT INTO supabase_migrations.schema_migrations (version, name)
+VALUES
+  ('20260505000000', 'market_data_q1_2026_refresh'),
+  ('20260507000000', 'named_premium_comps_q1_2026'),
+  ('20260508000000', 'residential_segmented_benchmarks_schema'),
+  ('20260515000000', 'comps_review_queue'),
+  ('20260516000000', 'comps_geocode_quality'),
+  ('20260517000000', 'ai_artifacts_numerical_drifts'),
+  ('20260518000000', 'deal_qa_history'),
+  ('20260520000000', 'comps_queue_assignment'),
+  ('20260524000000', 'deal_audit_log'),
+  ('20260525000000', 'niche_asset_class_benchmarks'),
+  ('20260526000000', 'ab_eval_runs'),
+  ('20260527000000', 'export_events'),
+  ('20260530000000', 'document_access_log'),
+  ('20260602000000', 'document_extractions_reaper'),
+  ('20260602000001', 'properties_auto_derived_context_columns'),
+  ('20260603000000', 'domain_claim_verified_uniqueness'),
+  ('20260604000000', 'ai_augment_usage_quota'),
+  ('20260605000000', 'security_events'),
+  ('20260607000000', 'user_consents'),
+  ('20260608000000', 'improvement_signals'),
+  ('20260609000000', 'deal_promoter_profiles'),
+  ('20260610000000', 'deal_comp_reliance'),
+  ('20260611000000', 'extraction_field_verdicts'),
+  ('20260612000000', 'organization_consents'),
+  ('20260614000000', 'deal_recommendation_runs'),
+  ('20260615000000', 'deal_recommendation_verdicts'),
+  ('20260616000000', 'micro_market_intelligence'),
+  ('20260617000000', 'karnataka_rera_tracker'),
+  ('20260618000000', 'promoter_rera_link'),
+  ('20260619000000', 'district_localities'),
+  ('20260620000000', 'deals_list_perf_indexes'),
+  ('20260625000000', 'organization_domains_and_audit'),
+  ('20260630000000', 'deal_rera_inputs'),
+  ('20260701000000', 'deal_signoffs'),
+  ('20260712000000', 'statutory_plan_registry'),
+  ('20260713000000', 'guidance_values_field_completion'),
+  ('20260720000000', 'yield_studio_persistence'),
+  ('20260726000000', 'deal_registers'),
+  ('20260730000000', 'user_signup_profile_fields'),
+  ('20260801000000', 'auth_bootstrap_security_definer'),
+  ('20260802000000', 'rls_flip_hardening'),
+  ('20260803000000', 'users_platform_admin_flag')
+ON CONFLICT (version) DO NOTHING;
+```
+
+3. Click the green **Run** button (bottom-right).
+4. **Success signal:** `Success. No rows returned`.
+5. **Reply:** `ledger fixed` — I'll re-run the checker to confirm the diary
+   is complete.
+
+_(The only update the checker found genuinely NOT applied is 5b above —
+"since your last visit" — which is exactly why 5b is its own item.)_
 
 ---
 

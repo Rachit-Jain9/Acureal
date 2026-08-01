@@ -48,14 +48,31 @@ const parseFileName = (fileName) => {
 };
 
 /**
+ * SQL comments must go before probe extraction. The first live run proved
+ * why: a header comment reading "-- Idempotent: CREATE TABLE IF NOT EXISTS,
+ * DROP POLICY..." parses as DDL, the comma after EXISTS makes the regex
+ * backtrack out of the optional IF-NOT-EXISTS group, and the keyword `IF`
+ * becomes a phantom object whose probe can never pass — dragging a fully
+ * applied migration into PARTIAL.
+ */
+const stripSqlComments = (sql) => sql
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/--[^\n]*/g, ' ');
+
+/** Backtracking artifacts: a capture that is itself a keyword is never a real object name. */
+const KEYWORD_CAPTURE = /^(?:if|not|exists|only|concurrently)$/i;
+
+/**
  * Extract probeable objects from migration SQL. Deliberately conservative:
  * only unambiguous DDL shapes; anything else contributes nothing (and a
  * file with zero probes reports UNVERIFIABLE rather than guessing).
  */
-const extractProbes = (sql) => {
+const extractProbes = (rawSql) => {
+  const sql = stripSqlComments(rawSql);
   const probes = [];
   const seen = new Set();
   const push = (probe) => {
+    if (KEYWORD_CAPTURE.test(probe.name) || (probe.column && KEYWORD_CAPTURE.test(probe.column))) return;
     const key = `${probe.kind}:${probe.schema}.${probe.name}${probe.column ? `.${probe.column}` : ''}`;
     if (!seen.has(key)) {
       seen.add(key);
@@ -69,13 +86,19 @@ const extractProbes = (sql) => {
   };
 
   const tableRe = /CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z_"][\w."]*)/gi;
-  const indexRe = /CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z_"][\w."]*)/gi;
+  // An index CANNOT be schema-qualified at creation — Postgres places it in
+  // its table's schema. So the schema comes from the ON clause, never from a
+  // default. (The first live run false-negatived all 20 regulatory_data
+  // indexes by assuming public.)
+  const indexRe = /CREATE\s+(?:UNIQUE\s+)?INDEX\s+(?:CONCURRENTLY\s+)?(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z_"][\w"]*)\s+ON\s+(?:ONLY\s+)?([A-Za-z_"][\w."]*)/gi;
   const funcRe = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+([A-Za-z_"][\w."]*)/gi;
   const addColRe = /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(?:ONLY\s+)?([A-Za-z_"][\w."]*)\s+ADD\s+COLUMN\s+(?:IF\s+NOT\s+EXISTS\s+)?([A-Za-z_"][\w"]*)/gi;
 
   let m;
   while ((m = tableRe.exec(sql))) push({ kind: 'table', ...qualify(m[1]) });
-  while ((m = indexRe.exec(sql))) push({ kind: 'index', ...qualify(m[1]) });
+  while ((m = indexRe.exec(sql))) {
+    push({ kind: 'index', schema: qualify(m[2]).schema, name: m[1].replace(/"/g, '') });
+  }
   while ((m = funcRe.exec(sql))) push({ kind: 'function', ...qualify(m[1]) });
   while ((m = addColRe.exec(sql))) {
     const target = qualify(m[1]);
@@ -106,8 +129,23 @@ const backfillVersion = (fileVersion) => `${fileVersion}000000`;
 
 const buildBackfillSql = (rows) => {
   if (rows.length === 0) return null;
+  // version is the ledger's primary key, but two migrations can share an
+  // author-date (the first live run had two 20260602 files). A colliding
+  // second row would be SILENTLY dropped by ON CONFLICT DO NOTHING — so
+  // same-day rows get incrementing second-suffixes instead.
+  const used = new Set();
+  const uniqueVersion = (fileVersion) => {
+    let n = 0;
+    let v = backfillVersion(fileVersion);
+    while (used.has(v)) {
+      n += 1;
+      v = `${fileVersion}${String(n).padStart(6, '0')}`;
+    }
+    used.add(v);
+    return v;
+  };
   const values = rows
-    .map((r) => `  ('${backfillVersion(r.version)}', '${r.slug}')`)
+    .map((r) => `  ('${uniqueVersion(r.version)}', '${r.slug}')`)
     .join(',\n');
   return [
     '-- migration-status backfill: ledger rows for migrations verified LIVE',
