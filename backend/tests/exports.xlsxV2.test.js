@@ -5407,11 +5407,14 @@ describe('Deal Structure & Exit Playbook (per-deal tailoring, 2026-07-13)', () =
   });
 });
 
-describe('Structure-consistency validators (JDA land double-count, 2026-07-13)', () => {
-  const sheetsContain = async (ctx, needle) => {
+describe('JDA mirror — the workbook charges no land when land is contributed (2026-08-01)', () => {
+  const loadWb = async (ctx) => {
     const buf = await buildDealWorkbookV2(ctx);
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(buf);
+    return wb;
+  };
+  const sheetsContain = (wb, needle) => {
     let found = false;
     wb.eachSheet((sh) => sh.eachRow((row) => row.eachCell((c) => {
       const v = c.value;
@@ -5420,28 +5423,73 @@ describe('Structure-consistency validators (JDA land double-count, 2026-07-13)',
     })));
     return found;
   };
-
-  test('flags a JDA carrying a full land value (contributed land double-counted)', async () => {
+  const findInputRow = (wb, label) => {
+    const sheet = wb.getWorksheet('Inputs & Assumptions');
+    let hit = null;
+    sheet.eachRow((row, rowNumber) => {
+      // Layout: A label · B value · C unit. Column B is the named-range cell.
+      if (String(row.getCell(1).value || '') === label) hit = { rowNumber, value: row.getCell(2).value };
+    });
+    return hit;
+  };
+  const jdaCtx = () => {
     const ctx = minimalContext();
     ctx.deal.deal_structure = 'jda_revenue_share';
     ctx.deal.model_params.inputs.landownerSharePct = 0.25;
-    ctx.deal.model_params.inputs.landCostCr = 90; // full value, not a deposit
-    expect(await sheetsContain(ctx, 'contributes land for a landowner share')).toBe(true);
+    ctx.deal.model_params.inputs.landCostCr = 90; // the full land VALUE
+    return ctx;
+  };
+
+  test('charged land is 0; the gross value survives as the contribution row', async () => {
+    const wb = await loadWb(jdaCtx());
+    expect(findInputRow(wb, 'Land Cost').value).toBe(0);
+    expect(findInputRow(wb, 'Land Value (Contributed)').value).toBe(90);
   });
 
-  test('does NOT flag a JDA with only a small refundable deposit', async () => {
-    const ctx = minimalContext();
-    ctx.deal.deal_structure = 'jda_revenue_share';
-    ctx.deal.model_params.inputs.landownerSharePct = 0.25;
-    ctx.deal.model_params.inputs.landCostCr = 1;
-    expect(await sheetsContain(ctx, 'contributes land for a landowner share')).toBe(false);
-  });
-
-  test('does NOT flag a normal outright purchase with a real land cost', async () => {
+  test('the contribution row does not exist on an outright purchase', async () => {
     const ctx = minimalContext();
     ctx.deal.deal_structure = 'outright';
     ctx.deal.model_params.inputs.landCostCr = 90;
-    expect(await sheetsContain(ctx, 'contributes land for a landowner share')).toBe(false);
+    const wb = await loadWb(ctx);
+    // Outright: land is genuinely charged, and no gross row is emitted —
+    // non-JDA workbooks are structurally identical to before the mirror.
+    expect(findInputRow(wb, 'Land Cost').value).toBe(90);
+    expect(findInputRow(wb, 'Land Value (Contributed)')).toBeNull();
+  });
+
+  test('QA still surfaces the treatment (auto-contributed copy, judged on GROSS)', async () => {
+    const wb = await loadWb(jdaCtx());
+    expect(sheetsContain(wb, 'treats the land as CONTRIBUTED')).toBe(true);
+    // The old double-count accusation is gone — the model no longer commits
+    // the error it used to warn about.
+    expect(sheetsContain(wb, 'contributes land for a landowner share')).toBe(false);
+  });
+
+  test('does NOT surface the treatment note for a small refundable deposit', async () => {
+    const ctx = jdaCtx();
+    ctx.deal.model_params.inputs.landCostCr = 1;
+    const wb = await loadWb(ctx);
+    expect(sheetsContain(wb, 'treats the land as CONTRIBUTED')).toBe(false);
+  });
+
+  test('Model Integrity carries the live JDA tie-out', async () => {
+    const wb = await loadWb(jdaCtx());
+    expect(sheetsContain(wb, 'JDA land treatment (charged land is zero when contributed)')).toBe(true);
+  });
+
+  test('marketing + finance ride developer-net revenue, not gross', async () => {
+    const wb = await loadWb(jdaCtx());
+    const calc = wb.getWorksheet('Calculations');
+    let marketing = null;
+    let finance = null;
+    calc.eachRow((row) => {
+      const label = String(row.getCell(1).value || '');
+      const f = row.getCell(2).value?.formula || row.getCell(2).value;
+      if (label.startsWith('Marketing & sales')) marketing = String(f);
+      if (label.startsWith('Finance / treasury')) finance = String(f);
+    });
+    expect(marketing).toContain('*(1-LandownerSharePct)');
+    expect(finance).toContain('*(1-LandownerSharePct)');
   });
 });
 
