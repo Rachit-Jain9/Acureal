@@ -147,6 +147,24 @@ breaks while you wait — the feature simply doesn't show.
 5. **Success signal:** it says `Success. No rows returned`.
 6. **Reply:** `visits migration done` — I'll verify it end-to-end.
 
+## 5c. Fix the database's record of what's been applied — one command + one paste
+**Why:** The database keeps a diary of which update files have been run. That
+diary stopped being written in mid-July, while updates kept being applied — so
+today nobody can tell from the diary what's live. A new tool checks each file
+against the real database and writes the catch-up entries for you.
+
+1. 🖥 In your terminal (VS Code), from the project folder, run:
+   `node backend/scripts/migration-status.js --sql`
+2. It prints a table (which files are recorded / live-but-unrecorded /
+   genuinely not applied) and, at the bottom, a block of SQL starting with
+   `INSERT INTO supabase_migrations...`.
+3. Copy that SQL block only.
+4. 🌐 Open `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`,
+   paste, click **Run**. Success signal: `Success. No rows returned`.
+5. **Reply:** `ledger fixed` — and paste the table from step 2 so I can see
+   the verdicts too.
+⚠️ If any line says `PARTIAL`, don't paste anything — send me the table first.
+
 ---
 
 # 🟡 NEEDS LEAD TIME — start soon
