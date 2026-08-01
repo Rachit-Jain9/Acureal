@@ -148,6 +148,26 @@ export function usePrefetchDealWorkspace() {
   }, [qc]);
 }
 
+/**
+ * "Since your last visit" watermark. The POST is the read here — it stamps
+ * the visit AND returns the delta against the PREVIOUS visit in one round
+ * trip. Modelled as a query keyed per deal so StrictMode double-mounts and
+ * same-session returns reuse the answer instead of re-stamping (the server's
+ * 30-minute session gap makes accidental re-stamps harmless regardless).
+ * Never wire this into a hover/prefetch path: stamping a visit on hover is
+ * exactly the failure the dedicated endpoint exists to prevent.
+ */
+export function useDealVisit(id) {
+  return useQuery({
+    queryKey: ['deal-visit', id],
+    queryFn: () => dealsAPI.visitDeal(id).then((r) => r.data.data),
+    enabled: !!id,
+    staleTime: Infinity,
+    gcTime: 30 * 60_000,
+    retry: false,
+  });
+}
+
 export function usePipeline() {
   return useQuery({
     queryKey: ['pipeline'],

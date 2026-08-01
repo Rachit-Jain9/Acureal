@@ -39,6 +39,7 @@ import ModelTrustSummary from '../financials/ModelTrustSummary';
 // key-metric card. Extends the chip that already ships in ParcelTab
 // (PR-NX50) to the Overview tab where operators land first.
 import ProvenanceChip from '../common/ProvenanceChip';
+import SinceLastVisit from './SinceLastVisit';
 import { useFieldProvenance } from '../../hooks/useFieldProvenance';
 import DealAutoDerivedWarningsStrip from './DealAutoDerivedWarningsStrip';
 import DealPlanningSnapshot from './DealPlanningSnapshot';
@@ -98,6 +99,10 @@ export default function OverviewTab({ setTab }) {
 
   return (
     <div className="space-y-6">
+      {/* What moved since this user's previous visit — renders nothing when
+          there is no news, so first visits and quiet deals stay clean. */}
+      <SinceLastVisit />
+
       {/* Key Metrics Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="card-editorial p-4">

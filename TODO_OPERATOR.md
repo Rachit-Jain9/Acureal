@@ -132,6 +132,23 @@ mailbox password set, and I don't create accounts or enter passwords.
 
 ---
 
+## 5b. Apply one database update — turns on "since your last visit"
+**Why:** The site can now show you exactly what changed on a deal since YOU
+last opened it (new documents, new risks, diligence progress). The code is
+live but stays invisible until this one database update is applied. Nothing
+breaks while you wait — the feature simply doesn't show.
+
+1. 🌐 Open the database editor:
+   `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
+2. 🌐 In another tab, open this exact file and copy ALL of its text:
+   `https://github.com/Rachit-Jain9/REDIP/raw/master/database/migrations/20260801_deal_user_visits.sql`
+3. Paste it into the big text box from step 1.
+4. Click the green **Run** button (bottom-right).
+5. **Success signal:** it says `Success. No rows returned`.
+6. **Reply:** `visits migration done` — I'll verify it end-to-end.
+
+---
+
 # 🟡 NEEDS LEAD TIME — start soon
 
 ## 6. ✅ DONE (2026-07-30) — acureal.in is LIVE
