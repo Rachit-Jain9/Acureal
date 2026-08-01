@@ -158,6 +158,100 @@ html[data-theme='light'] {
   animation: acureal-boot-in 200ms ease-out 300ms backwards;
 }
 
+/* ─────────────────────────────────────────────────────────────────────────
+   The brand's motion signature — the identity handoff's hero load sequence,
+   timings verbatim from the spec. Every element's UNANIMATED styles are its
+   final state; the hidden phase exists only through `backwards` fill on a
+   delayed animation. That is what makes reduced-motion trivial and correct:
+   kill the animation and the composition is simply, instantly, done.
+
+     eyebrow            letter-in   0.70s  cubic-bezier(.2,.8,.2,1)
+     wordmark letters   letter-in   0.72s  stagger 50ms from 60ms
+     rule               rule-in     0.80s  cubic-bezier(.3,.75,.15,1) @ .34s
+     node               node-slide  1.10s  cubic-bezier(.22,.82,.14,1) @ .80s
+     plumb              drop-draw   0.50s  ease-out @ 1.7s (dasharray 44)
+     halo               node-pulse  3.60s  ease-out @ 2.2s, infinite
+   ───────────────────────────────────────────────────────────────────────── */
+@keyframes acureal-letter-in {
+  from { opacity: 0; transform: translateY(0.28em); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes acureal-rule-in {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+@keyframes acureal-node-slide {
+  from { opacity: 0; transform: translateX(-160px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes acureal-drop-draw {
+  from { stroke-dashoffset: 44; }
+  to   { stroke-dashoffset: 0; }
+}
+
+@keyframes acureal-node-pulse {
+  0%   { opacity: 0.22; transform: scale(1); }
+  100% { opacity: 0;    transform: scale(2.9); }
+}
+
+.acureal-hero-eyebrow {
+  animation: acureal-letter-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+/* Per-letter delay is set inline (60ms + i·50ms) — the class carries the
+   shared curve. display:inline-block lets translateY act on each glyph. */
+.acureal-hero-letter {
+  display: inline-block;
+  animation: acureal-letter-in 0.72s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+.acureal-hero-rule {
+  transform-origin: left center;
+  animation: acureal-rule-in 0.8s cubic-bezier(0.3, 0.75, 0.15, 1) 0.34s backwards;
+}
+
+.acureal-hero-node {
+  transform-box: fill-box;
+  animation: acureal-node-slide 1.1s cubic-bezier(0.22, 0.82, 0.14, 1) 0.8s backwards;
+}
+
+.acureal-hero-plumb {
+  stroke-dasharray: 44;
+  animation: acureal-drop-draw 0.5s ease-out 1.7s backwards;
+}
+
+.acureal-hero-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: acureal-node-pulse 3.6s ease-out 2.2s infinite;
+  opacity: 0;
+}
+
+/* Supporting copy under the lockup arrives after the wordmark has landed. */
+.acureal-hero-after {
+  animation: acureal-letter-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .acureal-hero-eyebrow,
+  .acureal-hero-letter,
+  .acureal-hero-rule,
+  .acureal-hero-node,
+  .acureal-hero-plumb,
+  .acureal-hero-after {
+    animation: none;
+  }
+
+  /* The pulse has no meaningful final frame — without motion it is noise. */
+  .acureal-hero-halo {
+    animation: none;
+    opacity: 0;
+  }
+}
+
 @layer base {
   :root {
     --tnum: "tnum" 1, "cv11" 1, "ss01" 1;
