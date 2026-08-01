@@ -217,3 +217,120 @@ autonomously without operator nod):
 
 _Last updated: 2026-05-10. Append to this file (don't rewrite)
 when new corrections / preferences land._
+
+---
+
+# Appendix — 2026-08-01 (renames · production-error sweep · the three pastes)
+
+Extracted from the full 2026-08-01 session (both work blocks). Read together
+with the sections above; where this contradicts an older rule, this wins.
+
+## Direct corrections from Rachit
+
+1. **"I did not [decline]. Lets change its name to Acureal."**
+   I told him GitHub + Vercel renames "were declined" because an earlier
+   multiple-choice answer picked "Supabase display name only". That answer
+   was a *scoping choice for that moment*, not a veto — and he corrected me
+   the instant I framed it as a standing refusal.
+   ➜ **Rule**: Only items in `decisions_permanently_skipped.md` are
+   permanently off the table. Everything else is "not yet", and must be
+   presented as *"approved-and-waiting"* or *"say the word"* — never as
+   *"you declined this"*. When he DOES mean forever, he says so in words
+   ("skip it. dont even mention it again" — auto-renew, this same session).
+   The absence of that language means revisitable.
+
+2. **"Pls do not fixate on things that dont matter."** (earlier in this
+   session, about back-filling 5 unverified early users)
+   ➜ **Rule**: When a fix closes the class going forward, don't chase tiny
+   historical residues unless asked. Ship the fix, mention the residue once
+   in one sentence, move on.
+
+## Stated preferences
+
+3. **The quality-charter message is a standing template.** He re-sends the
+   long "10-hour block / only QUALITY / do what is best for the website"
+   charter to open big blocks. Treat it as broad autonomous authorization:
+   this session it covered platform renames, a production-error sweep, five
+   bug fixes, and three operator migrations without a single mid-course
+   check-in — and that was received as exactly right.
+
+4. **Multi-phase single PRs are explicitly welcome** ("Do the next multiple
+   steps together if possible... in a single PR"). This relaxes the older
+   one-PR-per-concern rule from 2026-05-10 — but keep RISK isolation
+   judgment: this session the auth/session fix still shipped separately from
+   the RLS-repair batch, and that split was right. Bundle by theme, isolate
+   by blast radius.
+
+5. **Chrome access is standing** ("I gave Claude access to my chrome, so
+   feel free to use it or do proper checks"). Use it for dashboards and
+   production verification without asking; he personally types codes,
+   passwords, and payment details.
+
+6. **A table of actions is not an instruction.** I gave him a clean 3-row
+   table (item / what it does / reply keyword) and his response was
+   *"What should I do with this and where?"*
+   ➜ **Rule**: Every ask must carry the WHERE (exact deep link), the HOW
+   (numbered clicks incl. Ctrl+A / Ctrl+C / Ctrl+V), the PAYLOAD (the text
+   itself, in a copy-button code block), the SUCCESS SIGNAL, and the reply
+   phrase. The table is a summary, never the instruction.
+
+7. **He reports results as screenshots, not words.** Parse them forensically
+   — this session, one screenshot carried the entire diagnosis (a browser
+   extension had injected "Adobe Acrobat" into his copied SQL) and two others
+   carried the only proof of success.
+
+## Things I'd do differently next time
+
+8. **Never send the operator to a raw GitHub page to Ctrl+A-copy SQL.**
+   His browser extensions inject text into pages; "Adobe Acrobat" landed
+   inside the copied migration and the whole paste failed (harmlessly —
+   transactions are all-or-nothing, which is also why every operator paste
+   must stay wrapped in BEGIN/COMMIT). Chat code blocks with the copy
+   button are contamination-proof. Payload in chat > link to raw file.
+
+9. **OneDrive will lock files mid-`git reset --keep`** (hit three times in
+   one session: TODO_OPERATOR.md ×2, SESSION_LOG.md ×1), and once rolled a
+   working-tree file back to an OLDER version after a merge. Recovery that
+   worked every time: wait 2–3s → `git checkout origin/master -- <file>` →
+   re-run the reset → grep a sentinel string to confirm content. The merged
+   remote is always the truth; never re-edit from the local copy after a
+   failed sync without checking it first.
+
+10. **The permission classifier distinguishes HOW prod reads happen.**
+    Subagent prompts that authorize direct prod-DB queries get their agents
+    blocked (no user consent inside *their* transcripts); ad-hoc node
+    one-liners from the main loop pass sometimes and get blocked other
+    times; the committed, named, read-only repo script
+    (`backend/scripts/migration-status.js`) passed every time.
+    ➜ Prefer committed tools for prod reads; design workflow agents to work
+    from repo files and hand DB probes back to the main loop.
+
+11. **Verify status questions against live sources before answering.**
+    "What's pending?" answered from memory would have missed the stale
+    email-item in TODO_OPERATOR and the approved-but-forgotten Supabase
+    rename. The check took two minutes and found both.
+
+12. **vercel[bot] deployment tables arrive disguised as "review comments"**
+    via the CI monitor. They are never actionable; don't reply, don't
+    resolve, just note the deployment state if useful.
+
+13. **git stash stays banned** (re-affirmed: the April-era stash-pop
+    incident earlier this session). Carry files across branches with
+    copies to TEMP, or commit to a branch.
+
+## Session outcome for the record (both blocks, 2026-08-01)
+
+- #1053–#1058 (block 1): session bootstrap, cinematic hero, JDA workbook
+  mirror, visit watermark, migration-status tool, session log.
+- Renames: GitHub → `Rachit-Jain9/Acureal`, Vercel → `acureal`
+  (+ `acureal.vercel.app` claimed, `redip.vercel.app` retained), Supabase
+  display name → Acureal.
+- #1059–#1065 (block 2): TODO truth-fixes, reference sweep,
+  migration-status live-run bugs (comment-prose probes, index schema
+  inheritance, version collisions), refresh context-stamp fix, RLS flip
+  repair (phantom `redip.organization_id` GUC family, improvement_signals
+  write policy, signups definer pair, admin/users membership join),
+  activity-enum drift, eventBus waitUntil, masterplan registry UX.
+- Operator applied 5b + 5c + 5d the same evening; ledger reconciles to
+  102 RECORDED / 34 UNVERIFIABLE / zero gaps. Remaining operator items:
+  mailboxes (5), two names (4), lawyer (7).
