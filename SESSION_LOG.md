@@ -6,6 +6,36 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-01 (deep-work block) — Sessions that survive, a hero that assembles itself, and three honesty fixes (#1053–#1057)
+
+Five PRs in one block: the recurring "I have to sign in manually" complaint fixed at the foundation, the landing hero rebuilt as the identity's own motion signature, and the three top audit engineering items shipped (JDA workbook mirror, "since your last visit", migration-ledger reconciliation).
+
+### #1053 — sessions resurrect from the refresh cookie at boot
+The complaint recurred because `isAuthenticated` meant "a cached profile exists in web storage" and ProtectedRoute redirected before ever consulting the real session — the 30-day httpOnly refresh cookie. Production evidence: **15 fresh login families in 14 days for the operator, zero server-side revocations** — the server never killed a session; the client kept starting over. Now: `authReady` + `bootstrap()` — no cached profile → one interceptor-free `POST /auth/refresh` probe (the endpoint already returned the full user) resurrects the session; LoginPage bounces live-session visitors straight to /dashboard. The probe uses a **separate axios client** because the main client's 401 handler hard-navigates to /login — right mid-session, catastrophic for a boot probe. 5 new store tests.
+
+### #1054 — the hero is the identity, animated with the handoff's motion signature
+Left hero column replaced by the ACUREAL lockup running the load sequence the design handoff specifies verbatim: letters land (50ms stagger), the measure rule scales out, the node slides to 62.5%, the plumb draws down, the halo breathes forever. Every element's RESTING css is its final state — hidden phases exist only via `backwards` fill, so reduced-motion is `animation:none` and the finished composition simply appears. Live text (screen readers hear one word), CSS-only, verified live on acureal.in.
+
+### #1055 — the workbook stops buying land the developer never bought
+On JDA deals the kernel zeroes upfront land; the exported workbook's live engine still charged the full value AND remitted the landowner share. One seed change corrects ~20 formulas because everything reads the `LandCostCr` named range; gross value survives as `GrossLandValueCr` (Inputs row emitted only for JDA — outright workbooks byte-identical) and feeds the capital stack's landowner-contribution line. Marketing/finance/margin move to developer-net revenue; **the sell rate stays gross** (netting it would false-flag every JDA against market comps — the trap the July program notes called out). QA warn repurposed from accusation to treatment-statement; Model Integrity gains a live tie-out. Byte-level edits with exactly-once anchors; the file's famous NUL turns out to be a deliberate literal in its own sheet-XML validator. Cross-product reconciliation now passes BECAUSE kernel and export agree. 327 tests across the 5 adjacent suites.
+
+### #1056 — "since your last visit"
+`deal_user_visits` (migration 20260801, operator-applies; everything 42P01-tolerant so it shipped dark). Novelty measured against the PREVIOUS visit (the current one is stamped on page open — "since now" is always "nothing"); 30-minute session gap so tab-hopping can't eat your own news. Recorded via explicit `POST /deals/:id/visit` — NOT the workspace composer, which declares no-write and is hover-PREFETCHED from the dashboard (recording there would clear your news on mouse-over). Overview strip renders nothing unless there is genuine news.
+
+### #1057 — migration-status: the ledger joins reality
+Ledger newest row ~20260717; 15 repo files unrecorded. The trap: ledger keys by APPLY time, files by AUTHOR date (`20260730_refresh_grants_remember_me.sql` = ledger row `20260717150011`) — only the slug joins. The tool slug-joins, then PROBES the live DB for each missing file's own DDL objects **schema-qualified** (an unqualified `to_regclass` false-negatived `regulatory_data.planning_authorities` during verification — the exact mistake the tool exists to prevent), and emits idempotent backfill INSERTs for LIVE-UNRECORDED only. Read-only by design; TODO_OPERATOR 5c is the one-command card.
+
+### Operational note — the repo carries four ancient stashes (April era)
+A scripted `git stash pop` grabbed one mid-block and partially applied 3-month-old WIP (3 conflicts + a stale SESSION_LOG). Recovered surgically; all shipped diffs verified clean. **Lesson recorded: never use `git stash` in this repo — commit to a branch instead. The old stashes were left untouched (they're archaeology, not garbage).**
+
+### Verified end-state
+Backend 265 suites / 4279 tests; frontend 171 / 1379; every PR browser-verified where visible, hero verified ON PRODUCTION. Open PRs: 0.
+
+### Still operator-gated
+Apply 20260801_deal_user_visits (TODO 5b) · run migration-status + paste backfill (TODO 5c) · mailboxes (TODO 5) · legal publish · workspace consolidation decision.
+
+---
+
 ## 2026-07-31 (deep-work block) — Document intelligence made real, AI failover consumed, export ledger written (#1045–#1049)
 
 A focused engineering block on the highest-impact verified items from the pending-work audit. Five PRs, each closing a silent-failure gap where the product claimed a capability that did not exist.
