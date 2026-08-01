@@ -8,9 +8,9 @@ have. Everything else (the code, the database, the product) is built and verifie
 After each one, reply with the little "done" phrase shown — that's how I keep this
 list up to date. Everything is written step-by-step, no jargon.
 
-_Last updated: 2026-07-30 (Acureal rebrand. **Item 6 — the domain — is DONE and live.**
-Item 6b, turning on email sending, is now the top priority; item 5 is the receiving
-side of email.)_
+_Last updated: 2026-08-01 (**Items 6 and 6b are both DONE** — the domain is live and
+email sending is verified working. What's left: 5 (mailboxes — the legally required
+one), 5b + 5c (two quick database pastes), 4 (two names), and 7 (the lawyer).)_
 
 ---
 
@@ -216,31 +216,18 @@ ever lapses, the domain — and with it the site and every email address on it �
 stops working, and someone else can buy the name. Worth turning on:
 `https://dcc.godaddy.com/control/portfolio/acureal.in/settings` → **Turn Auto-renew On**.
 
-## 6b. 🔴 Turn on email sending — **this is now the top priority**
-_(Item 6 is done, so nothing blocks this any more.)_
-**Why:** Right now **a new person who signs up never receives their verification
-email.** The app tries to send it and fails, because no email provider is
-connected. This also unlocks password-reset links and the K-RERA deadline
-reminders (already built and waiting).
+## 6b. ✅ DONE (2026-07-31) — email sending is ON and verified
+We did this together on 2026-07-31: Resend is connected to `acureal.in` (domain
+shows green **Verified**), the sending key is installed in Vercel, and we proved
+it end-to-end — a real verification email from **Acureal `<noreply@acureal.in>`**
+landed in a real Gmail inbox, and the link inside it works (an earlier bug sent
+people to a dead address; that was found and fixed the same day).
 
-1. 🌐 Go to `https://resend.com`, sign up (free to start), log in.
-2. Click **Domains → Add Domain**. Type `acureal.in`. Click **Add**.
-3. Resend shows a list of **DNS records** (usually 3: one `TXT` and two `CNAME`).
-4. 🌐 Open GoDaddy DNS again: `https://dcc.godaddy.com/control/portfolio/acureal.in/settings`
-   → **Manage DNS**. Add each record Resend listed, one at a time, using
-   **Add New Record**. **Copy-paste each value — do not retype it.**
-   - Where GoDaddy asks for **Name** and Resend shows something like
-     `send.acureal.in`, enter only the first part (`send`), not the whole thing.
-5. Back on Resend, wait for the domain to show a green **Verified**.
-6. Click **API Keys → Create API Key**. Name it `acureal-production`. Copy the
-   key (it starts with `re_`). ⚠️ You only get to see it once.
-7. 🌐 Open `https://vercel.com/rachitjain348-4262s-projects/redip/settings/environment-variables`
-   and add these two, using **Add New** for each:
-   - Name: `RESEND_API_KEY` · Value: the `re_…` key you copied
-   - Name: `MAIL_FROM` · Value: `Acureal <noreply@acureal.in>`
-8. Click **Save** on each. Green **Updated** message each time.
-9. **Reply:** `email sending on` — then I'll create a test account and confirm a
-   real verification email actually arrives, and switch on the K-RERA reminders.
+New signups now receive their verification email, and password-reset links work.
+
+_Note: the K-RERA deadline reminders mentioned here earlier are **not** waiting on
+email — they're deferred for a different reason (no live deal has a RERA number
+entered yet, so there is nothing to remind about). Details live in TODO_MANUAL.md._
 
 ## 7. Hire a lawyer for two legal documents
 **Why:** Big customers (funds, banks, REITs) check for proper legal paperwork before
