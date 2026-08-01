@@ -6,6 +6,7 @@ const emailVerificationService = require('../services/emailVerification.service'
 const signupNotificationService = require('../services/signupNotification.service');
 const refreshTokenService = require('../services/refreshToken.service');
 const { authenticate } = require('../middleware/auth');
+const { setRequestContext } = require('../lib/requestContext');
 const { handleValidation } = require('../middleware/validate');
 const {
   setAccessCookie,
@@ -491,11 +492,41 @@ router.post('/refresh', async (req, res, next) => {
       userAgent: req.headers['user-agent'] || null,
     });
 
+    // M1 Phase 2 — the stamp this route was missing (2026-08-01 postmortem):
+    // this is a PUBLIC route, so the request context is empty here, and
+    // hydrate's users read is guarded by the self-scoped RLS policy that
+    // matches on current_user_id(). Under the non-BYPASSRLS role that meant
+    // zero rows → 404 "User not found" on EVERY silent renewal since the
+    // flip, killing valid sessions. The token-hash match in rotate() is the
+    // credential — the same strength as the verified JWT that authenticate()
+    // stamps — so rotation.userId is safe to stamp before hydration.
+    setRequestContext({ userId: rotation.userId });
+
     // Mint a fresh access JWT for the user. We re-fetch role from the DB
     // to pick up any role change that happened mid-session (deactivation,
     // role bump). hydrateUserAuthContext throws on deactivated accounts.
     const { hydrateUserAuthContext } = require('../services/organization.service');
-    const authContext = await hydrateUserAuthContext(rotation.userId, null);
+    let authContext;
+    try {
+      authContext = await hydrateUserAuthContext(rotation.userId, null);
+    } catch (hydrateError) {
+      // hydrate throws 403 for deactivated accounts BEFORE the is_active
+      // branch below can run — so honor that branch's intent here: the
+      // family we just rotated into must not stay live for a deactivated
+      // account until TTL merely because the throw happened one frame early.
+      if (hydrateError?.statusCode === 403) {
+        await refreshTokenService.revokeFamily(rotation.familyId, 'security');
+      }
+      throw hydrateError;
+    }
+
+    // Full stamp after hydration (mirrors middleware/auth.js) so anything
+    // added to this path later that reads org-scoped rows sees them.
+    setRequestContext({
+      userId: authContext.user.id,
+      organizationId: authContext.user.organization_id,
+      role: authContext.user.role,
+    });
 
     if (!authContext.user.is_active) {
       // Deactivated mid-session — revoke the family we just rotated into,
@@ -527,8 +558,17 @@ router.post('/refresh', async (req, res, next) => {
     });
   } catch (error) {
     // On any rotation failure (unknown token / expired / family killed),
-    // sweep the cookies so the SPA does not loop on a dead refresh.
-    if (error?.statusCode === 401 || error?.statusCode === 403) {
+    // sweep the cookies so the SPA does not loop on a dead refresh. 404 is
+    // swept too: by that point rotate() has already consumed the presented
+    // grant, so the cookie the client holds is revoked either way — without
+    // a sweep a deleted-user cookie gets re-presented forever. Logged
+    // distinctly first because a refresh 404 is also the signature of the
+    // context-stamp regression class (2026-08-01 postmortem) — the log line
+    // is the evidence trail the sweep would otherwise destroy.
+    if (error?.statusCode === 404) {
+      log.error('refresh_user_lookup_404_after_rotation', { path: '/api/auth/refresh' });
+    }
+    if (error?.statusCode === 401 || error?.statusCode === 403 || error?.statusCode === 404) {
       clearAuthCookies(res);
     }
     next(error);
