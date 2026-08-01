@@ -25,6 +25,19 @@ const api = axios.create({
   withCredentials: true,
 });
 
+// Interceptor-free client for the ONE call that must not trigger the 401
+// machinery below: the cold-boot session probe. The main client's response
+// interceptor hard-navigates to /login when /auth/refresh 401s — correct for
+// a session that just died mid-use, catastrophic for a probe whose 401 simply
+// means "nobody was signed in here" (it would turn every logged-out visit to
+// a protected URL into a full page reload). The boot path needs the failure
+// as a plain rejected promise it can absorb.
+const bareApi = axios.create({
+  baseURL: API_URL,
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: true,
+});
+
 const isSessionBootstrapRequest = (config) => {
   const url = String(config?.url || '').toLowerCase();
   return url === '/auth/login'
@@ -140,6 +153,12 @@ api.interceptors.response.use(
 export const authAPI = {
   login: (data) => api.post('/auth/login', data),
   register: (data) => api.post('/auth/register', data),
+  // Cold-boot session probe. Rides the httpOnly refresh cookie and returns
+  // the full user on success, so one round-trip resurrects a session whose
+  // cached profile was lost (storage eviction, cleared site data, Safari's
+  // 7-day script-storage cap). Uses the interceptor-free client: a 401 here
+  // means "not signed in", never "kick the user to /login".
+  bootstrapRefresh: () => bareApi.post('/auth/refresh'),
   getMe: () => api.get('/auth/me'),
   updateMe: (data) => api.put('/auth/me', data),
   // Email verification — `confirm` is public (consumed before login on a fresh
