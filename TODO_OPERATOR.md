@@ -8,11 +8,12 @@ have. Everything else (the code, the database, the product) is built and verifie
 After each one, reply with the little "done" phrase shown — that's how I keep this
 list up to date. Everything is written step-by-step, no jargon.
 
-_Last updated: 2026-08-02 evening (**items 0 and 0b are both DONE** — you ran
-both pastes and I verified each against the live database. The second entrance
-to your database is shut, and deal sharing is locked to your own workspace.
-Still open: 5 (mailboxes — the legally required one), 4 (two names), and 7 (the
-lawyer). Nothing urgent left.)_
+_Last updated: 2026-08-02 late (**items 0, 0b, 8b and 8c are all DONE** and each
+verified against the live system. The second entrance to your database is shut
+and now has nothing left talking to it; deal sharing is locked to your own
+workspace; and the database connection verifies the server's identity, not just
+encrypts the line. Still open: 5 (mailboxes — the legally required one), 4 (two
+names), and 7 (the lawyer). Nothing urgent, nothing blocking.)_
 
 ---
 
@@ -336,7 +337,15 @@ These need nothing from you right now. When you want them, send the phrase and I
   and no working files were deleted — a literal "delete 123 files into one" would
   risk breaking fresh-database setup for no gain (the files are the safe, idempotent
   history). No action needed from you.
-- **8c. Delete one leftover add-on — 30 seconds, and the only step left on this.**
+- **8c. ✅ DONE (2026-08-02 — you deleted it; verified live).** Supabase now reports
+  zero add-ons. That was the last thing anywhere still talking to the second
+  database entrance, so it is now closed both by permission and by having no
+  users left.
+
+<details>
+<summary>Original instructions, for the record</summary>
+
+- **Delete one leftover add-on — 30 seconds, and the only step left on this.**
   I removed the unused `investor-package` add-on from the code after confirming
   it had never done anything: **zero** records written in its entire life across
   all three of its tables, and no activity in its logs. A copy is still sitting
@@ -349,7 +358,31 @@ These need nothing from you right now. When you want them, send the phrase and I
   It belonged to a feature we never launched (tamper-proof signed investor
   packs). If we ever build that, it gets rebuilt properly with its own limited
   database access.
-- **8b. Make the database connection check who it's talking to — 3 steps, needs one
+
+</details>
+
+- **8b. ✅ DONE (2026-08-02 — verified live).** Your database connection now checks
+  **who** it is talking to, not merely that the line is scrambled. The System
+  Health page confirms it: *"Transport verify-full · server certificate and
+  hostname verified"*. Your downloaded certificate was checked against the live
+  database first — its fingerprint matched what production actually presents,
+  exactly.
+
+  **It cost about six minutes of downtime, and that was my mistake.** I gave you
+  two settings in one message and told you to republish without first checking
+  that *both* covered Production. The certificate had saved as Development-only,
+  so verification switched on with no certificate available and sign-ins failed
+  until you corrected the scope and republished. Two things worked as designed:
+  the failure was loud and instant rather than subtle, and the fix was a setting
+  rather than a code rollback. Lesson recorded — when a change needs two
+  settings, verify both are saved AND correctly scoped before any republish.
+
+  To revert at any time: set `DATABASE_SSL_MODE` to `relaxed` and republish.
+
+<details>
+<summary>Original instructions, for the record</summary>
+
+- **Make the database connection check who it's talking to — 3 steps, needs one
   file from you.** The connection is scrambled (encrypted) but never checks the
   identity of the machine at the other end. Turning that check on needs
   Supabase's own certificate first, because they sign their database with a
@@ -376,6 +409,9 @@ These need nothing from you right now. When you want them, send the phrase and I
   After you send it: I verify it, you paste it into one Vercel setting, flip a
   second setting to `verify-full`, and it's done — reversible in seconds if
   anything misbehaves.
+
+</details>
+
 - **9. Guidance-value PDF (unlocks 11 placeholder rows).** Bengaluru guidance/circle-
   rate values are placeholders until you give me **one** official PDF. Go to
   `https://igr.karnataka.gov.in/english` → **Revised Guidelines Value** → pick Bengaluru

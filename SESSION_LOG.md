@@ -11134,3 +11134,106 @@ Two exported normalizers re-key each kernel result into the shared `segments` sh
 **Repo-wide CI unblock (rode along in #1027).** A new advisory (GHSA-mh99-v99m-4gvg, brace-expansion ≤5.0.7 DoS) turned the npm-audit gate red for EVERY branch mid-day with zero dependency changes on our side — the gate queries the live advisory DB. npm's only offered remedies were breaking downgrades (exceljs@3.4.0, jest@25). Fixed by pinning brace-expansion `^5.0.8` via `overrides` in backend AND packages/financial-kernel (its gate audits devDeps), verified with real xlsx/docx/pptx generation + full suites (backend 4,217, kernel 413) + all three CI audit commands exiting 0. Rationale recorded in-package (`overridesRationale`) and in memory.
 
 **Next:** operator creates the Supabase branch → Phase 4 rehearsal (`scripts/rehearsal/README.md`) → Phase 5 flip. Post-flip backlog unchanged (tighten five permissive policies, verify-full SSL, Tier A/B round-trip collapse). Remaining recon candidates: the IC memo half of the reference (icMemo footer + promptCacheHash disambiguation), the "since I last looked" dashboard concept.
+
+
+## 2026-08-02 - The second door: PostgREST containment, the Karnataka legal guard, an environment contract, and verified database transport
+
+### What was worked on
+
+A full-day block that began as a platform audit and turned into four closures,
+each found by verifying rather than assuming.
+
+**1. The PostgREST parallel door (#1067, #1072).** Acureal has two entrances to
+the same database. Every prior review — including several multi-agent audits —
+reasoned about the Express API. Nobody had ever inventoried the second:
+Supabase's PostgREST Data API, live and internet-facing. Behind it, Supabase's
+default privileges granted `anon` full CRUD on all 83 public tables plus EXECUTE
+on every function, including the six auth SECURITY DEFINER helpers the M1 RLS
+rollout itself introduced. With only the project's publishable key that reached
+password hashes, the operator's TOTP seed, the cross-workspace contact roster,
+account provisioning, and an INSERT into `refresh_token_grants` that forges a
+session for any user without a password. Closed by migration `20260805` plus an
+hourly canary and a CI fence.
+
+A follow-up (#1072) fixed two over-broad read-backs I had shipped with it: the
+function count included ordinary SECURITY INVOKER helpers (harmless, reachable
+only via Postgres's default EXECUTE-to-PUBLIC), and the default-privilege check
+ignored grantor, so it would have alarmed hourly forever about `supabase_admin`
+defaults nobody can alter. An alarm that is always red is an alarm nobody reads.
+
+**2. The Karnataka legal-verdict guard (#1073).** CLAUDE.md's hardest rule is
+that AI never asserts a statutory fact on the legal four. The guard enforcing it
+knew four generic English phrasings. Acureal is India-first, and an Indian deal
+document does not talk like that — "the A-khata is valid", "EC is nil", "DC
+conversion is complete", "registered under K-RERA" all sailed through. 25 rules
+now cover all four lanes in the vocabulary the domain actually uses. The hard
+part was not the vocabulary but not destroying the product: "verify that the
+khata is valid" must survive while "the khata is valid" must not, which needed
+clause-boundary-aware suppression.
+
+**3. An environment contract (#1074).** 90+ backend variables, nothing recorded.
+Writing the inventory down immediately surfaced a live defect: the rebrand had
+renamed a VARIABLE ITSELF (`REDIP_SKIP_*` -> `Acureal_SKIP_*`), and because
+environment names are case-sensitive, three workbook kill switches were dead.
+
+**4. Database transport verification (#1076, #1077, #1078).** Retired the
+dormant `investor-package` edge function (zero rows lifetime, zero invocations,
+no callers) — the last PostgREST consumer anywhere. Verified the operator's
+downloaded Supabase CA against the live pooler before anything changed, then
+enabled `verify-full`.
+
+### Plain-English recap
+
+- A second, unguarded way into the database was found and shut. It would have
+  handed out everyone's scrambled passwords and let a stranger sign in as any
+  user. Nobody could actually reach it, but it was one accident away.
+- The AI can no longer state that a khata is valid, an EC is nil, or approvals
+  are in place. It can still tell you to go and check those things, which is the
+  whole point of the product.
+- An emergency switch the rebrand quietly broke works again.
+- The database connection now checks who it is talking to, not just that the
+  line is scrambled.
+
+### PRs opened / merged
+
+- #1067 · #1072 — PostgREST containment + canary precision
+- #1073 — Karnataka statutory-verdict vocabulary
+- #1074 — environment contract + the rebrand-broken kill switch
+- #1076 · #1077 · #1078 — retire investor-package, CA newline normalisation,
+  transport posture surfaced
+
+### Validation
+
+- Backend 277 suites / 4,586 tests green (from 267 / 4,314 at session start).
+- Frontend build clean; bundle within budget; all six CI guards green.
+- Every claim verified against production: grant counts 83 -> 0, definers
+  reachable 0, CA fingerprint matched byte for byte, login returning 401 (not
+  500) over a verified connection.
+
+### An incident worth recording
+
+Enabling `verify-full` caused ~6 minutes of failed sign-ins. Cause: two settings
+were needed and I told the operator to republish without confirming BOTH covered
+Production. `DATABASE_CA_CERT` had saved as Development-only, so verification
+switched on with no certificate available. The wrong scope was visible in a
+screenshot two messages earlier and I read past it, having checked the
+certificate's content but not where it applied.
+
+Two things worked as designed: the failure was loud and immediate rather than
+subtle, and recovery was a setting rather than a code rollback. The transport
+line shipped 30 minutes earlier is what made both the original silent failure
+and the fix verifiable — without it, "seems fine" was indistinguishable from
+"is fine".
+
+**Rule:** when a change needs two settings, verify both are saved AND correctly
+scoped before any republish.
+
+### What's left to do
+
+- Operator: two mailboxes (`grievance@` is legally required), two names for the
+  incident plan, the lawyer for DPA + AUP.
+- Preview isolation — `DATABASE_URL` is scoped to All Environments, so preview
+  builds of unmerged code reach the live database. Confirmed, not yet fixed.
+- Queued: user-scoping the five permissive policies, Supabase Storage RLS,
+  `comps.last_verified`, headless Excel-recalc CI, audit-chain linkage, and
+  reconciling `TODO_MANUAL.md` against `TODO_OPERATOR.md`.
