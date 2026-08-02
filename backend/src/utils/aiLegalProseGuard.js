@@ -23,7 +23,10 @@
  */
 
 const { neutralizeStanceText, containsAbsoluteStanceVerb } = require('./icStanceVerbs');
-const { LEGAL_VERDICT_PATTERNS } = require('../services/ai/toneClassifier');
+// The statutory vocabulary lives in its own util — one definition shared with
+// the Deal Doctor's tone classifier, and no longer an upward import from a
+// util into a service.
+const { findLegalAssertion } = require('./legalVerdictVocabulary');
 
 // Concise inline marker left where a statutory-verdict sentence was removed, so
 // the reader knows something was redacted and why (rather than a silent gap).
@@ -36,10 +39,13 @@ const splitSentences = (text) => text.match(/[^.!?\n]*(?:[.!?]+|\n+|$)/g)?.filte
 
 const stripLegalVerdicts = (text) => {
   let removed = 0;
+  const lanes = new Set();
   const out = splitSentences(text)
     .map((sentence) => {
-      if (LEGAL_VERDICT_PATTERNS.some((re) => re.test(sentence))) {
+      const assertion = findLegalAssertion(sentence);
+      if (assertion) {
         removed += 1;
+        lanes.add(assertion.lane);
         // Preserve any leading whitespace so paragraph spacing survives.
         const lead = (sentence.match(/^\s*/) || [''])[0];
         return `${lead}${LEGAL_REDACTION_MARKER} `;
@@ -47,7 +53,7 @@ const stripLegalVerdicts = (text) => {
       return sentence;
     })
     .join('');
-  return { text: out, removed };
+  return { text: out, removed, lanes: [...lanes] };
 };
 
 /**
@@ -61,12 +67,16 @@ const sanitizeAiProse = (text) => {
   }
   const stanceRewritten = containsAbsoluteStanceVerb(text);
   const stanceClean = neutralizeStanceText(text);
-  const { text: scrubbed, removed } = stripLegalVerdicts(stanceClean);
+  const { text: scrubbed, removed, lanes } = stripLegalVerdicts(stanceClean);
   return {
     text: scrubbed,
     flagged: stanceRewritten || removed > 0,
     stanceRewritten,
     legalRemoved: removed,
+    // Which of the legal four the model drifted into. Surfaced so telemetry can
+    // answer "which statutory lane does this prompt keep straying towards?"
+    // rather than only "something was redacted".
+    legalLanes: lanes,
   };
 };
 

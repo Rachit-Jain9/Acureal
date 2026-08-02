@@ -11,8 +11,11 @@
  *                                dreaming", "the strategy is a fantasy"
  *   • Slander-grade claims    — addressing the promoter's competence
  *                                or intent, not just their track record
- *   • Absolute legal verdicts — "title is clear", "RERA-compliant",
- *                                "approval will be granted"
+ *   • Absolute legal verdicts — any statutory conclusion on the legal four,
+ *                                in Karnataka vocabulary as much as generic
+ *                                English ("the khata is valid", "EC is nil",
+ *                                "DC conversion is complete"). The vocabulary
+ *                                lives in utils/legalVerdictVocabulary.
  *   • Hedge-padding           — "may possibly potentially perhaps need
  *                                to be considered for re-examination"
  *
@@ -31,6 +34,15 @@
  */
 
 const log = require('../../lib/logger').child({ module: 'ai.tone-classifier' });
+// The statutory-verdict vocabulary is a DOMAIN concern shared with the prose
+// scrubber (utils/aiLegalProseGuard), so it lives in its own util rather than
+// here. `findLegalAssertion` adds what a bare pattern list cannot: it does not
+// fire on "verify that the khata is valid", which is diligence guidance rather
+// than a verdict.
+const {
+  findLegalAssertion,
+  LEGAL_VERDICT_PATTERNS,
+} = require('../../utils/legalVerdictVocabulary');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Theatrical / slander / hedge phrases — fast regex pass
@@ -50,13 +62,6 @@ const THEATRICAL_PATTERNS = [
 const SLANDER_PATTERNS = [
   /\b(?:promoter|developer|sponsor|landowner) (?:is|appears|seems) (?:incompetent|dishonest|fraudulent|unreliable|untrustworthy|reckless|lying|deceptive)\b/i,
   /\b(?:promoter|developer|sponsor|landowner)\b[^.]{0,40}\b(?:can'?t be trusted|cannot be trusted|will fail|always fails)\b/i,
-];
-
-const LEGAL_VERDICT_PATTERNS = [
-  /\btitle is (?:clear|good|fine|fully clean|unencumbered)\b/i,
-  /\bRERA[\s-]?(?:compliant|approved|valid|certified)\b/i,
-  /\b(?:approval|sanction) (?:will be|is) (?:granted|approved|certain)\b/i,
-  /\b(?:guarantee[ds]?|warrant[ds]?)\b[^.]{0,50}\b(?:returns|outcome|approval|title|RERA|profit)\b/i,
 ];
 
 const HEDGE_PILE_PATTERNS = [
@@ -84,8 +89,12 @@ const classifyLocal = (text) => {
   for (const pattern of SLANDER_PATTERNS) {
     if (pattern.test(text)) return { ok: false, reason: 'slander' };
   }
-  for (const pattern of LEGAL_VERDICT_PATTERNS) {
-    if (pattern.test(text)) return { ok: false, reason: 'legal_verdict' };
+  // Sentence-by-sentence, because the instruction-lead suppression that keeps
+  // "verify the khata is valid" alive is only meaningful within one sentence —
+  // a "confirm" three sentences earlier must not license a verdict later.
+  for (const sentence of text.split(/(?<=[.!?])\s+|\n+/)) {
+    const assertion = findLegalAssertion(sentence);
+    if (assertion) return { ok: false, reason: 'legal_verdict', lane: assertion.lane };
   }
   for (const pattern of HEDGE_PILE_PATTERNS) {
     if (pattern.test(text)) return { ok: false, reason: 'hedge_pile' };
@@ -109,8 +118,24 @@ ACCEPTABLE tone is:
 UNACCEPTABLE tone is:
   • Theatrical, slang, gimmicky ("this deal is dead", "your numbers are dreaming").
   • Slander-grade about the promoter's competence or intent.
-  • Absolute legal verdicts ("title is clear", "RERA-compliant", "approval will be granted").
   • Hedge piles (stacking "may possibly potentially perhaps").
+  • ANY statutory conclusion stated as fact, on title, encumbrance, RERA
+    registration, or statutory approval. This is the strictest rule, and it
+    applies in Indian / Karnataka vocabulary as much as in generic English:
+      "title is clear" · "clear and marketable title" · "chain of title is complete"
+      "the khata is valid" · "A-khata is in order" · "mutation is done"
+      "RTC is clean" · "survey is settled" · "no litigation" · "not PTCL land"
+      "EC is nil" · "free from encumbrances" · "property is unencumbered"
+      "RERA-compliant" · "registered under K-RERA" · "RERA registration is valid"
+      "approval will be granted" · "BBMP has approved" · "plan is sanctioned"
+      "OC has been received" · "DC conversion is complete" · "the land is converted"
+      "NOC obtained" · "Akrama-Sakrama regularisation granted"
+    A NEGATIVE conclusion ("title is not clear") is equally unacceptable.
+
+ACCEPTABLE, and must NOT be rejected — asking for a status is the product's job:
+  "Verify that the khata is valid." · "Confirm whether the EC is nil."
+  "DC conversion is pending." · "No evidence of RERA registration was found."
+  "Obtain the OC before closing." · "Title chain requires verification."
 
 Return STRICT JSON:
 {
