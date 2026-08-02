@@ -62,6 +62,58 @@ const CHECK_LABELS = {
   audit_trail: 'Audit trail',
   extractions: 'Document extractions',
   tenant_isolation: 'Tenant isolation',
+  api_exposure: 'Data API exposure',
+};
+
+// ── api_exposure reference data ─────────────────────────────────────────────
+// The PostGIS metadata relations were granted to anon by `supabase_admin`, not
+// by us, so 20260805 cannot revoke them. They carry no tenant data (SRID
+// reference rows and two catalog views) and are the long-standing accepted
+// advisor entries. Allowlisted so a permanent, unfixable condition never mints
+// an hourly Sentry issue — the thing that makes canaries get ignored.
+const POSTGIS_METADATA_RELATIONS = new Set([
+  'public.spatial_ref_sys',
+  'public.geometry_columns',
+  'public.geography_columns',
+]);
+
+// Every application-owned SECURITY DEFINER function that has been reviewed.
+// A definer runs with its owner's privileges, so each one is a deliberate,
+// audited hole through RLS: six auth-bootstrap helpers (20260801/20260802) and
+// two platform-admin cross-org readers (20260804). A definer appearing in the
+// database that is NOT on this list has not been reviewed — that is exactly
+// how the PostgREST exposure happened (the M1 migration created six functions
+// which silently inherited `anon` EXECUTE from Supabase's default ACL), so an
+// unknown definer is treated as unhealthy until someone adds it here.
+const APPROVED_DEFINERS = new Set([
+  'public.auth_find_user_for_login',
+  'public.auth_find_user_by_oauth',
+  'public.auth_find_mfa_challenge',
+  'public.auth_lookup_verified_domain',
+  'public.auth_find_invitation',
+  'public.auth_provision_signup',
+  'public.admin_list_signups',
+  'public.admin_signup_summary',
+]);
+
+// A definer must pin its search_path with pg_temp LAST. If pg_temp is absent it
+// is implicitly searched FIRST, letting any caller shadow an unqualified table
+// reference with a temp table of the same name and run their own SQL as the
+// function's owner. 20260802 re-created all six auth definers for this reason.
+//
+// Takes pg_proc.proconfig verbatim (a `text[]` of "key=value" settings), NOT a
+// pre-joined string — a joined string is ambiguous because search_path values
+// are themselves comma-separated.
+const definerSearchPathIsSafe = (proconfig) => {
+  const entry = (Array.isArray(proconfig) ? proconfig : [])
+    .find((s) => /^search_path=/i.test(String(s)));
+  if (!entry) return false;
+  const schemas = String(entry)
+    .slice('search_path='.length)
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter(Boolean);
+  return schemas.length > 0 && schemas[schemas.length - 1] === 'pg_temp';
 };
 
 const pct = (n) => `${Math.round(n * 100)}%`;
@@ -203,14 +255,15 @@ const checkStuckExtractions = async () => {
 
 /**
  * Check 4 — tenant-isolation fail-closed canary.
- * The app connects as a role that BYPASSES RLS, so the app-layer predicate
- * `organization_id = current_organization_id()` is the only real tenant wall
- * today. That wall's contract is: with NO org context, every org-scoped read
- * returns ZERO rows. This canary forces the no-context condition in its own
- * transaction (independent of the caller) and asserts the contract holds — the
- * single most valuable canary available before the DB role is hardened (M1).
- * It also surfaces the current DB posture (superuser / bypassrls) so that when
- * the role IS eventually swapped, the change becomes visible here.
+ * Since the M1 flip (2026-07-28) the app connects as `redip_app`, which does
+ * NOT bypass RLS, so Postgres itself now enforces the tenant wall alongside the
+ * app-layer `organization_id = current_organization_id()` predicate. The
+ * contract either way is: with NO org context, every org-scoped read returns
+ * ZERO rows. This canary forces the no-context condition in its own transaction
+ * (independent of the caller) and asserts the contract holds. It also reports
+ * the live DB posture (superuser / bypassrls), which is how a silent regression
+ * to a bypassing role — the single most dangerous config change available —
+ * would surface.
  */
 const checkTenantIsolation = async () => {
   const client = await getClient();
@@ -263,23 +316,182 @@ const checkTenantIsolation = async () => {
 };
 
 /**
+ * Check 5 — Data API exposure.
+ *
+ * Acureal has TWO doors into the same database. The Express API is the one
+ * every prior review reasoned about; PostgREST (Supabase's Data API) is the
+ * other, and it is live and internet-facing. Supabase's default privileges
+ * grant `anon` and `authenticated` full CRUD on every new table in `public`
+ * and EXECUTE on every new function — so on 2026-08-02 the publishable key
+ * alone reached password hashes, TOTP seeds, the cross-org signup roster,
+ * account provisioning, and an INSERT into refresh_token_grants that forges a
+ * session. Migration 20260805 closed it; this check is what keeps it closed.
+ *
+ * It asserts four things, in one round trip:
+ *   1. No table in public/regulatory_data is granted to anon or authenticated
+ *      (excluding the three PostGIS metadata relations we cannot revoke).
+ *   2. No application-owned SECURITY DEFINER function is executable by anon,
+ *      authenticated, or PUBLIC.
+ *   3. Every application-owned definer is on the reviewed allowlist, pins its
+ *      search_path with pg_temp LAST, and is not owned by the app role.
+ *   4. No default-ACL entry will re-grant to those roles on the next
+ *      CREATE TABLE — the self-healing property that made the original hole
+ *      survive every manual cleanup.
+ *
+ * Degrades to healthy-with-note on a database that has no `anon` role at all
+ * (a local dev database built from schema.sql), because there is nothing to
+ * expose there.
+ */
+const checkApiExposure = async () => {
+  try {
+    const { rows } = await query(
+      `WITH api_roles AS (
+         SELECT oid FROM pg_roles WHERE rolname IN ('anon', 'authenticated')
+       ),
+       app_definers AS (
+         SELECT p.oid,
+                n.nspname || '.' || p.proname                    AS fn,
+                pg_get_userbyid(p.proowner)                      AS owner,
+                p.proconfig                                      AS proconfig,
+                COALESCE(p.proacl, acldefault('f', p.proowner))  AS acl
+           FROM pg_proc p
+           JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE p.prosecdef
+            AND n.nspname IN ('public', 'regulatory_data')
+            -- Extension-owned definers (PostGIS st_estimatedextent) are not
+            -- ours to review or revoke; they carry no tenant data.
+            AND NOT EXISTS (
+              SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e'
+            )
+       )
+       SELECT
+         (SELECT COALESCE(json_agg(DISTINCT g.table_schema || '.' || g.table_name), '[]'::json)
+            FROM information_schema.role_table_grants g
+           WHERE g.table_schema IN ('public', 'regulatory_data')
+             AND g.grantee IN ('anon', 'authenticated'))                    AS exposed_tables,
+         (SELECT COALESCE(json_agg(t.fn), '[]'::json)
+            FROM (SELECT DISTINCT d.fn
+                    FROM app_definers d
+                    CROSS JOIN LATERAL aclexplode(d.acl) a
+                    LEFT JOIN api_roles r ON r.oid = a.grantee
+                   WHERE a.privilege_type = 'EXECUTE'
+                     AND (a.grantee = 0 OR r.oid IS NOT NULL)) t)           AS exposed_functions,
+         (SELECT COALESCE(json_agg(json_build_object(
+                   'fn', d.fn, 'owner', d.owner, 'proconfig', d.proconfig
+                 )), '[]'::json)
+            FROM app_definers d)                                            AS definers,
+         (SELECT count(*)::int
+            FROM pg_default_acl da
+            JOIN pg_namespace dn ON dn.oid = da.defaclnamespace
+            CROSS JOIN LATERAL aclexplode(da.defaclacl) a
+            JOIN api_roles r ON r.oid = a.grantee
+           WHERE dn.nspname IN ('public', 'regulatory_data'))               AS risky_default_acls,
+         (SELECT count(*)::int FROM api_roles)                              AS api_role_count,
+         current_user                                                       AS db_role`,
+    );
+
+    const r = rows[0] || {};
+    const apiRoleCount = Number(r.api_role_count) || 0;
+    const definers = Array.isArray(r.definers) ? r.definers : [];
+
+    if (apiRoleCount === 0) {
+      return {
+        status: HEALTHY,
+        api_roles_present: false,
+        definers_reviewed: definers.length,
+        detail: 'No anon/authenticated roles exist on this database — the Data API surface does not apply here.',
+      };
+    }
+
+    const exposedTables = (Array.isArray(r.exposed_tables) ? r.exposed_tables : [])
+      .filter((t) => !POSTGIS_METADATA_RELATIONS.has(t));
+    const exposedFunctions = Array.isArray(r.exposed_functions) ? r.exposed_functions : [];
+    const riskyDefaults = Number(r.risky_default_acls) || 0;
+    const appRole = r.db_role;
+
+    const unreviewedDefiners = definers
+      .filter((d) => !APPROVED_DEFINERS.has(d.fn))
+      .map((d) => d.fn);
+    const unpinnedDefiners = definers
+      .filter((d) => !definerSearchPathIsSafe(d.proconfig))
+      .map((d) => d.fn);
+    // A definer owned by the application role cannot bypass RLS, so the auth
+    // bootstrap it exists to serve would silently return zero rows.
+    const misownedDefiners = definers
+      .filter((d) => d.owner === appRole)
+      .map((d) => d.fn);
+
+    const faults = [];
+    if (exposedTables.length) {
+      faults.push(
+        `${exposedTables.length} table(s) reachable by anon/authenticated through the Data API: ${exposedTables.slice(0, 8).join(', ')}${exposedTables.length > 8 ? ' …' : ''}`,
+      );
+    }
+    if (exposedFunctions.length) {
+      faults.push(
+        `${exposedFunctions.length} SECURITY DEFINER function(s) executable by anon/authenticated/PUBLIC: ${exposedFunctions.join(', ')}`,
+      );
+    }
+    if (unreviewedDefiners.length) {
+      faults.push(
+        `${unreviewedDefiners.length} SECURITY DEFINER function(s) not on the reviewed allowlist: ${unreviewedDefiners.join(', ')} — review it, then add it to APPROVED_DEFINERS in healthCheck.service.js.`,
+      );
+    }
+    if (unpinnedDefiners.length) {
+      faults.push(
+        `${unpinnedDefiners.length} definer(s) without a search_path pinned with pg_temp LAST: ${unpinnedDefiners.join(', ')}`,
+      );
+    }
+    if (misownedDefiners.length) {
+      faults.push(
+        `${misownedDefiners.length} definer(s) owned by the application role (${appRole}) — they cannot bypass RLS and will return zero rows: ${misownedDefiners.join(', ')}`,
+      );
+    }
+    if (riskyDefaults > 0) {
+      faults.push(
+        `${riskyDefaults} default-privilege entr${riskyDefaults === 1 ? 'y' : 'ies'} still grant to anon/authenticated — the next CREATE TABLE in public/regulatory_data will re-expose itself automatically.`,
+      );
+    }
+
+    return {
+      status: faults.length ? UNHEALTHY : HEALTHY,
+      api_roles_present: true,
+      exposed_tables: exposedTables,
+      exposed_functions: exposedFunctions,
+      unreviewed_definers: unreviewedDefiners,
+      unpinned_definers: unpinnedDefiners,
+      risky_default_acls: riskyDefaults,
+      definers_reviewed: definers.length,
+      detail: faults.length
+        ? faults.join(' ')
+        : `Data API surface closed: no anon/authenticated grants, ${definers.length} reviewed SECURITY DEFINER function(s) all pinned and private, and no default privilege will re-expose a new table.`,
+    };
+  } catch (error) {
+    log.warn('api_exposure_check_failed', { error: error.message });
+    return { status: UNKNOWN, error: error.message };
+  }
+};
+
+/**
  * Run every check, optionally raising a Sentry alert per unhealthy subsystem.
  * @param {{ raiseAlerts?: boolean }} opts  raiseAlerts=true only for the cron —
  *   a human viewing the System Health page must NOT mint Sentry issues.
  */
 const runHealthCheck = async ({ raiseAlerts = false } = {}) => {
   const start = Date.now();
-  const [ai, audit, extractions, tenant] = await Promise.all([
+  const [ai, audit, extractions, tenant, apiExposure] = await Promise.all([
     checkAiErrorShare(),
     checkAuditWrites(),
     checkStuckExtractions(),
     checkTenantIsolation(),
+    checkApiExposure(),
   ]);
   const checks = {
     ai_providers: ai,
     audit_trail: audit,
     extractions,
     tenant_isolation: tenant,
+    api_exposure: apiExposure,
   };
 
   const unhealthy = Object.entries(checks).filter(([, c]) => c.status === UNHEALTHY);
@@ -328,5 +540,9 @@ module.exports = {
   checkAuditWrites,
   checkStuckExtractions,
   checkTenantIsolation,
+  checkApiExposure,
+  definerSearchPathIsSafe,
+  APPROVED_DEFINERS,
+  POSTGIS_METADATA_RELATIONS,
   CHECK_LABELS,
 };

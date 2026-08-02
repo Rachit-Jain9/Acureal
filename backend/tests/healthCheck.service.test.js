@@ -31,6 +31,22 @@ const mockIsolationClient = (canaryRow) => {
   return client;
 };
 
+// The api_exposure row for a database whose Data API surface is properly
+// closed: no anon/authenticated table grants, no anon-executable definers, and
+// every reviewed definer pinned with pg_temp LAST and owned by a role other
+// than the application role.
+const closedExposureRow = (overrides = {}) => ({
+  exposed_tables: [],
+  exposed_functions: [],
+  definers: [...health.APPROVED_DEFINERS].map((fn) => ({
+    fn, owner: 'postgres', proconfig: ['search_path=pg_catalog, public, pg_temp'],
+  })),
+  risky_default_acls: 0,
+  api_role_count: 2,
+  db_role: 'redip_app',
+  ...overrides,
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   isEnabled.mockReturnValue(true);
@@ -163,22 +179,149 @@ describe('healthCheck.checkTenantIsolation', () => {
   });
 });
 
+describe('healthCheck.definerSearchPathIsSafe', () => {
+  test('accepts a search_path whose LAST entry is pg_temp', () => {
+    expect(health.definerSearchPathIsSafe(['search_path=pg_catalog, public, pg_temp'])).toBe(true);
+  });
+
+  test('rejects pg_temp anywhere but last — it must not be searched before real schemas', () => {
+    expect(health.definerSearchPathIsSafe(['search_path=pg_temp, public'])).toBe(false);
+    expect(health.definerSearchPathIsSafe(['search_path=public, pg_temp, pg_catalog'])).toBe(false);
+  });
+
+  test('rejects an unpinned definer — an absent search_path means pg_temp is searched FIRST', () => {
+    expect(health.definerSearchPathIsSafe(null)).toBe(false);
+    expect(health.definerSearchPathIsSafe([])).toBe(false);
+    expect(health.definerSearchPathIsSafe(['statement_timeout=5s'])).toBe(false);
+  });
+
+  test('reads proconfig as an array, never a joined string — search_path values contain commas', () => {
+    // The bug this guards: joining proconfig into one string makes
+    // "search_path=a, b" indistinguishable from two separate settings.
+    expect(health.definerSearchPathIsSafe(['statement_timeout=5s', 'search_path=public, pg_temp'])).toBe(true);
+  });
+});
+
+describe('healthCheck.checkApiExposure', () => {
+  test('healthy when nothing is reachable by the PostgREST roles', async () => {
+    query.mockResolvedValueOnce({ rows: [closedExposureRow()] });
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('healthy');
+    expect(r.exposed_tables).toEqual([]);
+    expect(r.definers_reviewed).toBe(health.APPROVED_DEFINERS.size);
+    expect(r.detail).toMatch(/Data API surface closed/);
+  });
+
+  test('unhealthy when a table is reachable by anon — the original defect', async () => {
+    query.mockResolvedValueOnce({
+      rows: [closedExposureRow({ exposed_tables: ['public.users', 'public.refresh_token_grants'] })],
+    });
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('unhealthy');
+    expect(r.exposed_tables).toEqual(['public.users', 'public.refresh_token_grants']);
+    expect(r.detail).toMatch(/reachable by anon\/authenticated/);
+  });
+
+  test('ignores the three PostGIS metadata relations we cannot revoke', async () => {
+    // Granted by supabase_admin, not us; no tenant data. Alerting hourly on a
+    // permanently unfixable condition is how canaries get ignored.
+    query.mockResolvedValueOnce({
+      rows: [closedExposureRow({
+        exposed_tables: ['public.spatial_ref_sys', 'public.geometry_columns', 'public.geography_columns'],
+      })],
+    });
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('healthy');
+    expect(r.exposed_tables).toEqual([]);
+  });
+
+  test('unhealthy when an auth definer is executable by anon — the password-hash path', async () => {
+    query.mockResolvedValueOnce({
+      rows: [closedExposureRow({ exposed_functions: ['public.auth_find_user_for_login'] })],
+    });
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('unhealthy');
+    expect(r.detail).toMatch(/auth_find_user_for_login/);
+  });
+
+  test('unhealthy when a SECURITY DEFINER function appears that nobody reviewed', async () => {
+    query.mockResolvedValueOnce({
+      rows: [closedExposureRow({
+        definers: [
+          ...closedExposureRow().definers,
+          { fn: 'public.some_new_helper', owner: 'postgres', proconfig: ['search_path=pg_catalog, public, pg_temp'] },
+        ],
+      })],
+    });
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('unhealthy');
+    expect(r.unreviewed_definers).toEqual(['public.some_new_helper']);
+    expect(r.detail).toMatch(/not on the reviewed allowlist/);
+  });
+
+  test('unhealthy when a reviewed definer loses its pinned search_path', async () => {
+    const definers = closedExposureRow().definers;
+    definers[0] = { ...definers[0], proconfig: null };
+    query.mockResolvedValueOnce({ rows: [closedExposureRow({ definers })] });
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('unhealthy');
+    expect(r.unpinned_definers).toEqual([definers[0].fn]);
+  });
+
+  test('unhealthy when a definer is owned by the app role — it could not bypass RLS', async () => {
+    const definers = closedExposureRow().definers.map((d) => ({ ...d, owner: 'redip_app' }));
+    query.mockResolvedValueOnce({ rows: [closedExposureRow({ definers, db_role: 'redip_app' })] });
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('unhealthy');
+    expect(r.detail).toMatch(/owned by the application role/);
+  });
+
+  test('unhealthy when a default privilege will re-expose the next new table', async () => {
+    // The self-healing property that made the original hole survive cleanups:
+    // revoking today is undone by the next CREATE TABLE.
+    query.mockResolvedValueOnce({ rows: [closedExposureRow({ risky_default_acls: 3 })] });
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('unhealthy');
+    expect(r.risky_default_acls).toBe(3);
+    expect(r.detail).toMatch(/re-expose itself automatically/);
+  });
+
+  test('healthy with a note on a database that has no anon role at all (local dev)', async () => {
+    query.mockResolvedValueOnce({
+      rows: [closedExposureRow({ api_role_count: 0, exposed_tables: ['public.users'] })],
+    });
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('healthy');
+    expect(r.api_roles_present).toBe(false);
+  });
+
+  test('degrades to unknown rather than throwing when the probe itself fails', async () => {
+    query.mockRejectedValueOnce(new Error('pg down'));
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('unknown');
+    expect(r.error).toBe('pg down');
+  });
+});
+
 describe('healthCheck.runHealthCheck', () => {
   const healthyCanary = {
     db_role: 'postgres', is_superuser: 'on', bypasses_rls: true,
     ctx_is_null: true, scoped_visible_deals: 0,
   };
 
-  test('aggregates all four checks and reports overall healthy', async () => {
+  test('aggregates all five checks and reports overall healthy', async () => {
     query
       .mockResolvedValueOnce({ rows: [] })                                            // ai
       .mockResolvedValueOnce({ rows: [{ audit_writes: 1, event_writes: 1, activity_writes: 1, deal_mutations: 1 }] }) // audit
-      .mockResolvedValueOnce({ rows: [{ stuck: 0 }] });                               // extractions
+      .mockResolvedValueOnce({ rows: [{ stuck: 0 }] })                                // extractions
+      .mockResolvedValueOnce({ rows: [closedExposureRow()] });                        // api exposure
     mockIsolationClient(healthyCanary);
 
     const summary = await health.runHealthCheck({ raiseAlerts: false });
     expect(summary.overall).toBe('healthy');
-    expect(Object.keys(summary.checks)).toEqual(['ai_providers', 'audit_trail', 'extractions', 'tenant_isolation']);
+    expect(Object.keys(summary.checks)).toEqual([
+      'ai_providers', 'audit_trail', 'extractions', 'tenant_isolation', 'api_exposure',
+    ]);
     expect(summary.unhealthy_count).toBe(0);
     expect(typeof summary.duration_ms).toBe('number');
     expect(Sentry.captureMessage).not.toHaveBeenCalled();
@@ -188,7 +331,8 @@ describe('healthCheck.runHealthCheck', () => {
     query
       .mockResolvedValueOnce({ rows: [{ provider: 'gemini', model: 'dead', provider_calls: 20, failures: 20 }] }) // ai unhealthy
       .mockResolvedValueOnce({ rows: [{ audit_writes: 5, event_writes: 1, activity_writes: 5, deal_mutations: 2 }] }) // audit healthy
-      .mockResolvedValueOnce({ rows: [{ stuck: 3 }] });                               // extractions unhealthy
+      .mockResolvedValueOnce({ rows: [{ stuck: 3 }] })                                // extractions unhealthy
+      .mockResolvedValueOnce({ rows: [closedExposureRow()] });                        // api exposure healthy
     mockIsolationClient(healthyCanary);
 
     const summary = await health.runHealthCheck({ raiseAlerts: true });
@@ -208,7 +352,8 @@ describe('healthCheck.runHealthCheck', () => {
     query
       .mockResolvedValueOnce({ rows: [{ provider: 'gemini', model: 'dead', provider_calls: 20, failures: 20 }] })
       .mockResolvedValueOnce({ rows: [{ audit_writes: 1, event_writes: 1, activity_writes: 1, deal_mutations: 1 }] })
-      .mockResolvedValueOnce({ rows: [{ stuck: 0 }] });
+      .mockResolvedValueOnce({ rows: [{ stuck: 0 }] })
+      .mockResolvedValueOnce({ rows: [closedExposureRow()] });
     mockIsolationClient(healthyCanary);
 
     const summary = await health.runHealthCheck({ raiseAlerts: true });

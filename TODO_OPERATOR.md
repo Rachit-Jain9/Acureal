@@ -8,9 +8,11 @@ have. Everything else (the code, the database, the product) is built and verifie
 After each one, reply with the little "done" phrase shown — that's how I keep this
 list up to date. Everything is written step-by-step, no jargon.
 
-_Last updated: 2026-08-01 evening (**5b, 5c and 5d are all DONE** — you ran all three
-database pastes and every one is verified live. What's left: 5 (mailboxes — the
-legally required one), 4 (two names), and 7 (the lawyer).)_
+_Last updated: 2026-08-02 (**new item 0 at the top — please do that one first.** A
+security audit found a second, unguarded entrance to the database; closing it is
+one paste and changes nothing about how the site works. Otherwise unchanged: 5b,
+5c and 5d are all DONE and verified live. Still open: 5 (mailboxes — the legally
+required one), 4 (two names), and 7 (the lawyer).)_
 
 ---
 
@@ -45,6 +47,41 @@ legally required one), 4 (two names), and 7 (the lawyer).)_
 ---
 
 # 🔴 DO FIRST — protects your data and money (this week)
+
+## 0. Close the second door into the database — **most urgent thing on this list**
+
+**What's wrong.** Your database has two entrances. One is the Acureal website,
+which we've checked carefully for years. The other is a general-purpose entrance
+that Supabase switches on for every project — and nobody had ever looked at it.
+It was left wide open: it would hand out **everyone's scrambled passwords**, the
+**six-digit-code secret** for your own login, **everyone's name, email and phone
+number across all workspaces**, and it would let a stranger **create accounts** or
+**sign in as any user without knowing their password**.
+
+**How bad is it right now?** Nobody can walk in today — the entrance needs a
+specific project key, and that key does not appear anywhere on your website, in
+your code, or on the internet. But Supabase treats that kind of key as *safe to
+publish*, so it's the sort of thing that leaks by accident one day. And the hole
+repairs itself back open every time we add a new table. So: not on fire, but it
+must be shut properly, and it's a 30-second job.
+
+**What you need to do.** Run one database update. I'll paste the exact text into
+our chat — **do not** copy it from a web page; a browser add-on once smuggled the
+words "Adobe Acrobat" into a copied database update and broke it.
+
+1. 🌐 Open: `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
+2. 💬 Copy the block I post in chat (use the little copy button on the code block).
+3. 📋 Paste it into the big empty box.
+4. Click the green **Run** button at the bottom-right.
+5. **Success looks like:** a small results table appears at the bottom. Every
+   number in it should be **0**, except the last one, which should be **3**, and
+   the `anon_can_read_password_hashes` column should say **false**.
+6. **Reply:** `door closed` — and paste a screenshot of that results table. I'll
+   verify it against the live database myself and confirm.
+
+Nothing on the website changes for you or anyone else — the app uses its own
+separate key, which this doesn't touch.
+
 
 ## 1. ✅ DONE (2026-06-25 — Supabase Pro active, verified via API; daily backups auto-included, first appears within 24h) — Turn on database backups — most important
 **Why:** Right now your database may have **no automatic backups**. If something

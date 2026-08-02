@@ -3,6 +3,7 @@ import {
   ShieldCheck,
   FileStack,
   Cpu,
+  Globe,
   RefreshCcw,
   CheckCircle2,
   AlertTriangle,
@@ -17,12 +18,13 @@ import { useSystemHealth } from '../hooks/useSystemHealth';
 
 // Admin-only System Health — the operator-facing face of the liveness watchdog.
 //
-// Reads /api/admin/system-health (the same four subsystem checks the hourly
+// Reads /api/admin/system-health (the same five subsystem checks the hourly
 // cron runs: AI provider error share, audit-write liveness, stuck extractions,
-// and the tenant-isolation fail-closed canary) and renders them as a calm,
-// precise vitals board. The point of this surface is a single trustworthy
-// "is the platform healthy right now?" view — so the operator learns about
-// degradation from a dashboard instead of by personally hitting the bug.
+// the tenant-isolation fail-closed canary, and the Data API exposure guard) and
+// renders them as a calm, precise vitals board. The point of this surface is a
+// single trustworthy "is the platform healthy right now?" view — so the
+// operator learns about degradation from a dashboard instead of by personally
+// hitting the bug.
 //
 // Read-only. Cross-org aggregate health only (counts + statuses, no tenant
 // data). Refreshes on a gentle interval + window focus via the hook.
@@ -108,11 +110,11 @@ function OverallBanner({ overall, unhealthyCount, unknownCount, windowHours }) {
   );
 }
 
-function VitalCard({ icon: Icon, title, status, metric, metricLabel, detail, extra }) {
+function VitalCard({ icon: Icon, title, status, metric, metricLabel, detail, extra, className }) {
   const meta = STATUS_META[status] || STATUS_META.unknown;
   const StatusIcon = meta.Icon;
   return (
-    <Card className="relative overflow-hidden p-5">
+    <Card className={clsx('relative overflow-hidden p-5', className)}>
       <span aria-hidden className="absolute inset-y-0 left-0 w-1" style={{ backgroundColor: meta.stripe }} />
       <div className="pl-2.5">
         <div className="flex items-start justify-between gap-3">
@@ -161,17 +163,26 @@ export default function AdminSystemHealthPage() {
   const audit = checks.audit_trail || {};
   const extractions = checks.extractions || {};
   const tenant = checks.tenant_isolation || {};
+  const apiExposure = checks.api_exposure || {};
   const windowHours = data?.window_hours ?? 3;
 
   const aiOffenders = Array.isArray(ai.offenders) ? ai.offenders : [];
   const auditRows = (Number(audit.audit_writes) || 0) + (Number(audit.event_writes) || 0);
+
+  // Everything the PostgREST roles can still reach, in one list. Healthy is an
+  // empty list — this is the check where a non-zero number is the whole story.
+  const exposedObjects = [
+    ...(Array.isArray(apiExposure.exposed_tables) ? apiExposure.exposed_tables : []),
+    ...(Array.isArray(apiExposure.exposed_functions) ? apiExposure.exposed_functions : []),
+    ...(Array.isArray(apiExposure.unreviewed_definers) ? apiExposure.unreviewed_definers : []),
+  ];
 
   return (
     <div className="space-y-6">
       <PageHeader
         eyebrow="Admin · Reliability"
         title="System Health"
-        description="The liveness watchdog. Acureal's costliest failures have been silent — a subsystem quietly doing nothing while everything looks fine. These four checks run hourly (alerting on degradation) and on demand here, so the platform detects its own decline instead of waiting for someone to hit the bug."
+        description="The liveness watchdog. Acureal's costliest failures have been silent — a subsystem quietly doing nothing while everything looks fine. These five checks run hourly (alerting on degradation) and on demand here, so the platform detects its own decline instead of waiting for someone to hit the bug."
         actions={
           <div className="flex items-center gap-3">
             {data?.generated_at && (
@@ -201,6 +212,7 @@ export default function AdminSystemHealthPage() {
             <SkeletonCard />
             <SkeletonCard />
             <SkeletonCard />
+            <SkeletonCard className="sm:col-span-2" />
           </div>
         </div>
       )}
@@ -325,6 +337,42 @@ export default function AdminSystemHealthPage() {
                     {tenant.bypasses_rls
                       ? 'bypasses RLS — app-layer wall only (M1)'
                       : 'RLS enforced by Postgres'}
+                  </div>
+                ) : null
+              }
+            />
+
+            {/* Data API exposure — the internet-facing surface beside the app */}
+            <VitalCard
+              className="sm:col-span-2"
+              icon={Globe}
+              title="Data API exposure"
+              status={apiExposure.status || 'unknown'}
+              metric={<LiveNumber value={exposedObjects.length} />}
+              metricLabel="objects reachable by anon · want 0"
+              detail={apiExposure.detail || apiExposure.error || 'No signal.'}
+              extra={
+                exposedObjects.length > 0 ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {exposedObjects.slice(0, 12).map((name) => (
+                      <span
+                        key={name}
+                        className="font-mono text-[11px] rounded-md bg-neg-soft text-data-negative px-2 py-1"
+                      >
+                        {name}
+                      </span>
+                    ))}
+                    {exposedObjects.length > 12 && (
+                      <span className="text-[11px] text-content-muted self-center">
+                        +{exposedObjects.length - 12} more
+                      </span>
+                    )}
+                  </div>
+                ) : apiExposure.status === 'healthy' ? (
+                  <div className="mt-2 text-[11px] text-content-muted">
+                    {apiExposure.api_roles_present === false
+                      ? 'No anon role on this database.'
+                      : `${Number(apiExposure.definers_reviewed) || 0} reviewed SECURITY DEFINER function${Number(apiExposure.definers_reviewed) === 1 ? '' : 's'} · default privileges closed, so a new table cannot expose itself.`}
                   </div>
                 ) : null
               }
