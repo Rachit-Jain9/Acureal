@@ -307,6 +307,16 @@ These need nothing from you right now. When you want them, send the phrase and I
   and no working files were deleted — a literal "delete 123 files into one" would
   risk breaking fresh-database setup for no gain (the files are the safe, idempotent
   history). No action needed from you.
+- **8b. Make the database connection check who it's talking to.** Right now the
+  connection to your database is scrambled (encrypted) but doesn't verify the
+  identity of the machine at the other end. Turning verification on is now a
+  single setting, and reversible in seconds if anything goes wrong. **Don't flip
+  it yet** — I checked, and Supabase signs its database with its own private
+  certificate authority, so switching it on without first installing Supabase's
+  certificate would take the whole site down instantly. Say `harden the db
+  connection` and I'll walk you through it in the right order: download the
+  certificate from Supabase, add it, run the checker I've built, and only then
+  turn it on.
 - **9. Guidance-value PDF (unlocks 11 placeholder rows).** Bengaluru guidance/circle-
   rate values are placeholders until you give me **one** official PDF. Go to
   `https://igr.karnataka.gov.in/english` → **Revised Guidelines Value** → pick Bengaluru

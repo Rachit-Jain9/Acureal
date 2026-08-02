@@ -117,6 +117,41 @@ const validateEnv = ({ exitOnFailure = true } = {}) => {
     }
   }
 
+  // Database transport posture. `relaxed` encrypts but never authenticates the
+  // server's certificate, so the client will happily complete a handshake with
+  // anything answering on that host — including something between Vercel and
+  // Supabase. Surfacing it at boot keeps it from becoming invisible again.
+  const { resolveSslMode, MODES } = require('./databaseSsl');
+  const ssl = resolveSslMode(process.env);
+  if (ssl.invalid) {
+    warnings.push(
+      `DATABASE_SSL_MODE is "${ssl.requested}", which is not a recognised mode `
+      + `(${Object.values(MODES).join(' | ')}) — falling back to "${ssl.mode}". `
+      + 'A typo here must never silently change how the database connection is verified.',
+    );
+  }
+  if (isStrict() && ssl.mode === MODES.RELAXED) {
+    warnings.push(
+      'DATABASE_SSL_MODE is not "verify-full" — the database connection is encrypted '
+      + 'but the server certificate is NOT authenticated. Enabling it requires '
+      + 'DATABASE_CA_CERT (Supabase signs the pooler with a private CA); verify with '
+      + '`node backend/scripts/check-db-tls.js` before flipping.',
+    );
+  }
+  if (ssl.mode === MODES.VERIFY_FULL && isPlaceholder(process.env.DATABASE_CA_CERT)) {
+    // Measured: the Supabase pooler chains to "Supabase Intermediate 2021 CA",
+    // which is not in Node's trust store. verify-full without that CA rejects
+    // EVERY connection at cold start. Loud at boot beats SELF_SIGNED_CERT_IN_CHAIN
+    // on every request. Not fatal, because a provider that later moves to a
+    // public root would make this configuration correct.
+    warnings.push(
+      'DATABASE_SSL_MODE=verify-full is set but DATABASE_CA_CERT is empty. If this database '
+      + 'is signed by a private CA (Supabase is), every connection will fail with '
+      + 'SELF_SIGNED_CERT_IN_CHAIN. Run `node backend/scripts/check-db-tls.js` to confirm '
+      + 'before deploying, or set DATABASE_SSL_MODE back to "relaxed".',
+    );
+  }
+
   // PLATFORM_ORG_ID is optional (the email lookup is a real fallback), but a
   // present-and-malformed pin silently degrades platform comps/benchmarks to
   // the legacy path — surface it at boot like the AI-key format checks.
