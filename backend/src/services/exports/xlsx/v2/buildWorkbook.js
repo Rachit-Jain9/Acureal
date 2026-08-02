@@ -1939,6 +1939,15 @@ const buildInputsSheet = (workbook, ctx) => {
       ['Tenant Downtime',          'TenantDowntimeMonths', firstNumber(ctx.inputs.tenantDowntimeMonths, ctx.inputs.downtimeMonths, 3),                   'months / rollover', NUMBER_FORMATS.integer],
       ['TI / LC (Tenant Improv)', 'TILCAllowanceCr',     firstNumber(ctx.inputs.tiLcAllowanceCr, ctx.inputs.tenantImprovementsCr, 0),                  'INR Cr (one-time)', NUMBER_FORMATS.currency],
       ['Exit Cap Rate',           'ExitCapRate',         exitCapRateFor(ctx),       '% / year', NUMBER_FORMATS.percent],
+      // Alias of the row above. The sensitivity grid builds its cap-rate walk
+      // as `MAX(0.04,ExitCapRatePct+...)`, and only the hospitality inputs
+      // variant declared that spelling — so every other income workbook shipped
+      // #NAME? across the grid. Declared here as a formula so the two can never
+      // drift apart; hospitality keeps its own copy in its variant block.
+      // Label deliberately does NOT begin "Exit Cap Rate": lookups elsewhere
+      // find the operator-facing row by /^Exit Cap Rate/i, and a second row
+      // matching that prefix silently shadows it.
+      ['Cap Rate Pct (alias of Exit Cap Rate)', 'ExitCapRatePct', { formula: '=ExitCapRate' },                                                                        '% / year (derived alias)', NUMBER_FORMATS.percent],
       ['Selling Cost on Exit',    'SellingCostPct',      toPctDecimal(firstNumber(ctx.inputs.sellingCostPct, 0.02)),                                                 '% of sale', NUMBER_FORMATS.percent],
     ],
   };
@@ -2946,10 +2955,22 @@ const buildInputsSheet = (workbook, ctx) => {
     // collapses the escrow ledger cleanly. Income family never reaches the
     // dev rows, so it still skips the section.
     ...(ctx.dealFamily === 'development' ? [reraSection] : []),
-    // Deal Structure (PR-I3) — JDA / Outright / DM. Only meaningful for
-    // development family — income family acquisitions don't have a
-    // landowner-share concept (the seller takes the full sale price).
-    ...(ctx.dealFamily === 'development' ? [dealStructureSection] : []),
+    // Deal Structure (PR-I3) — JDA / Outright / DM.
+    //
+    // Rendered for EVERY deal, for the same reason reraSection above is: the
+    // Calculations sheet references `LandownerSharePct` UNCONDITIONALLY
+    // (`=B8*MarketingCostPct*(1-LandownerSharePct)` and the finance-cost row
+    // beside it), so gating the section on development family left the name
+    // undeclared on every income workbook — #NAME? in two Calculations cells,
+    // found 2026-08-02 by the workbook-integrity audit.
+    //
+    // The original reasoning — that income acquisitions have no landowner-share
+    // concept — is sound, and the section stays honest for them: the structure
+    // resolves to `outright_purchase` and the share to 0, which is exactly what
+    // the consuming formula expects ("Share 0 collapses the factor to 1 for
+    // outright deals"). A row saying 0% is true and legible; an undeclared name
+    // is neither.
+    dealStructureSection,
     scheduleSection,
     capitalSection,
     // PR-I6: Lender ecosystem informational fields sit BETWEEN Capital

@@ -2527,7 +2527,23 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         }
       }, 30000); // generates 7 workbooks in one test — 5s default is too tight
 
-      test('Income family deals do NOT get the Deal Structure section', async () => {
+      test('Income family deals DO declare LandownerSharePct, at zero', async () => {
+        // Reversed 2026-08-02, and the reversal is the fix.
+        //
+        // This previously asserted that income workbooks omit the Deal
+        // Structure section entirely — reasonable-sounding, since an office
+        // acquisition has no landowner share. But the Calculations sheet
+        // computes marketing and finance cost as `...*(1-LandownerSharePct)`
+        // UNCONDITIONALLY, so omitting the section left the name undeclared and
+        // Excel rendered #NAME? in two cells of every income workbook. The test
+        // was pinning the bug in place.
+        //
+        // Identical to the RERAEscrowPct incident buildWorkbook.js documents
+        // (fixed 2026-07-17): a conditionally-declared name with an
+        // unconditional reference. The section now renders for every deal; for
+        // an outright purchase it reads "outright_purchase" and 0%, which is
+        // both true and exactly what the consuming formula expects — 0
+        // collapses the factor to 1.
         const ctx = minimalContext();
         ctx.deal.asset_class = 'commercial_office';
         ctx.property.property_type = 'commercial_office';
@@ -2536,15 +2552,21 @@ describe('services/exports/xlsx/v2/buildWorkbook', () => {
         await wb.xlsx.load(buffer);
 
         const namesList = (wb.definedNames.model || []).map((n) => n.name);
-        expect(namesList).not.toContain('LandownerSharePct');
+        expect(namesList).toContain('LandownerSharePct');
+        expect(namesList).toContain('DealStructureLabel');
 
+        // The share itself must be zero for an outright purchase — declaring
+        // the name is only correct if its value keeps the maths unchanged.
         const inputs = wb.getWorksheet('Inputs & Assumptions');
-        let foundSection = false;
+        let shareValue = null;
+        let structureLabel = null;
         inputs.eachRow((row) => {
-          const v = String(row.getCell(1).value || '');
-          if (v.includes('Deal Structure') && v.includes('JDA')) foundSection = true;
+          const label = String(row.getCell(1).value || '').trim();
+          if (label === 'Landowner Revenue Share') shareValue = row.getCell(2).value;
+          if (label === 'Deal Structure') structureLabel = String(row.getCell(2).value || '');
         });
-        expect(foundSection).toBe(false);
+        expect(shareValue).toBe(0);
+        expect(structureLabel).toBe('outright_purchase');
       });
     });
 
