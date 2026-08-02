@@ -1,5 +1,6 @@
 const { Pool } = require('pg');
 const { normalizeDatabaseUrl } = require('./databaseUrl');
+const { resolveSslConfig } = require('./databaseSsl');
 const { getRequestContext } = require('../lib/requestContext');
 
 const connectionString = normalizeDatabaseUrl(process.env.DATABASE_URL);
@@ -17,7 +18,11 @@ const isServerless = !!process.env.VERCEL;
 
 const pool = new Pool({
   connectionString,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  // Governed by DATABASE_SSL_MODE — see config/databaseSsl.js. Default is the
+  // historical behaviour (encrypt, do not verify the server); set the env var to
+  // `verify-full` to authenticate the certificate chain and hostname, and back
+  // to `relaxed` to revert instantly without a deploy.
+  ssl: resolveSslConfig(process.env),
   max: isServerless ? 5 : 20,
   // Keep a warm serverless instance's pooled connection alive across short idle
   // gaps so back-to-back requests reuse a live socket instead of paying a fresh
