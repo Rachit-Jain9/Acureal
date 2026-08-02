@@ -8,11 +8,11 @@ have. Everything else (the code, the database, the product) is built and verifie
 After each one, reply with the little "done" phrase shown — that's how I keep this
 list up to date. Everything is written step-by-step, no jargon.
 
-_Last updated: 2026-08-02 (**new item 0 at the top — please do that one first.** A
-security audit found a second, unguarded entrance to the database; closing it is
-one paste and changes nothing about how the site works. Otherwise unchanged: 5b,
-5c and 5d are all DONE and verified live. Still open: 5 (mailboxes — the legally
-required one), 4 (two names), and 7 (the lawyer).)_
+_Last updated: 2026-08-02 evening (**items 0 and 0b are both DONE** — you ran
+both pastes and I verified each against the live database. The second entrance
+to your database is shut, and deal sharing is locked to your own workspace.
+Still open: 5 (mailboxes — the legally required one), 4 (two names), and 7 (the
+lawyer). Nothing urgent left.)_
 
 ---
 
@@ -48,7 +48,25 @@ required one), 4 (two names), and 7 (the lawyer).)_
 
 # 🔴 DO FIRST — protects your data and money (this week)
 
-## 0. Close the second door into the database — **most urgent thing on this list**
+## 0. ✅ DONE (2026-08-02 — you ran it; verified live) — Close the second door into the database
+
+The second entrance is shut. Verified against the live database straight after
+your run: **0** tables reachable by the anonymous role in either area, **0**
+powerful functions reachable, **password hashes unreachable** (the check reads
+`false`), and the app's own access untouched at **80** tables. The only things
+left are 3 mapping-reference tables that Supabase itself owns and that contain
+no customer data.
+
+One honest correction on my side: I told you every number should be 0. One
+column read **10**, which looked wrong but wasn't — my read-back question was
+too broad and was counting harmless everyday helper functions alongside the
+dangerous ones. Those 10 run with *your visitor's* permissions, which are now
+none, so they can't reach anything. I've since narrowed that check and it now
+reads **0**, and I've fixed the same over-counting in the hourly monitor so it
+can't cry wolf. The repair itself was correct from the start.
+
+<details>
+<summary>The original instructions, for the record</summary>
 
 **What's wrong.** Your database has two entrances. One is the Acureal website,
 which we've checked carefully for years. The other is a general-purpose entrance
@@ -82,7 +100,16 @@ words "Adobe Acrobat" into a copied database update and broke it.
 Nothing on the website changes for you or anyone else — the app uses its own
 separate key, which this doesn't touch.
 
-## 0b. Lock deal sharing to your own workspace — second paste, same place
+</details>
+
+## 0b. ✅ DONE (2026-08-02 — you ran it; verified live) — Deal sharing locked to your workspace
+
+Both numbers came back **0**: no cross-workspace permission rules left, and no
+existing share pointing outside a workspace. Sharing a deal now only works with
+people in your own workspace.
+
+<details>
+<summary>The original instructions, for the record</summary>
 
 **What's wrong.** The "share a deal" feature looked people up by email address
 and nothing else. So a deal could be shared with **someone in a completely
@@ -106,6 +133,8 @@ From then on, sharing a deal only works with people in your own workspace —
 which is everyone who should see it anyway. Sharing with genuine outsiders
 (an external lawyer or investor) is something we'd build properly later, with an
 expiry date, a watermark and the ability to withdraw access.
+
+</details>
 
 
 ## 1. ✅ DONE (2026-06-25 — Supabase Pro active, verified via API; daily backups auto-included, first appears within 24h) — Turn on database backups — most important

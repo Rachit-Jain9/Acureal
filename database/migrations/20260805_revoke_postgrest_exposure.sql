@@ -204,8 +204,26 @@ END $$;
 COMMIT;
 
 -- ────────────────────────────────────────────────────────────────────────────
--- VERIFICATION — run after COMMIT. Every column must read 0 / false except
--- postgis_metadata_tables_left, which is expected to be 3 (see the header).
+-- VERIFICATION — run after COMMIT.
+--
+-- Expected: 0, 0, 0, false, 80, 3 — and `unrevokable_default_grantors` listing
+-- only `supabase_admin`.
+--
+-- AMENDED 2026-08-02 after the live apply (the DDL above is unchanged and is
+-- what actually ran). Two columns were originally too broad and reported
+-- alarming numbers for benign state:
+--   • `app_functions_still_exposed` counted EVERY non-extension function, not
+--     just SECURITY DEFINER ones. It read 10 — all ordinary SECURITY INVOKER
+--     helpers (update_updated_at_column, current_user_id, sync_property_geom …)
+--     reachable only through Postgres's DEFAULT `EXECUTE TO PUBLIC` grant on
+--     new functions. Executing one as `anon` runs with anon's privileges, which
+--     are now none. Only a DEFINER runs as its owner, so only a DEFINER is a
+--     hole — the column now filters `p.prosecdef`.
+--   • The default-privilege check ignored WHO owns each entry. `postgres`
+--     cannot ALTER another role's defaults, so supabase_admin's survive by
+--     design. Ours came out clean; the column now names grantors instead of
+--     counting rows, so an entry we CAN fix is distinguishable from one we
+--     cannot.
 -- ────────────────────────────────────────────────────────────────────────────
 
 SELECT
@@ -219,10 +237,11 @@ SELECT
   (SELECT count(*) FROM pg_proc p
      JOIN pg_namespace n ON n.oid = p.pronamespace
     WHERE n.nspname IN ('public', 'regulatory_data')
+      AND p.prosecdef
       AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.objid = p.oid AND d.deptype = 'e')
       AND (has_function_privilege('anon', p.oid, 'EXECUTE')
         OR has_function_privilege('authenticated', p.oid, 'EXECUTE'))
-  ) AS app_functions_still_exposed,
+  ) AS definers_still_exposed,
   has_function_privilege('anon', 'public.auth_find_user_for_login(text)', 'EXECUTE')
     AS anon_can_read_password_hashes,
   (SELECT count(DISTINCT table_name) FROM information_schema.role_table_grants
@@ -230,4 +249,12 @@ SELECT
   ) AS app_tables_intact,
   (SELECT count(DISTINCT table_name) FROM information_schema.role_table_grants
     WHERE table_schema = 'public' AND grantee IN ('anon', 'authenticated')
-  ) AS postgis_metadata_tables_left;
+  ) AS postgis_metadata_tables_left,
+  (SELECT COALESCE(string_agg(DISTINCT pg_get_userbyid(da.defaclrole), ', '), '(none)')
+     FROM pg_default_acl da
+     JOIN pg_namespace dn ON dn.oid = da.defaclnamespace
+     CROSS JOIN LATERAL aclexplode(da.defaclacl) a
+     JOIN pg_roles r ON r.oid = a.grantee
+    WHERE dn.nspname IN ('public', 'regulatory_data')
+      AND r.rolname IN ('anon', 'authenticated')
+  ) AS unrevokable_default_grantors;
