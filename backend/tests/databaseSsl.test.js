@@ -66,6 +66,38 @@ describe('verify-full authenticates the server', () => {
   });
 });
 
+describe('a PEM that lost its newlines in transit still works', () => {
+  // A certificate is multi-line, and the journey from a downloaded .crt into a
+  // hosting dashboard does not always preserve that: some UIs and shell exports
+  // turn each real newline into the two characters \ and n. OpenSSL then
+  // rejects the blob — and because this path only runs once verify-full is
+  // already on, the first symptom is every connection failing at cold start.
+  const pem = ['-----BEGIN CERTIFICATE-----', 'MIIByjCCAXOgAwIBAgIU', '-----END CERTIFICATE-----'].join('\n');
+  const escaped = pem.split('\n').join('\\n');
+
+  test('the escaped form is genuinely different, so the test is not vacuous', () => {
+    expect(escaped).not.toBe(pem);
+    expect(escaped).toContain('\\n');
+    expect(escaped).not.toContain('\n');
+  });
+
+  test('literal backslash-n is normalised back to real newlines', () => {
+    expect(resolveSslConfig(env({ DATABASE_SSL_MODE: 'verify-full', DATABASE_CA_CERT: escaped })).ca)
+      .toBe(pem);
+  });
+
+  test('literal backslash-r-backslash-n is normalised too', () => {
+    const crlf = pem.split('\n').join('\\r\\n');
+    expect(resolveSslConfig(env({ DATABASE_SSL_MODE: 'verify-full', DATABASE_CA_CERT: crlf })).ca)
+      .toBe(pem);
+  });
+
+  test('a correctly-pasted PEM is left exactly alone', () => {
+    expect(resolveSslConfig(env({ DATABASE_SSL_MODE: 'verify-full', DATABASE_CA_CERT: pem })).ca)
+      .toBe(pem);
+  });
+});
+
 describe('a typo never silently changes the posture', () => {
   test.each(['verify_full', 'verifyfull', 'full', 'true', 'on', 'require'])(
     '%s is rejected and falls back to the production default',
