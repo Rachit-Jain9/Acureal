@@ -82,6 +82,31 @@ words "Adobe Acrobat" into a copied database update and broke it.
 Nothing on the website changes for you or anyone else — the app uses its own
 separate key, which this doesn't touch.
 
+## 0b. Lock deal sharing to your own workspace — second paste, same place
+
+**What's wrong.** The "share a deal" feature looked people up by email address
+and nothing else. So a deal could be shared with **someone in a completely
+different customer's workspace** — and they'd get the whole thing: documents,
+the financial model, diligence, risks, the full activity history. Nine
+permission rules in the database were quietly set up to allow exactly that.
+
+**How bad is it right now?** Nobody has ever shared a deal — the sharing list is
+completely empty — so nothing has leaked. It was simply possible.
+
+**What you need to do.** One more database update, same place as item 0. I'll
+paste the exact text in chat.
+
+1. 🌐 Open: `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new`
+2. 💬 Copy the block I post in chat (use the copy button).
+3. 📋 Paste it into the big empty box → click green **Run**.
+4. **Success looks like:** a results table with **two zeros**.
+5. **Reply:** `sharing locked`.
+
+From then on, sharing a deal only works with people in your own workspace —
+which is everyone who should see it anyway. Sharing with genuine outsiders
+(an external lawyer or investor) is something we'd build properly later, with an
+expiry date, a watermark and the ability to withdraw access.
+
 
 ## 1. ✅ DONE (2026-06-25 — Supabase Pro active, verified via API; daily backups auto-included, first appears within 24h) — Turn on database backups — most important
 **Why:** Right now your database may have **no automatic backups**. If something
