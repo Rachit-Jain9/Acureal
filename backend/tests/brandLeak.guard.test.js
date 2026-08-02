@@ -41,7 +41,28 @@ const SCAN_ROOTS = [
 ];
 
 // { file: 'backend/src/example.js', pattern: 'REDIP', reason: '...' }
-const ALLOWLIST = [];
+const ALLOWLIST = [
+  {
+    file: 'backend/src/services/exports/xlsx/v2/buildWorkbook.js',
+    pattern: 'REDIP',
+    reason:
+      'Legacy ENVIRONMENT VARIABLE names, not prose. The rebrand renamed the '
+      + 'variables themselves (REDIP_SKIP_* -> Acureal_SKIP_*); environment names '
+      + 'are case-sensitive, so any operator holding the old switch was silently '
+      + 'left with a dead kill switch. The builder now reads BOTH spellings. '
+      + 'Same category as redip_app and the redip.* cookies — a stored-state '
+      + 'identifier that must not be renamed casually. Remove once the Vercel '
+      + 'project is confirmed to carry no REDIP_SKIP_* variable.',
+  },
+  {
+    file: 'backend/src/config/envManifest.js',
+    pattern: 'REDIP',
+    reason:
+      'Registers those same legacy variable names so the environment contract '
+      + 'documents them rather than treating them as unknown. Retire alongside '
+      + 'the buildWorkbook entry above.',
+  },
+];
 
 const SCAN_EXTENSIONS = new Set([
   '.js', '.jsx', '.ts', '.tsx', '.cjs', '.mjs', '.json', '.css', '.html', '.md', '.sql',

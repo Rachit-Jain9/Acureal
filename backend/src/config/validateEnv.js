@@ -11,36 +11,23 @@
  * NODE_ENV=test so the suite controls its own environment.
  */
 
+// Both lists are DERIVED from the environment manifest rather than restated
+// here. The manifest records what every variable is for, who may see it, and
+// how badly it is needed; keeping a second copy of "which ones are required"
+// beside it is exactly the kind of drift that lets a variable be critical in
+// one file and forgotten in another.
+const { criticalVars, recommendedVars } = require('./envManifest');
+
+const asCheck = (entry) => ({ key: entry.name, why: entry.why });
+
 // Secrets the app cannot run safely without. A missing/placeholder value
 // here is a hard error in production.
-const CRITICAL = [
-  { key: 'DATABASE_URL', why: 'database connectivity' },
-  { key: 'JWT_SECRET', why: 'session-token signing' },
-  { key: 'DEAL_EVENTS_HMAC_KEY', why: 'tamper-evident audit trail' },
-];
+const CRITICAL = criticalVars().map(asCheck);
 
-// Vars that degrade a feature when absent but do not warrant a hard stop.
-const RECOMMENDED = [
-  { key: 'CRON_SECRET', why: 'authentication of Vercel cron calls' },
-  { key: 'GEMINI_API_KEY', why: 'document extraction and classification' },
-  { key: 'OPENAI_API_KEY', why: 'reasoning and embeddings' },
-  { key: 'ANTHROPIC_API_KEY', why: 'narrative-synthesis fallback' },
-  // Without a hard daily ceiling the AI cost guard is a no-op — a buggy retry
-  // loop or an authenticated abuser can run AI spend unbounded for a UTC day.
-  { key: 'AI_DAILY_COST_CAP_USD', why: 'a hard daily ceiling on AI spend (calls are NOT cost-capped until this is set)' },
-  // When unset, the mailer falls back to a dev path; in production that path
-  // now fails closed (no token is logged), so verification/reset email simply
-  // won't send until this is configured.
-  { key: 'RESEND_API_KEY', why: 'transactional email (verification + password reset)' },
-  // Without this the verification link falls back to http://localhost:5173 —
-  // the email sends fine and the link is dead in the recipient's inbox. The
-  // send path now refuses outright when deployed; this surfaces it at boot.
-  { key: 'APP_BASE_URL', why: 'the origin used to build verification/reset links (email links are DEAD without it)' },
-  // The legacy email lookup this replaces cannot work post-M1: the app runs as
-  // a NOBYPASSRLS role and RLS on `users` hides the operator row from everyone
-  // else, so platform comps + benchmarks render EMPTY for every non-operator.
-  { key: 'PLATFORM_ORG_ID', why: 'the shared comps/benchmark workspace pin (platform data shows EMPTY for other users without it)' },
-];
+// Vars that degrade a feature when absent but do not warrant a hard stop. The
+// `why` on each manifest entry is what gets printed, so the warning an operator
+// reads mid-incident is the same sentence a reviewer reads in the manifest.
+const RECOMMENDED = recommendedVars().map(asCheck);
 
 // Recognizable key prefixes per AI provider — used for a boot-time sanity
 // check so a wrong / corrupted key is caught here, not as a runtime 401.

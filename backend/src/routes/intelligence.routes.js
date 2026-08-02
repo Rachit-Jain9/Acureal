@@ -4,7 +4,12 @@ const { body } = require('express-validator');
 const intelligenceService = require('../services/intelligence.service');
 const icMemoService = require('../services/icMemo.service');
 const icEvidenceService = require('../services/icEvidence.service');
-const monitoring = require('../services/monitoring.supabase');
+const monitoring = require('../services/monitoring.service');
+// A bare `.catch(() => {})` after res.json() is not a background job on
+// serverless — the instance may freeze the moment the response flushes, so the
+// write is a coin flip AND its failure is invisible. runInBackground registers
+// it with waitUntil and reports rejections to Sentry.
+const { runInBackground } = require('../lib/backgroundTask');
 const { computeInvestorPackage: invokeKernelHandler } = require('../engines/investorPackage.adapter');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
@@ -477,43 +482,55 @@ router.post(
       const engineVersion = body?.engineVersion || 'inline';
 
       if (status >= 200 && status < 300 && body?.package && dealId) {
-        monitoring.persistInvestorPackageSnapshot({
-          organizationId,
-          dealId,
-          engineVersion,
-          source: 'backend',
-          inputHash: sha256(input),
-          body: body.package,
-        }).catch(() => {});
+        runInBackground(
+          'monitoring.investor_package_snapshot',
+          monitoring.persistInvestorPackageSnapshot({
+            organizationId,
+            dealId,
+            engineVersion,
+            source: 'backend',
+            inputHash: sha256(input),
+            body: body.package,
+          }),
+          { dealId },
+        );
       }
 
-      monitoring.recordMonitoringEvent({
-        organizationId,
-        dealId,
-        source: 'backend',
-        event: status < 300 ? 'investor_package_ok' : 'investor_package_error',
-        severity:
-          status < 300
-            ? engineVersion === 'safe-mode' ? 'medium' : 'info'
-            : status >= 500 ? 'high' : 'medium',
-        engineVersion,
-        payload: {
-          status,
-          hasPackage: Boolean(body?.package),
-          killSwitch: Boolean(body?.flagState?.killSwitch),
-        },
-      }).catch(() => {});
+      runInBackground(
+        'monitoring.investor_package_event',
+        monitoring.recordMonitoringEvent({
+          organizationId,
+          dealId,
+          source: 'backend',
+          event: status < 300 ? 'investor_package_ok' : 'investor_package_error',
+          severity:
+            status < 300
+              ? engineVersion === 'safe-mode' ? 'medium' : 'info'
+              : status >= 500 ? 'high' : 'medium',
+          engineVersion,
+          payload: {
+            status,
+            hasPackage: Boolean(body?.package),
+            killSwitch: Boolean(body?.flagState?.killSwitch),
+          },
+        }),
+        { dealId },
+      );
 
       res.status(status).json({ success: status < 400, data: body });
     } catch (error) {
-      monitoring.recordMonitoringEvent({
-        organizationId,
-        dealId,
-        source: 'backend',
-        event: 'investor_package_exception',
-        severity: 'critical',
-        payload: { message: error.message },
-      }).catch(() => {});
+      runInBackground(
+        'monitoring.investor_package_exception',
+        monitoring.recordMonitoringEvent({
+          organizationId,
+          dealId,
+          source: 'backend',
+          event: 'investor_package_exception',
+          severity: 'critical',
+          payload: { message: error.message },
+        }),
+        { dealId },
+      );
       next(error);
     }
   }

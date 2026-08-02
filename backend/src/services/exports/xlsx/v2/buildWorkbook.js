@@ -9334,15 +9334,26 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
   const dashboardSheetFile = dashboardIdx >= 0 ? `sheet${dashboardIdx + 1}.xml` : 'sheet1.xml';
 
   // PR-NX16 (2026-05-16) — escape hatches for diagnosing the Pointec Pens
-  // bug class. If Acureal_SKIP_CHART_INJECTION=1, skip the native-chart XML
-  // splice. If Acureal_SKIP_SPARKLINE_INJECTION=1, skip sparklines. If
-  // Acureal_SKIP_ALL_POST_INJECTION=1, skip both. Operator can toggle via
-  // Vercel env vars without a redeploy. Helps isolate whether the
-  // Dashboard corruption is from chart injection or earlier in the pipeline.
-  const skipCharts = process.env.Acureal_SKIP_CHART_INJECTION === '1'
-    || process.env.Acureal_SKIP_ALL_POST_INJECTION === '1';
-  const skipSparklines = process.env.Acureal_SKIP_SPARKLINE_INJECTION === '1'
-    || process.env.Acureal_SKIP_ALL_POST_INJECTION === '1';
+  // bug class. ACUREAL_SKIP_CHART_INJECTION=1 skips the native-chart XML
+  // splice; ACUREAL_SKIP_SPARKLINE_INJECTION=1 skips sparklines;
+  // ACUREAL_SKIP_ALL_POST_INJECTION=1 skips both. The operator can toggle these
+  // in Vercel without a redeploy, which is the point — they exist to isolate
+  // whether Dashboard corruption comes from injection or from earlier in the
+  // pipeline, at a moment when a redeploy is the last thing anyone wants.
+  //
+  // The REDIP_* names are read too, and that is not nostalgia. The 2026-07-30
+  // rebrand renamed the VARIABLE ITSELF (REDIP_SKIP_* -> Acureal_SKIP_*), and
+  // environment names are case-sensitive — so an operator who had the old
+  // switch set was silently left holding a dead kill switch, discoverable only
+  // during exactly the incident it was meant to help with. Both spellings now
+  // work, and the canonical name is finally SCREAMING_SNAKE_CASE like every
+  // other variable in the system.
+  const envFlag = (suffix) => process.env[`ACUREAL_${suffix}`] === '1'
+    || process.env[`REDIP_${suffix}`] === '1';
+
+  const skipAllPostInjection = envFlag('SKIP_ALL_POST_INJECTION');
+  const skipCharts = envFlag('SKIP_CHART_INJECTION') || skipAllPostInjection;
+  const skipSparklines = envFlag('SKIP_SPARKLINE_INJECTION') || skipAllPostInjection;
 
   // PR-NX16: track Dashboard cell count BEFORE and AFTER chart injection
   // so server-side logs reveal which step (if any) corrupts the sheet.
@@ -9431,7 +9442,7 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
       }
     } else if (skipCharts && process.env.NODE_ENV !== 'test') {
       // eslint-disable-next-line no-console
-      console.log(`[xlsx.v2 ${ctxLabel}] chart injection SKIPPED (Acureal_SKIP_CHART_INJECTION=1)`);
+      console.log(`[xlsx.v2 ${ctxLabel}] chart injection SKIPPED (ACUREAL_SKIP_CHART_INJECTION=1)`);
     }
   } catch (err) {
     // Chart injection is best-effort. If anything goes wrong (a future
@@ -9467,7 +9478,7 @@ const buildDealWorkbookV2 = async (exportContext, options = {}) => {
       }
     } else if (process.env.NODE_ENV !== 'test') {
       // eslint-disable-next-line no-console
-      console.log(`[xlsx.v2 ${ctxLabel}] sparkline injection SKIPPED (Acureal_SKIP_SPARKLINE_INJECTION=1)`);
+      console.log(`[xlsx.v2 ${ctxLabel}] sparkline injection SKIPPED (ACUREAL_SKIP_SPARKLINE_INJECTION=1)`);
     }
   } catch (err) {
     if (process.env.NODE_ENV !== 'test') {
