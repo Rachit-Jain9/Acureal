@@ -6,6 +6,108 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-02 (second block) — The guard that could not read Kannada, and the switch the rebrand killed (#1072–#1074)
+
+Continuation of the audit block. Three PRs, each starting from a rule the
+product already had and finding it was not actually being enforced.
+
+### #1072 — the canary I had shipped four hours earlier was about to cry wolf
+
+The operator applied `20260805` and reported the verification. Five of six
+columns read as predicted; one read **10** where I had said 0.
+
+Chasing it found the repair was correct and my *measurement* was not. The ten
+were ordinary SECURITY INVOKER helpers — `update_updated_at_column`,
+`current_user_id`, `sync_property_geom` — reachable only through Postgres's
+default `EXECUTE TO PUBLIC` grant on new functions. An invoker function runs
+with the CALLER's privileges, and anon now has none. Only a DEFINER runs as its
+owner, so only a DEFINER is a hole.
+
+The more important finding was underneath: the `ALTER DEFAULT PRIVILEGES` for
+`supabase_admin` had failed and been tolerated, exactly as the migration header
+predicted. Live state — grantor `postgres` CLEAN, grantor `supabase_admin`
+still granting. Ours is the one that matters (94 of 97 granted tables carried
+grantor `postgres`), so new Acureal tables do not re-expose. But the canary
+counted all of them and would have reported unhealthy **every hour, forever,
+about something nobody can fix** — the exact anti-pattern the PostGIS allowlist
+exists to avoid, and how the original exposure survived unnoticed. It now names
+grantors and faults only on ones we can ALTER.
+
+### #1073 — the statutory guard could not read the language its users write in
+
+CLAUDE.md's hardest rule is that AI never asserts a statutory fact on the legal
+four. The guard enforcing it knew **four** generic English phrasings. Acureal is
+India-first. Every one of these reached the customer untouched:
+
+    "The A-khata is valid and the EC is nil."
+    "DC conversion is complete; the land is converted."
+    "Mutation is done and the RTC is clean."
+    "Akrama-Sakrama regularisation has been granted."
+
+25 rules now cover khata / RTC / Pahani / mutation / survey / podi / 11E,
+mother deed and chain of title, PTCL / Inam / grant land / acquisition, EC and
+encumbrance, K-RERA, DC conversion, OC / CC, NOC, Akrama-Sakrama, plan sanction,
+and the BBMP / BDA / BMRDA / BIAAPA / GBA / KIADB alphabet. Negative
+conclusions too — from an AI narrator about a counterparty's asset, "title is
+not clear" is the more damaging of the two.
+
+**The hard part was not the vocabulary.** "Verify that the khata is valid" and
+"The khata is valid" share every keyword; the first is the diligence guidance
+the product exists to give. A guard stripping both would gut the platform's
+most useful prose while appearing to work. Matching is two-stage — pattern plus
+an instruction-lead check — and a pre-existing test then exposed the flaw in the
+naive version: *"Confirm pricing since approval will be granted shortly"* has an
+instruction governing PRICING, with the verdict in a new clause. Suppression now
+respects clause boundaries, while `and`/`or` deliberately do not break, so
+"verify the khata is valid and the EC is nil" survives whole.
+
+One existing expectation changed, and the change was the finding: the fixture
+"Approve the deal — the EC is clean." had been shipping as "Proceed the deal —
+the EC is clean" — banned verb neutralised, **statutory conclusion intact**.
+
+### #1074 — an environment contract, and the kill switch the rebrand killed
+
+90+ backend variables, 4 in the browser bundle, nothing written down. Writing
+the inventory found a live defect in the first pass: the rebrand renamed a
+VARIABLE ITSELF, `REDIP_SKIP_CHART_INJECTION` → `Acureal_SKIP_CHART_INJECTION`
+(confirmed by `git log -S`, disappears in #1035). Environment names are
+case-sensitive, so any operator holding the old switch had a **dead kill
+switch** — and these three are the escape hatches for diagnosing a corrupt
+workbook *without* a redeploy, so it would have failed at the worst possible
+moment. Both spellings now work; the canonical name is finally
+SCREAMING_SNAKE_CASE. The diagnostic log lines had been printing the dead name.
+
+`envManifest.js` registers all 100 with scope / sensitivity / requirement /
+why; `check-env-manifest.js` fails CI on an unregistered variable, a
+non-SCREAMING_SNAKE_CASE name, a scope/prefix disagreement, or a secret marked
+browser-readable. Vite inlines every `VITE_*` into the bundle, so the prefix is
+the trust boundary — not a dashboard label. `validateEnv` now derives its lists
+from the manifest so the two cannot drift.
+
+Second change in the same PR: the monitoring writers moved off `supabase-js`
+(PostgREST) onto the pool. They had been authenticating as `service_role`,
+which **bypasses RLS** — every row landed outside the tenant wall. They were
+also the last backend reason `public` had to stay on the PostgREST surface. And
+all three call sites were `.catch(() => {})` after `res.json()`, the
+dangling-promise class that dies on instance freeze — very likely why both
+tables hold zero rows.
+
+### Verified end-state
+
+Backend **277 suites / 4,578 tests**; frontend green; all five CI guards exit 0;
+production 200s on every host with **zero runtime errors**. Open PRs: 0.
+
+### Deliberately not done
+
+**M1 Phase 6** (deleting the pre-flip auth fallback branches) — it removes a
+safety net on the auth path, fixes no defect, and belongs in its own focused
+session rather than at the end of a long block. **The AI evaluation harness** —
+genuinely blocked on sanitised real documents; building 20 synthetic fixtures
+would produce a harness that measures nothing. **The AI Gateway benchmark** —
+measurement only, and it needs real workload runs.
+
+---
+
 ## 2026-08-02 — The second door: a platform audit finds an entrance nobody had ever inventoried (#1067–#1070)
 
 A full-platform audit brief. The honest scope call was that a from-scratch
