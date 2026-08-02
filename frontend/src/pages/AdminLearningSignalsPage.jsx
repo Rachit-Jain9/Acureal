@@ -340,10 +340,9 @@ export default function AdminLearningSignalsPage() {
       </div>
 
       {isError && (
-        <ErrorState
-          title="Could not load learning-signal data"
-          detail="The admin endpoint returned an error. Try Refresh; if it persists, check the Vercel runtime logs for /api/admin/learning-signals."
-        />
+        <ErrorState tone="danger" title="Could not load learning-signal data">
+          The admin endpoint returned an error. Try Refresh; if it persists, check the Vercel runtime logs for /api/admin/learning-signals.
+        </ErrorState>
       )}
 
       {isLoading && <SkeletonList rows={4} />}

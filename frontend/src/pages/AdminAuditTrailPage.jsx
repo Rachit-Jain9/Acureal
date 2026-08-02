@@ -257,10 +257,9 @@ export default function AdminAuditTrailPage() {
 
         {isError && (
           <div className="px-5 py-6">
-            <ErrorState
-              title="Could not load audit-trail"
-              detail="The admin endpoint returned an error. Try Refresh; if it persists, check the Vercel runtime logs for /api/admin/audit-trail."
-            />
+            <ErrorState tone="danger" title="Could not load audit-trail">
+              The admin endpoint returned an error. Try Refresh; if it persists, check the Vercel runtime logs for /api/admin/audit-trail.
+            </ErrorState>
           </div>
         )}
 
