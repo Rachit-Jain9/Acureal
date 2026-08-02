@@ -1,6 +1,6 @@
 # Acureal Regulatory & Zoning Intelligence — Architecture
 
-> **Status:** Architecture proposal (design-only). No migrations applied, no code shipped by this document.
+> **Status (corrected 2026-08-02): SHIPPED AND LIVE — this is no longer a proposal.** The header below read "design-only, no migrations applied, no code shipped" for months after the work went to production, which made the most load-bearing regulatory document in the repo actively misleading. Live in production: the jurisdiction resolver and statutory-plan registry, the RMP 2015 zonal regulations, the Anekal LPA, BIAAPA and Hoskote rulebooks, IGR guidance values across four SROs, and the land-rate-vs-guidance flag. Treat the phase plans below as an **implementation record**, not a to-do list; anything genuinely outstanding is called out inline.
 > **Scope:** The regulatory / zoning / FAR / overlay intelligence subsystem that feeds the deal Zoning tab, the Financial Engine, and IC memos.
 > **Stance:** Extend the existing `regulatory_data` schema and `parcel*` services. This is a **progressive refactor, not a rewrite**. Every primitive below either reuses or wraps something already in production.
 > **Liability frame:** Acureal produces **regulatory intelligence for underwriting screening**. It never produces "instant zoning certainty," and it never narrates a statutory conclusion on the legal-four lanes (title chain, encumbrance, RERA status, statutory approval status).

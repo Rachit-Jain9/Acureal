@@ -10,6 +10,15 @@ Manual actions that still require credentials, authority, or infrastructure outs
 > anything the operator must do**; this file (`TODO_MANUAL.md`) is the engineering-detail
 > record only. Don't duplicate operator instructions here — cross-reference instead.
 
+> **Reconciled 2026-08-02.** Three entries that used to sit under "Pending now" were
+> already done and are struck through below: `RESEND_API_KEY` (email sending live and
+> verified 2026-07-31), the rotated Google Maps key (deleted 2026-06-25), and the
+> `20260526_ab_eval_runs` migration (the ledger reconciler now reports zero unapplied
+> across all migration files). They are kept rather than deleted so the history stays
+> readable — but they are **not** work. The only genuinely open item in this section is
+> the K-RERA reminder question immediately below, and that one is a product question,
+> not an engineering task.
+
 ## Pending now (most recent first)
 
 > **✅ Migration backlog FULLY APPLIED + VERIFIED on production (Mumbai `niamgjbxxgmmffggumvj`) — 2026-06-09.**
@@ -55,10 +64,15 @@ Path: `database/migrations/20260620_deals_list_perf_indexes.sql`. Three composit
 ### ~~Apply migration: `20260530_document_access_log.sql`~~ — ✅ DONE + VERIFIED 2026-06-09 (table public.document_access_log exists)
 Path: `database/migrations/20260530_document_access_log.sql`. Creates the append-only `document_access_log` table (immutable, org-scoped RLS) that records every signed-URL issuance + byte-stream download of a deal/master-plan document — satisfies the CLAUDE.md "log access to sensitive documents" rule + the investor-grade audit trail. The backend code (the `documentAccessLog` sink subscribing to `DOCUMENT_ACCESSED`) already ships and is **migration-tolerant**: until this migration runs it logs a one-time `document_access_log_table_missing` warning and no-ops, so nothing breaks — but **no access is recorded until the table exists**. To apply: open https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new, paste the entire file, click Run, expect "Success. No rows returned."
 
-### `RESEND_API_KEY` — DEFERRED until a sending domain exists (2026-05-30)
+### ~~`RESEND_API_KEY` — DEFERRED until a sending domain exists (2026-05-30)~~ — ✅ DONE 2026-07-31
+> Resolved: `acureal.in` is verified with Resend, the key is set, and a real verification
+> email was delivered end-to-end to a live inbox. Kept for history; not work.
 Operator decision: no email-sending domain yet, so transactional email (signup verification + password reset) stays unconfigured for now. Consequence (intended, post the 2026-05-30 mailer-hardening PR): in production the mailer **fails closed** — those emails simply don't send (and crucially, the verification/reset link + token is NOT logged) rather than leaking. The boot logs a `RESEND_API_KEY is not set` warning. When a domain is acquired: verify it in Resend (DNS records) → create an API key (`re_…`) → set `RESEND_API_KEY` + `MAIL_FROM` ("Acureal <noreply@yourdomain>") in Vercel. Also set `AI_DAILY_COST_CAP_USD` while there (the only hard ceiling on AI spend; the cost guard is a no-op until set).
 
-### Confirm the rotated Google Maps key — old key deleted in Google Cloud Console (2026-05-30)
+### ~~Confirm the rotated Google Maps key — old key deleted in Google Cloud Console (2026-05-30)~~ — ✅ DONE 2026-06-25
+> Operator confirmed deletion. Kept for history; not work. Note the browser key
+> (`VITE_GOOGLE_MAPS_API_KEY`) is public by construction — it is compiled into the
+> shipped bundle — and is registered as such in `backend/src/config/envManifest.js`.
 `GOOGLE_MAPS_API_KEY` + `VITE_GOOGLE_MAPS_API_KEY` were updated in Vercel after the audit found a live key committed in git history (commit 55045e7, since redacted from the doc but still in history → permanently burned). **Updating Vercel does not disable the old key** — confirm the old/leaked key was **deleted or regenerated** in https://console.cloud.google.com/google/maps-apis/credentials and that the new key carries HTTP-referrer (browser) + API (server) restrictions and a billing budget cap. Until the old key is deleted in GCP, the leaked value still works.
 
 _(All Phase A1-A4 + auto-derived columns migrations confirmed applied 2026-05-19; see DONE entries below.)_
@@ -92,7 +106,11 @@ To re-seed a fresh DB in the future, run in order: `split-guidance-value-pdf.py`
 
 User confirmed deletion via Supabase dashboard. `lsbhrbvuynzqhdtzczco` is gone. Mumbai (`niamgjbxxgmmffggumvj`) is the only Supabase project. No Vercel env vars referenced Tokyo, so no follow-up needed.
 
-### Apply migration: `20260526_ab_eval_runs.sql` (Tier 2 #14)
+### ~~Apply migration: `20260526_ab_eval_runs.sql` (Tier 2 #14)~~ — ✅ APPLIED
+> The migration ledger was reconciled on 2026-08-01 and `backend/scripts/migration-status.js`
+> now reports zero unrecorded, zero partial and zero unapplied across every migration
+> file. Run that script rather than trusting any list in this file — a written migration
+> is never proof of a live one. Kept for history; not work.
 Path: `database/migrations/20260526_ab_eval_runs.sql`. Idempotent. Adds `ab_eval_runs` + `ab_eval_results` tables that back the new `/dashboard/admin/ab-eval` page (PR #222). Until applied, the page still works for one-shot runs but does not persist past comparisons.
 ```powershell
 psql "$DATABASE_URL" -f database/migrations/20260526_ab_eval_runs.sql
