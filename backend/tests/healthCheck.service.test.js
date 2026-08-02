@@ -182,6 +182,57 @@ describe('healthCheck.checkTenantIsolation', () => {
   });
 });
 
+describe('healthCheck.checkTenantIsolation — transport posture', () => {
+  const healthyCanary = {
+    db_role: 'redip_app', is_superuser: 'off', bypasses_rls: false,
+    ctx_is_null: true, scoped_visible_deals: 0,
+  };
+
+  const originalNodeEnv = process.env.NODE_ENV;
+  afterEach(() => {
+    delete process.env.DATABASE_SSL_MODE;
+    process.env.NODE_ENV = originalNodeEnv;
+  });
+
+  test('reports verify-full when the server is actually authenticated', async () => {
+    // Without this, flipping DATABASE_SSL_MODE is unverifiable from outside:
+    // verified and relaxed look identical from every endpoint, so an env var
+    // that silently failed to apply is indistinguishable from one that worked.
+    process.env.DATABASE_SSL_MODE = 'verify-full';
+    mockIsolationClient(healthyCanary);
+    const r = await health.checkTenantIsolation();
+    expect(r.ssl_mode).toBe('verify-full');
+    expect(r.ssl_verifies_server).toBe(true);
+    expect(r.detail).toMatch(/verifies the server certificate and hostname/);
+  });
+
+  test('reports production\'s relaxed default plainly rather than implying safety', async () => {
+    // The production default is "encrypt but do not verify"; a dashboard that
+    // said nothing here would let that read as verified.
+    process.env.NODE_ENV = 'production';
+    mockIsolationClient(healthyCanary);
+    const r = await health.checkTenantIsolation();
+    expect(r.ssl_mode).toBe('relaxed');
+    expect(r.ssl_verifies_server).toBe(false);
+    expect(r.detail).toMatch(/does NOT authenticate the server/);
+  });
+
+  test('a transport posture is never itself a fault — relaxed is a valid choice', async () => {
+    process.env.NODE_ENV = 'production';
+    mockIsolationClient(healthyCanary);
+    const r = await health.checkTenantIsolation();
+    expect(r.status).toBe('healthy');
+  });
+
+  test('an unrecognised DATABASE_SSL_MODE is surfaced, not swallowed', async () => {
+    process.env.DATABASE_SSL_MODE = 'verifyfull';
+    mockIsolationClient(healthyCanary);
+    const r = await health.checkTenantIsolation();
+    expect(r.ssl_mode_invalid).toBe(true);
+    expect(r.detail).toMatch(/not a recognised value and was ignored/);
+  });
+});
+
 describe('healthCheck.definerSearchPathIsSafe', () => {
   test('accepts a search_path whose LAST entry is pg_temp', () => {
     expect(health.definerSearchPathIsSafe(['search_path=pg_catalog, public, pg_temp'])).toBe(true);

@@ -42,6 +42,7 @@
  */
 
 const { query, getClient } = require('../config/database');
+const { resolveSslMode } = require('../config/databaseSsl');
 const { Sentry, isEnabled } = require('../lib/sentry');
 const log = require('../lib/logger').child({ module: 'health.watchdog' });
 
@@ -308,6 +309,15 @@ const checkTenantIsolation = async () => {
     const bypassesRls = r.bypasses_rls === true;
     const failClosed = ctxIsNull && scopedVisible === 0;
 
+    // Transport posture of the very connection this canary just used. Reported
+    // rather than alarmed on: "relaxed" is a legitimate deliberate setting, so
+    // this is not a fault — but without surfacing it, flipping
+    // DATABASE_SSL_MODE is unverifiable from the outside. Verified and relaxed
+    // look identical from every endpoint, so an env var that silently failed to
+    // apply would be indistinguishable from one that worked, which is exactly
+    // the silence this watchdog exists to end.
+    const ssl = resolveSslMode();
+
     return {
       status: failClosed ? HEALTHY : UNHEALTHY,
       fail_closed: failClosed,
@@ -316,11 +326,20 @@ const checkTenantIsolation = async () => {
       db_role: r.db_role,
       is_superuser: r.is_superuser === 'on' || r.is_superuser === true,
       bypasses_rls: bypassesRls,
-      detail: failClosed
-        ? (bypassesRls
-          ? 'Tenant boundary holds at the app layer. Note: the DB role still bypasses RLS, so isolation is defence-in-depth in code, not yet enforced by Postgres (M1).'
-          : 'Tenant boundary holds AND the DB role no longer bypasses RLS — Postgres now enforces isolation.')
-        : `FAIL-CLOSED BROKEN: with no org context, ${scopedVisible} deal(s) were visible (ctx_is_null=${ctxIsNull}). The app-layer tenant boundary is not holding.`,
+      ssl_mode: ssl.mode,
+      ssl_verifies_server: ssl.mode === 'verify-full',
+      ssl_mode_invalid: ssl.invalid === true,
+      detail: [
+        failClosed
+          ? (bypassesRls
+            ? 'Tenant boundary holds at the app layer. Note: the DB role still bypasses RLS, so isolation is defence-in-depth in code, not yet enforced by Postgres (M1).'
+            : 'Tenant boundary holds AND the DB role no longer bypasses RLS — Postgres now enforces isolation.')
+          : `FAIL-CLOSED BROKEN: with no org context, ${scopedVisible} deal(s) were visible (ctx_is_null=${ctxIsNull}). The app-layer tenant boundary is not holding.`,
+        ssl.mode === 'verify-full'
+          ? 'Transport verifies the server certificate and hostname (verify-full).'
+          : `Transport is encrypted but does NOT authenticate the server (${ssl.mode}).`,
+        ssl.invalid ? `DATABASE_SSL_MODE="${ssl.requested}" is not a recognised value and was ignored.` : '',
+      ].filter(Boolean).join(' '),
     };
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch { /* connection already broken */ }
