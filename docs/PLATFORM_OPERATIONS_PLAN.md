@@ -98,7 +98,9 @@ deployment, not generic advice._
 | S7 | PITR add-on (~$100/mo) — skip at current data volume; daily backups suffice. Revisit at first paying customer with contractual RPO. | operator ($) | ⏸ |
 | S8 | Read replicas / branching — skip; wrong scale. Migrations discipline (lint + idempotent files) is the working substitute. | — | ⏸ |
 | S9 | Supabase dashboard account: MFA on. | operator (2 min) | 🔜 |
-| S10 | Non-owner DB role for the Express pool so RLS becomes a live second layer (audit item #3) — pairs naturally with S5's retest. | me + operator (conn string) | 🔜 with S5 |
+| S10 | Non-owner DB role for the Express pool so RLS becomes a live second layer (audit item #3). | me + operator | ✅ **2026-07-28** — production connects as `redip_app` (`NOBYPASSRLS`); rehearsed on a branch first, verified live |
+| S11 | Managed Data API closed: the platform's auto-generated REST interface holds no privileges on our schemas, and default privileges revoked so a new table cannot re-expose itself. | me + operator | ✅ **2026-08-02** — hourly live canary + build-time migration gate |
+| S12 | Database transport authenticated (`verify-full` with the provider CA pinned), not merely encrypted. | me + operator | ✅ **2026-08-02** — posture reported by the liveness check |
 
 ## 5. Operating cadence
 

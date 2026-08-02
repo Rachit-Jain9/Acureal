@@ -1,6 +1,6 @@
 # Acureal — Security & Privacy Overview
 
-**Status date:** 2026-07-30
+**Status date:** 2026-08-02
 **Audience:** prospective customers, institutional investors, and their security / privacy reviewers
 **Owner:** Acureal engineering
 
@@ -134,10 +134,41 @@ returning empty results (which would surface to a user as an incorrect password)
 An internal liveness check continuously reports the database role's RLS posture,
 so a regression is observed rather than assumed.
 
+### 6.1 The managed platform's Data API
+
+Acureal's database is hosted on Supabase, whose platform also exposes an
+auto-generated REST interface over the database (PostgREST). It is a **second
+path to the same data**, independent of the application described above, and it
+is authenticated by a key the platform's own model treats as publishable in a
+browser.
+
+**Acureal does not use that interface.** As of 2026-08-02 the two roles it
+authenticates as hold **no privileges of any kind** on the application's schemas:
+no table access, no sequence access, and no execute permission on any function —
+including the pre-authentication helpers described above. The default privileges
+that would otherwise re-grant access to each newly created table have also been
+revoked, so a new table cannot silently re-expose itself.
+
+This is verified rather than asserted, in two places: an hourly internal check
+re-reads the live grants and the state of every `SECURITY DEFINER` function
+(execution revoked from `PUBLIC`, a pinned `search_path`, and presence on a
+reviewed allowlist), and a build-time check rejects any database migration that
+grants privileges to those roles. A function added without review fails the
+check rather than shipping.
+
+Object storage is a separate service and is unaffected; documents remain in
+private buckets reached only through short-lived signed URLs.
+
 ## 7. Data protection
 
 - **In transit:** all traffic is over TLS (HTTPS enforced; HSTS is sent with a
-  two-year max-age and preload).
+  two-year max-age and preload). The application's own connection to the
+  database additionally **verifies the server's certificate and hostname**
+  against the provider's certificate authority (`verify-full`, since
+  2026-08-02) — the connection is not merely encrypted, the server's identity is
+  authenticated, so an intercepting endpoint is rejected rather than trusted.
+  The live setting is reported by the same internal liveness check that reports
+  the database role, so the posture is observable rather than assumed.
 - **At rest:** the database and object storage are encrypted at rest by the
   storage providers.
 - **Secrets:** all API keys and signing secrets are server-side environment
@@ -254,6 +285,9 @@ items are tracked; status is current as of the date above:
 | Self-service "see / export my data" (DPDP access & portability) | In place — Privacy Centre |
 | Public sub-processor disclosure page | In place |
 | Database-enforced tenant isolation (application connects via a non-RLS-exempt role) | **In place (2026-07-28)** — policies FORCE-enabled and the application connects via a `NOBYPASSRLS` role; rehearsed on an isolated database copy, then verified in production. See section 6 for the two disclosed limits |
+| Managed-platform Data API closed to the publishable key | **In place (2026-08-02)** — the platform's auto-generated REST interface holds no privileges on our schemas, default privileges revoked so new tables cannot re-expose themselves, enforced by an hourly live check and a build-time migration gate. See section 6.1 |
+| Authenticated database transport (`verify-full`, not merely encrypted) | **In place (2026-08-02)** — the provider CA is pinned and the server's certificate and hostname are verified on every connection; the live setting is reported by the internal liveness check |
+| Isolation of preview/staging deployments from production data | **Open** — deployments built from unmerged branches currently share the production database connection. Access still passes through the same authentication and tenant policies as production, so this is an exposure of unreleased *code* to real data, not an unauthenticated path. Separation is planned |
 | Backup & disaster-recovery posture and recovery procedure | Documented — restore drill pending |
 | India-resident security-log retention for the CERT-In 180-day requirement | In progress |
 | Published Data Processing Agreement (DPA) | Planned — pending legal counsel |
