@@ -336,6 +336,14 @@ These need nothing from you right now. When you want them, send the phrase and I
   and no working files were deleted — a literal "delete 123 files into one" would
   risk breaking fresh-database setup for no gain (the files are the safe, idempotent
   history). No action needed from you.
+- **8c. Shut the second database entrance permanently (rather than just emptying it).**
+  Item 0 revoked everything behind that entrance, so it's harmless now. The
+  tidier finish is to switch the entrance off altogether. One thing is in the
+  way: a small unused add-on called `investor-package` still talks through it.
+  It belongs to a feature we never launched (tamper-proof signed investor
+  packs) and has written nothing, ever. Say `retire investor-package` and I'll
+  confirm it's genuinely unused, remove it, and then walk you through the
+  one-click setting that closes the entrance for good.
 - **8b. Make the database connection check who it's talking to.** Right now the
   connection to your database is scrambled (encrypted) but doesn't verify the
   identity of the machine at the other end. Turning verification on is now a
