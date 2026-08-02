@@ -6,6 +6,131 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-02 — The second door: a platform audit finds an entrance nobody had ever inventoried (#1067–#1070)
+
+A full-platform audit brief. The honest scope call was that a from-scratch
+eleven-dimension re-audit would mostly re-derive what the docs already record —
+so this ran as targeted verification against live production and current code.
+That found one genuinely new, severe exposure that every prior review had
+missed, plus four verified defects. Four PRs, all merged.
+
+### The finding: Acureal has TWO doors into the same database
+
+Every prior security review — including several multi-agent audits and the
+entire M1 RLS programme — reasoned about the boundary around the Express API.
+Nobody had inventoried **Supabase's PostgREST Data API**, which is live,
+internet-facing, and serves the `public` schema.
+
+Measured on production:
+- `GET /rest/v1/` → **401**, not 404. The API is up.
+- `anon` held full CRUD on **83** `public` tables + **14** `regulatory_data`
+  tables, including `users`, `refresh_token_grants`, `mfa_challenges`,
+  `email_verification_tokens`, `login_attempts`.
+- `anon` could EXECUTE **11** `SECURITY DEFINER` functions — including the six
+  auth helpers the M1 rollout itself introduced, which silently inherited
+  Supabase's default grant.
+- `pg_default_acl` re-granted it on **every future table**, so the hole repaired
+  itself after any manual cleanup.
+
+With only the project's publishable key — which Supabase's own model treats as
+safe to publish in a browser — that reached: any account's bcrypt
+`password_hash`; the operator's TOTP seed; the full cross-workspace PII roster;
+unlimited account provisioning; deletion of the login-lockout table; and
+**session forgery for any user without a password** via an INSERT into
+`refresh_token_grants` (its policy is `FOR ALL USING(true) TO public`, so RLS
+does not filter `anon` there). The forgery path was established structurally and
+deliberately never executed against production.
+
+**Latent, not active** — the key is absent from frontend source, the built
+bundle and the repo. One disclosure away from total compromise, and cheap to fix.
+
+**#1067** closes it in three layers: migration `20260805` revokes everything and
+fixes the default privileges; an hourly `api_exposure` canary re-checks it live
+(including that every app-owned definer is on a reviewed allowlist, pins
+`search_path` with `pg_temp` LAST, and is not owned by the app role — a new
+definer appearing without review is unhealthy, because that is exactly how this
+was born); and a static CI guard fences new migrations. Rejected after
+verification: disabling the Data API entirely would break the ACTIVE
+`investor-package` edge function and `monitoring.supabase.js`, both of which use
+PostgREST via `service_role`.
+
+### #1068 — three things accepted, stored, then silently ignored
+
+- **Model names had leaked back out of the registry.** `aiRouter` carried its own
+  Claude and OpenAI defaults — the exact pattern that shipped a retired Gemini
+  model for a week in July (~1.5k error rows). `DEFAULT_OPENAI_MODEL` and the
+  embedding default were never even *exported*, which is why
+  `embeddings.service.js` had grown its own literal. The `gpt-4o` divergence is
+  **preserved**, not collapsed — it was a real decision, now declared in the
+  registry beside the price table. A guard fails the build on any literal that
+  could select a model, and six self-tests prove the guard can actually fail.
+- **Manual FAR rules never matched.** `createManualFarRule` uppercased the zone
+  code; every seeded rulebook stores mixed case (`C-Business`, `R-Mixed`,
+  `AN-R`). An analyst overriding a FAR rule got a green confirmation and no
+  effect. Now resolved to the canonical stored casing.
+- **PPTX left no audit row.** The deck stamps the computation ref on its footer
+  but never called `recordExportSnapshot`, so a committee could read a deck
+  citing a computation the audit trail had no record of exporting.
+
+### #1069 — deal sharing was workspace-blind
+
+`shareDeal` resolved the recipient by bare email with **no organisation
+comparison**, and nine `*_shared_read` RLS policies made the database honour it —
+so a deal owner could hand a complete deal (documents, financial model,
+diligence, risks, full history) to any account in any other customer's
+workspace. `deal_shares` holds **zero rows**, so nothing leaked; the path was one
+API call wide.
+
+Those policies were correct in April 2026, when the migration that created them
+says every user had their own workspace ("1:1 user:org mapping"). Real
+multi-tenancy shipped since, and `deals_org_scope` already grants every member
+full access. **The premise expired; the policies didn't.** Migration `20260806`
+drops all nine; the service now joins `organization_members` on the deal's org.
+Tightening instead was rejected: a policy on `deals` that reads `deals` raises
+`infinite recursion detected in policy for relation deals`.
+
+### #1070 — and the measurement that stopped an outage
+
+`rejectUnauthorized: false` in production means the connection is encrypted but
+the server's certificate is never authenticated. The obvious fix — set
+`verify-full` and redeploy — **would have taken the whole site down.**
+
+`backend/scripts/check-db-tls.js` answers the question with **no credentials**
+(Postgres negotiates TLS before auth, so the certificate is inspectable from an
+8-byte SSLRequest). Against the live pooler it reports issuer **"Supabase
+Intermediate 2021 CA"** → `SELF_SIGNED_CERT_IN_CHAIN`. Supabase signs the pooler
+with a private CA that is not in Node's trust store, so `DATABASE_CA_CERT` is
+required, not optional. Shipped as `DATABASE_SSL_MODE` — an env edit with an
+instant revert, defaulting to unchanged behaviour — plus a boot warning. **Not
+flipped**, deliberately.
+
+### Verified end-state
+
+Backend **272 suites / 4,418 tests**; frontend **172 files / 1,385 tests**; build
+clean; bundle 3,481/4,096 KB; `lint-migrations`, `audit_rls.py` and the new
+`check-postgrest-exposure` guard all exit 0. Open PRs: 0.
+
+### Operator-gated
+
+**Item 0** (apply `20260805` — closes the second door) · **item 0b** (apply
+`20260806` — locks deal sharing) · item 8b (harden the DB connection, needs the
+Supabase CA first — say the word and I'll walk it through) · plus the standing
+mailboxes (5), names (4) and lawyer (7).
+
+### Not done, and why
+
+Preview deployments still run against the **production** database — confirmed:
+the E2E CI bot `e2e-ci-bot@redip-e2e.test` lives in production and the smoke
+suite runs against PR previews. Fixing it needs Vercel environment changes only
+the operator can make. Deliberately deferred: M1 Phase 6 (deleting the auth
+fallback branches) until `20260805` is applied and has soaked; the `api` schema
+boundary (0B) until then too. Held with evidence: durable job queue (zero
+extractions have ever stuck), DB index work (30 deals — a prior EXPLAIN put a
+seq scan at cost 2.42), and a deal-workspace redesign (the proposed IA is
+materially the shipped product).
+
+---
+
 ## 2026-08-01 (second block) — The platform answers to its name, and the error log pays out again (#1059–#1063)
 
 Operator reversed the earlier decision and directed the remaining platform renames; then a production-error sweep found one defect family and closed it. Six deliverables: 2 renames + 4 PRs + 1 operator migration.
