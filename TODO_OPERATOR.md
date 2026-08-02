@@ -336,24 +336,46 @@ These need nothing from you right now. When you want them, send the phrase and I
   and no working files were deleted — a literal "delete 123 files into one" would
   risk breaking fresh-database setup for no gain (the files are the safe, idempotent
   history). No action needed from you.
-- **8c. Shut the second database entrance permanently (rather than just emptying it).**
-  Item 0 revoked everything behind that entrance, so it's harmless now. The
-  tidier finish is to switch the entrance off altogether. One thing is in the
-  way: a small unused add-on called `investor-package` still talks through it.
-  It belongs to a feature we never launched (tamper-proof signed investor
-  packs) and has written nothing, ever. Say `retire investor-package` and I'll
-  confirm it's genuinely unused, remove it, and then walk you through the
-  one-click setting that closes the entrance for good.
-- **8b. Make the database connection check who it's talking to.** Right now the
-  connection to your database is scrambled (encrypted) but doesn't verify the
-  identity of the machine at the other end. Turning verification on is now a
-  single setting, and reversible in seconds if anything goes wrong. **Don't flip
-  it yet** — I checked, and Supabase signs its database with its own private
-  certificate authority, so switching it on without first installing Supabase's
-  certificate would take the whole site down instantly. Say `harden the db
-  connection` and I'll walk you through it in the right order: download the
-  certificate from Supabase, add it, run the checker I've built, and only then
-  turn it on.
+- **8c. Delete one leftover add-on — 30 seconds, and the only step left on this.**
+  I removed the unused `investor-package` add-on from the code after confirming
+  it had never done anything: **zero** records written in its entire life across
+  all three of its tables, and no activity in its logs. A copy is still sitting
+  in Supabase, so please delete it there:
+  1. 🌐 Open: `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/functions`
+  2. Find **investor-package** in the list.
+  3. Click it → the **⋯** (or **Settings**) menu → **Delete function** → confirm.
+  4. **Reply:** `function deleted`.
+
+  It belonged to a feature we never launched (tamper-proof signed investor
+  packs). If we ever build that, it gets rebuilt properly with its own limited
+  database access.
+- **8b. Make the database connection check who it's talking to — 3 steps, needs one
+  file from you.** The connection is scrambled (encrypted) but never checks the
+  identity of the machine at the other end. Turning that check on needs
+  Supabase's own certificate first, because they sign their database with a
+  private authority — switching it on without the certificate takes the site
+  down instantly. So the order matters, and step 1 is yours:
+
+  1. 🌐 Open: `https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/settings/database`
+  2. Scroll to **SSL Configuration** → click **Download certificate**. You'll get
+     a file called `prod-ca-2021.crt`.
+  3. 💬 **Drag that file into our chat.** It's a public certificate, not a
+     password — safe to share. I'll then run it against the live database and
+     confirm it's the right one *before* anything changes.
+
+  For the record, here's what your database actually presents today (I read it
+  straight off the live connection, no password needed). The file you download
+  should trace back to this root:
+
+  ```
+  Supabase Root 2021 CA
+  sha256  80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:
+          82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA
+  ```
+
+  After you send it: I verify it, you paste it into one Vercel setting, flip a
+  second setting to `verify-full`, and it's done — reversible in seconds if
+  anything misbehaves.
 - **9. Guidance-value PDF (unlocks 11 placeholder rows).** Bengaluru guidance/circle-
   rate values are placeholders until you give me **one** official PDF. Go to
   `https://igr.karnataka.gov.in/english` → **Revised Guidelines Value** → pick Bengaluru
