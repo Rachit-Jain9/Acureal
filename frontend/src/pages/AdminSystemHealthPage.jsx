@@ -331,12 +331,26 @@ export default function AdminSystemHealthPage() {
               detail={tenant.detail || tenant.error || 'No signal.'}
               extra={
                 tenant.db_role ? (
-                  <div className="mt-2 text-[11px] text-content-muted">
-                    DB role <span className="font-mono text-content-secondary">{tenant.db_role}</span>
-                    {' · '}
-                    {tenant.bypasses_rls
-                      ? 'bypasses RLS — app-layer wall only (M1)'
-                      : 'RLS enforced by Postgres'}
+                  <div className="mt-2 space-y-1 text-[11px] text-content-muted">
+                    <div>
+                      DB role <span className="font-mono text-content-secondary">{tenant.db_role}</span>
+                      {' · '}
+                      {tenant.bypasses_rls
+                        ? 'bypasses RLS — app-layer wall only (M1)'
+                        : 'RLS enforced by Postgres'}
+                    </div>
+                    {tenant.ssl_mode ? (
+                      <div>
+                        Transport <span className="font-mono text-content-secondary">{tenant.ssl_mode}</span>
+                        {' · '}
+                        {tenant.ssl_verifies_server
+                          ? 'server certificate and hostname verified'
+                          : 'encrypted, server not authenticated'}
+                        {tenant.ssl_mode_invalid && (
+                          <span className="text-data-negative"> · DATABASE_SSL_MODE not recognised, ignored</span>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                 ) : null
               }
