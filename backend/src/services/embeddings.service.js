@@ -22,9 +22,14 @@ const { query } = require('../config/database');
 // + latency lands in `ai_call_logs` and the daily cost cap applies. See
 // aiRouter.runOpenAIEmbedding for why response caching is intentionally off.
 const { runOpenAIEmbedding } = require('./ai/aiRouter');
+// The model name itself comes from the registry, never a local literal — a
+// second copy of an embedding model name silently re-embeds new documents in a
+// different vector space than the existing corpus, which makes similarity
+// search quietly wrong rather than loudly broken.
+const { DEFAULT_OPENAI_EMBEDDING_MODEL } = require('./ai/providerRegistry');
 const log = require('../lib/logger').child({ module: 'embeddings' });
 
-const DEFAULT_MODEL = process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small';
+const DEFAULT_MODEL = process.env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL;
 const DEFAULT_DIMENSIONS = 1536;
 
 const CHUNK_SIZE = 1000;        // chars

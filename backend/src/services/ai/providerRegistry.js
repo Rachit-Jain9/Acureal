@@ -27,6 +27,22 @@ const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite';
 const DEFAULT_OPENAI_MODEL = 'gpt-5.4';
 const DEFAULT_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small';
 
+// Claude's default, previously repeated inline as a parameter default in each
+// of the three run* helpers below. One name, one place: a duplicated literal is
+// exactly what shipped a retired Gemini model for weeks after the registry had
+// moved on. Operator override via CLAUDE_MODEL is preserved at each call site.
+const DEFAULT_CLAUDE_MODEL = 'claude-sonnet-4-6';
+
+// The routed-call OpenAI default, DELIBERATELY different from
+// DEFAULT_OPENAI_MODEL. Direct callers of runOpenAIReasoning get GPT-5.4; calls
+// dispatched through aiRouter stay on the prod-proven gpt-4o until the operator
+// ratifies the newer model on the live path. That divergence is intentional --
+// it lives here rather than as a literal in aiRouter so it is declared in the
+// registry, where the price table and model policy are reviewed together,
+// instead of hidden one layer down. Collapse the two only on an explicit
+// operator decision, never as a "tidy-up".
+const ROUTED_OPENAI_MODEL = 'gpt-4o';
+
 const getProviderAvailability = () => ({
   gemini: hasConfiguredValue(readApiKey('GEMINI_API_KEY')),
   claude: hasConfiguredValue(readApiKey('ANTHROPIC_API_KEY')),
@@ -152,7 +168,7 @@ const extractClaudeText = (message) => {
 const runClaudeReasoning = async ({
   systemPrompt,
   payload,
-  model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
+  model = process.env.CLAUDE_MODEL || DEFAULT_CLAUDE_MODEL,
   maxTokens = 700,
   cachePrompt = false,
 }) => {
@@ -185,7 +201,7 @@ const runClaudeWithDocument = async ({
   prompt,
   base64Data,
   mimeType,
-  model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
+  model = process.env.CLAUDE_MODEL || DEFAULT_CLAUDE_MODEL,
   maxTokens = 4000,
   cachePrompt = false,
 }) => {
@@ -244,7 +260,7 @@ const runClaudeWithDocument = async ({
 const runClaudeReasoningStream = async ({
   systemPrompt,
   payload,
-  model = process.env.CLAUDE_MODEL || 'claude-sonnet-4-6',
+  model = process.env.CLAUDE_MODEL || DEFAULT_CLAUDE_MODEL,
   maxTokens = 700,
   cachePrompt = false,
 }) => {
@@ -471,10 +487,16 @@ const runOpenAIEmbedding = async ({
 module.exports = {
   getProviderAvailability,
   getRoutingConfig,
-  // Single source of truth for the current Gemini default. aiRouter's
-  // resolveDefaultModel delegates here — never duplicate model-name literals
-  // (a stale duplicate caused the July 2026 retired-model outage).
+  // Single source of truth for every model-name default. aiRouter's
+  // resolveDefaultModel and embeddings.service delegate here — never duplicate
+  // model-name literals (a stale duplicate caused the July 2026 retired-model
+  // outage, and `backend/tests/modelRegistry.guard.test.js` now fails the build
+  // if one reappears outside this file).
   DEFAULT_GEMINI_MODEL,
+  DEFAULT_CLAUDE_MODEL,
+  DEFAULT_OPENAI_MODEL,
+  DEFAULT_OPENAI_EMBEDDING_MODEL,
+  ROUTED_OPENAI_MODEL,
   // Raw SDK client getters. runAI passes this whole module to a task's
   // run() callback as `providers`; exportNarrative.service.js and
   // aiMarketContext.service.js need raw client access for text-only

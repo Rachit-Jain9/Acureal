@@ -307,18 +307,19 @@ const resolveProviderForTask = (task) => {
 };
 
 const resolveDefaultModel = (provider) => {
-  // Gemini's default delegates to providerRegistry — the single place the
-  // "current Gemini model" decision lives. A duplicate literal here kept
-  // shipping 'gemini-3-flash-preview' long after the registry moved on
-  // (2026-05-15); Google retired that preview ~2026-07-01 and every routed
-  // Gemini call 404'd for a week (~1.5k error rows). Never duplicate model
-  // names outside the registry again.
+  // Every default delegates to providerRegistry — the single place a model-name
+  // decision lives. A duplicate literal here kept shipping
+  // 'gemini-3-flash-preview' long after the registry moved on (2026-05-15);
+  // Google retired that preview ~2026-07-01 and every routed Gemini call 404'd
+  // for a week (~1.5k error rows). Never duplicate model names outside the
+  // registry again — `modelRegistry.guard.test.js` now enforces that.
+  //
+  // ROUTED_OPENAI_MODEL is deliberately NOT DEFAULT_OPENAI_MODEL: routed calls
+  // stay on the prod-proven gpt-4o until the operator ratifies GPT-5.4 on the
+  // live path. That divergence is declared in the registry, not invented here.
   if (provider === 'gemini') return process.env.GEMINI_MODEL || providerRegistry.DEFAULT_GEMINI_MODEL;
-  if (provider === 'claude') return process.env.CLAUDE_MODEL || 'claude-sonnet-4-6';
-  // NOTE: providerRegistry's own OpenAI default is 'gpt-5.4'; the router
-  // deliberately stays on the prod-proven 'gpt-4o' for routed calls until
-  // the operator ratifies the newer model on the live path.
-  if (provider === 'openai') return process.env.OPENAI_MODEL || 'gpt-4o';
+  if (provider === 'claude') return process.env.CLAUDE_MODEL || providerRegistry.DEFAULT_CLAUDE_MODEL;
+  if (provider === 'openai') return process.env.OPENAI_MODEL || providerRegistry.ROUTED_OPENAI_MODEL;
   return 'unknown';
 };
 
