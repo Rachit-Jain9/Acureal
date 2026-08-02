@@ -51,3 +51,9 @@ backend/_pdf_tmp/
 /rows42_44.png
 /rows43_44.png
 /rows43_44_big.png
+
+# Abandoned Claude worktrees (150k files / 1.35 GB of stale duplicates).
+# Nothing here is tracked, but without this line non-git searches match the
+# duplicate copies and return answers from months-old code — it produced a
+# wrong result during the 2026-08-02 audit before ripgrep was used instead.
+.claude/worktrees/
