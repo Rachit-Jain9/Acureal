@@ -91,6 +91,14 @@ jobs:
         # ENABLE ROW LEVEL SECURITY. Sister of multitenancy_foundation —
         # defense-in-depth against new tables landing without RLS.
         run: python3 scripts/audit_rls.py
+      - name: PostgREST exposure guard (static migration scan)
+        # Acureal has two doors into the database: the Express API and
+        # Supabase's PostgREST Data API. Only the first was ever reviewed, and
+        # in Aug 2026 the second was found granting `anon` full CRUD on every
+        # table plus EXECUTE on the auth SECURITY DEFINER helpers. 20260805
+        # closed it; this stops a new migration reopening it. The live half is
+        # the hourly api_exposure canary in healthCheck.service.js.
+        run: node scripts/check-postgrest-exposure.js
       - name: Backend npm audit (fail on high/critical)
         run: npm audit --audit-level=high --omit=dev --prefix backend
       - name: Frontend npm audit (fail on high/critical)
