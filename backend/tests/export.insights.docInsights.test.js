@@ -226,7 +226,17 @@ describe('PR-NX45 — generateDocumentInsights', () => {
       const out = await generateDocumentInsights(fixture({ extractions: sampleExtractions }));
       // Defense-in-depth backstop to the prompt: no absolute verb survives.
       expect(out.summary_paragraph).not.toMatch(/\bApprove\b/);
-      expect(out.summary_paragraph).toMatch(/Proceed the deal/);
+      // ...and neither does the encumbrance verdict riding along with it.
+      //
+      // This assertion changed 2026-08-02, and the change is the point. The
+      // fixture sentence is "Approve the deal — the EC is clean." Until the
+      // Karnataka vocabulary landed, "the EC is clean" was invisible to the
+      // guard, so this shipped to the customer as "Proceed the deal — the EC
+      // is clean": the banned verb neutralised, the statutory conclusion
+      // intact. The sentence is now redacted whole, which satisfies BOTH hard
+      // rules rather than one of them.
+      expect(out.summary_paragraph).not.toMatch(/EC is clean/i);
+      expect(out.summary_paragraph).toContain('legal-status statement removed');
       expect(out.findings[0].recommendation).toBe('Recommend proceeding to IC.');
     });
   });
