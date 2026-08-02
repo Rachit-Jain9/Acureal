@@ -403,8 +403,44 @@ const createManualGuidanceValue = async (client, { context, source, data, payloa
   return { source, row: result.rows[0], activity_id: activityId };
 };
 
+// The seeded rulebooks store MIXED-CASE zone codes — 'C-Business', 'R-Mixed',
+// 'AN-R', 'BIA-IT'. `selectFarRule` resolves a parcel's FAR by matching on
+// `zone_code`, so blind-uppercasing an operator's entry to 'C-BUSINESS' created
+// a rule that was accepted, stored, and then silently never matched by the very
+// engine that asked for it — a manual override that looked applied and did
+// nothing. Resolve to the canonical stored casing instead.
+const canonicalizeZoneCode = async (client, { entered, zoneId }) => {
+  // The linked zone is authoritative: if the input is attached to a zone, that
+  // zone's own code is by definition the one FAR resolution will look for.
+  if (zoneId) {
+    const { rows } = await client.query(
+      'SELECT zone_code FROM regulatory_data.master_plan_zones WHERE id = $1::uuid',
+      [zoneId],
+    );
+    if (rows[0]?.zone_code) return rows[0].zone_code;
+  }
+
+  const { rows } = await client.query(
+    `SELECT zone_code
+       FROM regulatory_data.master_plan_zones
+      WHERE LOWER(zone_code) = LOWER($1)
+      ORDER BY zone_code
+      LIMIT 1`,
+    [entered],
+  );
+  // No seeded zone matches. Keep exactly what was typed — forcing a case on an
+  // unknown code cannot make it match and can only widen the mismatch.
+  return rows[0]?.zone_code || entered;
+};
+
 const createManualFarRule = async (client, { context, source, data, payload, userId, reviewStatus }) => {
-  const zoneCode = requireText(payload.zone_code || payload.zoneCode || context.zone_code, 'FAR zone code', 80).toUpperCase();
+  const enteredZoneCode = requireText(
+    payload.zone_code || payload.zoneCode || context.zone_code, 'FAR zone code', 80,
+  );
+  const zoneCode = await canonicalizeZoneCode(client, {
+    entered: enteredZoneCode,
+    zoneId: context.zone_id,
+  });
   const landUseFamily = requireText(payload.land_use_family || payload.landUseFamily, 'FAR land-use family', 80).toLowerCase();
   const baseFar = requireNumber(payload.base_far ?? payload.baseFar, 'Base FAR');
   const maxFar = requireNumber(payload.max_far ?? payload.maxFar, 'Max FAR');
@@ -543,4 +579,7 @@ const createAuthorityInput = async ({ dealId, kind, payload = {}, userId, ...dat
 
 module.exports = {
   createAuthorityInput,
+  // Exported for tests: the mixed-case zone-code contract is the difference
+  // between a manual FAR override applying and silently doing nothing.
+  canonicalizeZoneCode,
 };

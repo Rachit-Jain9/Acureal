@@ -1483,6 +1483,19 @@ router.get(
           .replace(/[^a-z0-9]/gi, '-')
           .toLowerCase();
 
+        // Close the provenance loop, as XLSX and DOCX already do. The deck
+        // STAMPS the computation ref on its footer, so without this the deck a
+        // committee is reading cites a computation the audit trail has no
+        // record of ever leaving the building. Awaited only once the buffer
+        // exists, and fail-open inside — an audit write must never cost the
+        // operator their download.
+        await auditService.recordExportSnapshot({
+          dealId: req.params.dealId,
+          format: 'pptx',
+          computationRef: exportContext.computationRef,
+          actorId: req.user?.id || null,
+        });
+
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
         res.setHeader(
           'Content-Disposition',
