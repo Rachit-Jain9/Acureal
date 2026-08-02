@@ -83,7 +83,16 @@ const resolveSslConfig = (env = process.env) => {
   if (mode === DISABLE) return false;
   if (mode === RELAXED) return { rejectUnauthorized: false };
 
-  const ca = (env.DATABASE_CA_CERT || '').trim();
+  // A PEM is multi-line, and the journey from a downloaded .crt into a hosting
+  // dashboard does not always preserve that. Some UIs and shell exports turn
+  // real newlines into the two characters \ and n; OpenSSL then rejects the
+  // blob and — because this only runs when verify-full is already on — the
+  // first symptom is every connection failing at cold start. Normalising here
+  // costs nothing and removes an entire class of 2am incident.
+  const ca = (env.DATABASE_CA_CERT || '')
+    .replace(/\\r\\n|\\n/g, '\n')
+    .trim();
+
   // Only attach a CA when one is actually supplied. Passing `ca: undefined`
   // is harmless, but passing `ca: ''` REPLACES Node's trust store with an empty
   // one and every connection fails with a self-signed-certificate error — a
