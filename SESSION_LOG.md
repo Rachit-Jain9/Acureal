@@ -11235,5 +11235,55 @@ scoped before any republish.
 - Preview isolation — `DATABASE_URL` is scoped to All Environments, so preview
   builds of unmerged code reach the live database. Confirmed, not yet fixed.
 - Queued: user-scoping the five permissive policies, Supabase Storage RLS,
-  `comps.last_verified`, headless Excel-recalc CI, audit-chain linkage, and
-  reconciling `TODO_MANUAL.md` against `TODO_OPERATOR.md`.
+  headless Excel-recalc CI, audit-chain linkage, and reconciling
+  `TODO_MANUAL.md` against `TODO_OPERATOR.md`.
+
+### Closing the session — documentation sweep and a product backlog
+
+The last block of the session was housekeeping rather than code.
+
+Every `.md` file in the repo was reviewed and the stale ones corrected: three
+items `TODO_MANUAL.md` still listed as pending were already done,
+`REGULATORY_INTELLIGENCE_ARCHITECTURE.md` still described work as "design-only"
+that has been live in production for weeks, and `M1_RLS_ROLLOUT.md` carried
+duplicate checkboxes from the flip.
+
+`docs/PRODUCT_BACKLOG.md` is new, and deliberately short — three items that
+would change what Acureal *is*, as opposed to how well it runs:
+
+1. **A cross-deal home.** Nothing in the product answers "what changed across my
+   pipeline since I last looked?", so there is no reason to open the app on a day
+   you are not working one specific deal. The per-deal version of exactly this
+   shipped 2026-08-01; the portfolio-level version is one query and one surface,
+   not a new engine.
+2. **Address-first parcel evidence.** The Bengaluru evidence base is the rarest
+   asset here and is reachable only behind a login, inside a deal. An address can
+   honestly resolve ward, UAV zone, rate card and guidance value with its gazette
+   citation — but it must stop at statutory zoning, which needs point-in-polygon
+   against a georeferenced plan that exists only as a raster. The document upload
+   that closes that gap is also how the deal enters the platform.
+3. **Removing the founder from the critical path**, ranked. Self-applying
+   migrations first: `migration-status.js` reconciles and `run-sql.js` executes a
+   single file, so only the applier between them is missing. It should be
+   dry-run-first and operator-invoked — automatic DDL on deploy turns a bad
+   migration into an automatic outage.
+
+Comp freshness (`comps.last_verified`) was declined by the operator and is
+recorded as permanently skipped; it has been removed from the queued list above.
+
+Twelve abandoned git worktrees (150,497 files, 1.35 GB) were audited before
+removal. Eleven were fully merged. The twelfth was one commit ahead, against a
+file that no longer exists — superseded, not lost. One genuinely uncommitted fix
+was found and salvaged: an `ErrorState` usage passing a `detail` prop the
+component does not accept.
+
+### Worth stating plainly at the end of this session
+
+Fourteen of the seventeen PRs merged today closed things that were already
+broken or already exposed, and none of them were visible from the application.
+The pattern across the whole session: the failures that matter here are silent
+ones — a kill switch that stopped working when the product was renamed, an audit
+trail dead for four months, a migration unapplied for a month, a second door
+into the database nobody had inventoried. What changed today is less about new
+capability and more about how much of that class is now provable rather than
+assumed.
