@@ -18,15 +18,30 @@
  * laptop.
  *
  * USAGE
- *   node backend/scripts/check-db-tls.js                    # reads DATABASE_URL
- *   node backend/scripts/check-db-tls.js <host> [port]      # explicit target
+ *   node backend/scripts/check-db-tls.js                       # reads DATABASE_URL
+ *   node backend/scripts/check-db-tls.js <host> [port]         # explicit target
+ *   node backend/scripts/check-db-tls.js <host> <port> --chain # print the chain
+ *   node backend/scripts/check-db-tls.js <host> <port> --ca <file>
  *
- * Exit code 0 = the certificate validates against the trust store (verify-full
- * is safe to enable). Exit code 1 = it does not, and the reason is printed.
+ * `--ca` is the one that matters before flipping DATABASE_SSL_MODE. Supabase
+ * signs the pooler with a PRIVATE CA, so verify-full only works if the right
+ * root is supplied — and the only safe place to obtain it is the authenticated
+ * dashboard, out of band from the connection being authenticated. Point this at
+ * the downloaded file and it answers, before anything is deployed, whether that
+ * exact certificate makes the exact production host verify. Trusting a CA the
+ * server itself handed us would defeat the purpose; this proves the one you
+ * fetched yourself is the right one.
+ *
+ * `--chain` prints the presented chain with SHA-256 fingerprints, so the
+ * downloaded file can be matched against what production actually serves.
+ *
+ * Exit code 0 = the certificate validates (verify-full is safe to enable).
+ * Exit code 1 = it does not, and the reason is printed.
  * READ-ONLY: it opens a socket, inspects the certificate, and disconnects
  * before sending a startup message. It never authenticates and never queries.
  */
 
+const fs = require('fs');
 const net = require('net');
 const tls = require('tls');
 
@@ -48,7 +63,27 @@ const targetFromEnv = () => {
   }
 };
 
-const negotiate = (host, port) => new Promise((resolve, reject) => {
+// Walk `issuerCertificate` to the self-signed root, collecting each link.
+// Node terminates the walk by making the root point at itself.
+const describeChain = (leaf) => {
+  const out = [];
+  let node = leaf;
+  const seen = new Set();
+  while (node && node.fingerprint256 && !seen.has(node.fingerprint256)) {
+    seen.add(node.fingerprint256);
+    out.push({
+      subject: node.subject?.CN || node.subject?.O || '(unnamed)',
+      issuer: node.issuer?.CN || node.issuer?.O || '(unnamed)',
+      fingerprint256: node.fingerprint256,
+      validTo: node.valid_to,
+      selfSigned: node.fingerprint256 === node.issuerCertificate?.fingerprint256,
+    });
+    node = node.issuerCertificate;
+  }
+  return out;
+};
+
+const negotiate = (host, port, ca) => new Promise((resolve, reject) => {
   const socket = net.connect({ host, port });
   const fail = (err) => { socket.destroy(); reject(err); };
 
@@ -70,7 +105,12 @@ const negotiate = (host, port) => new Promise((resolve, reject) => {
     const secured = tls.connect({
       socket,
       servername: host,
+      // Always complete the handshake so the certificate can be REPORTED rather
+      // than merely rejected. `authorized` still tells us what a strict client
+      // would have decided — and when a --ca is supplied, it decides against
+      // that CA, which is exactly the question being asked.
       rejectUnauthorized: false,
+      ...(ca ? { ca } : {}),
     }, () => {
       const cert = secured.getPeerCertificate(true) || {};
       resolve({
@@ -81,6 +121,7 @@ const negotiate = (host, port) => new Promise((resolve, reject) => {
         issuer: cert.issuer?.CN || cert.issuer?.O || null,
         altNames: cert.subjectaltname || null,
         validTo: cert.valid_to || null,
+        chain: describeChain(cert),
       });
       secured.end();
     });
@@ -89,9 +130,17 @@ const negotiate = (host, port) => new Promise((resolve, reject) => {
 });
 
 const main = async () => {
-  const [argHost, argPort] = process.argv.slice(2);
-  const target = argHost
-    ? { host: argHost, port: Number(argPort) || 5432 }
+  const argv = process.argv.slice(2);
+  const wantChain = argv.includes('--chain');
+  const caIdx = argv.indexOf('--ca');
+  const caPath = caIdx >= 0 ? argv[caIdx + 1] : null;
+  // Guard the `caIdx + 1` skip on --ca actually being present: with caIdx = -1
+  // it evaluates to 0 and silently swallows the host argument.
+  const caValueIdx = caIdx >= 0 ? caIdx + 1 : -1;
+  const positional = argv.filter((a, i) => !a.startsWith('--') && i !== caValueIdx);
+
+  const target = positional[0]
+    ? { host: positional[0], port: Number(positional[1]) || 5432 }
     : targetFromEnv();
 
   if (!target) {
@@ -99,11 +148,24 @@ const main = async () => {
     process.exit(2);
   }
 
-  console.log(`[check-db-tls] ${target.host}:${target.port}`);
+  let ca = null;
+  if (caPath) {
+    if (!fs.existsSync(caPath)) {
+      console.error(`[check-db-tls] CA file not found: ${caPath}`);
+      process.exit(2);
+    }
+    ca = fs.readFileSync(caPath, 'utf8');
+    if (!ca.includes('BEGIN CERTIFICATE')) {
+      console.error(`[check-db-tls] ${caPath} does not look like a PEM certificate.`);
+      process.exit(2);
+    }
+  }
+
+  console.log(`[check-db-tls] ${target.host}:${target.port}${ca ? `  (against CA ${caPath})` : ''}`);
 
   let result;
   try {
-    result = await negotiate(target.host, target.port);
+    result = await negotiate(target.host, target.port, ca);
   } catch (err) {
     console.error(`[check-db-tls] FAILED before the certificate could be read: ${err.message}`);
     process.exit(1);
@@ -115,16 +177,38 @@ const main = async () => {
   console.log(`  altNames   ${result.altNames || '(none)'}`);
   console.log(`  expires    ${result.validTo || '(unknown)'}`);
 
+  if (wantChain) {
+    console.log('\n  presented chain (leaf first):');
+    for (const [i, link] of result.chain.entries()) {
+      console.log(`    [${i}] ${link.subject}`);
+      console.log(`        issued by  ${link.issuer}${link.selfSigned ? '  (self-signed root)' : ''}`);
+      console.log(`        sha256     ${link.fingerprint256}`);
+      console.log(`        expires    ${link.validTo}`);
+    }
+    console.log('\n  Match the root fingerprint above against the certificate downloaded from');
+    console.log('  the Supabase dashboard before trusting it. A CA is only meaningful when it');
+    console.log('  is obtained out of band from the connection it is meant to authenticate.');
+  }
+
   if (result.authorized) {
-    console.log('\n  VERIFIED — the chain and hostname both validate against the trust store.');
-    console.log('  DATABASE_SSL_MODE=verify-full is safe to enable for this host.');
+    console.log(ca
+      ? '\n  VERIFIED against the supplied CA — chain and hostname both check out.'
+      : '\n  VERIFIED — the chain and hostname both validate against the system trust store.');
+    console.log('  DATABASE_SSL_MODE=verify-full is safe to enable for this host'
+      + (ca ? ' with this CA in DATABASE_CA_CERT.' : '.'));
     process.exit(0);
   }
 
   console.log(`\n  NOT VERIFIED — ${result.authorizationError}`);
-  console.log('  Enabling DATABASE_SSL_MODE=verify-full against this host would break every');
-  console.log('  connection. Supply the provider CA via DATABASE_CA_CERT and re-run, or stay');
-  console.log('  on "relaxed" until the chain is resolved.');
+  if (ca) {
+    console.log('  The supplied CA does not validate this host. Re-download it from');
+    console.log('  Supabase → Settings → Database → SSL Configuration, and confirm the root');
+    console.log('  fingerprint matches `--chain` output before using it.');
+  } else {
+    console.log('  Enabling DATABASE_SSL_MODE=verify-full would break every connection.');
+    console.log('  Supabase signs the pooler with a PRIVATE CA, so this is expected here —');
+    console.log('  download the CA from the dashboard and re-run with --ca <file>.');
+  }
   process.exit(1);
 };
 
