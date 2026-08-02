@@ -11,7 +11,7 @@ const shareDeal = async (dealId, sharedByUserId, sharedWithEmail, permission = '
   return transaction(async (client) => {
     // Verify the deal exists and belongs to the requesting user
     const dealResult = await client.query(
-      'SELECT id, created_by, name FROM deals WHERE id = $1 AND created_by = $2',
+      'SELECT id, created_by, name, organization_id FROM deals WHERE id = $1 AND created_by = $2',
       [dealId, sharedByUserId]
     );
 
@@ -19,14 +19,38 @@ const shareDeal = async (dealId, sharedByUserId, sharedWithEmail, permission = '
       throw createError('Deal not found or you are not the owner.', 404);
     }
 
-    // Find the target user by email
+    const deal = dealResult.rows[0];
+
+    // Resolve the recipient WITHIN the deal's workspace.
+    //
+    // This lookup used to be `WHERE LOWER(email) = LOWER($1)` with no
+    // organisation comparison at all, so a deal owner could hand a complete
+    // deal — documents, financial model, diligence, risks, full activity
+    // history — to any account on the platform, including one inside another
+    // customer's workspace. Nine `*_shared_read` RLS policies made the database
+    // honour it (dropped in 20260806). Membership in the deal's organisation is
+    // now the gate, enforced here rather than inferred.
     const userResult = await client.query(
-      'SELECT id, email, name FROM users WHERE LOWER(email) = LOWER($1) AND is_active = TRUE',
-      [sharedWithEmail]
+      `SELECT u.id, u.email, u.name
+         FROM users u
+         JOIN organization_members om
+           ON om.user_id = u.id
+          AND om.organization_id = $2
+        WHERE LOWER(u.email) = LOWER($1)
+          AND u.is_active = TRUE
+        LIMIT 1`,
+      [sharedWithEmail, deal.organization_id]
     );
 
     if (userResult.rows.length === 0) {
-      throw createError('No active user found with that email.', 404);
+      // Deliberately does not distinguish "no such account" from "account
+      // exists in another workspace" — that difference is a membership oracle
+      // for any other customer's user list.
+      throw createError(
+        'No active member of this workspace was found with that email. '
+        + 'Deals can only be shared with people in your own workspace.',
+        404,
+      );
     }
 
     const targetUser = userResult.rows[0];
