@@ -41,7 +41,10 @@ const closedExposureRow = (overrides = {}) => ({
   definers: [...health.APPROVED_DEFINERS].map((fn) => ({
     fn, owner: 'postgres', proconfig: ['search_path=pg_catalog, public, pg_temp'],
   })),
-  risky_default_acls: 0,
+  // Production's real shape after 20260805: our own `postgres` defaults are
+  // clean, and supabase_admin keeps its own — which we cannot ALTER and which
+  // only govern objects that role creates.
+  default_acl_grantors: ['supabase_admin'],
   api_role_count: 2,
   db_role: 'redip_app',
   ...overrides,
@@ -276,14 +279,30 @@ describe('healthCheck.checkApiExposure', () => {
     expect(r.detail).toMatch(/owned by the application role/);
   });
 
-  test('unhealthy when a default privilege will re-expose the next new table', async () => {
+  test('unhealthy when a default privilege WE CONTROL will re-expose the next new table', async () => {
     // The self-healing property that made the original hole survive cleanups:
     // revoking today is undone by the next CREATE TABLE.
-    query.mockResolvedValueOnce({ rows: [closedExposureRow({ risky_default_acls: 3 })] });
+    query.mockResolvedValueOnce({
+      rows: [closedExposureRow({ default_acl_grantors: ['postgres', 'supabase_admin'] })],
+    });
     const r = await health.checkApiExposure();
     expect(r.status).toBe('unhealthy');
-    expect(r.risky_default_acls).toBe(3);
+    expect(r.risky_default_acl_grantors).toEqual(['postgres']);
     expect(r.detail).toMatch(/re-expose itself automatically/);
+  });
+
+  test('stays healthy when only supabase_admin keeps its defaults — we cannot ALTER those', async () => {
+    // Measured on prod after 20260805: `postgres` defaults are clean;
+    // supabase_admin's survive because postgres is not a member of it. They
+    // govern only objects supabase_admin creates, and Acureal's migrations run
+    // as postgres (94 of 97 granted tables carried grantor postgres). Alerting
+    // hourly on a permanently unfixable condition is how a canary gets ignored.
+    query.mockResolvedValueOnce({ rows: [closedExposureRow()] });
+    const r = await health.checkApiExposure();
+    expect(r.status).toBe('healthy');
+    expect(r.risky_default_acl_grantors).toEqual([]);
+    expect(r.unalterable_default_acl_grantors).toEqual(['supabase_admin']);
+    expect(r.detail).toMatch(/supabase_admin keeps its own defaults/);
   });
 
   test('healthy with a note on a database that has no anon role at all (local dev)', async () => {

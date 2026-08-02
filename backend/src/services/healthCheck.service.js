@@ -77,6 +77,22 @@ const POSTGIS_METADATA_RELATIONS = new Set([
   'public.geography_columns',
 ]);
 
+// Default-privilege entries are keyed by the role that CREATES an object, and
+// `postgres` cannot ALTER another role's defaults without being a member of it.
+// Supabase's own `supabase_admin` defaults therefore survive 20260805 and cannot
+// be revoked from the SQL editor — measured on prod 2026-08-02, after the
+// migration applied cleanly:
+//
+//   grantor postgres        → {postgres, service_role, redip_app}   ← ours, clean
+//   grantor supabase_admin  → {postgres, anon, authenticated, ...}  ← not ours
+//
+// They only govern objects supabase_admin itself creates (the PostGIS metadata
+// class). Acureal's migrations run as `postgres` — 94 of the 97 granted tables
+// carried grantor `postgres` — so a new Acureal table does NOT re-acquire an
+// anon grant. Counting these as unhealthy would alert hourly, forever, on
+// something nobody can fix, which is how a canary earns being ignored.
+const UNALTERABLE_DEFAULT_ACL_GRANTORS = new Set(['supabase_admin']);
+
 // Every application-owned SECURITY DEFINER function that has been reviewed.
 // A definer runs with its owner's privileges, so each one is a deliberate,
 // audited hole through RLS: six auth-bootstrap helpers (20260801/20260802) and
@@ -380,12 +396,13 @@ const checkApiExposure = async () => {
                    'fn', d.fn, 'owner', d.owner, 'proconfig', d.proconfig
                  )), '[]'::json)
             FROM app_definers d)                                            AS definers,
-         (SELECT count(*)::int
-            FROM pg_default_acl da
-            JOIN pg_namespace dn ON dn.oid = da.defaclnamespace
-            CROSS JOIN LATERAL aclexplode(da.defaclacl) a
-            JOIN api_roles r ON r.oid = a.grantee
-           WHERE dn.nspname IN ('public', 'regulatory_data'))               AS risky_default_acls,
+         (SELECT COALESCE(json_agg(DISTINCT x.grantor), '[]'::json) FROM (
+            SELECT pg_get_userbyid(da.defaclrole) AS grantor
+              FROM pg_default_acl da
+              JOIN pg_namespace dn ON dn.oid = da.defaclnamespace
+              CROSS JOIN LATERAL aclexplode(da.defaclacl) a
+              JOIN api_roles r ON r.oid = a.grantee
+             WHERE dn.nspname IN ('public', 'regulatory_data')) x)          AS default_acl_grantors,
          (SELECT count(*)::int FROM api_roles)                              AS api_role_count,
          current_user                                                       AS db_role`,
     );
@@ -406,7 +423,13 @@ const checkApiExposure = async () => {
     const exposedTables = (Array.isArray(r.exposed_tables) ? r.exposed_tables : [])
       .filter((t) => !POSTGIS_METADATA_RELATIONS.has(t));
     const exposedFunctions = Array.isArray(r.exposed_functions) ? r.exposed_functions : [];
-    const riskyDefaults = Number(r.risky_default_acls) || 0;
+    const allDefaultAclGrantors = Array.isArray(r.default_acl_grantors) ? r.default_acl_grantors : [];
+    // Only grantors we can actually ALTER are a finding. The rest are reported
+    // so the state stays visible without being actionable noise.
+    const riskyDefaultGrantors = allDefaultAclGrantors
+      .filter((g) => !UNALTERABLE_DEFAULT_ACL_GRANTORS.has(g));
+    const unalterableDefaultGrantors = allDefaultAclGrantors
+      .filter((g) => UNALTERABLE_DEFAULT_ACL_GRANTORS.has(g));
     const appRole = r.db_role;
 
     const unreviewedDefiners = definers
@@ -447,9 +470,9 @@ const checkApiExposure = async () => {
         `${misownedDefiners.length} definer(s) owned by the application role (${appRole}) — they cannot bypass RLS and will return zero rows: ${misownedDefiners.join(', ')}`,
       );
     }
-    if (riskyDefaults > 0) {
+    if (riskyDefaultGrantors.length > 0) {
       faults.push(
-        `${riskyDefaults} default-privilege entr${riskyDefaults === 1 ? 'y' : 'ies'} still grant to anon/authenticated — the next CREATE TABLE in public/regulatory_data will re-expose itself automatically.`,
+        `Default privileges owned by ${riskyDefaultGrantors.join(', ')} still grant to anon/authenticated — a new table created by that role in public/regulatory_data will re-expose itself automatically. Fix with ALTER DEFAULT PRIVILEGES FOR ROLE <grantor> ... REVOKE.`,
       );
     }
 
@@ -460,11 +483,16 @@ const checkApiExposure = async () => {
       exposed_functions: exposedFunctions,
       unreviewed_definers: unreviewedDefiners,
       unpinned_definers: unpinnedDefiners,
-      risky_default_acls: riskyDefaults,
+      risky_default_acl_grantors: riskyDefaultGrantors,
+      unalterable_default_acl_grantors: unalterableDefaultGrantors,
       definers_reviewed: definers.length,
       detail: faults.length
         ? faults.join(' ')
-        : `Data API surface closed: no anon/authenticated grants, ${definers.length} reviewed SECURITY DEFINER function(s) all pinned and private, and no default privilege will re-expose a new table.`,
+        : `Data API surface closed: no anon/authenticated grants, ${definers.length} reviewed SECURITY DEFINER function(s) all pinned and private, and no default privilege we control will re-expose a new table.${
+          unalterableDefaultGrantors.length
+            ? ` (${unalterableDefaultGrantors.join(', ')} keeps its own defaults, which only govern objects that role creates — not ours.)`
+            : ''
+        }`,
     };
   } catch (error) {
     log.warn('api_exposure_check_failed', { error: error.message });

@@ -163,4 +163,22 @@ describe('operational shape', () => {
     expect(executable).toMatch(/anon_can_read_password_hashes/);
     expect(executable).toMatch(/app_tables_intact/);
   });
+
+  test('the function check counts only SECURITY DEFINER functions', () => {
+    // Amended after the live apply. Counting every non-extension function
+    // reported 10 — all ordinary SECURITY INVOKER helpers reachable through
+    // Postgres's default EXECUTE-to-PUBLIC grant, which run with the CALLER's
+    // privileges (anon now has none). Only a DEFINER runs as its owner, so
+    // only a DEFINER is a hole. A read-back that cries wolf is worse than none.
+    expect(executable).toMatch(/AND p\.prosecdef/);
+    expect(executable).toMatch(/AS definers_still_exposed/);
+  });
+
+  test('the default-privilege check names the grantor rather than counting rows', () => {
+    // `postgres` cannot ALTER another role's defaults, so supabase_admin's
+    // survive by design. Naming the grantor distinguishes an entry we can fix
+    // from one we cannot.
+    expect(executable).toMatch(/AS unrevokable_default_grantors/);
+    expect(executable).toMatch(/pg_get_userbyid\(da\.defaclrole\)/);
+  });
 });
