@@ -44,6 +44,47 @@ const PLACEHOLDER = /(^\s*$)|your[-_]|replace[-_]?with|change[-_]?me|^\[/i;
 
 const isPlaceholder = (value) => !value || PLACEHOLDER.test(String(value));
 
+// ── Environment separation ──────────────────────────────────────────────────
+// The production Supabase project ref. Not a secret — it appears in every
+// dashboard URL and in the pooler username. A NON-production Vercel deployment
+// (preview, development) holding credentials that resolve to this project is
+// unmerged code authenticating against live customer data. That is never a
+// configuration choice, always a mistake (confirmed live 2026-08-02: the E2E
+// bot's rows sat in the production database because DATABASE_URL was scoped to
+// All Environments). Env-var scoping in the dashboard is the first line of
+// defence; this guard is the one that survives someone re-scoping the variable.
+const PRODUCTION_SUPABASE_REF = 'niamgjbxxgmmffggumvj';
+
+// Supabase legacy service keys are JWTs whose payload carries the project ref;
+// the raw string never contains it. Decode defensively — a malformed or
+// new-format (sb_secret_*) key simply contributes nothing.
+const jwtPayload = (token) => {
+  try {
+    const segment = String(token).split('.')[1];
+    if (!segment) return '';
+    return Buffer.from(segment, 'base64url').toString('utf8');
+  } catch {
+    return '';
+  }
+};
+
+/**
+ * Which env vars point a non-production Vercel deployment at the production
+ * database or storage. Empty everywhere except a Vercel preview/development
+ * deployment that holds production-ref credentials.
+ */
+const productionRefLeaks = (env = process.env) => {
+  if (!env.VERCEL || env.VERCEL_ENV === 'production') return [];
+  const leaks = [];
+  for (const key of ['DATABASE_URL', 'SUPABASE_URL']) {
+    if (String(env[key] || '').includes(PRODUCTION_SUPABASE_REF)) leaks.push(key);
+  }
+  for (const key of ['SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_KEY']) {
+    if (jwtPayload(env[key]).includes(PRODUCTION_SUPABASE_REF)) leaks.push(key);
+  }
+  return leaks;
+};
+
 // Production OR any Vercel deployment (preview included) is held to the
 // strict standard — a preview missing a signing secret is just as broken.
 const isStrict = () => process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
@@ -61,6 +102,17 @@ const validateEnv = ({ exitOnFailure = true } = {}) => {
     if (isPlaceholder(process.env[key])) {
       errors.push(`${key} is missing or still a placeholder (needed for ${why}).`);
     }
+  }
+
+  // A preview must never run against production. Fatal, not a warning: the
+  // whole point is that unmerged code cannot silently read or write live data.
+  for (const key of productionRefLeaks(process.env)) {
+    errors.push(
+      `${key} resolves to the PRODUCTION Supabase project (${PRODUCTION_SUPABASE_REF}) `
+      + `on a "${process.env.VERCEL_ENV}" deployment. Unmerged code must never touch live data. `
+      + 'In Vercel, scope this variable to Production only and give Preview its own value '
+      + '(the "preview" branch database).',
+    );
   }
 
   for (const { key, why } of RECOMMENDED) {
@@ -179,4 +231,11 @@ const validateEnv = ({ exitOnFailure = true } = {}) => {
   return { ok: errors.length === 0, errors, warnings, skipped: false };
 };
 
-module.exports = { validateEnv, isPlaceholder, CRITICAL, RECOMMENDED };
+module.exports = {
+  validateEnv,
+  isPlaceholder,
+  productionRefLeaks,
+  PRODUCTION_SUPABASE_REF,
+  CRITICAL,
+  RECOMMENDED,
+};

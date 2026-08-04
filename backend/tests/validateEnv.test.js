@@ -128,4 +128,84 @@ describe('validateEnv', () => {
     expect(result.warnings.some((w) => /does not look like/.test(w))).toBe(false);
     expect(result.warnings.some((w) => /whitespace/.test(w))).toBe(false);
   });
+
+  describe('production-ref leak guard (preview isolation)', () => {
+    const PROD_REF = 'niamgjbxxgmmffggumvj';
+    const prodPoolerUrl = `postgresql://redip_app.${PROD_REF}:pw@aws-1-ap-south-1.pooler.supabase.com:6543/postgres`;
+    // A structurally-real Supabase legacy key: JWT whose payload carries the ref.
+    const jwtFor = (ref) => {
+      const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+      return `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ iss: 'supabase', ref, role: 'service_role' })}.sig`;
+    };
+
+    test('a preview deployment holding the production DATABASE_URL is fatal', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.VERCEL = '1';
+      process.env.VERCEL_ENV = 'preview';
+      process.env.DATABASE_URL = prodPoolerUrl;
+      process.env.JWT_SECRET = REAL_SECRET_A;
+      process.env.DEAL_EVENTS_HMAC_KEY = REAL_SECRET_B;
+      const { validateEnv } = load();
+      expect(() => validateEnv({ exitOnFailure: false })).toThrow(/startup aborted/i);
+    });
+
+    test('the same DATABASE_URL on the production deployment passes', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.VERCEL = '1';
+      process.env.VERCEL_ENV = 'production';
+      process.env.DATABASE_URL = prodPoolerUrl;
+      process.env.JWT_SECRET = REAL_SECRET_A;
+      process.env.DEAL_EVENTS_HMAC_KEY = REAL_SECRET_B;
+      const { validateEnv } = load();
+      const result = validateEnv({ exitOnFailure: false });
+      expect(result.ok).toBe(true);
+    });
+
+    test('a preview pointed at the preview-branch database passes', () => {
+      process.env.NODE_ENV = 'production';
+      process.env.VERCEL = '1';
+      process.env.VERCEL_ENV = 'preview';
+      process.env.DATABASE_URL = 'postgresql://redip_app.aphgtgyuuycorhqhjxqx:pw@aws-1-ap-south-1.pooler.supabase.com:6543/postgres';
+      process.env.JWT_SECRET = REAL_SECRET_A;
+      process.env.DEAL_EVENTS_HMAC_KEY = REAL_SECRET_B;
+      const { validateEnv } = load();
+      const result = validateEnv({ exitOnFailure: false });
+      expect(result.ok).toBe(true);
+    });
+
+    test('productionRefLeaks names every leaking variable, including a JWT-embedded ref', () => {
+      const { productionRefLeaks } = load();
+      const env = {
+        VERCEL: '1',
+        VERCEL_ENV: 'preview',
+        DATABASE_URL: prodPoolerUrl,
+        SUPABASE_URL: `https://${PROD_REF}.supabase.co`,
+        SUPABASE_SERVICE_ROLE_KEY: jwtFor(PROD_REF),
+      };
+      expect(productionRefLeaks(env)).toEqual([
+        'DATABASE_URL',
+        'SUPABASE_URL',
+        'SUPABASE_SERVICE_ROLE_KEY',
+      ]);
+    });
+
+    test('productionRefLeaks is silent off Vercel and for non-production refs', () => {
+      const { productionRefLeaks } = load();
+      // Local scripts legitimately hold the production URL — never a leak.
+      expect(productionRefLeaks({ DATABASE_URL: prodPoolerUrl })).toEqual([]);
+      // Branch-ref credentials on a preview are the intended configuration.
+      expect(productionRefLeaks({
+        VERCEL: '1',
+        VERCEL_ENV: 'preview',
+        SUPABASE_URL: 'https://aphgtgyuuycorhqhjxqx.supabase.co',
+        SUPABASE_SERVICE_ROLE_KEY: jwtFor('aphgtgyuuycorhqhjxqx'),
+      })).toEqual([]);
+      // A malformed key must not crash the guard.
+      expect(productionRefLeaks({
+        VERCEL: '1',
+        VERCEL_ENV: 'preview',
+        SUPABASE_SERVICE_ROLE_KEY: 'sb_secret_not_a_jwt',
+      })).toEqual([]);
+    });
+  });
 });
