@@ -8,12 +8,13 @@ have. Everything else (the code, the database, the product) is built and verifie
 After each one, reply with the little "done" phrase shown — that's how I keep this
 list up to date. Everything is written step-by-step, no jargon.
 
-_Last updated: 2026-08-02 late (**items 0, 0b, 8b and 8c are all DONE** and each
-verified against the live system. The second entrance to your database is shut
-and now has nothing left talking to it; deal sharing is locked to your own
-workspace; and the database connection verifies the server's identity, not just
-encrypts the line. Still open: 5 (mailboxes — the legally required one), 4 (two
-names), and 7 (the lawyer). Nothing urgent, nothing blocking.)_
+_Last updated: 2026-08-04 (**two new items at the top — 0c and 0d**, both
+quick. 0c stops test copies of the site from holding the real database's keys —
+the code-side safety net is already live, so previews will refuse to start
+until you flip the settings. 0d is your first one-command database update; it
+also fixes a hidden cache bug that has been re-paying Google for address
+lookups since late July. Still open from before: 5 (mailboxes — the legally
+required one), 4 (two names), and 7 (the lawyer).)_
 
 ---
 
@@ -48,6 +49,87 @@ names), and 7 (the lawyer). Nothing urgent, nothing blocking.)_
 ---
 
 # 🔴 DO FIRST — protects your data and money (this week)
+
+## 0c. Stop test copies of the site from touching the real database (added 2026-08-04)
+
+**What this is.** Every time code changes, Vercel builds a "preview" — a test
+copy of the site. Right now those test copies hold the keys to the **real**
+database, because three settings are shared with every environment. A test copy
+of unmerged code should never be able to read or change live customer data.
+I've already built the safety net in code (a preview that finds itself holding
+the real keys now refuses to start), and I've built a separate practice
+database for previews to use instead. You just need to flip the settings.
+
+🌐 In your browser, open: https://vercel.com/dashboard → click the **Acureal**
+project → **Settings** (top bar) → **Environment Variables** (left menu).
+
+For **each** of these three rows — `DATABASE_URL`, `SUPABASE_URL`,
+`SUPABASE_SERVICE_ROLE_KEY` — do the same four clicks:
+
+1. Find the row by name (use the search box at the top of the list).
+2. Click the **⋯** at the right end of the row → click **Edit**.
+3. In the **Environments** section of the dialog, **untick "Preview" and
+   "Development"** so that ONLY **Production** stays ticked. Do **not** touch
+   the value itself.
+4. Click **Save**. Success signal: a green "Updated" toast.
+
+Also check (don't change values, just look): if rows called `SUPABASE_KEY` or
+`BLOB_READ_WRITE_TOKEN` exist, give them the same treatment (Production only).
+And confirm `DATABASE_SSL_MODE` and `DATABASE_CA_CERT` both say **Production**
+— those two caused the 6-minute outage on 2026-08-02, so we check their scope
+whenever we're on this page.
+
+Then add ONE new setting so previews use the practice database:
+
+5. Click **Add Another** (or **Add New**) at the top.
+6. Key — paste exactly: `DATABASE_URL`
+7. Value — paste exactly (one line, nothing to fill in):
+   ```
+   postgresql://redip_app.aphgtgyuuycorhqhjxqx:bb4898885ac210c0006e12981f3da6d0@aws-0-ap-south-1.pooler.supabase.com:6543/postgres
+   ```
+8. In **Environments**, tick **ONLY "Preview"**. Untick everything else.
+9. Click **Save**. Success signal: the list now shows TWO `DATABASE_URL` rows —
+   one marked Production, one marked Preview.
+
+That practice database contains only made-up test companies ("Rehearsal Alpha"
+/ "Rehearsal Beta") — no real data. If you ever want to click around a preview,
+sign in there with `alpha-owner@rehearsal.test` / `Rehearse123!`.
+
+**Reply "scoped"** when done. (File uploads won't work on previews — that's
+expected and fine; the real site is untouched.)
+
+## 0d. Run your first automatic database update (added 2026-08-04 · ~2 minutes)
+
+The copy-paste-into-the-browser step is retired. Database updates now apply
+from one command, which first SHOWS what it would do, changes nothing without
+an explicit flag, undoes everything if a step fails, and keeps the ledger
+honest. It was proven by rebuilding a complete throwaway copy of your database
+from scratch before ever touching production.
+
+There is one update waiting: it fixes a hidden bug where the address-lookup
+cache silently stopped saving results after the July security upgrade, so the
+site has been re-paying Google for lookups it had already done.
+
+🖥 In your terminal (VS Code, at the project folder):
+
+1. Copy-paste and run:
+   ```
+   git pull
+   ```
+2. Copy-paste and run (this only SHOWS the plan — it changes nothing):
+   ```
+   node backend/scripts/migration-apply.js
+   ```
+   Success signal: a table of every update with a PLAN column, ending in
+   "Dry run only".
+3. Copy-paste and run (this applies the one waiting update):
+   ```
+   node backend/scripts/migration-apply.js --apply --only 20260807_geocode_cache_write_policy.sql
+   ```
+   Success signal: a line starting `✓ applied 20260807_geocode_cache_write_policy.sql`.
+
+**Reply "applied"** (and paste the ✓ line if you like) — I'll verify against
+the live database.
 
 ## 0. ✅ DONE (2026-08-02 — you ran it; verified live) — Close the second door into the database
 

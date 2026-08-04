@@ -8,7 +8,7 @@ Kept deliberately short. A backlog nobody finishes is a backlog nobody reads —
 if something has sat here unmoved for two quarters, close it rather than let it
 rot into background noise.
 
-_Last reviewed: 2026-08-02._
+_Last reviewed: 2026-08-04._
 
 ---
 
@@ -46,7 +46,15 @@ clutter. This one needs a shape agreed up front, not a speculative build.
 
 ## 2. Address-first parcel evidence — surfacing the moat
 
-**Status:** open · **Impact:** highest reach
+**Status:** ✅ shipped 2026-08-04 (#1086) · **Impact:** highest reach
+
+Shipped as the public `/parcel` page: any BBMP street resolves — no login — to
+its ward, gazette register, UAV zone, guidance band, and exact gazette-page
+citation, with the landing hero's search handing off to it. It stops at
+statutory zoning exactly as specified below, and the gap is the
+zoning-certificate-upload conversion. Decision recorded in the PR: public,
+rate-limited, row-capped — the moat is the assembly and the workflow, not one
+street's row. The original scope, kept for the record:
 
 The Bengaluru parcel evidence (18,743 cited streets, guidance values across four
 SROs, UAV zones, statutory FAR rulebooks for four planning authorities) is
@@ -77,13 +85,15 @@ upload is also how the deal enters the platform.
 
 Ranked by dependence removed per unit of effort:
 
-1. **Migrations apply themselves.** Schema changes are pasted by hand into a
-   browser SQL editor today. That has already been corrupted once by a browser
-   extension injecting text, and has already caused a migration to sit unapplied
-   for a month. `migration-status.js` reconciles (read-only) and `run-sql.js`
-   executes a single file — the applier between them is what is missing. Build
-   it dry-run-first and operator-invoked, **not** auto-on-deploy: automatic DDL
-   on every deploy converts a bad migration into an automatic outage.
+1. ✅ **Migrations apply themselves** — shipped 2026-08-04 (#1085) as
+   `backend/scripts/migration-apply.js`, exactly to the constraints below:
+   operator-invoked, dry-run by default, one transaction per file, stop at
+   first failure, ledger-recorded, idempotent re-runs. Proven end-to-end by
+   rebuilding the preview branch database from the repo's own recipe before
+   ever touching production. (Original scope: `migration-status.js` reconciles
+   read-only and `run-sql.js` executes a single file — the applier between
+   them was the missing piece; **not** auto-on-deploy, because automatic DDL
+   on every deploy converts a bad migration into an automatic outage.)
 2. **A second pair of hands.** The permission model exists but has never carried
    a real teammate.
 3. **A restore drill someone else performs.** Recovery is documented, never
