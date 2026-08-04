@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { ArrowRight, ArrowUpRight, Search } from 'lucide-react';
 
 // Acureal landing — Scene 1 of 6
 // "The parcel comes into focus." A single illustrative parcel off Sarjapur Road
@@ -443,10 +444,26 @@ export default function HeroParcelResolve() {
               <SignIn />
             </div>
 
+            {/* Street-lookup teaser — the free, no-login proof of depth.
+                Hands off to /parcel?q= (the public evidence page), which the
+                evidence explorer already listens for. */}
+            <div
+              style={{
+                marginTop: 26,
+                opacity: textIn ? 1 : 0,
+                transform: textIn ? 'translateY(0)' : 'translateY(8px)',
+                transition: reduceMotion.current
+                  ? undefined
+                  : `opacity 260ms ease-out 200ms, transform 260ms ${EASE} 200ms`,
+              }}
+            >
+              <StreetLookupTeaser />
+            </div>
+
             {/* Audience microcopy */}
             <div
               style={{
-                marginTop: 30,
+                marginTop: 24,
                 fontFamily: MONO,
                 fontSize: 11.5,
                 letterSpacing: '0.04em',
@@ -821,5 +838,96 @@ function SignIn() {
       Sign in
       <ArrowUpRight size={14} strokeWidth={1.75} />
     </a>
+  );
+}
+
+/* ---------------------- Street-lookup teaser ---------------------- */
+// A working search, not a decoration: it hands the query to the public
+// /parcel evidence page, which resolves any BBMP street to its ward, UAV
+// zone, guidance band, and exact gazette-page citation — no login.
+function StreetLookupTeaser() {
+  const navigate = useNavigate();
+  const [value, setValue] = useState('');
+  const [focused, setFocused] = useState(false);
+
+  const go = (e) => {
+    e.preventDefault();
+    const q = value.trim();
+    navigate(q ? `/parcel?q=${encodeURIComponent(q)}` : '/parcel');
+  };
+
+  return (
+    <form onSubmit={go} style={{ maxWidth: 440 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          backgroundColor: '#FCFAF4',
+          border: `1px solid ${focused ? '#1F4A3D' : '#CFC5B2'}`,
+          borderRadius: 2,
+          padding: '4px 4px 4px 14px',
+          transition: 'border-color 120ms ease-out',
+        }}
+      >
+        <Search size={15} strokeWidth={1.75} style={{ color: '#8C8579', flexShrink: 0 }} aria-hidden="true" />
+        <input
+          type="search"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          placeholder="Try any BBMP street — Koramangala, Whitefield Main Road…"
+          aria-label="Look up a Bengaluru street in the gazette evidence index"
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontFamily: SANS,
+            fontSize: 13.5,
+            color: '#1C1A16',
+            backgroundColor: 'transparent',
+            border: 'none',
+            outline: 'none',
+            padding: '8px 0',
+          }}
+        />
+        <button
+          type="submit"
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            fontFamily: SANS,
+            fontSize: 12.5,
+            fontWeight: 600,
+            color: '#FCFAF4',
+            backgroundColor: '#1F4A3D',
+            border: 'none',
+            borderRadius: 2,
+            padding: '9px 14px',
+            cursor: 'pointer',
+            transition: 'background-color 120ms ease-out',
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#1A3E33'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#1F4A3D'; }}
+          onFocus={(e) => { e.currentTarget.style.outline = '2px solid #1F4A3D'; e.currentTarget.style.outlineOffset = '2px'; }}
+          onBlur={(e) => { e.currentTarget.style.outline = 'none'; }}
+        >
+          Trace it
+          <ArrowRight size={13} strokeWidth={2} />
+        </button>
+      </div>
+      <div
+        style={{
+          marginTop: 7,
+          fontFamily: MONO,
+          fontSize: 10.5,
+          letterSpacing: '0.06em',
+          color: '#8C8579',
+        }}
+      >
+        19,830 gazette-cited street rows · free, no login
+      </div>
+    </form>
   );
 }

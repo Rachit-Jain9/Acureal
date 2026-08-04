@@ -38,6 +38,9 @@ function useDisableNumberInputScroll() {
 }
 
 const LandingPage = lazy(() => import('./pages/LandingPage'));
+// Public parcel evidence — the address-first, no-login front door to the
+// Bengaluru gazette street index (the landing hero's search hands off here).
+const PublicParcelPage = lazy(() => import('./pages/PublicParcelPage'));
 const LoginPage = lazy(() => import('./pages/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const DealsPage = lazy(() => import('./pages/DealsPage'));
@@ -172,6 +175,9 @@ export default function App() {
       <Routes>
         {/* Public landing page — no auth required */}
         <Route path="/" element={withSuspense(<LandingPage />)} />
+
+        {/* Public parcel evidence — no auth required */}
+        <Route path="/parcel" element={withSuspense(<PublicParcelPage />)} />
 
         {/* Auth */}
         <Route path="/login" element={withSuspense(<LoginPage />)} />

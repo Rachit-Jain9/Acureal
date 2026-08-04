@@ -47,6 +47,7 @@ const searchRoutes = require('./routes/search.routes');
 const localityIntelligenceRoutes = require('./routes/localityIntelligence.routes');
 const masterPlanRoutes = require('./routes/masterplan.routes');
 const masterPlanTilesRoutes = require('./routes/masterPlanTiles.routes');
+const publicParcelRoutes = require('./routes/publicParcel.routes');
 const parcelIntelligenceRoutes = require('./routes/parcelIntelligence.routes');
 const evidenceLinksRoutes = require('./routes/evidenceLinks.routes');
 const legalRoutes = require('./routes/legal.routes');
@@ -185,6 +186,30 @@ app.use('/api/privacy', heavyLimiter);
 // + outside the authenticate chain (tiles are anonymous <img> GETs of a public
 // reference raster; no tenant data).
 app.use('/api/master-plan-tiles', tileLimiter, masterPlanTilesRoutes);
+
+// Public parcel evidence (statutory reference data only — same rationale as
+// the tile proxy, same placement). Two tiers: /resolve can trigger a metered
+// geocoder call, so it gets a strict per-IP cap; the pure index lookups get a
+// debounce-friendly cap. Both sit before the general limiter so the public
+// page's keystroke traffic never eats an authenticated user's 120/min budget.
+const publicResolveLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many lookups. Please wait a moment and try again.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+const publicParcelLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many lookups. Please slow down.' },
+  skip: () => process.env.NODE_ENV === 'test',
+});
+app.use('/api/public/parcel/resolve', publicResolveLimiter);
+app.use('/api/public/parcel', publicParcelLimiter, publicParcelRoutes);
 app.use('/api', generalLimiter);
 
 // Body parsing
