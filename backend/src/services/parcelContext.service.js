@@ -549,7 +549,14 @@ const fetchKgisContextCached = async (coords) => {
 // single upstream failure (e.g. K-GIS timeout) doesn't drop the whole
 // response — the caller still gets a useful payload with the gap clearly
 // marked.
-async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
+//
+// `options.kgis = false` skips the K-GIS fan-out entirely. The public parcel
+// endpoint runs with NO request context, and kgis_cache is org-scoped
+// (current_organization_id() in both its read and its write) — an
+// unauthenticated call would miss the cache every time and hammer the live
+// K-GIS portal per request. Detection then degrades to bbox-only, which the
+// payload already reports honestly via detection_method.
+async function deriveParcelContextFromAddress({ address, lat, lng } = {}, { kgis = true } = {}) {
   const startedAt = Date.now();
   const trimmedAddress = address ? String(address).trim() : null;
   const numLat = lat === null || lat === undefined || lat === '' ? null : Number(lat);
@@ -614,7 +621,7 @@ async function deriveParcelContextFromAddress({ address, lat, lng } = {}) {
   // taluk is non-BBMP, we discard the BBMP results (rare and OK — the
   // BBMP search just returns nothing for those addresses anyway).
   const [kgisResult, streetIndexResult, pdMatched, callouts] = await Promise.all([
-    hasCoords
+    hasCoords && kgis
       ? fetchKgisContextCached({ lat: coords.lat, lng: coords.lng })
       : Promise.resolve(null),
     provisionallyInsideBbmp && tokens.length

@@ -195,6 +195,22 @@ export const authAPI = {
   mfaVerify: (challenge, code, rememberMe = false) => api.post('/auth/mfa/verify', { challenge, code, rememberMe }),
 };
 
+// Public parcel evidence — unauthenticated statutory reference lookups for
+// the /parcel front door. Uses its own bare client: no cookies (nothing to
+// send), no session headers, and crucially none of the main client's 401
+// machinery — a signed-out visitor is this surface's NORMAL caller.
+const publicApi = axios.create({
+  baseURL: API_URL,
+  headers: { 'Content-Type': 'application/json' },
+  withCredentials: false,
+});
+
+export const publicParcelAPI = {
+  streetLookup: (params) => publicApi.get('/public/parcel/street-lookup', { params }),
+  uavBenchmark: () => publicApi.get('/public/parcel/uav-benchmark'),
+  resolve: (params) => publicApi.get('/public/parcel/resolve', { params }),
+};
+
 // Legal — Terms / Privacy / Cookie / DPA / AUP versioned-documents registry.
 // `getActive` is public (no auth); `me` and `accept` require authentication.
 export const legalAPI = {

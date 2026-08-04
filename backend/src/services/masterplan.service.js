@@ -2156,6 +2156,26 @@ async function getStreetIndexSummary() {
   };
 }
 
+// The corpus-wide summary is a full-table aggregate over ~19.8k rows and rides
+// along on EVERY street search — including each keystroke-debounced call from
+// the (now public) evidence page. The index changes only when the gazette is
+// re-seeded, so a short in-process cache removes the aggregate from the hot
+// path without a staleness cost anyone can observe. Instance-local by design
+// (serverless instances each warm their own copy). Disabled under test so
+// suites keep controlling every query.
+const STREET_SUMMARY_TTL_MS = 10 * 60 * 1000;
+let streetSummaryCache = { at: 0, value: null };
+
+async function getStreetIndexSummaryCached() {
+  if (process.env.NODE_ENV === 'test') return getStreetIndexSummary();
+  if (streetSummaryCache.value && Date.now() - streetSummaryCache.at < STREET_SUMMARY_TTL_MS) {
+    return streetSummaryCache.value;
+  }
+  const value = await getStreetIndexSummary();
+  streetSummaryCache = { at: Date.now(), value };
+  return value;
+}
+
 async function searchBbmpStreets({ search = '', limit = 25, zone = null, register = null } = {}) {
   const cleanSearch = String(search || '').trim();
   // `Number(0) || 25` returns 25 because 0 is falsy, so use explicit
@@ -2212,7 +2232,7 @@ async function searchBbmpStreets({ search = '', limit = 25, zone = null, registe
 
   const [rowsResult, summary] = await Promise.all([
     query(sql, params),
-    getStreetIndexSummary(),
+    getStreetIndexSummaryCached(),
   ]);
 
   return {
