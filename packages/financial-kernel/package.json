@@ -36,7 +36,7 @@
     "brace-expansion": "Same pin as backend/package.json: <=5.0.7 carries GHSA-mh99-v99m-4gvg (DoS), reached here through the jest toolchain's minimatch. This package's CI audit gate runs WITHOUT --omit=dev, so devDependencies count. npm's only offered remedy was jest@25 — a five-major downgrade. 5.0.8 is the patched line with an unchanged single-function API. Remove once jest's dependency tree moves."
   },
   "overrides": {
-    "brace-expansion": "^5.0.8"
+    "brace-expansion": "^5.0.9"
   },
   "engines": {
     "node": ">=18.0.0"
