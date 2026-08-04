@@ -6,6 +6,117 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-04 — Previews cut off from production, migrations that apply themselves, and the wedge goes public (#1084–#1086)
+
+Four tasks, worked in the operator's order. Three shipped in full; the fourth
+delivered as a design awaiting sign-off, exactly as instructed.
+
+### #1084 — a preview can never again authenticate against production
+
+`DATABASE_URL` was scoped to All Environments, so every preview build of
+unmerged code ran against live customer data. Two layers closed it: the
+operator re-scopes the variables in Vercel (instructions in `TODO_OPERATOR.md`
+item 0c, every variable enumerated with its scope checked separately from its
+value — the 2026-08-02 outage rule applied prospectively), and `validateEnv`
+now FATALLY refuses to boot any non-production Vercel deployment holding
+production-ref credentials. The Supabase service keys are legacy JWTs whose
+payload carries the project ref, so the guard decodes them rather than
+string-matching. Until the re-scope happens, previews fail loudly at boot —
+loud beats silent, per the standing decision.
+
+Previews then need somewhere real to point: a persistent Supabase branch
+(**`preview`**, ref `aphgtgyuuycorhqhjxqx`, ~$10/month) was built BY HAND —
+branch auto-replay left a 43-table partial, as the M1 rehearsal predicted.
+Notable: the branch pooler lives on `aws-0`-ap-south-1 (production is
+`aws-1`); "Tenant or user not found" is the wrong-host symptom. It now runs
+the full schema, the `redip_app` role with the amended Phase-3 grants, and the
+rehearsal security fixtures, verified over the pooler: RLS fail-closed with no
+context, definer login path resolving a seeded account.
+
+### #1085 — the migration applier, proven on a real database first
+
+The missing piece between `migration-status.js` (read-only reconciler) and
+`run-sql.js` (single-file executor). The decided contract is encoded, not
+weakened: operator-invoked, dry-run by default, one transaction per migration,
+stop at the first failure (rolled back, never recorded), records to the same
+ledger migration-status reads, skips the already-applied. Seed/DML files —
+unverifiable from the database by nature — are applied only by name
+(`--only`); PARTIAL files stop the run at their position for a human.
+
+The hard requirement was end-to-end proof before production, and the proof WAS
+the preview-branch rebuild: the applier replayed the repo's own
+fresh-environment recipe — 129 ledger entries over nine resolve-and-continue
+rounds plus 35 `--only` seed applies — then re-ran to a clean
+`0 applied · 0 recorded · 129 skipped`, and a crafted mid-sequence failure
+demonstrated stop/rollback/no-record with the next file untouched. The
+rehearsal surfaced two real repo defects: `20260603_domain_claim…` was
+misdated (depends on a table from `20260625`; renamed to `20260626` — the
+ledger keys on slug, so production's RECORDED status is unaffected) and the
+platform-org row is an undocumented dependency of the comps seeds (now in
+`database/README.md`). Nine seed migrations legitimately refuse on a data-less
+environment; each refusal was loud, rolled back, and is documented.
+
+### #1086 — the wedge: acureal.in/parcel, no login
+
+The Bengaluru evidence base — 19,830 gazette-cited street rows, 199 wards, two
+registers, UAV zones, guidance bands, exact page citations — was reachable
+only behind a login inside a deal. It is now the public front door. The
+decision argued in the PR: **public**, because the moat is the assembly and
+the workflow (the gazette itself is a public document), while distribution is
+the scarce asset; scrape posture = per-IP limiters ahead of the general
+limiter, a server-side 12-row cap, no bulk endpoint, CDN cache headers.
+
+The page shares the SAME evidence explorer as the in-app room (extracted, not
+forked), wrapped in the landing's warm register. The landing hero gained a
+working street search that hands off via the `?q=` deep-link the page already
+listened for. The chain stops at statutory zoning deliberately — a zone
+cannot be honestly read off a street name — and the terminal node converts
+the gap into the zoning-certificate upload. Public API:
+`/api/public/parcel/street-lookup · uav-benchmark · resolve` (the resolver
+runs with K-GIS off — its cache is org-scoped — and folds in guidance-value
+candidates). The RLS posture of every touched table was probed read-only
+against production first: street index public-read, all 108 rate-card rows
+and all 1,313 approved guidance rows are `org_id IS NULL`, tenant tables
+invisible by construction.
+
+**Found while auditing that posture: `geocode_cache` writes have been silently
+denied since the M1 flip** — RLS enabled, only a SELECT policy, failures
+swallowed by a non-fatal catch. The cache stopped refreshing and every expired
+geocode re-paid Google. `20260807_geocode_cache_write_policy.sql` fixes it;
+applied + verified on the branch via the applier; production apply is operator
+item 0d — deliberately his first real use of the tool.
+
+### Task 4 — cross-deal home: design only, as instructed
+
+`docs/CROSS_DEAL_HOME_DESIGN.md` + a visual mock. The shape: one strip inside
+the existing attention panel — "Since you last looked — N deals moved", per-
+user per-deal counts reusing `deal_user_visits` (whose portfolio index has
+waited unused since 2026-08-01), the `getChangesSince` predicates, and the
+existing chip vocabulary. No new widget, no new page, no new endpoint — the
+two-widgets-removed-as-clutter lesson is the design's first constraint.
+Nothing built without a yes.
+
+### The day's recurring weather
+
+The npm-audit gate went red twice in one day from the live advisory DB with
+zero dependency changes on our side: three undici HIGHs (backend), then
+GHSA-rgw5-rvv9-x895 — a brace-expansion fix-bypass covering exactly the ≤5.0.8
+the July pin allowed (kernel). Both fixed forward within their PRs.
+
+### Validation
+
+Backend 280 suites / 4,637 tests green · frontend 172 files / 1,389 green ·
+build + all seven guards green · production healthy after both merges (post-
+deploy smoke green twice) · the wedge verified live in the browser end to end.
+
+### Operator queue
+
+Item **0c** (Vercel scoping — previews fail loudly until then) · item **0d**
+(first applier run: the geocode-cache fix) · the standing mailboxes/names/
+lawyer items · a yes/no on the cross-deal home design.
+
+---
+
 ## 2026-08-02 (second block) — The guard that could not read Kannada, and the switch the rebrand killed (#1072–#1074)
 
 Continuation of the audit block. Three PRs, each starting from a rule the
