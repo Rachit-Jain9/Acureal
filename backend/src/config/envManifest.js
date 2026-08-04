@@ -59,7 +59,7 @@ const ENV_MANIFEST = [
   { name: 'VERCEL_GIT_COMMIT_SHA', scope: PLATFORM, sensitivity: CONFIG, requirement: OPTIONAL, why: 'release stamp for Sentry' },
 
   // ── Database ─────────────────────────────────────────────────────────────
-  { name: 'DATABASE_URL', scope: SERVER, sensitivity: SECRET, requirement: CRITICAL, why: 'the Postgres connection, including the role password' },
+  { name: 'DATABASE_URL', scope: SERVER, sensitivity: SECRET, requirement: CRITICAL, why: 'the Postgres connection, including the role password', note: 'In Vercel: scope to Production only, with a separate Preview-scoped value pointing at the "preview" branch database. validateEnv hard-fails any preview whose value resolves to the production project.' },
   { name: 'DATABASE_SSL_MODE', scope: SERVER, sensitivity: CONFIG, requirement: OPTIONAL, why: 'relaxed | verify-full | disable — how the server certificate is checked' },
   { name: 'DATABASE_CA_CERT', scope: SERVER, sensitivity: CONFIG, requirement: OPTIONAL, why: 'PEM of the provider CA; REQUIRED when DATABASE_SSL_MODE=verify-full, because Supabase signs the pooler with a private CA' },
   { name: 'RLS_ENFORCED', scope: SERVER, sensitivity: CONFIG, requirement: OPTIONAL, why: 'historical kill-switch for the M1 auth-definer rollout', note: 'DEAD: authDefiners now gates on the live rolbypassrls probe and nothing reads this. Slated for removal with M1 Phase 6.' },
@@ -103,8 +103,8 @@ const ENV_MANIFEST = [
   // Requirement is `optional` only because validateEnv has a dedicated
   // "no document storage configured" check spanning Blob AND Supabase — marking
   // these recommended too would warn twice for one problem.
-  { name: 'SUPABASE_URL', scope: SERVER, sensitivity: CONFIG, requirement: OPTIONAL, why: 'Supabase project endpoint for Storage' },
-  { name: 'SUPABASE_SERVICE_ROLE_KEY', scope: SERVER, sensitivity: SECRET, requirement: OPTIONAL, why: 'server-side Storage access; bypasses RLS, never goes near a browser' },
+  { name: 'SUPABASE_URL', scope: SERVER, sensitivity: CONFIG, requirement: OPTIONAL, why: 'Supabase project endpoint for Storage', note: 'In Vercel: scope to Production only — previews holding this reach production documents. validateEnv enforces it.' },
+  { name: 'SUPABASE_SERVICE_ROLE_KEY', scope: SERVER, sensitivity: SECRET, requirement: OPTIONAL, why: 'server-side Storage access; bypasses RLS, never goes near a browser', note: 'In Vercel: scope to Production only. validateEnv decodes the JWT payload and hard-fails a preview holding the production project\'s key.' },
   { name: 'SUPABASE_KEY', scope: SERVER, sensitivity: SECRET, requirement: OPTIONAL, why: 'legacy alias for SUPABASE_SERVICE_ROLE_KEY', note: 'Alias kept for compatibility. Prefer the explicit name; retire once the deployment is confirmed to use it.' },
   { name: 'SUPABASE_STORAGE_BUCKET', scope: SERVER, sensitivity: CONFIG, requirement: OPTIONAL, why: 'document bucket name' },
   { name: 'BLOB_READ_WRITE_TOKEN', scope: SERVER, sensitivity: SECRET, requirement: OPTIONAL, why: 'Vercel Blob storage; preferred over Supabase Storage when set' },
