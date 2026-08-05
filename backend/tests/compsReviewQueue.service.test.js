@@ -16,6 +16,7 @@ const { query, transaction } = require('../src/config/database');
 const extraction = require('../src/services/extraction.service');
 const { uploadFile, fetchStoredFile } = require('../src/config/storage');
 const queue = require('../src/services/compsReviewQueue.service');
+const { assertColumnsResolve } = require('./helpers/pgSchemaGuard');
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -599,6 +600,14 @@ describe('listQueue assignedToMe filter', () => {
 });
 
 describe('bulkReassign', () => {
+  // A `mockImplementation` set below would outlive clearAllMocks (which only
+  // wipes recorded calls), so drop it explicitly. Every test in this file
+  // installs its own `...Once` queue, so nothing depends on a carried-over
+  // implementation.
+  afterEach(() => {
+    query.mockReset();
+  });
+
   test('rejects empty array with 400', async () => {
     await expect(queue.bulkReassign([], 'user-1', 'actor-1')).rejects.toMatchObject({ statusCode: 400 });
   });
@@ -654,6 +663,47 @@ describe('bulkReassign', () => {
       code: 'queue_assignment_column_missing',
       message: expect.stringMatching(/comps_review_queue assignment migration/i),
     });
+  });
+
+  // ── regression: the users.organization_id 42703 ────────────────────────
+  //
+  // The target-user check filtered on `users.organization_id`, a column
+  // public.users has never had — org membership lives in
+  // organization_members. Every reassign naming a target user raised 42703
+  // (undefined_column); unlike the UPDATE below it, that lookup had no error
+  // translation, so it surfaced as a raw HTTP 500. Same defect as the deal
+  // bulk-reassign, and as the picker in admin.routes.js that feeds this very
+  // modal. The tests above could not see it: a mocked `query` answers
+  // whatever it is told regardless of what the SQL says.
+
+  test('regression: target-user check resolves against the real schema (no 42703)', async () => {
+    query.mockImplementation(async (sql) => {
+      assertColumnsResolve(sql);
+      if (/FROM users/i.test(sql)) {
+        return { rows: [{ id: 'user-1', name: 'Rachit', email: 'r@x.io' }] };
+      }
+      if (/UPDATE comps_review_queue/i.test(sql)) {
+        return { rows: [{ id: 'r-1', status: 'pending_review', assigned_to: 'user-1' }] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await queue.bulkReassign(['r-1'], 'user-1', 'actor-1');
+    expect(result.succeeded_count).toBe(1);
+    expect(result.succeeded[0]).toMatchObject({ id: 'r-1', assigned_to: 'user-1' });
+  });
+
+  test('regression: target-user check asserts membership via organization_members', async () => {
+    query.mockResolvedValueOnce({ rows: [] }); // membership lookup misses
+    await expect(
+      queue.bulkReassign(['r-1'], 'phantom-user', 'actor-1'),
+    ).rejects.toMatchObject({ statusCode: 400 });
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toMatch(/JOIN\s+organization_members/i);
+    expect(sql).toMatch(/om\.organization_id\s*=\s*current_organization_id\(\)/i);
+    expect(sql).not.toMatch(/\busers\.organization_id\b/i);
+    expect(sql).not.toMatch(/\bu\.organization_id\b/i);
   });
 });
 

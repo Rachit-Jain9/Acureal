@@ -1197,8 +1197,25 @@ const bulkReassignDeals = async (ids, targetUserId, actorId) => {
   const cleaned = sanitizeBulkIds(ids);
 
   if (targetUserId) {
+    // Org membership lives in organization_members — users has NO
+    // organization_id column and never did. This check referenced one
+    // anyway, so every reassign that named a target user raised 42703
+    // (undefined_column) and the route returned a raw 500: the feature has
+    // never worked. Identical defect, identical fix to the org-scoped user
+    // picker in admin.routes.js (see the note above `GET /api/admin/users`).
+    //
+    // The `is_active` pair is part of the assertion, not decoration: a
+    // revoked membership or a deactivated account is not a valid assignee,
+    // and the picker that feeds this endpoint never offers either.
     const targetCheck = await query(
-      `SELECT id FROM users WHERE id = $1 AND organization_id = current_organization_id() LIMIT 1`,
+      `SELECT u.id
+         FROM users u
+         JOIN organization_members om ON om.user_id = u.id
+        WHERE u.id = $1
+          AND om.organization_id = current_organization_id()
+          AND om.is_active = TRUE
+          AND COALESCE(u.is_active, TRUE) = TRUE
+        LIMIT 1`,
       [targetUserId],
     );
     if (!targetCheck.rows[0]) {

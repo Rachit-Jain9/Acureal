@@ -11455,3 +11455,111 @@ trail dead for four months, a migration unapplied for a month, a second door
 into the database nobody had inventoried. What changed today is less about new
 capability and more about how much of that class is now provable rather than
 assumed.
+
+---
+
+## 2026-08-05 — bulk reassign has never worked: the third `users.organization_id` 42703 (#1090)
+
+### What was worked on
+
+A confirmed production bug in `deal.service.js:1201`. The bulk deal-reassign
+target check filtered on `users.organization_id` — a column `public.users` has
+never had. Org membership lives in the `organization_members` join table.
+Postgres answered every such call with 42703 (undefined_column); nothing
+translated it, so the endpoint returned a raw HTTP 500. The feature has never
+worked in production. Only the `null`-target path ("unassign") functioned,
+because it skips the lookup.
+
+A sweep of `backend/src/` for the same pattern found a **second live instance**:
+`compsReviewQueue.service.js:901`, the comps-queue bulk reassign, identical
+query, identical failure. Both were fixed in this PR. Everything else in the
+codebase either uses the proper join (`dealShare.service.js`,
+`organization.service.js`) or the genuinely-existing
+`users.default_organization_id`.
+
+This is the **third** instance of the defect. The first was the org-scoped user
+picker in `admin.routes.js` — the modal that *feeds* both of these endpoints —
+broken from 2026-06-16 until the 2026-08-01 error-log sweep caught it. The
+picker was fixed then; the two endpoints it hands a `targetUserId` to were not.
+That is the whole shape of this bug: it was found once, fixed once, and left in
+place twice.
+
+### The fix
+
+Both call sites now assert what the function was always trying to assert — *the
+reassignment target must be an active member of this organisation*:
+
+```sql
+JOIN organization_members om ON om.user_id = u.id
+WHERE om.organization_id = current_organization_id()
+  AND om.is_active = TRUE
+  AND COALESCE(u.is_active, TRUE) = TRUE
+```
+
+`om.is_active` / `u.is_active` are part of the assertion rather than a
+tightening for its own sake: a revoked membership is not a valid assignee, and
+the picker that feeds these endpoints never offers one. Matches
+`organization.service.js:358`. Also removed a `try { … } catch (err) { throw
+err; }` wrapper in the comps path that rethrew unchanged.
+
+### Why no test caught it
+
+Both services are unit-tested against a mocked `query`, which returns whatever
+it is told regardless of what the SQL says. SQL naming a non-existent column is
+invisible to that setup — which is exactly how the same defect shipped three
+times.
+
+New helper `backend/tests/helpers/pgSchemaGuard.js` simulates Postgres column
+resolution for `users` and `organization_members` and raises a real
+`code: '42703'` when a column is resolved against a table that lacks it. Four
+new tests (two per service) push the target-check SQL through it and assert the
+membership join.
+
+Deliberately narrow: two tables, only statements touching them, and a bare
+column is flagged only when it is a real column *somewhere else* in the guard's
+schema but not on the table in question — precisely the mistake being defended
+against, with no false positives.
+
+### Validation
+
+- `cd backend && npm test` → **280 suites / 4642 tests passing.**
+- **Falsification check:** reverting either service to the shipped query fails
+  all four new tests with the 42703. The regression net demonstrably bites.
+- Guard checked against every real `users` / `organization_members` query in the
+  repo (admin picker, `dealShare`, `organization.service`, `platformOrg`, and
+  the `deals` UPDATE CTE that runs immediately after the fixed lookup) — no
+  false positives.
+- Fresh-worktree note: `packages/financial-kernel` must be built
+  (`npm ci && npm run build` in that package) or 19 suites fail to resolve
+  `financial-kernel/dist`. Unrelated to this change; worth knowing before
+  reading a red suite as a regression.
+
+### PRs opened
+
+- #1090 — fix(bulk-reassign): both reassign endpoints 42703'd on a users column
+  that never existed.
+
+### Plain-English recap
+
+- Selecting several deals (or several comps in the review queue) and reassigning
+  them to a teammate always failed with a server error. It never worked, not
+  once. Now it does.
+- The app was asking the "people" list a question only the "who's in which
+  workspace" list can answer. The database rejected it every time.
+- You can now only reassign to someone with active access to that workspace —
+  picking someone whose access was revoked gives a clear message instead of a
+  server error.
+- The same mistake had shipped three times and sat broken for months each time,
+  because nothing tested it. There is now a safety net that catches this class
+  of error when it is written rather than months later in an error log.
+
+### What's left to do next
+
+- The `pgSchemaGuard` covers two tables because two tables is what this bug
+  touched. If a fourth instance of "SQL names a column that does not exist"
+  turns up in an error-log sweep, widening the guard's schema is a smaller job
+  than the sweep that found it.
+- Worth a deliberate look at whether other mocked-`query` unit tests are
+  asserting on SQL that could not run. This class of defect is invisible to the
+  current test style by construction, and three confirmed instances is not
+  obviously the whole set.

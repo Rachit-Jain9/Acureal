@@ -15,9 +15,15 @@ jest.mock('../src/lib/eventBus', () => ({
 
 const { query, transaction } = require('../src/config/database');
 const dealService = require('../src/services/deal.service');
+const { assertColumnsResolve } = require('./helpers/pgSchemaGuard');
 
 beforeEach(() => {
   jest.clearAllMocks();
+  // clearAllMocks wipes recorded calls but NOT implementations — reset the
+  // DB doubles explicitly so a `mockImplementation` in one test cannot leak
+  // into the next. Every test below installs its own queue of responses.
+  query.mockReset();
+  transaction.mockReset();
 });
 
 // ── bulkArchiveDeals ──────────────────────────────────────────────────────
@@ -123,6 +129,71 @@ describe('bulkReassignDeals', () => {
     // UPDATE, not a `SELECT id FROM users` lookup.
     expect(query.mock.calls[0][0]).not.toMatch(/FROM users/);
     expect(query.mock.calls[0][0]).toMatch(/UPDATE deals/);
+  });
+
+  // ── regression: the users.organization_id 42703 ────────────────────────
+  //
+  // The target-user check filtered on `users.organization_id`, a column
+  // public.users has never had — org membership lives in
+  // organization_members. Every reassign naming a target user therefore
+  // raised 42703 (undefined_column) and the route returned a raw HTTP 500,
+  // so this feature never worked in production. The suite above could not
+  // see it: a mocked `query` returns whatever it is told regardless of what
+  // the SQL says. These tests run the SQL past a column-resolution guard
+  // that errors exactly as Postgres would.
+
+  test('regression: target-user check resolves against the real schema (no 42703)', async () => {
+    query.mockImplementation(async (sql) => {
+      assertColumnsResolve(sql);
+      if (/FROM users/i.test(sql)) return { rows: [{ id: 'user-1' }] };
+      if (/UPDATE deals/i.test(sql)) {
+        return { rows: [{ id: 'd-1', assigned_to: 'user-1', old_assigned_to: 'user-7' }] };
+      }
+      return { rows: [] };
+    });
+
+    const result = await dealService.bulkReassignDeals(['d-1'], 'user-1', 'actor-1');
+    expect(result.succeeded_count).toBe(1);
+    expect(result.succeeded[0]).toMatchObject({ id: 'd-1', assigned_to: 'user-1' });
+  });
+
+  test('regression: target-user check asserts membership via organization_members', async () => {
+    query.mockResolvedValueOnce({ rows: [] }); // membership lookup misses
+    await expect(dealService.bulkReassignDeals(['d-1'], 'phantom-user', 'a-1'))
+      .rejects.toMatchObject({ statusCode: 400 });
+
+    const sql = query.mock.calls[0][0];
+    expect(sql).toMatch(/JOIN\s+organization_members/i);
+    expect(sql).toMatch(/om\.organization_id\s*=\s*current_organization_id\(\)/i);
+    // The column that never existed, in any of its spellings.
+    expect(sql).not.toMatch(/\busers\.organization_id\b/i);
+    expect(sql).not.toMatch(/\bu\.organization_id\b/i);
+  });
+
+  test('the schema guard would have failed on the shipped query', () => {
+    // Belt-and-braces: proves the guard above actually bites, so the
+    // regression test cannot quietly rot into a no-op.
+    let caught;
+    try {
+      assertColumnsResolve(
+        'SELECT id FROM users WHERE id = $1 AND organization_id = current_organization_id() LIMIT 1',
+      );
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toMatchObject({ code: '42703' });
+    expect(caught.message).toMatch(/organization_id/);
+
+    // ...and that it stays quiet on the corrected query.
+    expect(() => assertColumnsResolve(
+      `SELECT u.id FROM users u
+         JOIN organization_members om ON om.user_id = u.id
+        WHERE u.id = $1
+          AND om.organization_id = current_organization_id()
+          AND om.is_active = TRUE
+          AND COALESCE(u.is_active, TRUE) = TRUE
+        LIMIT 1`,
+    )).not.toThrow();
   });
 });
 
