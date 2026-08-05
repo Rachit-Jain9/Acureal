@@ -11563,3 +11563,117 @@ against, with no false positives.
   asserting on SQL that could not run. This class of defect is invisible to the
   current test style by construction, and three confirmed instances is not
   obviously the whole set.
+
+---
+
+## 2026-08-05 — Account closure did not terminate Google sign-in
+
+### What was worked on
+
+A confirmed authentication gap: closing an account (and erasing it under DPDP
+§8(7)) stamped `account_closed_at` / `erased_at` but never set
+`is_active = false`. Password login checked `account_closed_at`, so the front
+door held. Both Google branches in `loginOrRegisterWithGoogle` gated only on
+`is_active` — so a closed, or fully **erased**, account could still sign in with
+Google, and kept its `is_platform_admin` if it had one.
+
+### Entry points audited
+
+Six, each verified in code rather than assumed:
+
+| Entry point | Before |
+|---|---|
+| Password login | `account_closed_at` checked; `erased_at` missed |
+| Google Path A (`provider`+`subject`) | **`is_active` only — open** |
+| Google Path B (email match + OAuth bind) | **`is_active` only — open** |
+| MFA challenge completion | no closure check on the path at all |
+| Refresh-token exchange | `is_active` only |
+| `authenticate` middleware | `is_active` only |
+
+### The (a)-vs-(b) decision
+
+Chose **(b) read-time checks**, explicitly rejecting (a) "closure sets
+`is_active = false`":
+
+- The two states are not interchangeable. `is_active = false` is admin
+  deactivation — reversible, distinct message. `account_closed_at` is a
+  user-initiated closure with a 90-day erasure clock. Collapsing them lets an
+  admin "reactivate user" click silently undo a closure mid-clock, and breaks
+  the `erased > closed > inactive` precedence `dsar.service.js` relies on.
+- A write-time flag is fail-open by construction: it only covers rows that
+  passed through `closeAccount()`. `eraseClosedAccounts()` UPDATEs rows directly
+  and never touches `is_active`; rows can also be closed by operator SQL or
+  arrive from a restored backup.
+
+Enforced at **one chokepoint** — `hydrateUserAuthContext`, which all six entry
+points funnel through, so later-added entry points inherit it. New shared guard:
+`backend/src/utils/accountState.js`.
+
+Early checks retained in `auth.service` only where **ordering is load-bearing**:
+
+- Google Path B writes an OAuth binding onto the matched row *before* hydrate
+  runs — the check must precede that UPDATE, or Google sign-in binds a live
+  identity onto an erased account. It must also precede the binding-conflict
+  branch: an erased row keeps its old `oauth_subject`, so it would otherwise
+  409 *"contact support to update the binding"* on an erased account.
+- Password login otherwise reached `bcrypt.compare(password, null)`, since
+  erasure NULLs `password_hash`.
+
+### Refresh tokens
+
+`closeAccount()` already revoked live grants — that part was correct and needed
+no change. The refresh route's existing 403 handler revokes the rotated family,
+which closed/erased now inherit because the gate throws the same 403; pinned by
+test so a later tidy-up into an `is_active`-specific branch cannot reopen it.
+Erasure now also sweeps any grant that survived to that point, and logs a
+warning when it finds one (non-zero means a closure bypassed the service).
+
+### Migration 20260808
+
+`auth_find_user_by_oauth` never returned the closure columns — under post-M1
+definer routing the Google branch was *structurally* unable to see closure
+state. Changing a `RETURNS TABLE` signature needs DROP + CREATE, and **DROP
+clears the function ACL**, so the migration restores the full privilege state
+from 20260801/20260802/20260805 (`REVOKE` from `anon`/`authenticated`/`PUBLIC`,
+`GRANT` to `redip_app`, pinned `search_path`). Omitting that would have silently
+re-exposed the function to anyone holding the publishable key.
+`scripts/check-postgrest-exposure.js` passes.
+
+The app-level guard does not depend on this migration — hydrate reads `users`
+directly, so the hole is closed on deploy. The migration makes Path A's early
+check real on the definer route rather than a no-op.
+
+### Verification
+
+- 55 new tests across four files; every entry point covered with a **closed**
+  account and an **erased** account.
+- **Falsification check:** with the guard disabled, 24 of the 55 fail. They are
+  discriminating, not decorative.
+- `cd backend && npm test` → 283 suites, 4686 tests, all passing.
+- Fresh-worktree note (again — cost time this session too): a new worktree has
+  no `backend/node_modules` and no `packages/financial-kernel/dist`. Without
+  them, 19 suites fail to resolve the kernel and read like regressions. Windows
+  directory junctions to the main checkout are far faster than a reinstall.
+
+### PRs opened
+
+- #1091 — fix(auth): closure and erasure did not terminate Google sign-in.
+
+### Plain-English recap
+
+- Closing your account used to block the email-and-password sign-in but not the
+  "Sign in with Google" button — so a closed account could still get back in.
+- That also worked after the 90-day wipe had run, and a returning staff operator
+  came back with their operator powers intact.
+- Every way into the product now checks for a closed or erased account, and
+  shows a clear message instead of letting the person in.
+
+### What's left to do next
+
+- **Operator action:** apply `database/migrations/20260808_auth_oauth_definer_closure_columns.sql`
+  in Supabase. Not urgent — the fix is live without it; it closes the remaining
+  definer-route detail.
+- The closure/erasure pair now has one guard, but nothing stops a future query
+  from selecting a user row and acting on it without passing through
+  `hydrateUserAuthContext`. Worth a sweep for direct `FROM users` reads that
+  make an authorization decision.
