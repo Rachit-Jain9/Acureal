@@ -6,6 +6,63 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-05 — The company gets its own email address, and the platform starts writing to it (ops session, no PRs)
+
+An operator-driven session, worked live in the browser rather than in code. The
+goal as stated: `rachit.jain@acureal.in` should exist, be readable from Gmail,
+receive **all** Acureal mail and **only** Acureal mail, with the personal Gmail
+accounts demoted to login/recovery duty.
+
+### What actually happened, in order
+
+1. **The free GoDaddy mailbox was created first** — the domain purchase bundled
+   one Professional Email (Titan) account, paid through 2027-07-28. The operator
+   created `rachit.jain@acureal.in` there.
+2. **Operator-notification routing was fixed in Vercel.** `PLATFORM_ADMIN_EMAILS`
+   did not exist as an env var — the code had been running on its
+   `rachitj579@gmail.com` fallback the whole time. It now exists and contains
+   exactly `rachit.jain@acureal.in`. This was safe to narrow because (verified
+   against prod) both gmail users carry the persisted `is_platform_admin=true`
+   flag — admin access rides the flag, not the allowlist — and `PLATFORM_ORG_ID`
+   was already pinned in Vercel, so platform-org resolution never consults the
+   email list. `RESEND_API_KEY` + `MAIL_FROM` were confirmed present (set
+   2026-07-30) and the Resend DNS (`resend._domainkey` DKIM + `send.acureal.in`
+   SPF) verified live. Production redeployed; signup notifications now go only
+   to the new address.
+3. **Then the plan changed underneath us.** Google retired the Gmail
+   "Check mail from other accounts" POP import on the operator's account, which
+   killed the free link-Titan-into-Gmail route mid-instruction. While exploring,
+   the operator signed up for **Google Workspace** — and GoDaddy's Domain
+   Connect automation rewrote the zone on the spot: MX flipped from
+   `secureserver.net` to `smtp.google.com`, root SPF became the managed macro
+   `dc-bdaca08905._spfm.acureal.in` (expands to `_spf.google.com` +
+   `secureserver.net`). The fork was surfaced with costs (trial free to
+   2026-08-19, then ~₹150–250/user/month); the operator chose to keep Workspace.
+4. **Google's "Activate Gmail" verifier failed once** ("Unable to verify at the
+   moment") — stale-cache timing, checked minutes after the MX flip. DNS was
+   confirmed correct at both authoritative GoDaddy nameservers and at 8.8.8.8 /
+   1.1.1.1; a retry after propagation succeeded. Domain verified, Gmail active,
+   admin-console warning gone.
+
+### End state (the part future sessions must know)
+
+- `rachit.jain@acureal.in` is a **Google Workspace** account (real Gmail, own
+  login; personal Gmail untouched, recovery-only). Workspace admin console
+  under the operator; **paid billing starts 2026-08-19** — the one open
+  decision is confirming/canceling before that date.
+- The Titan mailbox still exists but is **bypassed** (MX no longer points at
+  it); treat it as dormant, not as a mail destination.
+- Resend (app outbound) survived the zone rewrite untouched — both records
+  re-verified after the flip. App → `rachit.jain@acureal.in` delivery lands in
+  Workspace Gmail with aligned DKIM.
+- The app **login** email is unchanged (`rachitjain348@gmail.com`); switching
+  the login identity to the new address was explicitly deferred as a separate,
+  careful task.
+- Free Workspace aliases (`support@`, `deals@`) offered, not yet created.
+
+No code changed; no PRs. The session log entry and a memory-file update are the
+only repo artifacts.
+
 ## 2026-08-04 — Previews cut off from production, migrations that apply themselves, and the wedge goes public (#1084–#1086)
 
 Four tasks, worked in the operator's order. Three shipped in full; the fourth
