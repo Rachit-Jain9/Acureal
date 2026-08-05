@@ -893,20 +893,26 @@ const bulkReassign = async (ids, targetUserId, actorId) => {
 
   // Validate target user belongs to the same org if non-null. NULL is the
   // canonical "unassign" — no validation needed.
+  //
+  // Org membership lives in organization_members — users has NO
+  // organization_id column and never did. This check referenced one anyway,
+  // so every reassign that named a target user raised 42703
+  // (undefined_column) and the route returned a raw 500. Same defect as the
+  // deal bulk-reassign and as the picker in admin.routes.js that feeds this
+  // very modal. The `is_active` pair is part of the assertion: a revoked
+  // membership or a deactivated account is not a valid assignee.
   if (targetUserId) {
-    let targetCheck;
-    try {
-      targetCheck = await query(
-        `SELECT id, name, email
-           FROM users
-          WHERE id = $1
-            AND organization_id = current_organization_id()
-          LIMIT 1`,
-        [targetUserId],
-      );
-    } catch (err) {
-      throw err;
-    }
+    const targetCheck = await query(
+      `SELECT u.id, u.name, u.email
+         FROM users u
+         JOIN organization_members om ON om.user_id = u.id
+        WHERE u.id = $1
+          AND om.organization_id = current_organization_id()
+          AND om.is_active = TRUE
+          AND COALESCE(u.is_active, TRUE) = TRUE
+        LIMIT 1`,
+      [targetUserId],
+    );
     if (!targetCheck.rows[0]) {
       throw createError('Target user not found in this organization.', 400);
     }
