@@ -10,6 +10,7 @@ const {
 } = require('../constants/roles');
 const { normalizeEmailDomain, isPublicEmailDomain } = require('../utils/emailDomain');
 const { getPlatformAdminEmails } = require('../utils/platformOrg');
+const { assertAccountUsable } = require('../utils/accountState');
 const organizationAuditLog = require('./organizationAuditLog.service');
 
 const slugifyOrganizationName = (value) =>
@@ -130,8 +131,18 @@ const hydrateUserAuthContext = async (userId, requestedOrganizationId = null, cl
     // is_platform_admin rides a to_jsonb projection so this query cannot
     // 42703 before migration 20260803 adds the column — it just reads NULL,
     // and buildAuthUser falls back to the env allowlist.
+    //
+    // account_closed_at / erased_at are referenced DIRECTLY (migration
+    // 20260511), not via to_jsonb. That is deliberate: a to_jsonb projection
+    // would read NULL on an unmigrated database and silently let a closed
+    // account authenticate — fail-open on the exact control this guard exists
+    // to provide. A direct reference fails loud instead, and login() has
+    // hard-depended on these same two columns since PR #158, so any database
+    // that could serve this query already has them. tests/accountState.schema
+    // .test.js asserts they are present so CI catches a drift before prod does.
     `SELECT id, email, name, phone, is_active, default_organization_id,
             password_set, oauth_provider, mfa_enrolled_at,
+            account_closed_at, erased_at,
             (to_jsonb(users) ->> 'is_platform_admin')::boolean AS is_platform_admin
      FROM users
      WHERE id = $1`,
@@ -144,9 +155,14 @@ const hydrateUserAuthContext = async (userId, requestedOrganizationId = null, cl
 
   const userRow = userResult.rows[0];
 
-  if (!userRow.is_active) {
-    throw createError('Your account has been deactivated. Please contact the administrator.', 403);
-  }
+  // THE universal session gate. Every authenticated entry point reaches this
+  // line: the `authenticate` middleware (so every protected request, not just
+  // sign-in), password login, MFA completion, all three Google branches,
+  // refresh-token rotation, and register. Enforcing terminal state here rather
+  // than at each call site is what makes closure/erasure actually terminate
+  // access — including on entry points added later, which inherit the check for
+  // free. Ordering is most-terminal-first (erased → closed → deactivated).
+  assertAccountUsable(userRow, createError);
 
   const preferredOrganizationId = requestedOrganizationId || userRow.default_organization_id || null;
   const { memberships, activeMembership } = await resolveActiveMembership(

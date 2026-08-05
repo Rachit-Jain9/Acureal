@@ -72,7 +72,9 @@ describe('accountClosure.closeAccount', () => {
 
 describe('accountClosure.eraseClosedAccounts', () => {
   test('anonymizes users past the grace window', async () => {
-    query.mockResolvedValueOnce({ rowCount: 2, rows: [{ id: 'u-1' }, { id: 'u-2' }] });
+    query
+      .mockResolvedValueOnce({ rowCount: 2, rows: [{ id: 'u-1' }, { id: 'u-2' }] })
+      .mockResolvedValueOnce({ rowCount: 0 }); // surviving-grant sweep
 
     const result = await accountClosure.eraseClosedAccounts();
 
@@ -91,12 +93,17 @@ describe('accountClosure.eraseClosedAccounts', () => {
     // exist", which threw on EVERY erasure run since this service shipped. No
     // migration creates that column and nothing reads it; the write was dead.
     // Erasure ran in ONE query now, not a doomed primary + a fallback retry.
-    query.mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'u-9' }] });
+    query
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'u-9' }] })
+      .mockResolvedValueOnce({ rowCount: 0 });
 
     const result = await accountClosure.eraseClosedAccounts();
 
     expect(result.rows_erased).toBe(1);
-    expect(query).toHaveBeenCalledTimes(1); // no wasted doomed attempt
+    // Exactly ONE erasure statement — no wasted doomed attempt, no fallback
+    // retry. (The second call is the surviving-grant sweep, not a re-run.)
+    const erasureStatements = query.mock.calls.filter(([sql]) => /UPDATE users/.test(sql));
+    expect(erasureStatements).toHaveLength(1);
     expect(query.mock.calls[0][0]).not.toMatch(/email_normalized/);
   });
 
@@ -105,6 +112,48 @@ describe('accountClosure.eraseClosedAccounts', () => {
     const result = await accountClosure.eraseClosedAccounts();
     expect(result.rows_erased).toBe(0);
     expect(result.error).toMatch(/connection refused/);
+  });
+
+  test('revokes any refresh grant that survived to erasure', async () => {
+    // Closure revoked every grant 90 days earlier and nothing can mint a new
+    // one for a closed account, so this should normally sweep zero rows. It
+    // exists for the closure that never went through closeAccount() — an
+    // operator UPDATE straight in SQL, or a restored backup. Erasure is the
+    // terminal state; nothing may hold a live credential past it.
+    query
+      .mockResolvedValueOnce({ rowCount: 2, rows: [{ id: 'u-1' }, { id: 'u-2' }] })
+      .mockResolvedValueOnce({ rowCount: 1 });
+
+    await accountClosure.eraseClosedAccounts();
+
+    const [sql, params] = query.mock.calls[1];
+    expect(sql).toMatch(/UPDATE refresh_token_grants/);
+    expect(sql).toMatch(/revoked_reason = 'account_erasure'/);
+    expect(sql).toMatch(/revoked_at IS NULL/);
+    expect(params[0]).toEqual(['u-1', 'u-2']);
+  });
+
+  test('skips the grant sweep entirely when nothing was erased', async () => {
+    query.mockResolvedValueOnce({ rowCount: 0, rows: [] });
+
+    const result = await accountClosure.eraseClosedAccounts();
+
+    expect(result.rows_erased).toBe(0);
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+
+  test('a failed grant sweep does not fail the erasure', async () => {
+    // Erasure is a statutory obligation on a 90-day clock; it must report
+    // success once the PII is gone even if the follow-up sweep errors. The
+    // cron retries the sweep on its next run.
+    query
+      .mockResolvedValueOnce({ rowCount: 1, rows: [{ id: 'u-1' }] })
+      .mockRejectedValueOnce(new Error('refresh table down'));
+
+    const result = await accountClosure.eraseClosedAccounts();
+
+    expect(result.rows_erased).toBe(1);
+    expect(result.error).toBeUndefined();
   });
 });
 

@@ -15,6 +15,7 @@ const {
 const { setRequestContext } = require('../lib/requestContext');
 const { requireDefinerPath } = require('../lib/authDefiners');
 const { normalizeEmailDomain, isPublicEmailDomain } = require('../utils/emailDomain');
+const { assertAccountUsable } = require('../utils/accountState');
 const legalService = require('./legal.service');
 const { mapOrganizationRoleToLegacyUserRole } = require('../constants/roles');
 const { isPasswordBreached } = require('../utils/passwordBreach');
@@ -375,20 +376,20 @@ const login = async (email, password, requestedOrganizationId = null) => {
 
   const user = result.rows[0];
 
-  if (!user.is_active) {
-    throw createError('Your account has been deactivated. Please contact the administrator.', 403);
-  }
-
-  // Account closure block (PR #158). Closed accounts cannot reauthenticate.
-  // We deliberately surface the closure state in the error so the user
-  // knows why login is failing — no security-through-obscurity here; a
-  // closed user is the legitimate owner of the account, not an attacker.
-  if (user.account_closed_at) {
-    throw createError(
-      'This account has been closed. Contact grievance@acureal.in if this was unexpected.',
-      403,
-    );
-  }
+  // Account closure block (PR #158), now routed through the shared guard so
+  // password login, Google, MFA completion and refresh cannot drift apart.
+  //
+  // Two behaviour changes vs. the hand-rolled pair this replaces. (1) erased_at
+  // is now honoured here, not just account_closed_at — erasure NULLs
+  // password_hash, so an erased row previously fell through to bcrypt.compare
+  // against NULL rather than being refused outright. (2) Terminal state is
+  // checked ahead of is_active, so a closed account that an admin also
+  // deactivated reports closure — the truer, more actionable reason.
+  //
+  // The message still names the closure openly rather than hiding behind
+  // "invalid email or password": a closed user is the legitimate owner of the
+  // account, not an attacker. That reasoning is unchanged from PR #158.
+  assertAccountUsable(user, createError);
 
   const isPasswordValid = await bcrypt.compare(password, user.password_hash);
   if (!isPasswordValid) {
@@ -592,6 +593,7 @@ const findUserByOAuthIdentity = async (provider, subject, client = null) => {
   const exec = client ? client.query.bind(client) : query;
   const result = await exec(
     `SELECT id, email, name, phone, is_active, default_organization_id,
+            account_closed_at, erased_at,
             oauth_provider, oauth_subject, email_verified_at
        FROM users
       WHERE oauth_provider = $1 AND oauth_subject = $2
@@ -612,6 +614,7 @@ const findUserByEmail = async (email, client = null) => {
   const exec = client ? client.query.bind(client) : query;
   const result = await exec(
     `SELECT id, email, name, phone, is_active, default_organization_id,
+            account_closed_at, erased_at,
             oauth_provider, oauth_subject, email_verified_at
        FROM users
       WHERE email = $1
@@ -642,12 +645,19 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
   // Path A — exact (provider, subject) match. Returning user signs in.
   const byIdentity = await findUserByOAuthIdentity(claims.provider, claims.subject);
   if (byIdentity) {
-    if (!byIdentity.is_active) {
-      throw createError(
-        'Your account has been deactivated. Please contact the administrator.',
-        403
-      );
-    }
+    // Terminal-state gate: closed and erased accounts cannot sign in with
+    // Google any more than they can with a password. Before this check, a
+    // closed — even an ERASED — row still held a live Google binding and
+    // authenticated straight through, keeping whatever is_platform_admin it had.
+    //
+    // On the SECURITY DEFINER route this is belt-and-braces until migration
+    // 20260808 lands: auth_find_user_by_oauth's older signature does not return
+    // the closure columns, so they read undefined and this call is a no-op
+    // there. The hydrateUserAuthContext call a few lines below reads `users`
+    // directly and refuses regardless, so the path is closed either way — the only
+    // pre-migration side effect reaching a closed row is the harmless
+    // last_login_at stamp.
+    assertAccountUsable(byIdentity, createError);
     // M1 Phase 2: Google verified this identity — stamp the context so the
     // self-scoped UPDATE + hydrate reads survive a non-bypass role.
     setRequestContext({ userId: byIdentity.id });
@@ -663,6 +673,20 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
   // Path B — email match. Bind on first sign-in if no prior OAuth binding.
   const byEmail = await findUserByEmail(normalizedEmail);
   if (byEmail) {
+    // Terminal-state gate FIRST — ahead of the binding-conflict checks below.
+    //
+    // Two reasons for that ordering. (1) Side effect: this branch's whole job
+    // is to WRITE a fresh Google binding onto the matched row. Without a gate
+    // here, signing in with Google would bind a live identity onto a closed or
+    // erased account and then mint a session — the bind happens before
+    // hydrateUserAuthContext gets a chance to refuse. The check has to precede
+    // the UPDATE, not merely exist somewhere on the path. (2) Erasure NULLs
+    // password_hash but leaves oauth_provider/oauth_subject intact, so an
+    // erased Google-bound row would otherwise fall into the "bound to a
+    // different Google identity — contact support" 409, which both misdescribes
+    // the situation and invites support to rebind an erased account.
+    assertAccountUsable(byEmail, createError);
+
     if (byEmail.oauth_provider && byEmail.oauth_provider !== claims.provider) {
       throw createError(
         'This email is already registered with a different sign-in method. Use that method to sign in.',
@@ -676,12 +700,6 @@ const loginOrRegisterWithGoogle = async (idToken, options = {}) => {
       throw createError(
         'This email is bound to a different Google identity. Contact support to update the binding.',
         409
-      );
-    }
-    if (!byEmail.is_active) {
-      throw createError(
-        'Your account has been deactivated. Please contact the administrator.',
-        403
       );
     }
 

@@ -10,8 +10,15 @@
  *     • Revokes every active refresh-token grant for the user (forced
  *       logout across all devices).
  *     • Returns { closedAt, refreshGrantsRevoked }.
- *     • Login is blocked thereafter via auth.service login() — closed
- *       accounts cannot reauthenticate.
+ *     • Access is blocked thereafter by the terminal-state gate in
+ *       hydrateUserAuthContext (utils/accountState.js), which sits on EVERY
+ *       authenticated path — password login, both Google branches, MFA
+ *       completion, refresh-token rotation, and the per-request authenticate
+ *       middleware. Closure deliberately does NOT set is_active = false: that
+ *       flag means "admin deactivation", a separate and reversible state, and
+ *       collapsing the two would let an admin's "reactivate user" click
+ *       silently undo a DPDP closure whose erasure clock is still running.
+ *       See the header of utils/accountState.js for the full rationale.
  *
  *   eraseClosedAccounts()
  *     • Called by the daily retention sweep cron.
@@ -119,6 +126,28 @@ const eraseClosedAccounts = async () => {
     );
     const rowsErased = result.rowCount || 0;
     if (rowsErased > 0) {
+      // Belt-and-braces: closure already revoked every grant 90 days ago, and
+      // no path can mint a new one for a closed account. This sweeps grants
+      // that predate the closure revocation or were created out-of-band (an
+      // operator SQL closure that skipped closeAccount(), a restored backup).
+      // Erasure is the terminal state — nothing may hold a live grant past it.
+      try {
+        const revoked = await query(
+          `UPDATE refresh_token_grants
+              SET revoked_at = NOW(), revoked_reason = 'account_erasure'
+            WHERE user_id = ANY($1::uuid[])
+              AND revoked_at IS NULL`,
+          [result.rows.map((r) => r.id)],
+        );
+        if (revoked.rowCount > 0) {
+          // Non-zero here means a grant survived closure — worth knowing about,
+          // because it implies a closure that bypassed closeAccount().
+          log.warn('erasure_revoked_surviving_grants', { count: revoked.rowCount });
+        }
+      } catch (err) {
+        log.warn('erasure_grant_revoke_failed', { error: err.message });
+      }
+
       log.info('accounts_erased', {
         rows_erased: rowsErased,
         grace_days: GRACE_DAYS,
