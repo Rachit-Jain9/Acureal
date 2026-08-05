@@ -81,6 +81,8 @@ const CookiesPage = lazy(() => import('./pages/legal/CookiesPage'));
 const GrievancePage = lazy(() => import('./pages/legal/GrievancePage'));
 const SubprocessorsPage = lazy(() => import('./pages/legal/SubprocessorsPage'));
 const VerifyEmailPage = lazy(() => import('./pages/legal/VerifyEmailPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 
 // Shown only while the cold-boot session probe is in flight, and only for
 // visitors with no cached profile (the common signed-in reload never sees
@@ -191,6 +193,8 @@ export default function App() {
         <Route path="/grievance" element={withSuspense(<GrievancePage />)} />
         <Route path="/subprocessors" element={withSuspense(<SubprocessorsPage />)} />
         <Route path="/verify-email" element={withSuspense(<VerifyEmailPage />)} />
+        <Route path="/forgot-password" element={withSuspense(<ForgotPasswordPage />)} />
+        <Route path="/reset-password" element={withSuspense(<ResetPasswordPage />)} />
 
         {/* Authenticated app — all under /dashboard */}
         <Route

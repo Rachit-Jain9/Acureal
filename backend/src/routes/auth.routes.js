@@ -3,6 +3,7 @@ const express = require('express');
 const { body } = require('express-validator');
 const authService = require('../services/auth.service');
 const emailVerificationService = require('../services/emailVerification.service');
+const passwordResetService = require('../services/passwordReset.service');
 const signupNotificationService = require('../services/signupNotification.service');
 const refreshTokenService = require('../services/refreshToken.service');
 const { authenticate } = require('../middleware/auth');
@@ -240,6 +241,71 @@ router.post(
         success: true,
         message: 'Email verified.',
         data: { userId: result.userId, email: result.email, verifiedAt: result.verifiedAt },
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// Fire-and-forget: resolve the account and dispatch the reset email AFTER the
+// generic 200 is already on the wire. This is the enumeration defence: the
+// response status, body, AND timing are identical whether the address matches
+// an account or not (the found-path's token INSERT + Resend HTTP call would
+// otherwise be a hundreds-of-ms latency oracle). Failures — including the
+// per-user 429 throttle and mail-provider outages — surface in logs only.
+const dispatchPasswordResetAsync = ({ email, ipAddress, userAgent }) => {
+  setImmediate(async () => {
+    try {
+      await passwordResetService.requestReset({ email, ipAddress, userAgent });
+    } catch (error) {
+      log.warn('password_reset_dispatch_failed', { error: error.message });
+    }
+  });
+};
+
+// POST /auth/forgot-password — public; the "forgot password" request leg.
+// ALWAYS answers the same 200 regardless of whether the address matches an
+// account (existing, unknown, OAuth-only, deactivated, closed, erased).
+router.post(
+  '/forgot-password',
+  [body('email').isEmail().normalizeEmail().withMessage('Valid email is required')],
+  handleValidation,
+  async (req, res) => {
+    dispatchPasswordResetAsync({
+      email: req.body.email,
+      ipAddress: req.ip || null,
+      userAgent: req.headers['user-agent'] || null,
+    });
+    res.json({
+      success: true,
+      message: 'If an account exists for that email, a password reset link has been sent.',
+    });
+  }
+);
+
+// POST /auth/reset-password — public; consumes the one-shot emailed token and
+// sets the new password. Deliberately does NOT auto-login on success: minting
+// session cookies on a public route would sidestep MFA, so the SPA routes the
+// user to the sign-in form instead. Bad/expired tokens are 400 (never 401 —
+// the SPA's 401 interceptor would yank the visitor to /login mid-flow).
+router.post(
+  '/reset-password',
+  [
+    body('token').isString().trim().isLength({ min: 16, max: 256 }),
+    body('newPassword')
+      .isLength({ min: 8 })
+      .withMessage('New password must be at least 8 characters')
+      .matches(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/)
+      .withMessage('New password must contain uppercase, lowercase and a number'),
+  ],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      await passwordResetService.confirmReset(req.body.token, req.body.newPassword);
+      res.json({
+        success: true,
+        message: 'Your password has been reset. Sign in with your new password.',
       });
     } catch (error) {
       next(error);
@@ -633,6 +699,23 @@ router.put(
         name: req.body.name || req.body.fullName,
       };
       const updated = await authService.updateUser(req.user.id, payload, req.user.organization_id);
+
+      // A successful password CHANGE signs out every OTHER device. Before
+      // this, sessions on other machines survived a password change — the
+      // exact scenario ("I think someone has my password") the change exists
+      // for. The current session is carved out via its refresh-token family
+      // so the user isn't dumped to the login screen by their own change;
+      // the reset flow (passwordReset.service) revokes with NO carve-out.
+      if (req.body.newPassword && req.body.currentPassword) {
+        const rawRefresh = readRefreshCookie(req);
+        const family = rawRefresh
+          ? await refreshTokenService.findFamilyByToken(rawRefresh)
+          : null;
+        await refreshTokenService.revokeAllForUser(req.user.id, 'password_change', {
+          exceptFamilyId: family?.family_id || null,
+        });
+      }
+
       res.json({ success: true, message: 'Profile updated.', data: updated });
     } catch (error) {
       next(error);

@@ -233,15 +233,21 @@ const revokeFamily = async (familyId, reason = 'logout') => {
 /**
  * Revoke EVERY active grant for a user — used when a user changes
  * password, is deactivated, or requests "sign me out everywhere".
+ *
+ * `exceptFamilyId` carves out one family (the caller's own current session)
+ * so an interactive password change doesn't log the user out of the very
+ * device they changed it from. Pass nothing to revoke unconditionally —
+ * the password-RESET flow does, since it has no current session by definition.
  */
-const revokeAllForUser = async (userId, reason = 'security') => {
+const revokeAllForUser = async (userId, reason = 'security', { exceptFamilyId = null } = {}) => {
   if (!userId) return { revokedCount: 0 };
   const result = await query(
     `UPDATE public.refresh_token_grants
         SET revoked_at = NOW(),
             revoked_reason = $2
-      WHERE user_id = $1 AND revoked_at IS NULL`,
-    [userId, reason]
+      WHERE user_id = $1 AND revoked_at IS NULL
+        AND ($3::uuid IS NULL OR family_id <> $3::uuid)`,
+    [userId, reason, exceptFamilyId]
   );
   return { revokedCount: result.rowCount };
 };

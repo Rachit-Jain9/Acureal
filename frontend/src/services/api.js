@@ -44,10 +44,14 @@ const isSessionBootstrapRequest = (config) => {
     || url === '/auth/register'
     || url === '/auth/google'
     || url === '/auth/refresh'
+    || url === '/auth/forgot-password'
+    || url === '/auth/reset-password'
     || url.endsWith('/auth/login')
     || url.endsWith('/auth/register')
     || url.endsWith('/auth/google')
-    || url.endsWith('/auth/refresh');
+    || url.endsWith('/auth/refresh')
+    || url.endsWith('/auth/forgot-password')
+    || url.endsWith('/auth/reset-password');
 };
 
 // Request interceptor — the session travels in httpOnly cookies
@@ -167,6 +171,12 @@ export const authAPI = {
   verifyEmailRequest: () => api.post('/auth/verify-email/request'),
   verifyEmailConfirm: (token) => api.post('/auth/verify-email/confirm', { token }),
   verifyEmailStatus: () => api.get('/auth/verify-email/status'),
+  // Password recovery — both public. The request leg always answers the same
+  // generic 200 (never confirms an account exists); the confirm leg consumes
+  // the one-shot emailed token. Bad tokens are 400, never 401, so the
+  // interceptor's refresh/redirect machinery never fires mid-reset.
+  forgotPassword: (email) => api.post('/auth/forgot-password', { email }),
+  resetPassword: (token, newPassword) => api.post('/auth/reset-password', { token, newPassword }),
   // Federated identity — Google.
   // googleConfig is public (no auth) and tells the SPA whether to render the
   // Sign in with Google button + which client_id to initialise GIS with.

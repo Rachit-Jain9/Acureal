@@ -28,6 +28,10 @@
  *                                  retention. The `cost_usd` rollup tables
  *                                  (when added) take over the long-term
  *                                  cost-history role.
+ *   5. password_reset_tokens     — Live for 60 minutes; anything older than
+ *                                  30 days is dead history kept only for
+ *                                  short-term abuse forensics. Fail-open
+ *                                  before the 20260809 migration is applied.
  *
  * Each step is wrapped in its own try/catch so a single failing query does
  * NOT abort the rest of the sweep. The summary returned to the cron caller
@@ -131,6 +135,23 @@ const purgeAiCallLogs = async () => {
   }
 };
 
+const purgePasswordResetTokens = async () => {
+  try {
+    // Tokens live 60 minutes; consumed/expired rows are kept ~30 days as
+    // abuse forensics (who requested, from where), then dropped. Errors —
+    // including 42P01 before the 20260809 migration lands — are non-fatal.
+    const result = await query(
+      `DELETE FROM public.password_reset_tokens
+        WHERE created_at < NOW() - INTERVAL '30 days'
+        RETURNING id`,
+    );
+    return { rows_purged: result.rowCount || 0 };
+  } catch (error) {
+    log.warn('password_reset_tokens_purge_failed', { error: error.message });
+    return { rows_purged: 0, error: error.message };
+  }
+};
+
 // Erases closed accounts past the 90-day grace window (DPDP §8(7)).
 // Wraps the closure-service call so failures surface in the per-target
 // summary rather than aborting the whole sweep.
@@ -150,13 +171,14 @@ const purgeClosedAccounts = async () => {
 
 const runSweep = async () => {
   const start = Date.now();
-  const [aiCache, refreshTokens, loginAttempts, aiCallLogs, closedAccounts, mfaChallenges] = await Promise.all([
+  const [aiCache, refreshTokens, loginAttempts, aiCallLogs, closedAccounts, mfaChallenges, passwordResetTokens] = await Promise.all([
     purgeAiResponseCache(),
     purgeRefreshTokenGrants(),
     purgeLoginAttempts(),
     purgeAiCallLogs(),
     purgeClosedAccounts(),
     mfaService.purgeExpiredChallenges(),
+    purgePasswordResetTokens(),
   ]);
 
   const summary = {
@@ -166,18 +188,20 @@ const runSweep = async () => {
     ai_call_logs: aiCallLogs,
     closed_accounts: closedAccounts,
     mfa_challenges: mfaChallenges,
+    password_reset_tokens: passwordResetTokens,
     total_rows_purged:
       (aiCache.rows_purged || 0) +
       (refreshTokens.rows_purged || 0) +
       (loginAttempts.rows_purged || 0) +
       (aiCallLogs.rows_purged || 0) +
       (closedAccounts.rows_erased || 0) +
-      (mfaChallenges.rows_purged || 0),
+      (mfaChallenges.rows_purged || 0) +
+      (passwordResetTokens.rows_purged || 0),
     duration_ms: Date.now() - start,
   };
 
   // Surface anything that errored so a quiet cron failure isn't invisible.
-  const errors = [aiCache, refreshTokens, loginAttempts, aiCallLogs, closedAccounts, mfaChallenges]
+  const errors = [aiCache, refreshTokens, loginAttempts, aiCallLogs, closedAccounts, mfaChallenges, passwordResetTokens]
     .filter((r) => r.error)
     .map((r) => r.error);
 
