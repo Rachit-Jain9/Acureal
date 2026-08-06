@@ -256,6 +256,14 @@ export const organizationAPI = {
   // Team & members
   listMembers: () => api.get('/organization/members'),
   invite: (email, role) => api.post('/organization/invitations', { email, role }),
+  listInvitations: () => api.get('/organization/invitations'),
+  revokeInvitation: (invitationId) =>
+    api.delete(`/organization/invitations/${invitationId}`),
+  // PUBLIC — the recipient opens this from their email with no account yet.
+  // Uses the bare client so a 404 (bad/expired token) cannot trip the 401
+  // refresh-and-redirect machinery on a page reached while signed out.
+  previewInvitation: (token) =>
+    bareApi.get('/organization/invitations/preview', { params: { token } }),
   updateMemberRole: (userId, role) =>
     api.patch(`/organization/members/${userId}/role`, { role }),
   removeMember: (userId) =>

@@ -23,8 +23,14 @@ export default function LoginPage() {
   // directly in the create-account form. The landing-page "Get started"
   // CTA uses this so first-time visitors don't have to find and click
   // the "Don't have an account? Register" toggle.
+  // Arrives from the /invite landing page. An invited recipient with no account
+  // is sent straight into register mode with the token in hand, so accepting an
+  // invitation is one continuous flow rather than "sign up, then somehow also
+  // find the workspace".
+  const invitationToken = searchParams.get('invite') || '';
   const initialRegisterMode =
-    searchParams.get('mode') === 'register' || searchParams.get('register') === '1';
+    searchParams.get('mode') === 'register'
+    || searchParams.get('register') === '1';
   const [isRegister, setIsRegister] = useState(initialRegisterMode);
   const [showPassword, setShowPassword] = useState(false);
   // Defaults ON. This is a B2B work tool signed into daily from trusted
@@ -115,6 +121,10 @@ export default function LoginPage() {
           city: form.city || undefined,
           acceptedTermsVersion: legalDocs?.terms_of_service?.version,
           acceptedPrivacyVersion: legalDocs?.privacy_policy?.version,
+          // Carried from /invite?token=… → /login?invite=…. The backend has
+          // accepted this at registration since the multi-tenancy work; until
+          // now no client had ever sent one, so the invitation loop was dead.
+          invitationToken: invitationToken || undefined,
         },
         rememberMe,
       );
@@ -176,6 +186,7 @@ export default function LoginPage() {
         idToken,
         acceptedTermsVersion: legalDocs?.terms_of_service?.version,
         acceptedPrivacyVersion: legalDocs?.privacy_policy?.version,
+        invitationToken: invitationToken || undefined,
       },
       rememberMe,
     );
