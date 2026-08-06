@@ -362,6 +362,14 @@ export default function LoginPage() {
                   />
                 </Field>
 
+                {!isRegister && (
+                  <div className="flex justify-end -mt-2">
+                    <Link to="/forgot-password" className={`text-xs ${linkClass}`}>
+                      Forgot password?
+                    </Link>
+                  </div>
+                )}
+
                 {isRegister && (
                   <Field label="Phone" helper="Optional" error={validationErrors.phone}>
                     <Input
