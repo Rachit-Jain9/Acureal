@@ -6,6 +6,134 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-06 — The login moves to the company address, and account recovery exists for the first time (#1089, #1093, #1094)
+
+Continuation of the 2026-08-05 email session. Three things landed: the operator
+identity rename, a password-recovery flow the product had never had, and the
+six defects an adversarial review found in that flow **after** it shipped green.
+
+### #1089 — the operator login becomes rachit.jain@acureal.in
+
+Planned by a 7-agent workflow (4 read lenses → 2 lockout critics → synthesis)
+because getting it wrong locks the operator out of his own platform. The
+verdict rejected the obvious "create a new user and migrate ownership" —
+its migrate step is broken in production today (`deal.service.js:1201` filters
+`users.organization_id`, a column that does not exist → 42703 → HTTP 500; filed
+and fixed separately as #1090) and every user FK is `ON DELETE SET NULL`, so
+deleting the old row would silently blank `created_by` on 22 live deals.
+
+Instead: rename the row in place. Identity is UUID-keyed everywhere durable and
+no RLS policy references the email column, so deals, shares, audit history,
+sessions and the platform-admin flag all survive untouched. `oauth_provider` /
+`oauth_subject` go NULL because the row was bound to the OLD gmail Google
+identity — with only the email changed, signing in with the new Workspace
+account 409s on a subject mismatch; clearing the pair makes that click a clean
+first-time bind.
+
+The single genuine blocker the plan surfaced: **this product had no password
+reset**, so clearing the Google binding left the password as the only way back
+in. That gated the whole change on the operator proving his password worked —
+and directly motivated #1093.
+
+Two things the review caught that were live exposures, not hypotheticals:
+`PLATFORM_ADMIN_EMAILS` had been pointed at an address holding no `users` row
+while registration is open and `is_platform_admin` is computed from that
+allowlist at signup — so whoever registered that exact address became a
+platform operator. The rename claims the address and closes it. Separately, the
+operator hit the other half live: clicking "Sign in with Google" as the new
+address **before** the rename fell through to the Path C cold-signup and
+created a third empty account + workspace, which had to be deleted in the same
+transaction as the rename. That trap now runs in reverse — picking the OLD
+gmail in the Google chooser cold-signs-up and looks exactly like "all my deals
+vanished".
+
+Applied by the operator 2026-08-06. Verified in prod: users=9, the row holds
+`rachit.jain@acureal.in`, is_platform_admin true, oauth columns NULL, 22 deals
+still owned, zero rows on the old gmail.
+
+### #1093 — forgot-password
+
+A deliberate clone of the `emailVerification.service.js` token blueprint
+(32-byte base64url, sha256-only at rest, supersede-on-reissue, `FOR UPDATE`
+one-shot consume, 5/hour per user) with the deltas that make it a *reset*: a
+60-minute TTL; enumeration resistance as a contract (one generic 200 on the
+request leg, dispatched after the response so status, body **and timing** never
+differ; one vague 400 on the confirm leg); session revocation inside the reset
+transaction; and `password_set = TRUE` so Google-only accounts convert cleanly,
+with inbox possession as the proof.
+
+Same-PR class fix: `revokeAllForUser` existed, exported, with **zero callers**,
+and changing a password revoked nothing — sessions on other devices survived
+the exact event they exist for.
+
+### #1094 — the six defects that survived a green test suite
+
+The feature shipped with 4,659 tests passing and was still broken for a large
+class of accounts. Four hostile reviewers plus per-finding refutation passes
+returned **six confirmed, zero rejected**. Worth recording as a method result:
+the tests all passed because they encoded the same assumptions the code did.
+
+The two that mattered most:
+
+**Gmail is stored in two shapes and nothing had noticed.** The Google path
+stores `claims.email.toLowerCase()` — dots intact. `/register` applies
+`normalizeEmail()` — dots stripped. Both conventions are live in production
+data. `/forgot-password` normalised, so it could only ever find half of them;
+for every dotted-gmail Google account the service logged "unknown email", sent
+nothing, and the enumeration-resistant generic 200 meant the page said *"check
+your inbox"* forever. Fixed with `canonicalEmail` + `emailLookupCandidates`
+(new, in `utils/emailDomain.js`), which reimplement normalizeEmail's gmail rules
+explicitly rather than importing `validator` — that package is only a
+*transitive* dependency of express-validator, and an identity function should
+not inherit a third party's defaults. Non-gmail addresses cost exactly one
+lookup, as before. `/login`, deal-share and org-invite have the same bug and are
+filed separately: fixing them needs the lockout keyed on the canonical address
+while the lookup goes dual-candidate, or an attacker splits their 5-failure
+budget across unlimited dot variants of one address.
+
+**The reset email could silently never send.** Dispatch rode a bare
+`setImmediate` after the response. On Vercel that is not a background job —
+once the response flushes the instance may freeze, and because the pattern
+swallows its own errors the loss looks identical to success. `lib/backgroundTask.js`
+exists for exactly this and says so in its header; the new code had cloned the
+older verification-email idiom, which is survivable there (a signed-in user can
+re-request) and not here (a locked-out user has no surface to re-request from).
+
+The rest: the 5/hour cap was check-then-act across autocommit statements
+(now one transaction behind a per-user advisory lock, which also closes a
+window where a crash destroyed the user's valid link while issuing no
+replacement); the change-password session carve-out was **dead code**, because
+`redip.refresh` is `Path=/api/auth/refresh` and never reaches `PUT /auth/me`,
+so the exemption always degraded to "exempt nothing" and logged the user out of
+their own device — replaced with revoke-then-reissue, carrying the remember-me
+tier across; the confirm leg never re-checked account eligibility, so a token
+minted pre-closure still rewrote credentials on a frozen account (the #1091
+class recurring, closed at both ends); and the post-reset lockout clear was
+keyed only on the stored email, leaving dotted-gmail users locked out
+immediately after recovering.
+
+### Also this session
+
+- **#1090** — both bulk deal-reassign endpoints had 42703'd on `users.organization_id`
+  since they shipped. Found while planning #1089.
+- **#1091** — account closure set `account_closed_at` but the Google sign-in
+  paths gate only on `is_active`, so a closed (even erased) account could still
+  sign in with Google and kept `is_platform_admin`. Found by the same review.
+- Migration **20260809** (`password_reset_tokens`) applied to production by the
+  operator; verified live with its RLS policy and four `redip_app` grants.
+
+### Next
+
+The Deal & Workspace Access Control spec (same-domain colleague discovery,
+Team-Lead-approved external invitations) — architecture in
+`docs/DEAL_ACCESS_CONTROL_PLAN.md`. The substrate map found the headline item:
+the invite UI already **lies**. `POST /api/organization/invitations` creates a
+tokened row and returns it to the admin's browser, the Team page toasts
+"Invitation sent" and the modal says "They'll get an email link to join this
+workspace" — but `sendMail` is imported by exactly three services and none of
+them is invitations. No email is ever sent, and no frontend surface ever reads
+or forwards an invitation token. The loop is dead end to end.
+
 ## 2026-08-05 — The company gets its own email address, and the platform starts writing to it (ops session, no PRs)
 
 An operator-driven session, worked live in the browser rather than in code. The
