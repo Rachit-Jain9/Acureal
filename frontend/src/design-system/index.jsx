@@ -25,6 +25,10 @@ export { CollapsibleCard } from './CollapsibleCard';
 // Checkbox — accessible checkbox control.
 export { default as Checkbox } from './Checkbox';
 
+// Searchable colleague picker (WAI-ARIA combobox) + the avatar it renders.
+// The caller supplies the list; eligibility is always a server decision.
+export { PersonPicker, PersonAvatar } from './PersonPicker';
+
 // Common primitives re-exported through the barrel so they're importable
 // alongside the rest of the design system.
 export { default as Badge } from '../components/common/Badge';

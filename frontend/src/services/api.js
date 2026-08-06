@@ -351,6 +351,10 @@ export const dealsAPI = {
   getSummary: () => api.get('/deals/summary'),
   // Sharing
   listShares: (id) => api.get(`/deals/${id}/shares`),
+  // Colleague picker for the Share dialog. The server decides eligibility
+  // (own workspace, active, not already shared, not you) — the client only
+  // renders what comes back.
+  listShareCandidates: (id, q = '') => api.get(`/deals/${id}/share-candidates`, { params: { q } }),
   shareDeal: (id, email, permission) => api.post(`/deals/${id}/shares`, { email, permission }),
   revokeShare: (id, userId) => api.delete(`/deals/${id}/shares/${userId}`),
   getSharedWithMe: () => api.get('/deals/shared-with-me'),

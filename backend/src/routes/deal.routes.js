@@ -788,6 +788,25 @@ router.get('/:id/shares', authenticate, async (req, res, next) => {
   }
 });
 
+// GET /deals/:id/share-candidates?q=
+//
+// Colleagues this deal can be shared with. Owner-only (the service re-checks),
+// scoped to the DEAL's organisation, with self / already-shared / inactive
+// filtered out server-side. The client never decides who is eligible — it only
+// renders what this returns.
+router.get('/:id/share-candidates', authenticate, async (req, res, next) => {
+  try {
+    const candidates = await dealShareService.listShareCandidates(
+      req.params.id,
+      req.user.id,
+      { q: req.query.q, limit: req.query.limit },
+    );
+    res.json({ success: true, data: candidates });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // POST /deals/:id/shares
 router.post(
   '/:id/shares',
