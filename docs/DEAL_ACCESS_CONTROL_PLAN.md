@@ -207,15 +207,50 @@ Each phase is independently shippable and independently valuable.
 
 ---
 
-## 4. Open questions for the operator
+## 4. Operator decisions (2026-08-06) — settled
 
-1. **External access scope.** The spec says "time-bound or role-scoped".
-   Time-bound access needs an expiry on `organization_members` and a sweep —
-   materially more work than role-scoping. Recommend role-scoped (`viewer`) in
-   phase 3; time-bound as a later addition.
-2. **Should an external invitation grant workspace membership at all**, or only
-   per-deal access via `deal_shares`? The spec mixes "workspace" and "deal"
-   language throughout. Per-deal is tighter and matches the zero-trust framing,
-   but the entire approval/membership substrate is org-level.
-3. **Majority approval** — worth building, or is any-one-approves sufficient
-   indefinitely? (Currently: accepted by config, rejected by API.)
+**External access is DEAL-SCOPED, never workspace-scoped.** An external guest
+gets a `deal_shares` row for the one deal they were invited to. They never
+become an `organization_members` row.
+
+This is the decision the other two hang off. Workspace membership would expose
+the entire pipeline, the comps database and Market Intelligence to a party
+invited to read one title document — an unacceptable blast radius for the
+lawyer/lender/broker cases this feature exists for. `deal_shares` is already the
+right grain, already RLS-governed, and already locked to a single deal.
+
+Consequences to hold onto:
+
+- The approval queue is org-level (that substrate exists), but what approval
+  *grants* is per-deal. The invitation row therefore carries a `deal_id`.
+- An external guest has no org, so anything that renders "members" must handle
+  a participant with membership = none. The **External** badge is not decoration
+  — it is the visible form of a genuinely different access path.
+- `organization_invitations` is the wrong table for these. External deal invites
+  get their own `deal_invitations`, sharing the token blueprint but keyed on the
+  deal. Overloading the org table with a nullable `deal_id` would put two
+  different lifecycles behind one `UNIQUE(organization_id, email)` constraint.
+
+**External access is BOTH role-scoped AND time-limited.** Default `viewer`,
+plus an expiry defaulting to **90 days**, extendable or shortenable by a Team
+Lead, with the remaining time visible wherever the guest is listed.
+
+Time-bounding was originally deferred as "materially more work" — that
+assessment assumed expiring `organization_members`, which needs a membership
+expiry concept, a sweep, and careful interaction with `default_organization_id`.
+Expiring a `deal_shares` row instead is one nullable `expires_at` column plus a
+step in `retentionSweep.service.js`, which already runs nightly on Vercel cron.
+The decision to scope deal-only made this cheap, so it ships in phase 3 rather
+than "later".
+
+The failure mode being closed: role-scoping stops a guest damaging a deal;
+expiry stops a guest silently *retaining* it. In a deal room holding title
+documents and pricing, the second is the one that accumulates quietly.
+
+**Approval rule: any-one-approves, permanently for now.** `'majority'` stays in
+the config enum so it can be switched on without a migration, and the API keeps
+rejecting it until the engine exists. Majority needs a voting state machine,
+tie-breaks, and quorum-when-an-admin-leaves handling; with today's team size a
+majority of one is just any-one with extra steps.
+
+Self-approval stays blocked regardless of rule.

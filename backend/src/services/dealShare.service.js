@@ -77,6 +77,62 @@ const shareDeal = async (dealId, sharedByUserId, sharedWithEmail, permission = '
   });
 };
 
+/**
+ * Colleagues the caller may share THIS deal with — the data behind the
+ * Share Deal picker.
+ *
+ * Scoped by ORGANISATION MEMBERSHIP, not by email-domain string matching.
+ * The user-visible promise ("only my colleagues appear") is the same, but
+ * membership is the boundary RLS and the 20260806 share lock already enforce,
+ * and a verified domain claim is what produces membership — so the two cannot
+ * drift apart. Splitting an address on '@' would add a second, weaker boundary
+ * beside the real one, and two firms can share a public-provider domain.
+ *
+ * Excluded server-side, never client-side: the caller (you cannot share with
+ * yourself), anyone already holding a share, and inactive accounts/memberships.
+ *
+ * `q` is an optional type-ahead filter over name and email. It is matched with
+ * a literal-escaped LIKE — the raw string would otherwise let '%' turn a
+ * one-character keystroke into a full roster dump.
+ */
+const listShareCandidates = async (dealId, requestingUserId, { q = '', limit = 20 } = {}) => {
+  const dealResult = await query(
+    'SELECT id, organization_id FROM deals WHERE id = $1 AND created_by = $2',
+    [dealId, requestingUserId]
+  );
+  if (dealResult.rows.length === 0) {
+    throw createError('Deal not found or you are not the owner.', 404);
+  }
+  const { organization_id: organizationId } = dealResult.rows[0];
+
+  const term = String(q || '').trim();
+  // Escape LIKE metacharacters so a typed '%' or '_' is literal.
+  const pattern = term ? `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%` : null;
+  const safeLimit = Math.max(1, Math.min(Number(limit) || 20, 50));
+
+  const result = await query(
+    `SELECT u.id, u.name, u.email, om.role
+       FROM organization_members om
+       INNER JOIN users u ON u.id = om.user_id
+      WHERE om.organization_id = $1
+        AND om.is_active = TRUE
+        AND COALESCE(u.is_active, TRUE) = TRUE
+        AND u.account_closed_at IS NULL
+        AND u.erased_at IS NULL
+        AND u.id <> $2
+        AND NOT EXISTS (
+          SELECT 1 FROM deal_shares ds
+           WHERE ds.deal_id = $3 AND ds.shared_with = u.id
+        )
+        AND ($4::text IS NULL OR u.name ILIKE $4 ESCAPE '\\' OR u.email ILIKE $4 ESCAPE '\\')
+      ORDER BY u.name ASC NULLS LAST, u.email ASC
+      LIMIT $5`,
+    [organizationId, requestingUserId, dealId, pattern, safeLimit]
+  );
+
+  return result.rows;
+};
+
 const revokeDealShare = async (dealId, sharedByUserId, sharedWithUserId) =>
   transaction(async (client) => {
     // Verify the deal belongs to the requesting user
@@ -147,6 +203,7 @@ const listDealsSharedWithMe = async (userId) => {
 
 module.exports = {
   shareDeal,
+  listShareCandidates,
   revokeDealShare,
   listDealShares,
   listDealsSharedWithMe,
