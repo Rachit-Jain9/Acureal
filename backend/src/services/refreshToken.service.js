@@ -234,22 +234,45 @@ const revokeFamily = async (familyId, reason = 'logout') => {
  * Revoke EVERY active grant for a user — used when a user changes
  * password, is deactivated, or requests "sign me out everywhere".
  *
- * `exceptFamilyId` carves out one family (the caller's own current session)
- * so an interactive password change doesn't log the user out of the very
- * device they changed it from. Pass nothing to revoke unconditionally —
- * the password-RESET flow does, since it has no current session by definition.
+ * Unconditional by design. A caller that must keep the current device signed
+ * in (interactive password change) revokes everything and then issues a FRESH
+ * family for itself — see PUT /auth/me. An "except this family" parameter was
+ * tried and removed: the refresh cookie is path-scoped to /api/auth/refresh, so
+ * no route outside that path can identify the caller's family from the request,
+ * and the exemption silently degraded to "exempt nothing".
  */
-const revokeAllForUser = async (userId, reason = 'security', { exceptFamilyId = null } = {}) => {
+const revokeAllForUser = async (userId, reason = 'security') => {
   if (!userId) return { revokedCount: 0 };
   const result = await query(
     `UPDATE public.refresh_token_grants
         SET revoked_at = NOW(),
             revoked_reason = $2
-      WHERE user_id = $1 AND revoked_at IS NULL
-        AND ($3::uuid IS NULL OR family_id <> $3::uuid)`,
-    [userId, reason, exceptFamilyId]
+      WHERE user_id = $1 AND revoked_at IS NULL`,
+    [userId, reason]
   );
   return { revokedCount: result.rowCount };
+};
+
+/**
+ * The persistence tier ("remember me") of the user's most recent live grant,
+ * defaulting to TRUE — the historical tier — when nothing live is found.
+ *
+ * Needed by revoke-then-reissue flows: without carrying the tier across, a
+ * password change would silently upgrade a browser-session sign-in into a
+ * 30-day persistent one, re-breaking the promise on the login page's
+ * "Keep me signed in" checkbox.
+ */
+const latestActivePersistence = async (userId) => {
+  if (!userId) return true;
+  const result = await query(
+    `SELECT remember_me
+       FROM public.refresh_token_grants
+      WHERE user_id = $1 AND revoked_at IS NULL
+      ORDER BY created_at DESC
+      LIMIT 1`,
+    [userId]
+  );
+  return result.rows[0] ? result.rows[0].remember_me !== false : true;
 };
 
 /**
@@ -277,5 +300,6 @@ module.exports = {
   rotate,
   revokeFamily,
   revokeAllForUser,
+  latestActivePersistence,
   findFamilyByToken,
 };

@@ -9,6 +9,7 @@ const refreshTokenService = require('../services/refreshToken.service');
 const { authenticate } = require('../middleware/auth');
 const { setRequestContext } = require('../lib/requestContext');
 const { handleValidation } = require('../middleware/validate');
+const { runInBackground } = require('../lib/backgroundTask');
 const {
   setAccessCookie,
   setRefreshCookie,
@@ -49,39 +50,38 @@ const sessionResponseData = (result) => {
   return data;
 };
 
-// Fire-and-forget: dispatch the verification email in the background after
-// register() commits. We never block the signup response on the mailer; if it
-// fails, the user can request another link from the dashboard banner.
-const dispatchVerificationEmailAsync = ({ userId, email, name, ipAddress, userAgent }) => {
-  setImmediate(async () => {
-    try {
-      await emailVerificationService.sendVerificationEmail({
-        userId,
-        email,
-        name,
-        ipAddress,
-        userAgent,
-      });
-    } catch (error) {
-      log.warn('signup_verification_dispatch_failed', { userId, error: error.message });
-    }
-  });
-};
+// Post-response email dispatch, on the ONE mechanism that survives serverless.
+//
+// These used to be `setImmediate(async () => …)`. On Vercel that is not a
+// background job: once the response is flushed the platform may freeze or
+// reclaim the instance, so the callback can run partially or never — and since
+// the pattern swallows its own errors, the loss looks exactly like success.
+// runInBackground registers the work with `waitUntil` (and reports failures to
+// Sentry), which is why lib/backgroundTask.js exists.
+//
+// The promise MUST be created here, in request scope: that is what keeps the
+// AsyncLocalStorage request context (and therefore RLS tenancy) attached, and
+// what gives waitUntil something already in flight to hold the instance for.
+// It does NOT delay the response — res.json() runs on the same tick, right
+// after the first await inside the service yields.
 
-// Fire-and-forget: tell the platform operator(s) a new user just signed up.
-// Best-effort — the service itself never throws — but we also guard here so a
-// synchronous scheduling hiccup can't bubble into the signup response. Runs
-// only for genuinely NEW accounts (register / Google cold-signup), never for
-// a returning Google login.
-const dispatchSignupNotificationAsync = (signup) => {
-  setImmediate(async () => {
-    try {
-      await signupNotificationService.sendNewSignupNotification(signup);
-    } catch (error) {
-      log.warn('signup_notification_dispatch_failed', { error: error.message });
-    }
-  });
-};
+// Verification email after register() commits. Lower stakes than the others:
+// if it is lost the user can re-request from the dashboard banner.
+const dispatchVerificationEmailAsync = ({ userId, email, name, ipAddress, userAgent }) =>
+  runInBackground(
+    'signup_verification_email',
+    emailVerificationService.sendVerificationEmail({ userId, email, name, ipAddress, userAgent }),
+    { userId },
+  );
+
+// Operator notification that a new user signed up. Best-effort — the service
+// itself never throws. Runs only for genuinely NEW accounts (register / Google
+// cold-signup), never for a returning Google login.
+const dispatchSignupNotificationAsync = (signup) =>
+  runInBackground(
+    'signup_operator_notification',
+    signupNotificationService.sendNewSignupNotification(signup),
+  );
 
 // POST /auth/register
 router.post(
@@ -248,28 +248,41 @@ router.post(
   }
 );
 
-// Fire-and-forget: resolve the account and dispatch the reset email AFTER the
-// generic 200 is already on the wire. This is the enumeration defence: the
-// response status, body, AND timing are identical whether the address matches
-// an account or not (the found-path's token INSERT + Resend HTTP call would
-// otherwise be a hundreds-of-ms latency oracle). Failures — including the
-// per-user 429 throttle and mail-provider outages — surface in logs only.
-const dispatchPasswordResetAsync = ({ email, ipAddress, userAgent }) => {
-  setImmediate(async () => {
-    try {
-      await passwordResetService.requestReset({ email, ipAddress, userAgent });
-    } catch (error) {
-      log.warn('password_reset_dispatch_failed', { error: error.message });
-    }
-  });
-};
+// Resolve the account and dispatch the reset email WITHOUT the response
+// waiting on it. This is the enumeration defence: the response status, body,
+// AND timing are identical whether the address matches an account or not (the
+// found-path's token INSERT + Resend HTTP call would otherwise be a
+// hundreds-of-ms latency oracle).
+//
+// This is the dispatch that most needs to be durable: a locked-out user has no
+// signed-in surface to re-request from, so a silently dropped email is the end
+// of their recovery path. The per-user 429 throttle is an expected outcome, not
+// an incident, so it is logged and swallowed BEFORE runInBackground's Sentry
+// capture rather than paging on routine rate-limiting.
+const dispatchPasswordResetAsync = ({ email, ipAddress, userAgent }) =>
+  runInBackground(
+    'password_reset_email',
+    passwordResetService.requestReset({ email, ipAddress, userAgent }).catch((error) => {
+      if (error?.statusCode === 429) {
+        log.info('password_reset_request_throttled');
+        return;
+      }
+      throw error;
+    }),
+  );
 
 // POST /auth/forgot-password — public; the "forgot password" request leg.
 // ALWAYS answers the same 200 regardless of whether the address matches an
 // account (existing, unknown, OAuth-only, deactivated, closed, erased).
+//
+// Deliberately NO normalizeEmail() here, unlike /register and /login. That
+// sanitizer strips gmail dots, and the Google sign-in path stores addresses
+// dotted — so normalising made reset silently impossible for every dotted-gmail
+// Google account (the request logged "unknown email" and the generic 200 hid
+// it). The service resolves every stored shape instead; validation-only here.
 router.post(
   '/forgot-password',
-  [body('email').isEmail().normalizeEmail().withMessage('Valid email is required')],
+  [body('email').isEmail().withMessage('Valid email is required')],
   handleValidation,
   async (req, res) => {
     dispatchPasswordResetAsync({
@@ -703,17 +716,31 @@ router.put(
       // A successful password CHANGE signs out every OTHER device. Before
       // this, sessions on other machines survived a password change — the
       // exact scenario ("I think someone has my password") the change exists
-      // for. The current session is carved out via its refresh-token family
-      // so the user isn't dumped to the login screen by their own change;
-      // the reset flow (passwordReset.service) revokes with NO carve-out.
+      // for.
+      //
+      // REVOKE-THEN-REISSUE, not carve-out. The obvious approach — exempt the
+      // caller's own refresh-token family — cannot work here: `redip.refresh`
+      // is Path=/api/auth/refresh (lib/cookies.js), so the browser never sends
+      // it to /api/auth/me. Reading it always yielded null, which silently
+      // meant "carve out nothing" and revoked the user's own session too; they
+      // would be bounced to /login within 15 minutes by their own change.
+      //
+      // So: revoke everything unconditionally, then mint a fresh family for
+      // THIS device and reset its cookie. Strictly stronger than a carve-out —
+      // the pre-change session is genuinely dead everywhere, including here —
+      // and the user stays signed in on the device they are holding. The tier
+      // is carried over from the grant being revoked so a "sign me out when the
+      // browser closes" session is not silently upgraded to a 30-day one.
       if (req.body.newPassword && req.body.currentPassword) {
-        const rawRefresh = readRefreshCookie(req);
-        const family = rawRefresh
-          ? await refreshTokenService.findFamilyByToken(rawRefresh)
-          : null;
-        await refreshTokenService.revokeAllForUser(req.user.id, 'password_change', {
-          exceptFamilyId: family?.family_id || null,
+        const persistent = await refreshTokenService.latestActivePersistence(req.user.id);
+        await refreshTokenService.revokeAllForUser(req.user.id, 'password_change');
+        const { rawToken: freshRefresh } = await refreshTokenService.issueFamily({
+          userId: req.user.id,
+          ipAddress: req.ip || null,
+          userAgent: req.headers['user-agent'] || null,
+          rememberMe: persistent,
         });
+        setRefreshCookie(res, freshRefresh, { persistent });
       }
 
       res.json({ success: true, message: 'Profile updated.', data: updated });
