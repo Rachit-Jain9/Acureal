@@ -82,6 +82,29 @@ const closeAccount = async (userId) => {
     log.warn('refresh_grants_revoke_failed_on_closure', { user_id: userId, error: err.message });
   }
 
+  // Burn any outstanding password-reset links. A live reset token is an
+  // unrevoked path to set credentials on this account, so closure has to
+  // terminate it alongside the sessions — the #1091 class ("closure did not
+  // terminate an auth path") applied to the newest auth path. confirmReset
+  // ALSO re-checks account state at consume time, so this is belt-and-braces:
+  // that check covers out-of-band closures this code never runs for, and this
+  // covers the window before a token would even be presented.
+  // Non-fatal, and tolerant of 42P01 while the 20260809 migration is pending.
+  try {
+    await query(
+      `UPDATE public.password_reset_tokens
+          SET consumed_at = NOW(), consumed_by = 'account_closure'
+        WHERE user_id = $1
+          AND consumed_at IS NULL`,
+      [userId],
+    );
+  } catch (err) {
+    log.warn('password_reset_tokens_burn_failed_on_closure', {
+      user_id: userId,
+      error: err.message,
+    });
+  }
+
   log.info('account_closed', {
     user_id: userId,
     closed_at: result.rows[0].account_closed_at,

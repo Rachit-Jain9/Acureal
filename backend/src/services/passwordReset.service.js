@@ -42,6 +42,7 @@ const { query, transaction } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
 const { sendMail, redactEmail } = require('../lib/mailer');
 const { requireDefinerPath } = require('../lib/authDefiners');
+const { emailLookupCandidates, canonicalEmail } = require('../utils/emailDomain');
 const { isPasswordBreached } = require('../utils/passwordBreach');
 const securityEvents = require('./securityEvents.service');
 const log = require('../lib/logger').child({ module: 'password_reset' });
@@ -121,8 +122,9 @@ const renderResetEmail = ({ name, resetUrl, oauthProvider }) => {
   return { html, text };
 };
 
-const enforceRequestThrottle = async (userId) => {
-  const result = await query(
+const enforceRequestThrottle = async (userId, client = null) => {
+  const exec = client ? client.query.bind(client) : query;
+  const result = await exec(
     `SELECT COUNT(*)::int AS recent
        FROM public.password_reset_tokens
       WHERE user_id = $1 AND created_at > NOW() - INTERVAL '1 hour'`,
@@ -139,28 +141,55 @@ const enforceRequestThrottle = async (userId) => {
 /**
  * Issue a fresh reset token for a user, superseding any prior unconsumed one.
  * Returns the raw token so the caller can email it. Never log the raw token.
+ *
+ * ATOMIC AND SERIALISED PER USER. The throttle count, the supersede, and the
+ * insert are one transaction behind a per-user advisory lock. Two reasons,
+ * both found in the 2026-08-06 adversarial review:
+ *
+ *   1. Check-then-act. As three autocommit statements, N concurrent requests
+ *      for the same victim all read `recent < 5` before any of them inserted,
+ *      all passed, and all sent mail — the 5/hour inbox-bombing cap was
+ *      softened by roughly the request parallelism. The IP limiter does not
+ *      cover a distributed run, so this DB-level cap is the real defence.
+ *   2. Interleaving (A supersede, B supersede, A insert, B insert) left TWO
+ *      simultaneously-valid tokens, breaking the documented one-active-token
+ *      invariant — the partial index is not UNIQUE, so nothing else enforced it.
+ *
+ * The transaction also removes a durability hole: as separate statements, a
+ * crash (or a serverless freeze) between the supersede and the insert killed
+ * the user's previous still-valid link while issuing no replacement.
+ *
+ * The lock key is the user's UUID hashed into a bigint — advisory locks are
+ * transaction-scoped (`_xact_`), so it releases on COMMIT or ROLLBACK with no
+ * cleanup path to forget.
  */
 const issueToken = async ({ userId, ipAddress = null, userAgent = null }) => {
   if (!userId) throw createError('userId required to issue reset token.', 400);
 
-  await enforceRequestThrottle(userId);
-
   const rawToken = generateRawToken();
   const tokenHash = sha256Hex(rawToken);
 
-  await query(
-    `UPDATE public.password_reset_tokens
-        SET consumed_at = NOW(), consumed_by = 'superseded'
-      WHERE user_id = $1 AND consumed_at IS NULL`,
-    [userId]
-  );
+  await transaction(async (client) => {
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1::text, 0))', [
+      `password_reset:${userId}`,
+    ]);
 
-  await query(
-    `INSERT INTO public.password_reset_tokens
-       (user_id, token_hash, expires_at, ip_address, user_agent)
-     VALUES ($1, $2, NOW() + ($3 || ' minutes')::INTERVAL, $4::inet, $5)`,
-    [userId, tokenHash, TOKEN_TTL_MINUTES, ipAddress, userAgent]
-  );
+    await enforceRequestThrottle(userId, client);
+
+    await client.query(
+      `UPDATE public.password_reset_tokens
+          SET consumed_at = NOW(), consumed_by = 'superseded'
+        WHERE user_id = $1 AND consumed_at IS NULL`,
+      [userId]
+    );
+
+    await client.query(
+      `INSERT INTO public.password_reset_tokens
+         (user_id, token_hash, expires_at, ip_address, user_agent)
+       VALUES ($1, $2, NOW() + ($3 || ' minutes')::INTERVAL, $4::inet, $5)`,
+      [userId, tokenHash, TOKEN_TTL_MINUTES, ipAddress, userAgent]
+    );
+  });
 
   return rawToken;
 };
@@ -170,17 +199,28 @@ const issueToken = async ({ userId, ipAddress = null, userAgent = null }) => {
 // self-read needs current_user_id(), unset here). Route through the SECURITY
 // DEFINER helper exactly like login() does; the fallback is byte-compatible
 // and correct in tests / any bypass-role environment.
-const findUserForReset = async (normalizedEmail) => {
-  const result = (await requireDefinerPath())
-    ? await query('SELECT * FROM public.auth_find_user_for_login($1)', [normalizedEmail])
-    : await query(
-        `SELECT id, email, name, is_active, account_closed_at, erased_at,
-                oauth_provider, password_set
-           FROM users
-          WHERE email = $1`,
-        [normalizedEmail]
-      );
-  return result.rows[0] || null;
+//
+// TRIES EVERY STORED SHAPE of the typed address (emailLookupCandidates), most
+// literal first. Gmail is stored two ways in this database — dotted by the
+// Google sign-in path, dot-stripped by /register — so a single-shape lookup
+// silently missed half of them. For every non-gmail address the candidate list
+// has exactly one entry, so this is one query as before.
+const findUserForReset = async (email) => {
+  const useDefiner = await requireDefinerPath();
+
+  for (const candidate of emailLookupCandidates(email)) {
+    const result = useDefiner
+      ? await query('SELECT * FROM public.auth_find_user_for_login($1)', [candidate])
+      : await query(
+          `SELECT id, email, name, is_active, account_closed_at, erased_at,
+                  oauth_provider, password_set
+             FROM users
+            WHERE email = $1`,
+          [candidate]
+        );
+    if (result.rows[0]) return result.rows[0];
+  }
+  return null;
 };
 
 /**
@@ -198,7 +238,7 @@ const requestReset = async ({ email, ipAddress = null, userAgent = null }) => {
   }
   const normalizedEmail = email.toLowerCase().trim();
 
-  const user = await findUserForReset(normalizedEmail);
+  const user = await findUserForReset(email);
   if (!user) {
     // Redacted per the DPDP no-PII-in-logs stance; enough to spot abuse waves.
     log.info('password_reset_request_unknown_email', {
@@ -323,15 +363,30 @@ const confirmReset = async (rawToken, newPassword) => {
     // "set first password" (possession of the inbox is the proof); for a
     // password account it's a plain overwrite. RETURNING + rowCount makes a
     // zero-row RLS miss fail LOUD instead of reporting success.
+    //
+    // ELIGIBILITY IS RE-ASSERTED HERE, not just at issue time. requestReset
+    // refuses to issue for a closed/erased/deactivated account, but a token
+    // minted while the account was healthy stayed usable for its full 60-minute
+    // window across a closure — rewriting the credentials and wiping the
+    // lockout history of an account that access-termination had frozen. This is
+    // the #1091 defect class (termination failing to close an auth path), so it
+    // is closed read-time and default-deny: an out-of-band closure the write
+    // path never saw is still caught. Zero rows → the same vague link error
+    // (which also retires the one non-generic 404 on this leg), and because the
+    // transaction rolls back, the token is NOT consumed and neither the session
+    // revocation nor the lockout wipe below ever runs.
     const userResult = await client.query(
       `UPDATE public.users
           SET password_hash = $2, password_set = TRUE, updated_at = NOW()
         WHERE id = $1
+          AND is_active = TRUE
+          AND account_closed_at IS NULL
+          AND erased_at IS NULL
         RETURNING id, email`,
       [row.user_id, newHash]
     );
     if (userResult.rowCount === 0) {
-      throw createError('Account not found.', 404);
+      throw createError(INVALID_LINK_MESSAGE, 400);
     }
     const userEmail = userResult.rows[0].email;
 
@@ -349,9 +404,14 @@ const confirmReset = async (rawToken, newPassword) => {
     // Clear any login lockout — the failed attempts that locked the account
     // may well belong to the attacker who forced this reset; the legitimate
     // owner must be able to sign in immediately with the new password.
+    //
+    // Keyed on BOTH stored shapes: login throttles on the canonical address
+    // while users.email may be the dotted gmail form, so clearing only the
+    // stored value would leave a dotted-gmail account still locked out
+    // immediately after a successful recovery.
     await client.query(
-      `DELETE FROM login_attempts WHERE email = $1`,
-      [userEmail]
+      `DELETE FROM login_attempts WHERE email = ANY($1::text[])`,
+      [[...new Set([userEmail, canonicalEmail(userEmail)])]]
     );
 
     return { userId: row.user_id, email: userEmail };
