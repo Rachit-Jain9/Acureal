@@ -7,6 +7,7 @@ import { toast } from '../components/common/Toast';
 // query keys are org-implicit; switching workspaces invalidates everything.
 
 const MEMBERS_KEY = ['organization-members'];
+const INVITATIONS_KEY = ['organization-invitations'];
 const JOIN_REQUESTS_KEY = ['organization-join-requests'];
 const DOMAINS_KEY = ['organization-domains'];
 
@@ -36,11 +37,46 @@ export function useInviteMember() {
     mutationFn: ({ email, role }) => organizationAPI.invite(email, role).then((r) => r.data.data),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: MEMBERS_KEY });
-      // Existing Acureal users are added to the workspace immediately; new emails
-      // get an invitation link consumed when they sign up.
-      toast.success(data?.kind === 'added' ? 'Teammate added to the workspace' : 'Invitation sent');
+      qc.invalidateQueries({ queryKey: INVITATIONS_KEY });
+      // Existing Acureal users are added to the workspace immediately; new
+      // emails get a link they use to sign up.
+      //
+      // "Invitation sent" was previously shown unconditionally — while no code
+      // path in the product ever handed an invitation to the mailer. The claim
+      // is now true, but delivery is dispatched in the background, so the copy
+      // says what has actually happened at this instant rather than asserting
+      // the recipient's inbox state.
+      toast.success(
+        data?.kind === 'added'
+          ? 'Teammate added to the workspace'
+          : 'Invitation created — the email is on its way',
+      );
     },
     onError: (err) => toast.error(errMessage(err, 'Could not send the invitation')),
+  });
+}
+
+// ── Invitations ──────────────────────────────────────────────────────────────
+// Outstanding invitations (admin-gated). Until now there was no way to see, let
+// alone withdraw, an invitation that had been created.
+export function useInvitations(enabled = true) {
+  return useQuery({
+    queryKey: INVITATIONS_KEY,
+    queryFn: () => organizationAPI.listInvitations().then((r) => r.data.data.invitations),
+    enabled,
+  });
+}
+
+export function useRevokeInvitation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (invitationId) =>
+      organizationAPI.revokeInvitation(invitationId).then((r) => r.data.data),
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: INVITATIONS_KEY });
+      toast.success(`Invitation to ${data?.email || 'that address'} withdrawn`);
+    },
+    onError: (err) => toast.error(errMessage(err, 'Could not withdraw the invitation')),
   });
 }
 

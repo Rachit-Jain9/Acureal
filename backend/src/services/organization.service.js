@@ -213,6 +213,75 @@ const createWorkspaceForUser = async (client, { userId, name, email, organizatio
   return organization;
 };
 
+// How long an emailed invitation stays usable. Was hardcoded inline at 7 days;
+// named here because phase 3 makes it a per-workspace setting (spec default 14)
+// and a magic number inside a SQL string is not a thing you can configure.
+const INVITATION_EXPIRY_DAYS = 14;
+
+/**
+ * Public, token-authenticated preview of an invitation — what the /invite
+ * landing page shows BEFORE the recipient has an account.
+ *
+ * The token IS the secret, so returning the workspace name, the inviter and
+ * the invited address to whoever holds it leaks nothing they were not already
+ * sent by email. It deliberately returns no ids and nothing about the
+ * workspace's contents.
+ *
+ * Errors are uniform: any unusable invitation (unknown, expired, accepted,
+ * revoked) returns the same 404 shape, so this cannot be used to probe which
+ * tokens exist.
+ */
+const previewInvitation = async (invitationToken) => {
+  if (!invitationToken || typeof invitationToken !== 'string' || invitationToken.length < 16) {
+    throw createError('This invitation link is not valid or has expired.', 404);
+  }
+
+  const result = await query(
+    `SELECT
+       oi.email,
+       oi.role,
+       oi.status,
+       oi.expires_at,
+       oi.accepted_at,
+       o.name  AS organization_name,
+       u.name  AS invited_by_name,
+       u.email AS invited_by_email
+     FROM organization_invitations oi
+     JOIN organizations o ON o.id = oi.organization_id
+     LEFT JOIN users u ON u.id = oi.invited_by
+     WHERE oi.token = $1`,
+    [invitationToken]
+  );
+
+  const invitation = result.rows[0];
+  const unusable =
+    !invitation
+    || invitation.accepted_at
+    || invitation.status === 'revoked'
+    || invitation.status === 'rejected'
+    || new Date(invitation.expires_at) < new Date();
+
+  if (unusable) {
+    throw createError('This invitation link is not valid or has expired.', 404);
+  }
+
+  // Does the invited address already have an account? Decides whether the
+  // landing page offers "sign in" or "create your account".
+  const existing = await query('SELECT id FROM users WHERE LOWER(email) = $1', [
+    String(invitation.email).toLowerCase(),
+  ]);
+
+  return {
+    email: invitation.email,
+    role: normalizeRole(invitation.role) || invitation.role,
+    organizationName: invitation.organization_name,
+    invitedByName: invitation.invited_by_name,
+    invitedByEmail: invitation.invited_by_email,
+    expiresAt: invitation.expires_at,
+    hasAccount: existing.rows.length > 0,
+  };
+};
+
 // Pure invitation-usability gate, shared by consumeInvitation (the direct
 // fallback path) and the register definer branch (M1 Phase 2), so both raise
 // the exact same friendly errors in the same order. `invitation` may be null /
@@ -224,6 +293,13 @@ const assertInvitationUsable = (invitation, email) => {
 
   if (invitation.accepted_at) {
     throw createError('Invitation has already been accepted.', 409);
+  }
+
+  // `status` may be absent on the definer path (auth_find_invitation predates
+  // the column and does not select it) — treat missing as usable so the check
+  // is additive, never a new way for a valid invitation to fail.
+  if (invitation.status === 'revoked' || invitation.status === 'rejected') {
+    throw createError('This invitation has been withdrawn.', 410);
   }
 
   if (new Date(invitation.expires_at) < new Date()) {
@@ -243,7 +319,8 @@ const consumeInvitation = async (client, { userId, email, invitationToken }) => 
        oi.email,
        oi.role,
        oi.expires_at,
-       oi.accepted_at
+       oi.accepted_at,
+       oi.status
      FROM organization_invitations oi
      WHERE oi.token = $1`,
     [invitationToken]
@@ -265,7 +342,9 @@ const consumeInvitation = async (client, { userId, email, invitationToken }) => 
   await client.query(
     `UPDATE organization_invitations
      SET accepted_at = NOW(),
-         accepted_by = $2
+         accepted_by = $2,
+         status = 'accepted',
+         updated_at = NOW()
      WHERE id = $1`,
     [invitation.id, userId]
   );
@@ -328,19 +407,28 @@ const inviteOrganizationMember = async ({ organizationId, email, role, invitedBy
     };
   }
 
+  // Re-inviting REGENERATES the token. The previous upsert reset the role,
+  // inviter and expiry but left `token` alone (it is a column DEFAULT, which
+  // only fires on INSERT) — so a re-invite reissued the SAME secret, and could
+  // resurrect an already-accepted row by nulling accepted_at beneath it. A
+  // reissued invitation must invalidate whatever was sent before.
   const result = await query(
-    `INSERT INTO organization_invitations (organization_id, email, role, invited_by, expires_at)
-     VALUES ($1, LOWER($2), $3, $4, NOW() + INTERVAL '7 days')
+    `INSERT INTO organization_invitations (organization_id, email, role, invited_by, expires_at, status)
+     VALUES ($1, LOWER($2), $3, $4, NOW() + ($5 || ' days')::INTERVAL, 'approved')
      ON CONFLICT (organization_id, email)
      DO UPDATE SET
        role = EXCLUDED.role,
        invited_by = EXCLUDED.invited_by,
        expires_at = EXCLUDED.expires_at,
+       token = encode(gen_random_bytes(24), 'hex'),
+       status = 'approved',
        accepted_at = NULL,
        accepted_by = NULL,
+       revoked_at = NULL,
+       revoked_by = NULL,
        updated_at = NOW()
-     RETURNING id, organization_id, email, role, token, expires_at, created_at`,
-    [organizationId, email, normalizedRole, invitedBy]
+     RETURNING id, organization_id, email, role, token, expires_at, created_at, status`,
+    [organizationId, email, normalizedRole, invitedBy, INVITATION_EXPIRY_DAYS]
   );
 
   await organizationAuditLog.recordAudit({
@@ -351,6 +439,97 @@ const inviteOrganizationMember = async ({ organizationId, email, role, invitedBy
   });
 
   return { kind: 'invited', invitation: result.rows[0] };
+};
+
+/**
+ * Mark an invitation as delivered. Called after the mailer succeeds, so
+ * `sent_at` means "a message actually left the building" rather than "a row
+ * was created" — the distinction the old UI got wrong for months.
+ */
+const markInvitationSent = async (invitationId) => {
+  await query(
+    `UPDATE organization_invitations
+        SET status = 'sent',
+            sent_at = COALESCE(sent_at, NOW()),
+            last_sent_at = NOW(),
+            send_count = send_count + 1,
+            updated_at = NOW()
+      WHERE id = $1
+        AND status IN ('approved', 'sent')`,
+    [invitationId]
+  );
+};
+
+/**
+ * Outstanding invitations for a workspace — what the Team page's pending list
+ * reads. Expiry is computed at read time rather than trusted from `status`,
+ * because nothing sweeps the table: a row can sit at 'sent' long past its
+ * expires_at, and reporting that as pending would be the same class of lie as
+ * the toast this feature is fixing.
+ */
+const listInvitations = async (organizationId) => {
+  const result = await query(
+    `SELECT
+       oi.id,
+       oi.email,
+       oi.role,
+       oi.status,
+       oi.expires_at,
+       oi.sent_at,
+       oi.send_count,
+       oi.created_at,
+       u.name  AS invited_by_name,
+       u.email AS invited_by_email,
+       (oi.expires_at < NOW()) AS is_expired
+     FROM organization_invitations oi
+     LEFT JOIN users u ON u.id = oi.invited_by
+     WHERE oi.organization_id = $1
+       AND oi.status NOT IN ('accepted', 'revoked', 'rejected')
+     ORDER BY oi.created_at DESC`,
+    [organizationId]
+  );
+
+  return result.rows.map((row) => ({
+    ...row,
+    role: normalizeRole(row.role) || row.role,
+    status: row.is_expired ? 'expired' : row.status,
+  }));
+};
+
+/**
+ * Withdraw an invitation. The token stays in the row (audit) but the status
+ * makes it unusable — assertInvitationUsable refuses anything not 'approved'
+ * or 'sent'.
+ */
+const revokeInvitation = async ({ organizationId, invitationId, actorId }) => {
+  const result = await query(
+    `UPDATE organization_invitations
+        SET status = 'revoked',
+            revoked_at = NOW(),
+            revoked_by = $3,
+            updated_at = NOW()
+      WHERE id = $1
+        AND organization_id = $2
+        AND status IN ('approved', 'sent', 'pending_approval')
+      RETURNING id, email, role`,
+    [invitationId, organizationId, actorId]
+  );
+
+  if (result.rowCount === 0) {
+    // Either it does not exist, belongs to another workspace, or has already
+    // reached a terminal state. Not distinguished — an admin of org A must not
+    // learn whether an invitation id exists in org B.
+    throw createError('Invitation not found or no longer active.', 404);
+  }
+
+  await organizationAuditLog.recordAudit({
+    organizationId,
+    actorId,
+    eventType: 'member_invite_revoked',
+    before: { email: result.rows[0].email, role: result.rows[0].role },
+  });
+
+  return { revoked: true, email: result.rows[0].email };
 };
 
 // The active workspace roster. Pending domain auto-joins (is_active = FALSE)
@@ -680,6 +859,11 @@ module.exports = {
   inviteOrganizationMember,
   joinByVerifiedDomain,
   listMembershipsForUser,
+  INVITATION_EXPIRY_DAYS,
+  previewInvitation,
+  markInvitationSent,
+  listInvitations,
+  revokeInvitation,
   listOrganizationMembers,
   listPendingJoinRequests,
   approveJoinRequest,

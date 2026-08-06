@@ -81,6 +81,7 @@ const CookiesPage = lazy(() => import('./pages/legal/CookiesPage'));
 const GrievancePage = lazy(() => import('./pages/legal/GrievancePage'));
 const SubprocessorsPage = lazy(() => import('./pages/legal/SubprocessorsPage'));
 const VerifyEmailPage = lazy(() => import('./pages/legal/VerifyEmailPage'));
+const InvitePage = lazy(() => import('./pages/InvitePage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('./pages/ResetPasswordPage'));
 
@@ -193,6 +194,7 @@ export default function App() {
         <Route path="/grievance" element={withSuspense(<GrievancePage />)} />
         <Route path="/subprocessors" element={withSuspense(<SubprocessorsPage />)} />
         <Route path="/verify-email" element={withSuspense(<VerifyEmailPage />)} />
+        <Route path="/invite" element={withSuspense(<InvitePage />)} />
         <Route path="/forgot-password" element={withSuspense(<ForgotPasswordPage />)} />
         <Route path="/reset-password" element={withSuspense(<ResetPasswordPage />)} />
 

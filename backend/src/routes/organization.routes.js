@@ -21,11 +21,33 @@ const benchmarkEligibility = require('../services/benchmarkEligibility.service')
 const organizationService = require('../services/organization.service');
 const organizationDomain = require('../services/organizationDomain.service');
 const organizationAuditLog = require('../services/organizationAuditLog.service');
+const invitationEmail = require('../services/invitationEmail.service');
 const { normalizeRole, ORGANIZATION_ROLES } = require('../constants/roles');
 const { authenticate, requireRole } = require('../middleware/auth');
 const { handleValidation } = require('../middleware/validate');
+const { runInBackground } = require('../lib/backgroundTask');
+const log = require('../lib/logger').child({ module: 'organization.routes' });
 
 const router = express.Router();
+
+// Deliver the invitation without the request waiting on Resend.
+//
+// runInBackground, never a bare promise: on Vercel the instance can freeze once
+// the response is flushed, and unawaited work then vanishes while looking
+// exactly like success — the failure that silently dropped password-reset
+// emails (#1094). Here it would be worse: the invitation ROW would exist,
+// the UI would report success, and the email would never arrive. That is the
+// precise lie this whole change exists to end, so the delivery path reports
+// failures to Sentry and only stamps `sent_at` after the mailer actually
+// succeeds.
+const dispatchInvitationEmail = ({ invitationId, ...message }) =>
+  runInBackground(
+    'organization_invitation_email',
+    invitationEmail.sendInvitationEmail(message).then(async () => {
+      if (invitationId) await organizationService.markInvitationSent(invitationId);
+    }),
+    { hasAccount: message.hasAccount },
+  );
 
 // Assemble the benchmark-setting payload: the org-level opt-out state, its
 // append-only change history, and — for the calling user — whether deals they
@@ -130,12 +152,100 @@ router.post(
         role: normalizeRole(req.body.role),
         invitedBy: req.user.id,
       });
-      res.status(201).json({ success: true, data: result });
+
+      // Send the email. Until now this line did not exist anywhere in the
+      // codebase — the row was created, the raw token was returned to the
+      // inviting admin's browser, and nothing was ever delivered.
+      // organization is the hydrated { id, name, slug } object — there is no
+      // flat organization_name on req.user, and reading one would have put the
+      // literal fallback into every invitation email.
+      const common = {
+        inviterName: req.user.name || 'A colleague',
+        inviterEmail: req.user.email,
+        organizationName: req.user.organization?.name || 'your workspace',
+      };
+
+      if (result.kind === 'added') {
+        // Case A: they already had an account and are now a member. A
+        // notification, not a request — there is nothing for them to accept.
+        dispatchInvitationEmail({
+          ...common,
+          to: result.member.email,
+          recipientName: result.member.name,
+          hasAccount: true,
+        });
+      } else {
+        dispatchInvitationEmail({
+          ...common,
+          invitationId: result.invitation.id,
+          to: result.invitation.email,
+          hasAccount: false,
+          rawToken: result.invitation.token,
+          expiresAt: result.invitation.expires_at,
+        });
+      }
+
+      // The raw token is deliberately NOT returned any more. It used to ride
+      // back in this response so the admin's browser held a working
+      // credential for someone else's account — with nothing in the UI that
+      // ever used it.
+      const { token, ...invitationSafe } = result.invitation || {};
+      res.status(201).json({
+        success: true,
+        data: result.kind === 'added' ? result : { kind: result.kind, invitation: invitationSafe },
+      });
     } catch (error) {
       next(error);
     }
   }
 );
+
+// GET /api/organization/invitations — outstanding invitations (admin+).
+router.get('/invitations', authenticate, requireRole('admin'), async (req, res, next) => {
+  try {
+    const invitations = await organizationService.listInvitations(req.user.organization_id);
+    res.json({ success: true, data: { invitations } });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// DELETE /api/organization/invitations/:invitationId — withdraw one (admin+).
+router.delete(
+  '/invitations/:invitationId',
+  authenticate,
+  requireRole('admin'),
+  [param('invitationId').isUUID().withMessage('A valid invitation id is required.')],
+  handleValidation,
+  async (req, res, next) => {
+    try {
+      const result = await organizationService.revokeInvitation({
+        organizationId: req.user.organization_id,
+        invitationId: req.params.invitationId,
+        actorId: req.user.id,
+      });
+      res.json({ success: true, data: result });
+    } catch (error) {
+      next(error);
+    }
+  }
+);
+
+// GET /api/organization/invitations/preview?token= — PUBLIC.
+//
+// Backs the /invite landing page, which a recipient opens from their email
+// before they have an account. The token is the secret: whoever holds it was
+// sent it, so returning the workspace name and inviter leaks nothing further.
+// Every unusable state returns the same 404 so the endpoint cannot be used to
+// probe which tokens exist.
+router.get('/invitations/preview', async (req, res, next) => {
+  try {
+    const preview = await organizationService.previewInvitation(String(req.query.token || ''));
+    res.json({ success: true, data: preview });
+  } catch (error) {
+    next(error);
+  }
+});
 
 // PATCH /api/organization/members/:userId/role — change a member's role (admin+).
 router.patch(
