@@ -129,9 +129,18 @@ describe('buildIcMemoInput', () => {
     expect(p.financials.irrPct).toBe(18.5);
     expect(p.financials.npvCr).toBe(32.4);
     expect(p.scenarios).toHaveLength(1);
-    expect(p.marketBenchmarks).toHaveLength(1);
-    expect(p.comps).toHaveLength(1);
-    expect(p.comps[0].geocodeQuality).toBe('rooftop');
+    // Benchmarks and comps are POSTURE objects now, not bare arrays: an empty
+    // set has to be able to say it is unrecorded rather than looking like
+    // "nothing to worry about". The fixture's deal is in Whitefield and the
+    // fixture benchmark is Whitefield, so it matches on locality.
+    expect(p.marketBenchmarks.recorded).toBe(true);
+    expect(p.marketBenchmarks.items).toHaveLength(1);
+    expect(p.marketBenchmarks.items[0].microMarket).toBe('Whitefield');
+    // No coordinates on the fixture property → no proximity comps, so the
+    // city-wide set rides along explicitly flagged as NOT this site's evidence.
+    expect(p.comps.recorded).toBe(false);
+    expect(p.comps.scope).toBe('city_wide');
+    expect(p.comps.items).toHaveLength(1);
     expect(p.risk_flags).toHaveLength(1);
     expect(p.risk_flags[0].severity).toBe('high');
     expect(p.risk_flags[0].source).toBe('ai_detector');
@@ -260,6 +269,121 @@ describe('SYSTEM_PROMPT', () => {
     const p = icMemo.SYSTEM_PROMPT;
     expect(p).toMatch(/verification/i);
     expect(p).toMatch(/Risk Radar/i);
+  });
+
+  // Three of four stored production memos reproduced the prompt's own worked
+  // example — "₹ 18,500/sqft ... Whitefield Q1 benchmark of ₹ 16,000–19,000" —
+  // as if it were this deal's underwriting basis and market support. The
+  // fabricated ceiling (₹19,000) sat ABOVE the real recorded Whitefield ceiling,
+  // so an invented rate read as market-supported. No concrete figure may appear
+  // in an instruction the model is asked to imitate.
+  test('carries no concrete figures the model could copy as this deal\'s data', () => {
+    const p = icMemo.SYSTEM_PROMPT;
+    expect(p).not.toMatch(/18,?500/);
+    expect(p).not.toMatch(/16,?000\s*[–-]\s*19,?000/);
+    expect(p).not.toMatch(/Whitefield/i);
+    // The §4 example must be a placeholder shape, not a filled-in one.
+    expect(p).toMatch(/<rate>\/sqft/);
+    expect(p).toMatch(/<micro-market>/);
+  });
+
+  test('binds evidence to this site and forbids naming unsupplied markets', () => {
+    const p = icMemo.SYSTEM_PROMPT;
+    expect(p).toMatch(/marketBenchmarks\.items/);
+    expect(p).toMatch(/comps\.items/);
+    expect(p).toMatch(/UNRECORDED, never SUPPORTIVE/);
+    expect(p).toMatch(/assetClassMatch/);
+    expect(p).toMatch(/Not yet modelled/);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// Evidence posture — comps and benchmarks must belong to THIS site
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('buildCompsPosture', () => {
+  const near = (over = {}) => ({
+    project_name: 'Mahindra Blossom', locality: 'Whitefield', rate_per_sqft: 15500,
+    project_type: 'residential', distance_km: 0.43, is_verified: true, ...over,
+  });
+
+  test('proximity comps are recorded, carry distance, and win over the city set', () => {
+    const out = icMemo.buildCompsPosture([near()], [{ project_name: 'Far Tower' }], 'residential');
+    expect(out.recorded).toBe(true);
+    expect(out.scope).toBe('nearby');
+    expect(out.items[0].distanceKm).toBe(0.4);
+    expect(out.items[0].assetClassMatch).toBe(true);
+    expect(out.items.some((c) => c.project === 'Far Tower')).toBe(false);
+  });
+
+  // Hopefarm's real shape: commercial_office deal, every nearby comp residential.
+  // A hard asset-class filter would have emptied the one deal with the best
+  // local evidence — so the mismatch is carried as a LABEL, not a filter.
+  test('an asset-class mismatch is labelled, never filtered out', () => {
+    const out = icMemo.buildCompsPosture([near()], [], 'commercial');
+    expect(out.recorded).toBe(true);
+    expect(out.items[0].assetClassMatch).toBe(false);
+  });
+
+  // Jigani: zero comps within 10 km.
+  test('no comps anywhere is recorded:false, not an empty array', () => {
+    const out = icMemo.buildCompsPosture([], [], 'residential');
+    expect(out.recorded).toBe(false);
+    expect(out.items).toEqual([]);
+    expect(out.reason).toMatch(/no comparable transactions/i);
+  });
+
+  test('city fallback is explicitly NOT this site\'s evidence', () => {
+    const out = icMemo.buildCompsPosture([], [{ project_name: 'Indiranagar Lux', rate_per_sqft: 28000 }], 'residential');
+    expect(out.recorded).toBe(false);
+    expect(out.scope).toBe('city_wide');
+    expect(out.reason).toMatch(/must not be cited as evidence/i);
+    expect(out.items).toHaveLength(1);
+  });
+});
+
+describe('buildMarketBenchmarkPosture', () => {
+  const rows = [
+    { micro_market: 'Indiranagar', avg_price_min_per_sqft: 24000, avg_price_max_per_sqft: 30000, yoy_growth_min_pct: 9, yoy_growth_max_pct: 12, anchor_hub: 'CBD' },
+    { micro_market: 'Whitefield', avg_price_min_per_sqft: 14000, avg_price_max_per_sqft: 17800, yoy_growth_min_pct: 8, yoy_growth_max_pct: 12, anchor_hub: 'ITPL' },
+  ];
+
+  test('matches the deal\'s own locality, not the priciest market', () => {
+    const out = icMemo.buildMarketBenchmarkPosture(rows, { locality: 'Whitefield', city: 'Bengaluru' });
+    expect(out.recorded).toBe(true);
+    expect(out.items).toHaveLength(1);
+    expect(out.items[0].microMarket).toBe('Whitefield');
+  });
+
+  test('an unmatched locality yields recorded:false — never the city top-6', () => {
+    const out = icMemo.buildMarketBenchmarkPosture(rows, { locality: 'Jigani', city: 'Bengaluru' });
+    expect(out.recorded).toBe(false);
+    expect(out.items).toEqual([]);
+    expect(out.reason).toMatch(/no micro-market benchmark/i);
+  });
+
+  test('a deal with no locality says so rather than guessing', () => {
+    const out = icMemo.buildMarketBenchmarkPosture(rows, {});
+    expect(out.recorded).toBe(false);
+    expect(out.reason).toMatch(/no locality recorded/i);
+  });
+});
+
+describe('buildAssumptionSlice', () => {
+  test('carries only whitelisted, numeric, stored inputs', () => {
+    const out = icMemo.buildAssumptionSlice({
+      sellingRatePerSqft: '7500', exitCapRate: 8.5, notes: 'ignore me', someLegacyKey: 42,
+    });
+    expect(out.recorded).toBe(true);
+    expect(out.sellingRatePerSqft).toBe(7500);
+    expect(out.exitCapRate).toBe(8.5);
+    expect(out.notes).toBeUndefined();
+    expect(out.someLegacyKey).toBeUndefined();
+  });
+
+  test('an empty model is recorded:false so §4 writes "Not yet modelled"', () => {
+    expect(icMemo.buildAssumptionSlice({}).recorded).toBe(false);
+    expect(icMemo.buildAssumptionSlice({ notes: 'x' }).recorded).toBe(false);
   });
 });
 

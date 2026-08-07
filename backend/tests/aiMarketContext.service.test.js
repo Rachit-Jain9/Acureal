@@ -293,3 +293,62 @@ describe('aiMarketContext.service · generateAllSections', () => {
     expect(runAI).not.toHaveBeenCalled();
   });
 });
+
+
+/**
+ * THE LEGAL FOUR, IN AN INVESTOR DOCX.
+ *
+ * This generator writes five sections printed verbatim into an investor report
+ * (Demographics, Why This Area, Supply & Demand, social infrastructure,
+ * cautions). Nothing downstream re-checks them: the artifact guard runs at
+ * aiArtifacts.saveArtifact, and this path never passes through it. So a model
+ * sentence asserting RERA registration or a clean title reached the page
+ * unaltered — CLAUDE.md's hardest rule, breached in an LP-facing document.
+ *
+ * The 17 tests that preceded these contained ZERO legal assertions. That gap
+ * is why it shipped. These drive the REAL generateSection path, not a helper.
+ */
+describe('legal-four guard runs on every returned string', () => {
+  const { LEGAL_REDACTION_MARKER } = require('../src/utils/aiLegalProseGuard');
+
+  test('a RERA / approval assertion is redacted before it can be printed', async () => {
+    runAI.mockResolvedValueOnce(stubAIResponse({
+      paragraphs: [
+        'The corridor has absorbed steady office supply since 2019.',
+        'Most launches here are RERA-registered and the layout plan is approved.',
+      ],
+      data_quality: 'specific',
+    }));
+
+    const out = await aiMarketContext.generateSection({
+      section: 'supplyDemandPipeline',
+      payload: { locality: 'Whitefield', city: 'Bengaluru', asset_class: 'commercial_office' },
+    });
+
+    expect(out.available).toBe(true);
+    const joined = (out.paragraphs || []).join(' ');
+    expect(joined).toContain(LEGAL_REDACTION_MARKER);
+    expect(joined).not.toMatch(/RERA-registered and the layout plan is approved/i);
+    // The innocuous sentence survives intact — the guard redacts claims, not prose.
+    expect(joined).toMatch(/absorbed steady office supply/);
+  });
+
+  // The guard covers every returned string, not just paragraphs[] — `caution`
+  // shares the same `trim` funnel, which is why guarding one function covers
+  // the whole surface.
+  test('a statutory assertion in the cautions field is redacted too', async () => {
+    runAI.mockResolvedValueOnce(stubAIResponse({
+      paragraphs: ['Supply is concentrated along the eastern spine.'],
+      caution: 'The title is clean here, so diligence is light.',
+      data_quality: 'directional',
+    }));
+
+    const out = await aiMarketContext.generateSection({
+      section: 'supplyDemandPipeline',
+      payload: { locality: 'Whitefield', city: 'Bengaluru', asset_class: 'commercial_office' },
+    });
+
+    expect(out.caution).toContain(LEGAL_REDACTION_MARKER);
+    expect(out.caution).not.toMatch(/title is clean/i);
+  });
+});
