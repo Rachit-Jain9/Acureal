@@ -20,18 +20,28 @@ required one), 4 (two names), and 7 (the lawyer).)_
 
 ## ✅ Already handled — nothing for you to do here
 
-- **✅ DONE (2026-08-07 — you authorised it in chat; I ran it).** The eight test
-  deals are out of your live workspace. They were `E2E Sarjapur Plotted`,
-  `E2E Whitefield Apartments`, `Stale-check test (PR-8)`,
+- **✅ DONE (2026-08-07 — you authorised it in chat; I ran it).** **Six** test
+  deals are out of your live workspace: `Stale-check test (PR-8)`,
   `TEST - Hotel Operating Roll (DELETE)`, `TEST - Land-rate flag (Gandhinagar)`,
   `TEST - Redevelopment Occupants (PR-8)`, `ZZ Bridge Verification (temp — delete
   me)` and `ZZ Plotted Verification (temp — delete me)`. Every one was checked
   first and held **nothing** — no documents, diligence items, risks, approvals,
   activities or reports — so no real work was touched. They were **archived, not
-  deleted**: they still exist, they're just out of the way, and any of them can be
-  brought back. Each archive is recorded in the deal history log with the reason,
-  the same way the app records it when you archive a deal yourself. Your Deals
-  list now shows the nine real ones.
+  deleted**: they still exist, they're just out of the way, and any can be brought
+  back. Each archive is recorded in the deal history log with the reason, the same
+  way the app records it when you archive a deal yourself.
+
+  **Correction, same day — two of the eight had to come back.** I originally
+  archived eight. Two of them, `E2E Whitefield Apartments` and
+  `E2E Sarjapur Plotted`, were not junk: they are the deals the automatic
+  post-deploy health check opens to prove the site still works after every
+  release. Archiving them made that check fail within the hour. I restored both
+  immediately, the health check went green again, and I've put a warning in the
+  test file so nobody — including me — mistakes them for clutter again. Nothing
+  was lost and nothing needs doing from you; recorded here because the earlier
+  version of this note said eight, and eight is wrong.
+
+  Your Deals list now shows the nine real deals plus those two fixtures.
 
 - **✅ DONE (2026-07-17 — operator ran it; verified live).** The Bengaluru
   locality → Planning District lookup (`20260619_district_localities.sql`) is

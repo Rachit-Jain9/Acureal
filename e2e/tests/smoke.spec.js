@@ -19,6 +19,19 @@
 
 const { test, expect } = require('@playwright/test');
 
+// ⚠️ LIVE PRODUCTION FIXTURES — DO NOT ARCHIVE OR DELETE.
+//
+// `E2E Whitefield Apartments` and `E2E Sarjapur Plotted` are real rows in the
+// production database that exist solely so this suite has stable, known data to
+// assert against. They look exactly like the disposable test deals that
+// accumulate in a live workspace, and on 2026-08-07 they were archived during an
+// operator-authorised cleanup of "obvious junk" — which turned three of these
+// five smoke tests red within the hour, because an archived deal drops out of
+// the deals list this suite navigates.
+//
+// They were restored the same day. If you are tidying the workspace, skip these
+// two by name; if you ever need to retire them, change this constant and the
+// deals-list assertion in the same commit.
 const SEEDED_DEAL = 'E2E Whitefield Apartments';
 
 // Assert the app didn't bounce us to /login and no error boundary fired.
