@@ -3,8 +3,28 @@
 const {
   normalizeEmailDomain,
   isPublicEmailDomain,
+  isGoogleMailAddress,
   PUBLIC_EMAIL_PROVIDERS,
 } = require('../src/utils/emailDomain');
+
+describe('emailDomain.isGoogleMailAddress', () => {
+  // Marks the one provider family whose canonical form is MANY-to-one, which
+  // is what decides whether a canonical address may be treated as naming a
+  // single account (auth.service.js clearLoginAttempts).
+  test.each([
+    ['a.b@gmail.com', true],
+    ['a.b@GoogleMail.com', true],
+    ['  A.B@gmail.com  ', true],
+    ['a.b@acme-realty.in', false],
+    ['a.b@outlook.com', false],
+    ['a.b@gmail.com.attacker.tld', false],
+    ['gmail.com', false],
+    ['', false],
+    [null, false],
+  ])('isGoogleMailAddress(%s) → %s', (input, expected) => {
+    expect(isGoogleMailAddress(input)).toBe(expected);
+  });
+});
 
 describe('emailDomain.normalizeEmailDomain', () => {
   test('extracts the domain from an email, lower-cased', () => {

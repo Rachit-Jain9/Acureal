@@ -418,10 +418,24 @@ router.get('/google/config', (req, res) => {
 });
 
 // POST /auth/login
+//
+// Deliberately NO normalizeEmail() here, for the same reason /forgot-password
+// dropped it: that sanitizer strips gmail dots, and the Google sign-in path
+// stores addresses dotted. Normalising made email+password sign-in outright
+// impossible for every account created with a dotted-gmail Google identity —
+// the lookup never matched, and the generic "Invalid email or password" hid it
+// completely. It also made the new forgot-password flow a dead end for exactly
+// those users: they could receive a reset link and set a password, then not use
+// it. authService.login() resolves every stored shape instead.
+//
+// Dropping the sanitizer does NOT weaken the per-account lockout. It cannot: the
+// login_attempts row is keyed on canonicalEmail() inside the throttle helpers,
+// so all dot and +tag variants of one address share a single 5-failure budget.
+// See the header comment on enforceLoginThrottle in auth.service.js.
 router.post(
   '/login',
   [
-    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('email').isEmail().withMessage('Valid email is required'),
     body('password').notEmpty().withMessage('Password is required'),
   ],
   handleValidation,

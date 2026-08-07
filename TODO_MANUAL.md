@@ -24,6 +24,57 @@ Manual actions that still require credentials, authority, or infrastructure outs
 > **✅ Migration backlog FULLY APPLIED + VERIFIED on production (Mumbai `niamgjbxxgmmffggumvj`) — 2026-06-09.**
 > Verified live via the Supabase MCP that every migration through `20260701_deal_signoffs.sql` is applied. In particular the cross-tenant SELECT hole is **CLOSED** — `0` permissive `USING(true)` SELECT policies remain on tenant tables — so the "🔴 URGENT" `20260623` item below is **DONE**, not pending. Also confirmed present: `document_access_log`, `deal_signoffs`, durable `deal_audit_log` (`deal_id` nullable / `ON DELETE SET NULL`), `organization_domains` + `organization_audit_log`, `deal_workspace_cache`, `deals.rera_inputs`, the market-reference Data-API scoping (`20260628`), the function search-path lockdown (`20260627b`), and the `document_extractions.extraction_started_at` reaper column. Supabase's security advisor shows **no actionable findings**; the only remaining lints are benign/intentional: auth/cache tables RLS-enabled-with-no-policy (that is *default-deny*, the correct locked-down posture); `extension_in_public` on PostGIS/pgvector (deliberately left — relocating in-use extensions is riskier than the lint); and the `spatial_ref_sys` RLS ERROR, which is unfixable via SQL (public PostGIS EPSG reference owned by `supabase_admin`) and carries no sensitive data. The per-migration entries below are retained for history.
 
+### Org invitations still match ONE gmail shape — needs a migration, not a JS change (2026-08-07)
+
+**Symptom.** Inviting a colleague whose account was created by Google sign-in with a dotted gmail
+address (`first.last@gmail.com`) does not find their existing account. It silently creates a pending
+invitation instead — and an invitation token is only consumable at registration, so for someone who
+already has an account it can never be redeemed. The admin sees success; the colleague is never added.
+The related half: a colleague invited by email who then signs up **with Google** is refused with
+"Invitation email does not match this registration."
+
+**Why it is not fixed in the /login PR.** The route's `normalizeEmail()` cannot simply be dropped the way
+it was for `/login` and deal-share. On those routes the address is only a lookup key. Here it is also the
+**storage key** of the `organization_invitations` row, and that shape is pinned by SQL this repo cannot
+change at runtime: `public.auth_provision_signup` — the live SECURITY DEFINER signup path under the
+non-bypass `redip_app` role — redeems an invitation with a raw
+`IF lower(v_inv.email) <> lower(p_email)` comparison against the address `/register` normalises
+(`database/migrations/20260802_rls_flip_hardening.sql:184`). Store any other shape and invitations become
+unredeemable. Relaxing only the JS pre-check (`assertInvitationUsable`) is worse than leaving it: the SQL
+still refuses, and it raises `AUTH_PROVISION_INVITATION_EMAIL_MISMATCH` with `ERRCODE = 'P0001'`, which
+nothing in `errorHandler.js` maps — turning a readable 409 into an opaque 500 on an unauthenticated route.
+`backend/tests/collaboration.emailShapes.test.js` pins the current behaviour so a future half-fix fails
+in CI instead of in production.
+
+**What the fix needs (all three together, one PR):**
+
+1. A migration redefining `public.auth_provision_signup` so the invitation-email comparison folds both
+   sides the same way `canonicalEmail()` does in JS.
+2. A `P0001` branch in `backend/src/middleware/errorHandler.js` mapping `AUTH_PROVISION_INVITATION_*` to
+   409 / 410 / 404 instead of falling through to 500.
+3. Only then: drop `normalizeEmail()` from the invite route, look up over `emailLookupCandidates()`, write
+   the canonical address, and compare canonically in `assertInvitationUsable`.
+
+**Operator step when it is ready:** apply the migration from the Supabase SQL editor
+(https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new) — same routine as every other
+migration in this file.
+
+### Duplicate accounts from the two gmail shapes — needs a canonical-email column (2026-08-07)
+
+`register()`'s duplicate-email guard is a single-shape exact match, and it receives an address that
+`/register`'s `normalizeEmail()` has already dot-stripped. It therefore cannot see a Google-created dotted
+row, so signing in with Google and later registering with a password on the same gmail address produces
+**two separate accounts** — with deals split between them. This predates the /login PR and is not fixable
+in JS: the dotted spellings of one canonical address are combinatorial (2^(n-1)), so there is nothing to
+enumerate.
+
+**What the fix needs:** a `users.email_canonical` column (generated or backfilled + trigger-maintained)
+with a unique index, so the guard becomes a single indexed lookup. The same column would let us *find*
+the duplicate pairs already in production and merge them, and would retire the dual-candidate lookup in
+`findUsersForLogin` entirely. It also closes the one residual weakness noted in `auth.service.js`: while
+two accounts can share a canonical address, a successful sign-in on a canonical gmail address cannot be
+allowed to clear the shared lockout row.
+
 ### K-RERA compliance-deadline email reminders — DEFERRED. The real blocker is NOT email (re-verified 2026-07-28)
 
 > **Corrected 2026-07-28.** This was recorded as blocked on `RESEND_API_KEY`. Email is

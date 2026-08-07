@@ -2,6 +2,7 @@
 
 const { query, transaction } = require('../config/database');
 const { createError } = require('../middleware/errorHandler');
+const { emailLookupCandidates } = require('../utils/emailDomain');
 
 const shareDeal = async (dealId, sharedByUserId, sharedWithEmail, permission = 'viewer') => {
   if (!['viewer', 'editor'].includes(permission)) {
@@ -30,19 +31,35 @@ const shareDeal = async (dealId, sharedByUserId, sharedWithEmail, permission = '
     // customer's workspace. Nine `*_shared_read` RLS policies made the database
     // honour it (dropped in 20260806). Membership in the deal's organisation is
     // now the gate, enforced here rather than inferred.
-    const userResult = await client.query(
-      `SELECT u.id, u.email, u.name
-         FROM users u
-         JOIN organization_members om
-           ON om.user_id = u.id
-          AND om.organization_id = $2
-        WHERE LOWER(u.email) = LOWER($1)
-          AND u.is_active = TRUE
-        LIMIT 1`,
-      [sharedWithEmail, deal.organization_id]
-    );
+    //
+    // The address is matched against EVERY SHAPE it could be stored in, most
+    // literal first. Gmail lives in this database two ways — dotted by the
+    // Google sign-in path, dot-stripped by /register — so the single-shape
+    // match silently failed to find a colleague whose account came from Google
+    // with a dotted address, and the deliberately vague 404 below reported it
+    // as "not a member of this workspace". Organisation membership is still the
+    // only gate; this widens which typed addresses resolve to a member, never
+    // which members are eligible.
+    let targetUser = null;
+    for (const candidate of emailLookupCandidates(sharedWithEmail)) {
+      const userResult = await client.query(
+        `SELECT u.id, u.email, u.name
+           FROM users u
+           JOIN organization_members om
+             ON om.user_id = u.id
+            AND om.organization_id = $2
+          WHERE LOWER(u.email) = $1
+            AND u.is_active = TRUE
+          LIMIT 1`,
+        [candidate, deal.organization_id]
+      );
+      if (userResult.rows[0]) {
+        targetUser = userResult.rows[0];
+        break;
+      }
+    }
 
-    if (userResult.rows.length === 0) {
+    if (!targetUser) {
       // Deliberately does not distinguish "no such account" from "account
       // exists in another workspace" — that difference is a membership oracle
       // for any other customer's user list.
@@ -52,8 +69,6 @@ const shareDeal = async (dealId, sharedByUserId, sharedWithEmail, permission = '
         404,
       );
     }
-
-    const targetUser = userResult.rows[0];
 
     if (targetUser.id === sharedByUserId) {
       throw createError('You cannot share a deal with yourself.', 400);

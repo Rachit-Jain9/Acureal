@@ -306,6 +306,19 @@ const assertInvitationUsable = (invitation, email) => {
     throw createError('Invitation has expired.', 410);
   }
 
+  // KNOWN GAP, deliberately left raw. The two sides arrive in different shapes
+  // when the invitee signs up with GOOGLE: the invitation row holds /register's
+  // normalised address while Google hands us claims.email with dots intact, so
+  // invite-then-sign-up-with-Google is refused with this 409.
+  //
+  // A canonical comparison here would be inert AND actively harmful. This
+  // function is only the friendly pre-check; on the live non-bypass role the
+  // authoritative gate is inside public.auth_provision_signup, which does its
+  // own raw `lower(v_inv.email) <> lower(p_email)` and RAISEs
+  // AUTH_PROVISION_INVITATION_EMAIL_MISMATCH (P0001) — a code nothing in
+  // errorHandler maps. Relaxing only the JS half would convert this readable
+  // 409 into an opaque 500 while still not letting the invitation through.
+  // Both halves have to move together, in a migration. See organization.routes.js.
   if (invitation.email.toLowerCase() !== email.toLowerCase()) {
     throw createError('Invitation email does not match this registration.', 409);
   }
@@ -371,6 +384,16 @@ const inviteOrganizationMember = async ({ organizationId, email, role, invitedBy
   // so it would never reach someone who already signed up. This is admin-
   // initiated (the route gates it to admin/owner) and grants the user access to
   // THIS workspace only — it exposes none of their own data to the org.
+  //
+  // KNOWN GAP, deliberately not fixed here: this is a single-shape match, and
+  // gmail lives in this database two ways (dotted from Google sign-in,
+  // dot-stripped from /register). Inviting a Google-created colleague at
+  // first.last@gmail.com therefore misses their account and falls through to
+  // the invitation branch below, which for someone who already has an account
+  // can never be redeemed. Widening the match here requires the raw typed
+  // address, which requires changing the route's sanitizer, which changes the
+  // invitation STORAGE shape — and that shape is pinned by auth_provision_signup.
+  // See the comment on the route in organization.routes.js.
   const existing = await query(
     'SELECT id, name, email FROM users WHERE LOWER(email) = $1',
     [normalizedEmail]

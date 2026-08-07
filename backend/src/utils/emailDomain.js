@@ -76,6 +76,17 @@ const canonicalEmail = (value) => {
   return `${local}@gmail.com`;
 };
 
+// True when the address belongs to the one provider family whose canonical
+// form is MANY-TO-ONE — every dot spelling of a gmail local part folds to the
+// same key. Callers that treat the canonical address as an account identifier
+// need to know this: for every other domain the canonical form is the address
+// itself, so the mapping is 1:1 and the key names exactly one account.
+const isGoogleMailAddress = (value) => {
+  const raw = String(value || '').trim().toLowerCase();
+  const at = raw.lastIndexOf('@');
+  return at > 0 && GOOGLE_MAIL_DOMAINS.has(raw.slice(at + 1));
+};
+
 // Every stored shape a typed address might match, most-literal first. Callers
 // try them in order and take the first hit. Deduped, so non-gmail addresses
 // (the overwhelming majority, and every corporate domain) cost exactly one
@@ -91,5 +102,6 @@ module.exports = {
   normalizeEmailDomain,
   isPublicEmailDomain,
   canonicalEmail,
+  isGoogleMailAddress,
   emailLookupCandidates,
 };

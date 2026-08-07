@@ -812,7 +812,11 @@ router.post(
   '/:id/shares',
   authenticate,
   [
-    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    // No normalizeEmail(): it strips gmail dots, and a colleague whose account
+    // was created by Google sign-in is stored dotted — so normalising made
+    // "share with first.last@gmail.com" resolve to nobody and 404 as if they
+    // were not in the workspace. shareDeal() resolves every stored shape.
+    body('email').isEmail().withMessage('Valid email is required'),
     body('permission').optional().isIn(['viewer', 'editor']).withMessage('Permission must be viewer or editor'),
   ],
   handleValidation,

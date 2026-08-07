@@ -14,7 +14,13 @@ const {
 } = require('./organization.service');
 const { setRequestContext } = require('../lib/requestContext');
 const { requireDefinerPath } = require('../lib/authDefiners');
-const { normalizeEmailDomain, isPublicEmailDomain } = require('../utils/emailDomain');
+const {
+  normalizeEmailDomain,
+  isPublicEmailDomain,
+  canonicalEmail,
+  isGoogleMailAddress,
+  emailLookupCandidates,
+} = require('../utils/emailDomain');
 const { assertAccountUsable } = require('../utils/accountState');
 const legalService = require('./legal.service');
 const { mapOrganizationRoleToLegacyUserRole } = require('../constants/roles');
@@ -30,6 +36,25 @@ const SALT_ROUNDS = 12;
 //   • Successful login clears the row
 //   • Unknown emails are tracked too — leaking lockout-by-existence would
 //     defeat the existing "Invalid email or password" generic message.
+//
+// THE ROW IS KEYED ON THE CANONICAL ADDRESS, and the three helpers below
+// canonicalise their own argument rather than trusting the caller to have done
+// it. That placement is the security control, not a convenience:
+//
+//   /login no longer applies express-validator's normalizeEmail() — it could
+//   not, because that sanitizer strips gmail dots and the Google sign-in path
+//   stores addresses dotted, so normalising made password sign-in impossible
+//   for every dotted-gmail Google account. But an unnormalised key would have
+//   been far worse than the bug it fixed: keyed on the address AS TYPED, an
+//   attacker gets a fresh 5-failure budget from every dot variant of the same
+//   address (f.irst@, fi.rst@, fir.st@ …), and the per-account lockout stops
+//   existing. Canonicalising INSIDE these functions makes that class of mistake
+//   unrepresentable — no future caller can re-introduce it by passing a raw
+//   address, because there is no parameter that reaches the SQL unprocessed.
+//
+// Net effect versus the old behaviour: strictly stronger. Every dot and +tag
+// variant of one gmail address now shares a single budget, where before
+// normalizeEmail() collapsed them only because it also broke the lookup.
 const LOGIN_FAIL_THRESHOLD = 5;
 const LOGIN_FAIL_WINDOW_MIN = 15;
 const LOGIN_LOCK_MINUTES = 15;
@@ -38,7 +63,7 @@ const enforceLoginThrottle = async (email) => {
   const result = await query(
     `SELECT locked_until FROM login_attempts
      WHERE email = $1 AND locked_until IS NOT NULL AND locked_until > NOW()`,
-    [email]
+    [canonicalEmail(email)]
   );
   if (result.rows.length > 0) {
     throw createError(
@@ -64,12 +89,12 @@ const recordFailedLogin = async (email) => {
          ELSE login_attempts.locked_until
        END,
        updated_at = NOW()`,
-    [email, LOGIN_FAIL_WINDOW_MIN, LOGIN_FAIL_THRESHOLD, LOGIN_LOCK_MINUTES]
+    [canonicalEmail(email), LOGIN_FAIL_WINDOW_MIN, LOGIN_FAIL_THRESHOLD, LOGIN_LOCK_MINUTES]
   );
 };
 
 const clearLoginAttempts = async (email) => {
-  await query(`DELETE FROM login_attempts WHERE email = $1`, [email]);
+  await query(`DELETE FROM login_attempts WHERE email = $1`, [canonicalEmail(email)]);
 };
 
 // Optional signup-profile fields (company / job_title / city). Trim, cap to
@@ -349,55 +374,155 @@ const register = async (name, email, password, phone = null, options = {}) => {
   });
 };
 
+// Pre-identity lookup for sign-in. Mirrors findUserForReset in
+// passwordReset.service.js, and diverges from it in one way: it returns EVERY
+// stored shape that resolves, not just the first.
+//
+// M1 Phase 2: the lookup is PRE-IDENTITY — under a non-BYPASSRLS role no users
+// policy can match it (self-read needs current_user_id(), unset here). Route
+// through the SECURITY DEFINER helper when it exists; the fallback is the
+// byte-identical original query, fully correct under the current bypass role
+// (authDefiners fails loud, never silent, post-flip).
+//
+// Why a LIST and not the first hit. Gmail lives in this database in two shapes,
+// so `first.last@gmail.com` and `firstlast@gmail.com` can be two DISTINCT rows
+// — and routinely are, because the duplicate-email guard in register() has
+// never been able to see across the two shapes. For such a pair, stopping at
+// the first hit would resolve the typed address to the Google row (which holds
+// an unusable random hash) and reject a password that is perfectly valid on the
+// other row — turning today's working sign-in into a 401. Returning both lets
+// the caller try the password against each.
+const findUsersForLogin = async (email) => {
+  const useDefiner = await requireDefinerPath();
+  const rows = [];
+  const seenIds = new Set();
+
+  for (const candidate of emailLookupCandidates(email)) {
+    const result = useDefiner
+      ? await query('SELECT * FROM public.auth_find_user_for_login($1)', [candidate])
+      : await query(
+          `SELECT id, email, password_hash, name, phone, is_active, last_login_at, default_organization_id,
+                  account_closed_at, erased_at
+           FROM users
+           WHERE email = $1`,
+          [candidate]
+        );
+    for (const row of result.rows) {
+      if (row && !seenIds.has(row.id)) {
+        seenIds.add(row.id);
+        rows.push(row);
+      }
+    }
+  }
+
+  return rows;
+};
+
 const login = async (email, password, requestedOrganizationId = null) => {
-  const normalizedEmail = email.toLowerCase();
+  // Throttle FIRST, on the canonical address — see the helpers' header comment.
+  // The route no longer normalises, so `email` here is exactly what was typed.
+  await enforceLoginThrottle(email);
 
-  await enforceLoginThrottle(normalizedEmail);
+  const candidates = await findUsersForLogin(email);
 
-  // M1 Phase 2: the email lookup is PRE-IDENTITY — under a non-BYPASSRLS role
-  // no users policy can match it (self-read needs current_user_id(), unset
-  // here). Route through the SECURITY DEFINER helper when it exists; the
-  // fallback is the byte-identical original query, fully correct under the
-  // current bypass role (authDefiners fails loud, never silent, post-flip).
-  const result = (await requireDefinerPath())
-    ? await query('SELECT * FROM public.auth_find_user_for_login($1)', [normalizedEmail])
-    : await query(
-        `SELECT id, email, password_hash, name, phone, is_active, last_login_at, default_organization_id,
-                account_closed_at, erased_at
-         FROM users
-         WHERE email = $1`,
-        [normalizedEmail]
-      );
-
-  if (result.rows.length === 0) {
-    await recordFailedLogin(normalizedEmail);
+  if (candidates.length === 0) {
+    await recordFailedLogin(email);
     throw createError('Invalid email or password.', 401);
   }
 
-  const user = result.rows[0];
+  // Try each stored shape of the typed address. For every non-gmail address —
+  // and for every gmail typed in the shape it is stored in — there is exactly
+  // one candidate and this loop is the old straight-line path, decision for
+  // decision. The loop only does more work when the duplicate-row case above
+  // is actually present.
+  let user = null;
+  let terminalError = null; // closure / erasure / deactivation we had to skip
+  let checkedAPassword = false;
 
-  // Account closure block (PR #158), now routed through the shared guard so
-  // password login, Google, MFA completion and refresh cannot drift apart.
-  //
-  // Two behaviour changes vs. the hand-rolled pair this replaces. (1) erased_at
-  // is now honoured here, not just account_closed_at — erasure NULLs
-  // password_hash, so an erased row previously fell through to bcrypt.compare
-  // against NULL rather than being refused outright. (2) Terminal state is
-  // checked ahead of is_active, so a closed account that an admin also
-  // deactivated reports closure — the truer, more actionable reason.
-  //
-  // The message still names the closure openly rather than hiding behind
-  // "invalid email or password": a closed user is the legitimate owner of the
-  // account, not an attacker. That reasoning is unchanged from PR #158.
-  assertAccountUsable(user, createError);
+  for (const row of candidates) {
+    // Account closure block (PR #158), routed through the shared guard so
+    // password login, Google, MFA completion and refresh cannot drift apart.
+    //
+    // Two behaviour changes vs. the hand-rolled pair this replaced. (1) erased_at
+    // is honoured here, not just account_closed_at — erasure NULLs
+    // password_hash, so an erased row previously fell through to bcrypt.compare
+    // against NULL rather than being refused outright. (2) Terminal state is
+    // checked ahead of is_active, so a closed account that an admin also
+    // deactivated reports closure — the truer, more actionable reason.
+    //
+    // The message still names the closure openly rather than hiding behind
+    // "invalid email or password": a closed user is the legitimate owner of the
+    // account, not an attacker. That reasoning is unchanged from PR #158.
+    try {
+      assertAccountUsable(row, createError);
+    } catch (error) {
+      // Only a deliberate, classified refusal is a candidate-level outcome. A
+      // programming fault or a driver error must surface as itself, never be
+      // laundered into "invalid email or password".
+      if (!error?.statusCode) throw error;
+      if (!terminalError) terminalError = error;
+      // A closed row must not mask a live one: if the other stored shape of
+      // this address is a healthy account, that account can still sign in.
+      continue;
+    }
 
-  const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-  if (!isPasswordValid) {
-    await recordFailedLogin(normalizedEmail);
+    // Belt-and-braces: assertAccountUsable already refuses erased rows (the
+    // only ones with a NULL hash), but bcrypt.compare throws on a non-string
+    // second argument, and a 500 on the sign-in path would be a far worse
+    // failure than a 401.
+    if (!row.password_hash) continue;
+
+    checkedAPassword = true;
+    if (await bcrypt.compare(password, row.password_hash)) {
+      user = row;
+      break;
+    }
+  }
+
+  if (!user) {
+    // Nothing accepted this password. If NO candidate was even usable, the
+    // honest answer is the closure/deactivation reason — and, exactly as
+    // before, that outcome does not spend lockout budget: it is the legitimate
+    // owner of a frozen account, not a guess at a password.
+    if (!checkedAPassword && terminalError) throw terminalError;
+    await recordFailedLogin(email);
     throw createError('Invalid email or password.', 401);
   }
 
-  await clearLoginAttempts(normalizedEmail);
+  // Clear the lockout row only when this success PROVES the row belongs to the
+  // account that just authenticated.
+  //
+  // The canonical key is many-to-one for gmail, so one lockout row can serve two
+  // distinct accounts (see findUsersForLogin). Clearing it unconditionally hands
+  // an attacker an unlimited-guess machine: register firstlast@gmail.com — which
+  // register()'s single-shape duplicate guard permits even when the victim's
+  // Google account already exists as first.last@gmail.com — then loop {four wrong
+  // guesses at the victim's row, one real sign-in to your own}, refunding the
+  // shared budget forever. Only the per-IP limiter would remain, which is exactly
+  // the gap this per-account throttle exists to close.
+  //
+  // When we can be sure the row is unshared, the old behaviour is kept:
+  //
+  //   • Not a gmail-family address → canonicalisation is the identity, the key
+  //     names exactly one address. Nothing can share it. (Every corporate
+  //     domain, i.e. most of this product's users.)
+  //   • Gmail typed in a NON-canonical shape → findUsersForLogin probed the
+  //     canonical spelling too and it held no row. That matters because an
+  //     attacker-controlled sibling is ALWAYS at the canonical spelling:
+  //     /register normalises before storing, and the only path that stores a
+  //     dotted address is Google sign-in, which requires the mailbox. One row
+  //     back from both probes therefore means no sibling exists.
+  //
+  // The remaining case — gmail typed in canonical form — is the one we cannot
+  // clear safely, because a dotted sibling we never probed may exist. Those
+  // users keep a counter that ages out on its own once their last failure
+  // passes the 15-minute window (see recordFailedLogin); it is simply not
+  // wiped early.
+  const keyNamesOneAccount =
+    !isGoogleMailAddress(email) || emailLookupCandidates(email).length > 1;
+  if (keyNamesOneAccount && candidates.length === 1) {
+    await clearLoginAttempts(email);
+  }
 
   // M1 Phase 2: credentials are validated — stamp the user id into the
   // request context NOW. Everything below (the MFA-enrollment self-read, the
