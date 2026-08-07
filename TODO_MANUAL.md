@@ -55,6 +55,14 @@ in CI instead of in production.
 3. Only then: drop `normalizeEmail()` from the invite route, look up over `emailLookupCandidates()`, write
    the canonical address, and compare canonically in `assertInvitationUsable`.
 
+**Three call sites to fix together** (all single-shape `LOWER(email) = $1` today):
+
+- `organization.service.js` `inviteOrganizationMember()` — misses the existing account, mints the dead invitation.
+- `organization.service.js` `assertInvitationUsable()` — the raw comparison, mirrored in `auth_provision_signup`.
+- `organization.service.js` `getInvitationPreview()` — landed with #1097 (2026-08-06). Decides whether the
+  invite landing page offers "sign in" or "create your account". A Google-created dotted colleague is told
+  to create an account, which walks them into the duplicate-account defect below rather than to sign-in.
+
 **Operator step when it is ready:** apply the migration from the Supabase SQL editor
 (https://supabase.com/dashboard/project/niamgjbxxgmmffggumvj/sql/new) — same routine as every other
 migration in this file.

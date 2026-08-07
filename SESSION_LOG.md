@@ -11805,3 +11805,100 @@ check real on the definer route rather than a no-op.
   from selecting a user row and acting on it without passing through
   `hydrateUserAuthContext`. Worth a sweep for direct `FROM users` reads that
   make an authorization decision.
+
+## 2026-08-07 — the two gmail shapes reach /login: dotted-Google accounts could never sign in (#1098)
+
+### What was worked on
+
+`/login` ran express-validator's `normalizeEmail()` and then matched on equality.
+That sanitizer strips gmail dots; the Google sign-in path stores
+`claims.email.toLowerCase()` with dots intact. So every account created with a
+dotted-gmail Google identity was unable to sign in with email + password — at
+all, permanently, behind the generic "Invalid email or password." Same root
+cause as the `/forgot-password` defect fixed in #1094, and it meant that PR's
+recovery flow ended at a door the user cannot open: receive the link, set a
+password, still locked out.
+
+The route now validates without sanitising; `login()` resolves every stored
+shape via `emailLookupCandidates()`, preserving the `requireDefinerPath()` /
+`auth_find_user_for_login` routing.
+
+**The lockout was the hard half.** Dropping the sanitizer with the throttle keyed
+on the address as typed would have been much worse than the bug it fixes: a
+fresh 5-failure budget per dot variant (2^(n-1) spellings of an n-char local
+part) and the per-account lockout ceases to exist. `enforceLoginThrottle` /
+`recordFailedLogin` / `clearLoginAttempts` now canonicalise their OWN argument,
+so the control sits where no future caller can bypass it by passing a raw
+address. Net effect is strictly stronger than before.
+
+**Two further defects surfaced while proving that out**, both fixed:
+
+- The lookup returns every matching shape, not the first. `first.last@gmail.com`
+  and `firstlast@gmail.com` can be two DISTINCT rows (register()'s duplicate
+  guard has never seen across the shapes). First-hit resolution would pick the
+  Google row — unusable random hash — and reject a password valid on the
+  sibling, breaking a sign-in that works today.
+- A successful sign-in no longer clears a lockout row it cannot prove it owns.
+  The canonical key is many-to-one for gmail, so an attacker who registers the
+  canonical sibling of a victim's dotted Google account could loop {4 guesses at
+  the victim, 1 real sign-in to their own} and refund the shared budget forever,
+  leaving only the per-IP limiter. Caught by a test written for the *first*
+  version of the guard, which the attack walked straight through.
+
+Deal sharing had the same defect and is fixed the same way. The workspace
+boundary is untouched — this widens which typed addresses resolve to a member,
+never which members are eligible.
+
+### Method note
+
+An 8-agent adversarial sweep (4 discovery modalities + 4 attack angles) ran
+against the working tree. It was worth it: it produced the throttle-refund
+attack, and it killed a change I had already written. The invitation fix I had
+in hand would have been *inert and harmful* — `assertInvitationUsable` is only
+the friendly pre-check; on the live non-bypass role the authoritative gate is
+inside `public.auth_provision_signup`, which does its own raw
+`lower(v_inv.email) <> lower(p_email)` and raises P0001, a code `errorHandler`
+does not map. Relaxing the JS half alone turns a readable 409 into a 500 on an
+unauthenticated route. Reverted before merge.
+
+Also verified empirically rather than assumed: `normalizeEmail` folds far more
+than gmail — `raj-kumar@yahoo.in` → `raj@yahoo.in` (destructive), `ops@yandex.com`
+→ `ops@yandex.ru`, outlook/hotmail/live/msn and icloud/me `+subaddress`. That
+decided against extending `canonicalEmail`: reproducing validator's 80-domain
+table inside a security-relevant identity function would drift against a
+transitive dependency.
+
+### PRs merged
+
+- #1098 — fix(auth): sign in with the gmail address you actually have. Squashed
+  to master as `6f248c4d`. Includes a separate, clearly-labelled commit bumping
+  js-yaml 3.15.0 → 3.15.1 in the kernel dev tree — GHSA-5p4m-2wfm-xmqj was
+  published after master last went green and was failing the audit gate on every
+  PR repo-wide. Dev-only transitive, lockfile only, 3 lines.
+
+### Validation
+
+- `cd backend && npm test` → 287 suites, 4768 tests, all passing.
+- 30 new regression tests (`auth.emailShapes.test.js`,
+  `collaboration.emailShapes.test.js`) plus `isGoogleMailAddress` coverage. The
+  lockout tests drive a working in-memory `login_attempts` counter rather than
+  asserting on a mocked argument — a call-order mock would pass just as happily
+  against the buggy version, and did.
+- Fresh-worktree note, third session running: no `backend/node_modules`, no
+  `packages/financial-kernel/dist`. 19 suites fail to resolve the kernel and read
+  exactly like regressions until you build it.
+
+### What's left to do next
+
+Two entries added to `TODO_MANUAL.md`, both blocked on the same missing piece:
+
+- **Org invitations** still match one gmail shape, across three call sites
+  (`inviteOrganizationMember`, `assertInvitationUsable`, and `getInvitationPreview`
+  which arrived with #1097). Needs a migration redefining `auth_provision_signup`
+  + a `P0001` branch in `errorHandler.js` + the route change, together. Tests pin
+  the current behaviour so a half-fix fails in CI.
+- **Duplicate accounts** from the two shapes — `register()`'s guard cannot see
+  across them and dotted spellings are combinatorial. Needs a
+  `users.email_canonical` column + backfill, which would also let us find and
+  merge the pairs already in production, retire the dual-candidate lookup, and
+  remove the one residual weakness noted in `auth.service.js`.
