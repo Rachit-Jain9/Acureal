@@ -57,7 +57,15 @@ export function normalizeFinancials(financials) {
       exitCapRate: toNumber(kpis.exitCapRate ?? inputsRaw.exitCapRate),
       terminalValue: toNumber(kpis.terminalValue ?? kpis.exitValue),
       terminalValuePV: toNumber(kpis.terminalValuePV),
-      terminalValueMethod: kpis.terminalValueMethod || inputsRaw.terminalValueMethod || null,
+      // NEVER fall back to the raw INPUT. Doing so laundered an analyst's
+      // selection into a statement about what the model did: the kernel
+      // capitalises NOI at the exit cap and nothing else, so a deal saved with
+      // terminalValueMethod='forward_purchase' displayed a "Forward Purchase"
+      // badge over a cap-rate valuation. The label may only ever describe the
+      // computation that actually produced the number beside it.
+      terminalValueMethod:
+        kpis.terminalValueMethod
+        || (toNumber(kpis.exitValue ?? financials.exit_value_cr) != null ? 'exit_cap_rate' : null),
       terminalValueFormula: kpis.terminalValueFormula || null,
       capRateValuationCr: toNumber(kpis.capRateValuationCr),
       revPAR: toNumber(kpis.revPAR),

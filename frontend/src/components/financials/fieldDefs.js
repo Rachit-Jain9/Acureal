@@ -42,12 +42,27 @@ export const TERMINAL_VALUE_METHOD_LABELS = {
   forward_purchase:  'Forward Purchase',
 };
 
-// Terminal-value overlay fields reused for every income / hospitality class.
-export const TERMINAL_VALUE_FIELDS = [
-  { name: 'terminalValueMethod', label: 'Terminal Value Method',              type: 'select', options: TERMINAL_VALUE_METHOD_OPTIONS, hint: 'DCF terminal value methodology. Cap rate is standard; perpetuity growth or exit multiple can override for specific investor conventions.' },
-  { name: 'exitMultiple',        label: 'Exit Multiple (× stabilized NOI)',   type: 'number', step: '0.5',  min: '0', max: '50', placeholder: '12', hint: 'Applied as Stabilized NOI × multiple. Office/Retail: 12–16×; Industrial: 10–14×; Hospitality: 8–11× stabilized EBITDA.', visibleWhen: (inputs) => inputs.terminalValueMethod === 'exit_multiple' },
-  { name: 'perpetuityGrowthPct', label: 'Perpetuity Growth (% pa)',           type: 'number', step: '0.25', min: '-10', max: '15', placeholder: '3', hint: 'Gordon growth rate g. Must be less than discount rate. India long-term nominal: 3–6%.', visibleWhen: (inputs) => inputs.terminalValueMethod === 'perpetuity_growth' },
-];
+// Terminal-value overlay fields — DELIBERATELY EMPTY.
+//
+// This list used to offer Terminal Value Method (cap rate / exit multiple /
+// Gordon perpetuity / forward purchase), Exit Strategy, the LRD refinance trio
+// and Forward Purchase Price. The deterministic kernel reads NONE of them —
+// verified by grep across packages/financial-kernel/src and backend/src/engines:
+// zero references to any of the eight. It capitalises NOI at the exit cap rate,
+// always.
+//
+// So the controls accepted a choice, changed the badge on the Terminal Value
+// card, and moved no number: a ₹805.53 Cr cap-rate valuation could sit under a
+// "Forward Purchase" pill while IRR, NPV and the equity multiple all assumed an
+// open-market sale. An analyst typing a 14x exit multiple watched the form take
+// it and nothing happen.
+//
+// CLAUDE.md: never ship UI that looks production-ready over an unsupported
+// workflow. Until the kernel models these methods (its own change, with a test
+// that IRR moves when the method flips), the honest interface offers only what
+// it computes. The list is kept as an empty export so the four asset-class
+// spreads below stay structurally intact and re-enabling is one edit.
+export const TERMINAL_VALUE_FIELDS = [];
 
 export const ASSET_CLASSES = ASSET_CLASS_CONFIG;
 
@@ -108,11 +123,6 @@ export const FIELD_DEFS = {
     { name: 'entryCapRate',           label: 'Entry Cap Rate (%)',              type: 'number', step: '0.25', placeholder: '7', hint: 'Prime Bengaluru office: 6.5–8%' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '7.5', hint: 'Typically 25–50 bps wider than entry' },
     ...TERMINAL_VALUE_FIELDS,
-    { name: 'exitStrategy',           label: 'Exit Strategy',                   type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized income asset.' },
-    { name: 'lrdLTV',                 label: 'LRD LTV (0–1)',                   type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.65', hint: 'Refinance sizing against entry value when the asset is stabilized.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'lrdInterestRatePct',     label: 'LRD Rate (% pa)',                 type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9', hint: 'Coupon / all-in cost on the refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'lrdRefinanceYear',       label: 'LRD Refinance Year',              type: 'number', step: '1', min: '1', max: '20', placeholder: '2', hint: 'Year of the hold period when refinance proceeds arrive.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'forwardPurchasePriceCr', label: 'Forward Purchase Price (₹ Cr)',   type: 'number', step: '0.01', min: '0', placeholder: '180', hint: 'Contracted forward-purchase consideration if agreed.', visibleWhen: (inputs) => inputs.exitStrategy === 'forward_purchase' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '5' },
     { name: 'projectDurationYears',   label: 'Construction Duration (years)',   type: 'number', step: '0.25', min: '1', max: '15', placeholder: '3' },
     { name: 'debtCoverage',           label: 'Debt LTV / LTC (0–1)',            type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.65' },
@@ -135,11 +145,6 @@ export const FIELD_DEFS = {
     { name: 'lcMonths',               label: 'Leasing Commissions (months)',    type: 'number', step: '0.5',  placeholder: '2' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '8', hint: 'Retail: 7.5–9%' },
     ...TERMINAL_VALUE_FIELDS,
-    { name: 'exitStrategy',           label: 'Exit Strategy',                   type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized income asset.' },
-    { name: 'lrdLTV',                 label: 'LRD LTV (0–1)',                   type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.60', hint: 'Refinance sizing against entry value when the asset is stabilized.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'lrdInterestRatePct',     label: 'LRD Rate (% pa)',                 type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9', hint: 'Coupon / all-in cost on the refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'lrdRefinanceYear',       label: 'LRD Refinance Year',              type: 'number', step: '1', min: '1', max: '20', placeholder: '3', hint: 'Year of the hold period when refinance proceeds arrive.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'forwardPurchasePriceCr', label: 'Forward Purchase Price (₹ Cr)',   type: 'number', step: '0.01', min: '0', placeholder: '160', hint: 'Contracted forward-purchase consideration if agreed.', visibleWhen: (inputs) => inputs.exitStrategy === 'forward_purchase' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '7' },
     { name: 'projectDurationYears',   label: 'Construction Duration (years)',   type: 'number', step: '0.25', min: '1', max: '15', placeholder: '3' },
     { name: 'debtCoverage',           label: 'Debt LTV / LTC (0–1)',            type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.60' },
@@ -158,11 +163,6 @@ export const FIELD_DEFS = {
     { name: 'opexPct',                label: 'Operating Expenses (% of EGR)',   type: 'number', step: '1',    placeholder: '15', hint: 'Industrial is lower opex than office' },
     { name: 'exitCapRate',            label: 'Exit Cap Rate (%)',               type: 'number', step: '0.25', placeholder: '8.5', hint: 'Warehousing/logistics: 7.5–9.5%' },
     ...TERMINAL_VALUE_FIELDS,
-    { name: 'exitStrategy',           label: 'Exit Strategy',                   type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized income asset.' },
-    { name: 'lrdLTV',                 label: 'LRD LTV (0–1)',                   type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.65', hint: 'Refinance sizing against entry value when the asset is stabilized.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'lrdInterestRatePct',     label: 'LRD Rate (% pa)',                 type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9', hint: 'Coupon / all-in cost on the refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'lrdRefinanceYear',       label: 'LRD Refinance Year',              type: 'number', step: '1', min: '1', max: '20', placeholder: '3', hint: 'Year of the hold period when refinance proceeds arrive.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'forwardPurchasePriceCr', label: 'Forward Purchase Price (₹ Cr)',   type: 'number', step: '0.01', min: '0', placeholder: '140', hint: 'Contracted forward-purchase consideration if agreed.', visibleWhen: (inputs) => inputs.exitStrategy === 'forward_purchase' },
     { name: 'holdPeriodYears',        label: 'Hold Period (years)',             type: 'number', step: '1',    placeholder: '7' },
     { name: 'projectDurationYears',   label: 'Construction Duration (years)',   type: 'number', step: '0.25', min: '1', max: '15', placeholder: '1.5' },
     { name: 'debtCoverage',           label: 'Debt LTV / LTC (0–1)',            type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.65' },
@@ -185,11 +185,6 @@ export const FIELD_DEFS = {
     { name: 'ebitdaMarginPct',         label: 'EBITDA Margin (% of total revenue)',   type: 'number', step: '1',    placeholder: '28', hint: 'After management fee & reserve. India hotels: 22–32%' },
     { name: 'exitCapRate',             label: 'Exit Cap Rate (%)',                    type: 'number', step: '0.25', placeholder: '9',  hint: 'Hotel exit caps India: 8–11%' },
     ...TERMINAL_VALUE_FIELDS,
-    { name: 'exitStrategy',            label: 'Exit Strategy',                         type: 'select', options: EXIT_STRATEGY_OPTIONS, hint: 'Choose the monetization path for the stabilized operating asset.' },
-    { name: 'lrdLTV',                  label: 'Operating Refi LTV (0–1)',              type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.55', hint: 'Refinance sizing against stabilized entry value during hold.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'lrdInterestRatePct',      label: 'Operating Refi Rate (% pa)',            type: 'number', step: '0.25', min: '0', max: '50', placeholder: '9.5', hint: 'Coupon / all-in cost on the operating refinance facility.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'lrdRefinanceYear',        label: 'Operating Refi Year',                   type: 'number', step: '1', min: '1', max: '20', placeholder: '3', hint: 'Year of the hold period when refinance proceeds arrive.', visibleWhen: (inputs) => inputs.exitStrategy === 'lrd' },
-    { name: 'forwardPurchasePriceCr',  label: 'Forward Purchase Price (₹ Cr)',         type: 'number', step: '0.01', min: '0', placeholder: '220', hint: 'Contracted forward-purchase consideration if agreed.', visibleWhen: (inputs) => inputs.exitStrategy === 'forward_purchase' },
     { name: 'holdPeriodYears',         label: 'Hold Period (years)',                  type: 'number', step: '1',    placeholder: '8' },
     { name: 'projectDurationYears',    label: 'Construction Duration (years)',        type: 'number', step: '0.25', min: '1', max: '15', placeholder: '2.5', hint: 'Typical hotel construction: 2–3 years' },
     { name: 'debtCoverage',            label: 'Debt LTV / LTC (0–1)',                 type: 'number', step: '0.05', min: '0', max: '1', placeholder: '0.55' },
@@ -226,8 +221,7 @@ export const DEFAULT_VALUES = {
   commercial_office: {
     rentEscalationPct: '5', vacancyPct: '10', opexPct: '20',
     tiPerSqft: '500', lcMonths: '2',
-    entryCapRate: '7', exitCapRate: '7.5', exitStrategy: 'cap_rate_sale', lrdLTV: '0.65', lrdInterestRatePct: '9', lrdRefinanceYear: '2', holdPeriodYears: '5',
-    terminalValueMethod: 'exit_cap_rate', exitMultiple: '14', perpetuityGrowthPct: '3',
+    entryCapRate: '7', exitCapRate: '7.5', holdPeriodYears: '5',
     projectDurationYears: '3', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '14',
     gstPct: '18',
   },
@@ -235,22 +229,19 @@ export const DEFAULT_VALUES = {
     anchorPct: '40', anchorRentDiscount: '20',
     rentEscalationPct: '5', vacancyPct: '12', opexPct: '20',
     tiPerSqft: '800', lcMonths: '2',
-    exitCapRate: '8', exitStrategy: 'cap_rate_sale', lrdLTV: '0.60', lrdInterestRatePct: '9', lrdRefinanceYear: '3', holdPeriodYears: '7',
-    terminalValueMethod: 'exit_cap_rate', exitMultiple: '12', perpetuityGrowthPct: '3',
+    exitCapRate: '8', holdPeriodYears: '7',
     projectDurationYears: '3', debtCoverage: '0.60', interestRatePct: '10.5', discountRatePct: '14',
     gstPct: '18',
   },
   industrial_warehousing: {
     rentEscalationPct: '5', vacancyPct: '8', opexPct: '15',
-    exitCapRate: '8.5', exitStrategy: 'cap_rate_sale', lrdLTV: '0.65', lrdInterestRatePct: '9', lrdRefinanceYear: '3', holdPeriodYears: '7',
-    terminalValueMethod: 'exit_cap_rate', exitMultiple: '11', perpetuityGrowthPct: '2.5',
+    exitCapRate: '8.5', holdPeriodYears: '7',
     projectDurationYears: '1.5', debtCoverage: '0.65', interestRatePct: '10', discountRatePct: '14',
     gstPct: '18',
   },
   hospitality: {
     stabilizedOccPct: '65', adrGrowthPct: '5', fbRevPct: '30', otherRevPct: '9',
-    gopMarginPct: '30', ebitdaMarginPct: '22', exitCapRate: '9', exitStrategy: 'cap_rate_sale', lrdLTV: '0.55', lrdInterestRatePct: '9.5', lrdRefinanceYear: '3',
-    terminalValueMethod: 'exit_cap_rate', exitMultiple: '9', perpetuityGrowthPct: '3',
+    gopMarginPct: '30', ebitdaMarginPct: '22', exitCapRate: '9',
     holdPeriodYears: '8', projectDurationYears: '2.5',
     debtCoverage: '0.55', interestRatePct: '10.5', contingencyPct: '5', discountRatePct: '15',
     gstPct: '18',

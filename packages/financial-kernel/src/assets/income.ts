@@ -248,6 +248,19 @@ export function computeIncomeAsset(
     entryValue: entryValueCr.toNumber(),
     exitCapRate: exitCapRatePct,
     entryCapRate: entryCapRatePct,
+    // The three operands of the exit valuation, so the UI can show a TRUE
+    // derivation instead of guessing. The Terminal Value panel reads exactly
+    // these; without them it substituted 0 and printed "₹0.00 Cr ÷ 9.00%" as
+    // the derivation of a ₹19.12 Cr number, on the one surface whose job is to
+    // let an IC member check the arithmetic. All three already existed as
+    // locals — no new maths, and the deterministic result is unchanged.
+    noiAtExit: noiAtExit.toNumber(),
+    terminalValue: exitValueCr.toNumber(),
+    // Present value of the exit proceeds, discounted over the full period to
+    // the exit — construction included, since the exit lands holdPeriodYears
+    // after operations begin, not after day zero.
+    terminalValuePV: exitValueCr.toNumber()
+      / Math.pow(1 + discountRatePct / 100, holdPeriodYears + constructionMonths / 12),
     dscr,
     devCostPerSqft: leasableAreaSqft > 0 ? (totalDevCostCr.toNumber() * CRORE) / leasableAreaSqft : null,
     rentPerSqftAnnual: effectiveBaseRent * 12,

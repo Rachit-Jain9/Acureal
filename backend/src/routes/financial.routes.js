@@ -89,20 +89,17 @@ const modelValidation = [
   body('lcMonths').optional().isFloat({ min: 0, max: 24 }),
   body('entryCapRate').optional().isFloat({ min: 1, max: 30 }),
   body('exitCapRate').optional().isFloat({ min: 1, max: 30 }),
-  body('exitStrategy').optional().isIn(['cap_rate_sale', 'lrd', 'forward_purchase']),
-  body('terminalValueMethod').optional().isIn(['exit_cap_rate', 'exit_multiple', 'perpetuity_growth', 'forward_purchase'])
-    .withMessage('terminalValueMethod must be one of exit_cap_rate | exit_multiple | perpetuity_growth | forward_purchase'),
-  body('exitMultiple').optional().isFloat({ min: 0, max: 50 })
-    .withMessage('exitMultiple must be between 0 and 50'),
-  body('perpetuityGrowthPct').optional().isFloat({ min: -10, max: 15 })
-    .withMessage('perpetuityGrowthPct must be between -10 and 15'),
+  // exitStrategy, terminalValueMethod, exitMultiple, perpetuityGrowthPct, the
+  // lrd* trio and forwardPurchasePriceCr are deliberately NOT accepted. The
+  // deterministic kernel dereferences none of them (zero references across
+  // packages/financial-kernel/src and backend/src/engines), so validating and
+  // storing them only ever produced inputs the model silently discarded — and
+  // a UI badge that contradicted the number beside it. Their controls are
+  // removed in the same change; re-add both halves together if and when the
+  // kernel models these exit methods.
   body('holdPeriodYears').optional().isInt({ min: 1, max: 20 }),
   body('debtCoverage').optional().isFloat({ min: 0, max: 1 }),
-  body('lrdLTV').optional().isFloat({ min: 0, max: 1 }),
-  body('lrdInterestRatePct').optional().isFloat({ min: 0, max: 50 }),
-  body('lrdRefinanceYear').optional().isFloat({ min: 1, max: 20 }),
   body('amortizationYears').optional().isFloat({ min: 5, max: 30 }),
-  body('forwardPurchasePriceCr').optional().isFloat({ min: 0 }),
   body('interestRatePct').optional().isFloat({ min: 0, max: 50 }),
   body('anchorPct').optional().isFloat({ min: 0, max: 100 }),
   body('anchorRentDiscount').optional().isFloat({ min: 0, max: 80 }),

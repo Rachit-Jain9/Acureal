@@ -16,7 +16,14 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
   const capitalStack = rawFinancials?.capital_stack || rawFinancials?.model_params?.capitalStack;
   const inputs = rawFinancials?.model_params?.inputs || {};
 
-  const debtLTV = capitalStack?.debtLTV ?? inputs.debtLTV ?? 0;
+  // The income / hospitality capital stack emits `debtPct` (0-100) where the
+  // development shape emits `debtLTV` (0-1). Both are kernel-computed, so
+  // reading either is a rename, not an invention — without the fallback the
+  // LTV badge silently vanished on every levered income deal.
+  const debtLTV = capitalStack?.debtLTV
+    ?? (capitalStack?.debtPct != null ? Number(capitalStack.debtPct) / 100 : null)
+    ?? inputs.debtLTV
+    ?? 0;
   const debtRatePct = capitalStack?.debtRatePct ?? inputs.debtRatePct ?? 0;
   const debtDrawnCr = capitalStack?.debtCr ?? 0;
   const projectDurationMonths =
@@ -50,7 +57,21 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
     });
   }, [debtDrawnCr, debtRatePct, projectDurationMonths, constructionStartMonths, constructionEndMonths, debtTenorMonths]);
 
-  const amortizingSchedule = capitalStack?.debtSchedule;
+  // Two shapes reach this panel. Hospitality emits { termLoan, lrd }; the
+  // income-asset builder emits a FLAT { principalCr, annualRatePct,
+  // amortizationYears, totalInterestCr } bundle. The panel only ever rendered
+  // the first, so a levered income deal — ₹339.54 Cr of debt at 14% sitting in
+  // the stored model — showed no Debt Schedule at all, and nothing errored.
+  // Normalising into the termLoan slot makes both render through the existing
+  // path. The fields the flat shape lacks (quarterly payment, annual debt
+  // service, balloon) already fall through fmtCr to "—", which is the honest
+  // rendering: absent, not zero.
+  const rawAmortizing = capitalStack?.debtSchedule;
+  const amortizingSchedule = !rawAmortizing
+    ? null
+    : (rawAmortizing.termLoan || rawAmortizing.lrd)
+      ? rawAmortizing
+      : (rawAmortizing.principalCr > 0 ? { termLoan: rawAmortizing, lrd: null } : null);
 
   if (!capitalStack || (!schedule && !amortizingSchedule?.termLoan && !amortizingSchedule?.lrd)) {
     return null;
@@ -75,11 +96,12 @@ export default function DebtSchedulePanel({ financials: rawFinancials }) {
               ₹{schedule.totalDebtCr.toFixed(2)} Cr @ {schedule.debtRatePct}% pa
             </span>
           )}
-          {hasAmortizing && (
-            <Badge tone="success">
-              Amortizing — {amortizingSchedule.termLoan?.amortizationYears || amortizingSchedule.lrd?.amortizationYears}yr
-            </Badge>
-          )}
+          {hasAmortizing && (() => {
+            // A missing tenor must not print "Amortizing — 0yr".
+            const yrs = amortizingSchedule.termLoan?.amortizationYears
+              || amortizingSchedule.lrd?.amortizationYears;
+            return <Badge tone="success">{yrs > 0 ? `Amortizing — ${yrs}yr` : 'Amortizing'}</Badge>;
+          })()}
           {debtLTV > 0 && <Badge tone="warn">{(debtLTV * 100).toFixed(0)}% LTV</Badge>}
         </div>
         <ChevronRight

@@ -366,7 +366,7 @@ function KpisSection() {
       <Formula
         label="IRR (Levered Project IRR)"
         expr="Σ CFₜ / (1 + IRR)^t = 0, solved via Newton-Raphson"
-        note="Cash flows are on a quarterly grid; IRR is annualized (×4 in simple, or (1+q)^4−1 in compound). Converges in ≤20 iterations."
+        note="Cash flows are on a MONTHLY grid; the monthly IRR is annualised as (1+r_m)^12 − 1. The proforma table is a quarterly roll-up of the same monthly series. Newton-Raphson with a bisection fallback."
       />
       <Formula
         label="NPV"
@@ -432,7 +432,7 @@ function CashflowSection() {
 
       <Formula
         label="Finance Cost (Construction)"
-        expr="Σ (Outstanding Debtₜ × rate/4)   for t in quarters"
+        expr="Σ (Outstanding Debtₜ × ((1+rate)^0.25 − 1))   for t in quarters"
         note="Interest accrues on the actual outstanding balance each quarter — not on 50% of peak (which is the shortcut associates use). This captures the real cost of the debt-draw lag."
       />
       <Formula
@@ -736,7 +736,7 @@ const DCF_STAGES = [
     summary: 'Construction draws on S-curve (negative), operating NOI (positive), finance cost accruals, and debt draws / P&I. Output: quarterly equity cash flow feeding IRR and NPV.',
     formulas: [
       { k: 'Construction', f: 'Drawₜ = Hard × S-curveₜ  (beta 2,2)' },
-      { k: 'Finance',      f: 'Interestₜ = Balanceₜ₋₁ × (rate / 4)' },
+      { k: 'Finance',      f: 'Interestₜ = Balanceₜ × ((1+rate)^0.25 − 1)   (balance includes this quarter’s draw)' },
       { k: 'Equity CF',    f: 'Σ NOIₜ − Opexₜ − Debt Serviceₜ + Draws − Costs' },
     ],
     inputs: ['Construction window', 'Debt rate, LTV, term', 'Sellout / lease-up curve'],
@@ -751,14 +751,14 @@ const DCF_STAGES = [
     surface: 'from-accent-soft to-accent-soft',
     text: 'text-accent',
     tagline: 'Exit valuation in year N',
-    summary: 'Four interchangeable methods: exit cap rate (default), exit multiple, Gordon perpetuity growth, or contractual forward purchase. The chosen TV is added to the final quarter\'s cash flow before IRR/NPV.',
+    summary: 'The kernel capitalises NOI at the exit cap rate. That is the only terminal-value method it implements — exit multiple, Gordon perpetuity and contractual forward purchase are NOT modelled today, and the controls that used to offer them have been removed rather than left to silently produce a cap-rate number under another name. The TV is added to the terminal period\'s cash flow before IRR/NPV.',
     formulas: [
-      { k: 'Exit Cap',   f: 'TV = NOI_exit ÷ Exit Cap Rate' },
-      { k: 'Multiple',   f: 'TV = NOI_stabilized × Exit Multiple (9–12×)' },
-      { k: 'Perpetuity', f: 'TV = NOI_exit × (1 + g) ÷ (r − g)' },
-      { k: 'Forward',    f: 'TV = Contractual Price (₹ Cr)' },
+      { k: 'Exit Cap',   f: 'TV = NOI_exit ÷ Exit Cap Rate   — the method in use' },
+      { k: 'Multiple',   f: 'Not modelled — manual override required' },
+      { k: 'Perpetuity', f: 'Not modelled — manual override required' },
+      { k: 'Forward',    f: 'Not modelled — manual override required' },
     ],
-    inputs: ['Exit cap rate', 'Exit multiple', 'Perpetuity growth g', 'Forward-purchase price'],
+    inputs: ['Exit cap rate'],
   },
   {
     id: 'npv',
@@ -772,8 +772,8 @@ const DCF_STAGES = [
     tagline: 'Discounted return metrics',
     summary: 'All quarterly equity cash flows (including the discounted TV injected in the terminal quarter) are discounted at WACC for NPV. IRR solves the same series for the rate at which NPV = 0.',
     formulas: [
-      { k: 'NPV', f: 'Σ CFₜ ÷ (1 + r/4)^t  — r = discount rate' },
-      { k: 'IRR', f: 'Σ CFₜ ÷ (1 + IRR/4)^t = 0   (Newton-Raphson)' },
+      { k: 'NPV', f: 'Σ CFₜ ÷ (1 + r_m)^t,  r_m = (1+r)^(1/12) − 1  (monthly grid)' },
+      { k: 'IRR', f: 'solve Σ CFₜ ÷ (1 + r_m)^t = 0; annualised as (1+r_m)^12 − 1  (Newton, bisection fallback)' },
       { k: 'PV of TV', f: 'TV ÷ (1 + r)^holdYears' },
     ],
     inputs: ['Discount rate / WACC', 'Hold period', 'Final-quarter terminal value'],
@@ -789,7 +789,7 @@ function DCFFlowSection({ assetClass }) {
       commercial_office: 'Office TV is dominated by exit-cap sensitivity — a 50bps compression swings NPV materially. Run the Value-vs-Cap curve in the viz layer.',
       retail: 'Retail blends anchor (discounted) + inline rents, and exit caps trade 75–125 bps wider than office.',
       industrial_warehousing: 'Warehousing has the tightest opex ratio (~15%) and cap rates in the 7.5–9.5% band.',
-      hospitality: 'Hospitality substitutes EBITDA for NOI. TV default is exit multiple on stabilized EBITDA (9–12×).',
+      hospitality: 'Hospitality substitutes EBITDA for NOI, and exits on the exit CAP RATE applied to stabilised EBITDA-level NOI — not on an EBITDA multiple.',
     };
     return notes[assetClass] || notes.commercial_office;
   }, [assetClass]);
