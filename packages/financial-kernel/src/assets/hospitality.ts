@@ -528,6 +528,15 @@ export function computeHospitality(inputs: DealInputs): KernelResult {
     exitValue: exitValueCr.toNumber(),
     entryValue: entryValueCr.toNumber(),
     exitCapRate: exitCapRatePct,
+    // Operands of the exit valuation — see income.ts for why the Terminal
+    // Value panel needs these. Hospitality capitalises stabilised EBITDA-level
+    // NOI at the exit cap; `exitNOICr` is that grown NOI.
+    noiAtExit: exitNOICr.toNumber(),
+    terminalValue: exitValueCr.toNumber(),
+    terminalValuePV: exitCapRatePct > 0
+      ? exitValueCr.toNumber()
+        / Math.pow(1 + discountRatePct / 100, holdPeriodYears + constructionMonths / 12)
+      : null,
     dscr,
     revPAR: revPARStabilised,
     revPar: revPARStabilised,

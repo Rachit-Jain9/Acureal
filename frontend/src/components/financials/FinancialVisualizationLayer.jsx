@@ -8,7 +8,7 @@ import {
   TrendingUp, DollarSign, Layers, Target, Activity,
   GitBranch, Gauge, LineChart as LineIcon, BarChart3,
 } from 'lucide-react';
-import { formatCrores, formatPct, formatINR } from '../../utils/format';
+import { formatCrores, formatCroresOrDash, formatPct, formatINR } from '../../utils/format';
 import { useChartAnim } from '../../hooks/useChartAnim';
 
 // ─── DESIGN TOKENS (Precision Analysis) ───────────────────────────────────
@@ -165,11 +165,27 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
   // Early return AFTER all hooks — see the note at the top of the component.
   if (!method) return null;
 
+  // This panel exists so an IC member can check how the exit number was
+  // derived. A derivation printed from operands that are absent is worse than
+  // no derivation: it reads as an audit trail while asserting arithmetic that
+  // never happened. Commercial Retail showed "NOI_exit ÷ Exit Cap =
+  // ₹0.00Cr ÷ 9.00%" beneath a ₹19.12 Cr terminal value, because the operands
+  // defaulted to 0. Build an entry ONLY when its operands are actually present;
+  // anything else renders the honest unavailable state below.
+  const hasOperands = (...vals) => vals.every((v) => Number.isFinite(v) && v !== 0);
   const formulaMap = {
-    exit_cap_rate:     `NOI_exit ÷ Exit Cap = ₹${noiExit.toFixed(2)}Cr ÷ ${capPct.toFixed(2)}%`,
-    exit_multiple:     `NOI_stabilized × Multiple = ₹${noiStab.toFixed(2)}Cr × ${exitMultipleInput.toFixed(1)}×`,
-    perpetuity_growth: `NOI_exit × (1+g) ÷ (r−g) = ₹${noiExit.toFixed(2)}Cr × ${(1 + gPct / 100).toFixed(3)} ÷ ${(discountPct - gPct).toFixed(2)}%`,
-    forward_purchase:  `Contractual price = ₹${fwdCr.toFixed(2)} Cr`,
+    ...(hasOperands(noiExit, capPct) && {
+      exit_cap_rate: `NOI_exit ÷ Exit Cap = ₹${noiExit.toFixed(2)}Cr ÷ ${capPct.toFixed(2)}%`,
+    }),
+    ...(hasOperands(noiStab, exitMultipleInput) && {
+      exit_multiple: `NOI_stabilized × Multiple = ₹${noiStab.toFixed(2)}Cr × ${exitMultipleInput.toFixed(1)}×`,
+    }),
+    ...(hasOperands(noiExit, discountPct - gPct) && {
+      perpetuity_growth: `NOI_exit × (1+g) ÷ (r−g) = ₹${noiExit.toFixed(2)}Cr × ${(1 + gPct / 100).toFixed(3)} ÷ ${(discountPct - gPct).toFixed(2)}%`,
+    }),
+    ...(hasOperands(fwdCr) && {
+      forward_purchase: `Contractual price = ₹${fwdCr.toFixed(2)} Cr`,
+    }),
   };
 
   return (
@@ -191,7 +207,9 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
 
         <div className="bg-bg-secondary rounded-lg border border-hairline p-4">
           <div className="text-[11px] font-semibold uppercase text-content-muted tracking-wide">PV of Terminal Value</div>
-          <div className="mt-1 text-2xl font-bold text-content-primary tabular-nums">{formatCrores(tvPv)}</div>
+          {/* An unmodelled PV must read as absent, not as ₹0.00 Cr — a real
+              zero and a missing value are different claims about the deal. */}
+          <div className="mt-1 text-2xl font-bold text-content-primary tabular-nums">{formatCroresOrDash(tvPv)}</div>
           <div className="mt-1 text-[11px] text-content-secondary">Discounted at {discountPct.toFixed(1)}% to t=0</div>
         </div>
 
@@ -207,7 +225,9 @@ export function TerminalValuePanel({ kpis, revenue, inputs }) {
       <div className="px-5 pb-3">
         <div className="rounded-lg bg-bg-secondary border border-hairline p-3">
           <div className="text-[10px] font-bold uppercase tracking-wider text-content-muted mb-1">Formula in use</div>
-          <div className="font-mono text-[13px] text-content-primary">{formulaMap[method] || '—'}</div>
+          <div className={formulaMap[method] ? 'font-mono text-[13px] text-content-primary' : 'text-[13px] text-content-muted'}>
+            {formulaMap[method] || 'Derivation unavailable — recompute the model'}
+          </div>
         </div>
       </div>
 
