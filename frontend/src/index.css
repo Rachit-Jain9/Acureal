@@ -1,4 +1,12 @@
-@import url('https://rsms.me/inter/inter.css');
+/* Inter is loaded by the <link> to fonts.googleapis.com in index.html, which is
+   the origin the CSP `style-src` allows. A second @import from rsms.me used to
+   sit here: it was blocked on every single production page load
+   ("Loading the stylesheet 'https://rsms.me/inter/inter.css' violates the
+   following Content Security Policy directive"), so it never contributed a
+   glyph — it only produced a console error that made the real errors harder to
+   see. Removed rather than allow-listed: adding a third-party origin to the CSP
+   to duplicate a font we already serve would widen the policy, add a DNS+TLS
+   round trip to first paint, and leak visitor IPs to another host. */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;

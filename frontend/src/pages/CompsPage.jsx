@@ -20,6 +20,7 @@ import PageHeader from '../components/common/PageHeader';
 import PageIntro from '../components/guide/PageIntro';
 import ProvenanceCell from '../components/common/ProvenanceCell';
 import { deriveCompProvenance } from '../utils/compProvenance';
+import { scrollIntoView } from '../utils/motion';
 import DataToolbar from '../components/common/DataToolbar';
 import SortableHeader, { applySort, cycleSort } from '../components/common/SortableHeader';
 import { SkeletonList, confirm, Modal, Button } from '../design-system';
@@ -568,10 +569,7 @@ export default function CompsPage() {
   // {block: 'nearest'} so the page doesn't yank if the row is already in view.
   useEffect(() => {
     if (!selectedCompId) return;
-    const el = rowRefs.current[selectedCompId];
-    if (el && typeof el.scrollIntoView === 'function') {
-      el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    scrollIntoView(rowRefs.current[selectedCompId], { block: 'nearest' });
   }, [selectedCompId, safePage]);
 
   return (
