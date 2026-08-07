@@ -205,6 +205,9 @@ const precomputeDeckAssets = async (exportContext, baseContext, options) => {
       medium: Number(riskSummary.medium) || 0,
       low: Number(riskSummary.low) || 0,
     },
+    // See buildReport.js — the gauge slide renders this score; an empty
+    // register must not gauge the same as a clean one.
+    riskRegisterPopulated: riskSummary.recorded === true,
     financialModelPresent: !!baseContext.hasFinancialModel,
   };
   const dealScore = computeDealScore(scoreInput);

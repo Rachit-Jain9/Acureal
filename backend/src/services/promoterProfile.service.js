@@ -132,6 +132,14 @@ const assessPromoter = (profile) => {
       text: 'Promoter recorded, but delivery history not yet filled in',
     });
   }
+  if (profile.rera_registered === true && !Number.isFinite(profile.rera_complaints)) {
+    // Acureal has no K-RERA complaints feed — a blank field means nobody has
+    // looked, not that the register is clean. Same reasoning as the
+    // deliveredTotal === 0 clause above: unchecked keeps the posture
+    // unverified rather than letting it reach `cleared`.
+    warns += 1;
+    signals.push({ tone: 'warn', text: 'RERA complaints not yet checked' });
+  }
 
   let posture;
   if (problems > 0) posture = 'flagged';
@@ -147,7 +155,10 @@ const assessPromoter = (profile) => {
           : 'Promoter track record recorded — no concerns flagged',
     });
     if (profile.rera_registered === true) {
-      signals.push({ tone: 'positive', text: 'RERA-registered, no complaints on record' });
+      // Reachable only when rera_complaints is a real recorded 0 — the warn
+      // above keeps an unchecked profile out of the `cleared` branch entirely.
+      // Phrased as what the register says, not as a statutory conclusion.
+      signals.push({ tone: 'positive', text: 'RERA-registered; complaints recorded: 0' });
     }
   }
 

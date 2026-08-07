@@ -93,13 +93,14 @@ describe('getPortfolioRiskRadar', () => {
     });
     const radar = await portfolioRadar.getPortfolioRiskRadar();
     expect(radar.open_severity.total).toBe(0);
-    // A resolved flag still marks the mode as assessed → cleared in that
-    // category, which (with no required DD anywhere else) leaves the deal
-    // unverified overall.
+    // A resolved flag no longer marks the mode "assessed". Logging one ticket
+    // and closing it is not a diligence pass over the failure mode, and
+    // treating it as one let a single closed flag clear an entire lane.
     expect(radar.totals.cleared).toBe(0);
     expect(radar.totals.unverified).toBe(1);
     const market = radar.failure_modes.find((m) => m.key === 'market');
-    expect(market.cleared_deals).toBe(1);
+    expect(market.cleared_deals).toBe(0);
+    expect(market.unverified_deals).toBe(1);
   });
 
   test('ranks top-at-risk by open_critical then score then open_high', async () => {
@@ -122,7 +123,12 @@ describe('getPortfolioRiskRadar', () => {
     expect(order).toEqual(['d1', 'd2', 'd3']);
   });
 
-  test('cleared portfolio shows no deals in top-at-risk', async () => {
+  // A fully-diligenced deal has nothing at risk — but it is still not
+  // "cleared" at the portfolio level, because Title & Ownership and
+  // Approvals & Regulatory are legal-four lanes whose completed checklist
+  // yields `recorded`, and `recorded` counts with unverified. That is the
+  // point: the dashboard must never colour green off checklist completion.
+  test('a fully-diligenced deal has nothing at risk, but is not counted cleared', async () => {
     wire({
       deals: [deal({ id: 'd1' })],
       // Every required DD across every category completed.
@@ -132,20 +138,28 @@ describe('getPortfolioRiskRadar', () => {
         { deal_id: 'd1', category: 'statutory', status: 'completed', is_required: true },
         { deal_id: 'd1', category: 'financial_commercial', status: 'completed', is_required: true },
         { deal_id: 'd1', category: 'physical_technical', status: 'completed', is_required: true },
+        { deal_id: 'd1', category: 'market', status: 'completed', is_required: true },
       ],
       // Required approvals all validated.
       approvals: [
         { deal_id: 'd1', is_required: true, is_validated: true, expiry_date: '2030-01-01' },
       ],
-      // One closed flag in Market so the failure mode is "assessed".
-      flags: [{ deal_id: 'd1', category: 'market', severity: 'low', status: 'resolved' }],
     });
     const radar = await portfolioRadar.getPortfolioRiskRadar();
-    // The market category was the only one we marked assessed; the others are
-    // assessed via completed DD. So every category is cleared → deal cleared.
-    expect(radar.totals.cleared).toBe(1);
     expect(radar.totals.flagged).toBe(0);
     expect(radar.top_deals_at_risk).toEqual([]);
+    expect(radar.totals.cleared).toBe(0);
+    expect(radar.totals.unverified).toBe(1);
+
+    // The non-legal-four lanes DO clear on completed required diligence.
+    const financial = radar.failure_modes.find((m) => m.key === 'financial');
+    expect(financial.cleared_deals).toBe(1);
+    // The two legal-four lanes never do.
+    for (const key of ['title_ownership', 'approvals_regulatory']) {
+      const mode = radar.failure_modes.find((m) => m.key === key);
+      expect(mode.cleared_deals).toBe(0);
+      expect(mode.unverified_deals).toBe(1);
+    }
   });
 
   test('expired required approval flags Approvals mode and the deal', async () => {

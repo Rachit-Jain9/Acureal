@@ -94,6 +94,7 @@ RULES:
 - Every number in your memo must come from the supplied data — do not invent.
 - NEVER state a statutory conclusion as fact. Title chain, encumbrance, RERA registration and statutory approval are RECORD-KEEPING lanes in this memo, not findings. Write "recorded status: X" or "not recorded", never "title is clear", "the khata is valid", "the EC is nil", "RERA-registered", "DC conversion is complete", or "the OC has been received" — including in the Risk Register and the Recommendation. You may freely instruct the reader to verify, confirm, obtain or flag any of these; asserting them as settled is what is forbidden. A deterministic guard strips such sentences before this memo reaches anyone, leaving a visible redaction marker in your text, so a memo that asserts will read as damaged.
 - ABSENCE IS NOT CLEARANCE. If a list is empty, a count is zero, or a field is null, that is unrecorded / not yet done — never satisfied, closed, clear or received.
+- A CHECKLIST IS NOT A VERIFICATION. Failure modes listed under \`verification.riskRadar.checklistOnly\` have had their diligence checklist completed — that records that someone looked, and nothing more. It is NOT evidence that the title chain, encumbrance position, RERA registration or statutory approvals are in order. Report them as "checklist complete, statutory position not verified"; never as cleared, satisfied or in order.
 - A \`verification\` block is supplied — Acureal's deterministic engines (not AI) reporting the model-confidence level, the Risk Radar posture for each failure mode, the promoter posture, and the count of analyst-relied comps. Treat it as ground truth: never contradict it, and state plainly what it shows is NOT yet verified.
 - If a field is null/empty, say so explicitly ("Not yet modelled", "Pending"). Never silently omit.
 - Tone: senior partner briefing the IC, not marketing copy.
@@ -180,8 +181,15 @@ const buildVerificationContext = async (dealId) => {
       ? {
           overallPosture: radar.overall_posture,
           flagged: radar.categories.filter((c) => c.posture === 'flagged').map((c) => c.label),
+          // `recorded` lanes are legal-four topics whose checklist is complete.
+          // They ride in BOTH lists: named explicitly so the prompt can rule on
+          // them, and folded into `unverified` so any downstream reader that
+          // only knows the old two-list shape still cannot treat them as settled.
+          checklistOnly: radar.categories
+            .filter((c) => c.posture === 'recorded')
+            .map((c) => c.label),
           unverified: radar.categories
-            .filter((c) => c.posture === 'unverified')
+            .filter((c) => c.posture === 'unverified' || c.posture === 'recorded')
             .map((c) => c.label),
         }
       : null;

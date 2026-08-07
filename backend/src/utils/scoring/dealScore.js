@@ -85,7 +85,10 @@ const bandFor = (score) => {
  * @param {number} inputs.grossMarginPct
  * @param {number} inputs.dscr                  Min DSCR for the project
  * @param {number} inputs.ddCompletionPct       0–100
- * @param {Object} inputs.riskCounts            { critical, high, medium, low }
+ * @param {Object} inputs.riskCounts            { critical, high, medium, low } — OPEN risks only
+ * @param {boolean} inputs.riskRegisterPopulated  Whether ANY risk row exists for the deal.
+ *   Required to earn the 25-pt risk baseline. Defaults to false (fail-closed):
+ *   zero open risks on an empty register is absence, not clearance.
  * @param {boolean} inputs.financialModelPresent
  * @param {number} inputs.dataPointsKnown       Count of populated structured fields
  * @param {number} inputs.dataPointsTotal       Total expected fields for this asset class
@@ -156,27 +159,47 @@ const computeDealScore = (inputs = {}) => {
 
   // Component 5: Risk severity — up to 25 pts deducted from a 25-pt baseline
   // Critical = -10 each, High = -5, Medium = -2, Low = -0.5. Floors at 0.
+  //
+  // ABSENCE IS NOT CLEARANCE. The baseline is a reward for a register that was
+  // populated and came back clean; it was previously also handed to every deal
+  // whose register had never been opened, because both states present as
+  // zero counts. On a deal with no risk work those 25 points were ~45% of the
+  // score printed at 48pt on the DOCX cover and on the PPTX gauge — an IC
+  // reading a diligenced-and-clean number off an untouched register.
+  // Fail-closed: only an explicit `true` earns the baseline, so a caller that
+  // forgets to thread the flag scores 0 rather than silently scoring full.
   {
-    const counts = inputs.riskCounts || {};
-    const critical = num(counts.critical) || 0;
-    const high     = num(counts.high) || 0;
-    const medium   = num(counts.medium) || 0;
-    const low      = num(counts.low) || 0;
+    const populated = inputs.riskRegisterPopulated === true;
     const baseline = 25;
-    const deduction =
-      critical * 10 +
-      high * 5 +
-      medium * 2 +
-      low * 0.5;
-    const awarded = Math.round(Math.max(0, baseline - deduction));
-    breakdown.push({
-      component: 'Risk register (baseline 25 pts, deductions for severity)',
-      max: baseline,
-      awarded,
-      reason:
-        `${critical} critical / ${high} high / ${medium} medium / ${low} low ` +
-        `→ ${deduction.toFixed(1)} pts deducted`,
-    });
+
+    if (!populated) {
+      breakdown.push({
+        component: 'Risk register (baseline 25 pts, deductions for severity)',
+        max: baseline,
+        awarded: 0,
+        reason: 'Risk register not populated — no risk assessment on file, 0 pts awarded',
+      });
+    } else {
+      const counts = inputs.riskCounts || {};
+      const critical = num(counts.critical) || 0;
+      const high     = num(counts.high) || 0;
+      const medium   = num(counts.medium) || 0;
+      const low      = num(counts.low) || 0;
+      const deduction =
+        critical * 10 +
+        high * 5 +
+        medium * 2 +
+        low * 0.5;
+      const awarded = Math.round(Math.max(0, baseline - deduction));
+      breakdown.push({
+        component: 'Risk register (baseline 25 pts, deductions for severity)',
+        max: baseline,
+        awarded,
+        reason:
+          `${critical} critical / ${high} high / ${medium} medium / ${low} low ` +
+          `→ ${deduction.toFixed(1)} pts deducted`,
+      });
+    }
   }
 
   // Component 6: Financial model presence — 5 pts (binary)

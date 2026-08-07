@@ -2881,6 +2881,10 @@ const buildReportContext = (exportContext = {}, options = {}) => {
       medium: num(riskSummary.medium) || 0,
       low: num(riskSummary.low) || 0,
     },
+    // Zero open risks earns the 25-pt baseline only if a register exists to be
+    // clean. Without this the score cannot tell "diligenced, no issues" from
+    // "never assessed" — and prints the flattering one at 48pt.
+    riskRegisterPopulated: riskSummary.recorded === true,
     financialModelPresent: !!(totalCost != null || totalRevenue != null || irr != null),
   });
 

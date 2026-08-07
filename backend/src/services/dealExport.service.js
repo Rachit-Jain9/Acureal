@@ -622,7 +622,13 @@ const getDealExportContext = async (dealId, options = {}) => {
         COUNT(*) FILTER (WHERE status IN ('open', 'flagged') AND severity = 'critical') AS critical,
         COUNT(*) FILTER (WHERE status IN ('open', 'flagged') AND severity = 'high') AS high,
         COUNT(*) FILTER (WHERE status IN ('open', 'flagged') AND severity = 'medium') AS medium,
-        COUNT(*) FILTER (WHERE status IN ('open', 'flagged') AND severity = 'low') AS low
+        COUNT(*) FILTER (WHERE status IN ('open', 'flagged') AND severity = 'low') AS low,
+        -- Every risk row ever recorded, open or not. The four counters above are
+        -- open-only, so they read 0 both for "diligenced and clean" and for
+        -- "nobody has ever opened the risk register" — two states that must
+        -- never render alike. This column is what tells them apart downstream
+        -- (composite score, tear-sheet ribbon).
+        COUNT(*) AS recorded_total
        FROM risk_flags
        WHERE deal_id = $1
          AND deleted_at IS NULL`,
@@ -749,6 +755,11 @@ const getDealExportContext = async (dealId, options = {}) => {
   };
   riskSummary.total =
     riskSummary.critical + riskSummary.high + riskSummary.medium + riskSummary.low;
+  // `total` stays open-only — every existing consumer depends on that meaning.
+  // These two are additive and answer the different question: has anyone
+  // assessed risk on this deal at all?
+  riskSummary.total_ever = Number(riskSummaryResult.rows[0]?.recorded_total || 0);
+  riskSummary.recorded = riskSummary.total_ever > 0;
 
   const approvals = approvalsResult.rows;
   const documents = documentsResult.rows;

@@ -37,6 +37,9 @@ describe('buildPlaybook', () => {
       stage: 'due_diligence',
       readiness_summary: {
         dd_completion_pct: 95,
+        // A checklist must exist for a deal-breaker count to be meaningful —
+        // 95% complete implies required items, so the fixture now says so.
+        required_dd_count: 20,
         pending_deal_breakers: 2,
         approval_completion_pct: 40,
         document_count: 6,
@@ -85,5 +88,46 @@ describe('buildPlaybook', () => {
     expect(() =>
       buildPlaybook({ stage: 'due_diligence', readiness_summary: 'not-an-object' }),
     ).not.toThrow();
+  });
+});
+
+/**
+ * ABSENCE IS NOT CLEARANCE — the deal-breaker gate.
+ *
+ * `pending_deal_breakers === 0` reads identically for "every deal-breaker was
+ * resolved" and "no diligence checklist has ever been created". Live on
+ * Gattahalli, a deal sitting in IC review with zero DD items: the one
+ * checklist row whose job is to stop an unvetted deal reaching IC was ticked
+ * green because no diligence had been done at all.
+ */
+describe('deal-breaker steps require a checklist to exist', () => {
+  it('never ticks deal-breakers green when no DD checklist exists', () => {
+    for (const stage of ['due_diligence', 'underwriting', 'ic_review']) {
+      const pb = buildPlaybook({
+        stage,
+        readiness_summary: { required_dd_count: 0, pending_deal_breakers: 0 },
+      });
+      const step = pb.steps.find((s) => s.id === 'deal_breakers');
+      expect(step.status).toBe('pending');
+      expect(step.detail).toMatch(/no diligence checklist/);
+    }
+  });
+
+  it('still ticks deal-breakers green on a seeded, fully-resolved register', () => {
+    const pb = buildPlaybook({
+      stage: 'ic_review',
+      readiness_summary: { required_dd_count: 16, pending_deal_breakers: 0 },
+    });
+    expect(pb.steps.find((s) => s.id === 'deal_breakers').status).toBe('done');
+  });
+
+  it('reports the outstanding count when the register has unresolved items', () => {
+    const pb = buildPlaybook({
+      stage: 'ic_review',
+      readiness_summary: { required_dd_count: 16, pending_deal_breakers: 3 },
+    });
+    const step = pb.steps.find((s) => s.id === 'deal_breakers');
+    expect(step.status).toBe('pending');
+    expect(step.detail).toMatch(/3 unresolved/);
   });
 });

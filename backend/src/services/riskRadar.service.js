@@ -121,10 +121,19 @@ const emptyCategory = (cat) => ({
     : null,
 });
 
+// Two of the seven failure modes are lanes of the "legal four" — the topics
+// CLAUDE.md forbids the product from concluding on. Ticking a diligence
+// checklist is evidence that someone looked; it is NOT verification of the
+// title chain or of statutory approval status, and no amount of checkbox
+// completion may be rendered as "Cleared" for them. They get their own posture.
+const CHECKLIST_ONLY = new Set(['title_ownership', 'approvals_regulatory']);
+
 // Deterministic posture + human-readable signals for one category.
 //   flagged    — an active problem (open flag, flagged DD item, overdue
 //                required DD item, or expired approval)
 //   cleared    — the category was assessed and all required work is done
+//   recorded   — legal-four lane: the checklist is complete, which is not the
+//                same as the statutory position being verified. Never green.
 //   unverified — not yet cleared: required work open, or nothing checked at all
 const assessCategory = (c) => {
   const { flags, diligence: dd, approvals: ap } = c;
@@ -136,11 +145,24 @@ const assessCategory = (c) => {
     || dd.overdue > 0
     || (ap ? ap.expired_required > 0 : false);
   const openWork = dd.required_open > 0 || (ap ? ap.required_pending > 0 : false);
-  const assessed = dd.total > 0 || flags.ever > 0 || (ap ? ap.total > 0 : false);
+  // `assessed` must mean required work actually exists and was done — not that
+  // the lane was merely touched. Counting `flags.ever` or any DD row let a
+  // single resolved flag, or a lane of purely optional pending items, present
+  // as a completed assessment.
+  const assessed = dd.completed > 0 || dd.required_total > 0 || (ap ? ap.required_total > 0 : false);
+
+  // Statutory diligence rows are not an approvals register. A deal with title
+  // DD ticked but zero approval records has had no approval evidence recorded
+  // at all, and must not read as anything but unverified.
+  const approvalsRegisterEmpty = c.key === 'approvals_regulatory' && (!ap || ap.total === 0);
+  if (approvalsRegisterEmpty) {
+    signals.push({ tone: 'warn', text: 'No approval records on file for this deal' });
+  }
 
   let posture;
   if (hasProblem) posture = 'flagged';
-  else if (assessed && !openWork) posture = 'cleared';
+  else if (approvalsRegisterEmpty) posture = 'unverified';
+  else if (assessed && !openWork) posture = CHECKLIST_ONLY.has(c.key) ? 'recorded' : 'cleared';
   else posture = 'unverified';
 
   if (flags.total > 0) {
@@ -191,6 +213,13 @@ const assessCategory = (c) => {
   }
   if (posture === 'cleared') {
     signals.push({ tone: 'positive', text: 'Required diligence complete — no open flags' });
+  }
+  if (posture === 'recorded') {
+    signals.push({
+      tone: 'neutral',
+      text: 'Checklist complete — verify against primary records. '
+        + 'Acureal does not clear title, encumbrance, RERA or statutory approval status.',
+    });
   }
 
   return { posture, signals };
@@ -324,9 +353,12 @@ const getRiskRadar = async (dealId) => {
     }
   }
 
+  // `recorded` counts with unverified, never with cleared: a completed
+  // checklist on a legal-four lane must not let the page conclude
+  // "every assessed failure mode is cleared".
   const overall_posture = categories.some((c) => c.posture === 'flagged')
     ? 'flagged'
-    : categories.some((c) => c.posture === 'unverified')
+    : categories.some((c) => c.posture === 'unverified' || c.posture === 'recorded')
       ? 'unverified'
       : 'cleared';
 
