@@ -6,6 +6,148 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-08 — an eight-lens audit, and the two clusters worth shipping first (#1106, #1107)
+
+Open brief: find and finish everything pending, highest-impact first. Three
+things framed the work before any code was written.
+
+**All 30 prior sessions were enumerated: every PR merged, none running.** No
+work was stranded anywhere. All genuine pending work lives in the TODO files.
+
+**Production was read first, again, and again decided the priorities.** 9 users,
+3 active in 7 days, 11 active deals, 24 documents, 84 DD items, 81 comps,
+**0 deal shares and 0 invitations ever**, 0 dotted-gmail users, zero Vercel
+runtime errors in 7 days, security advisors clean (only PostGIS-owned lints).
+That killed two candidates outright: more collaboration plumbing serves nobody
+yet, and the deferred gmail-two-shapes invitation migration still affects zero
+production users. Nothing is crashing, so the wins were never stability — they
+were things shown to users that are WRONG, and craft.
+
+**The audit**: 8 lenses (trust-numbers, trust-absence, broken-promises,
+frontend-craft, performance, integration-seams, data-credibility,
+export-integrity), every finding adversarially refuted before it counted.
+54 agents, ~6.2M tokens. **39 confirmed, 3 refuted.** Synthesised into 5
+clusters; the top 2 shipped today.
+
+### #1106 — absence is not clearance, everywhere else
+
+#1100 fixed the instance that reached investment committees. The same class was
+alive in **seven** more places, all the same shape: a filtered `COUNT` of zero
+rendering as a positive statement, because "diligenced and clean" and "nobody
+has ever looked" are indistinguishable to it.
+
+The composite score handed the full 25-pt risk baseline to deals whose register
+was never opened — ~45% of the number printed at 48pt on the DOCX cover.
+The tear-sheet PDF printed a green "OPEN RISK FLAGS 0" on page 1 for six live
+deals with no register. IC Readiness awarded 8/100 as green "Verified" across
+three never-populated registers — on eight of eleven live deals it was the ONE
+bucket that looked worked-through. The dashboard tile painted green over a
+73%-unassessed portfolio while an amber "Not verified" pill contradicted it
+inches away. The stage playbook ticked "Clear all deal-breaker risks" green on
+a deal in IC review with zero DD items — the row that exists to stop an
+unvetted deal reaching IC, satisfied by doing no diligence at all.
+
+Two deserve recording in full:
+
+**The legal four failing in deterministic UI.** Risk Radar rendered a green
+CheckCircle and "Title & Ownership — Cleared" off checkbox ticks, with the
+summary "Every assessed failure mode is cleared." `sanitizeAiProse` cannot
+catch this — the string is deterministic UI, not AI prose, so the guard built
+for exactly this rule never saw it. Those two lanes now emit a distinct
+`recorded` posture ("Checklist complete", never green) carrying an explicit
+"Acureal does not clear title, encumbrance, RERA or statutory approval status".
+Statutory DD rows no longer stand in for an approvals register; `recorded`
+counts with unverified in the portfolio rollup so the dashboard cannot
+re-inflate the claim.
+
+**A contract mismatch hiding behind 177 passing tests.** icReadiness's risk
+detector reads a flat numeric `risk.score` per its own docstring; the real
+caller passes `getRiskScore()`'s OBJECT. The numeric read produced null, the
+branch was never exercised, and zero flags fell into `verified`. The suite
+could not see it because its fixtures used a shape production never emits — the
+same lesson as the legal-four guard blind spot. The new test feeds the real
+caller shape and fails on master.
+
+Six existing assertions encoded the defect and were updated, not deleted.
+
+### #1107 — the Financial Engine must describe the model it actually ran
+
+Four surfaces described a different model from the one that produced the
+numbers beside them. No computed result changed; what changed is what the
+product claims about them.
+
+**Terminal Value Method was a live dropdown the kernel never read.** Grep
+proved it: `terminalValueMethod`, `exitMultiple`, `perpetuityGrowthPct`,
+`exitStrategy`, the `lrd*` trio and `forwardPurchasePriceCr` have ZERO
+references across the kernel and engines. A live ₹522 Cr office deal showed
+₹805.53 Cr badged "Forward Purchase" over a cap-rate valuation, with IRR, NPV
+and equity multiple all assuming the open-market sale. Removed rather than
+modelled — CLAUDE.md forbids production-ready UI over an unsupported workflow —
+and the API validators went with them so the backend stops accepting inputs it
+discards. `normalizeFinancials` no longer falls back to the raw INPUT for the
+label; it may only describe the computation that produced the number.
+
+**The audit line was arithmetic that never happened.** "NOI_exit ÷ Exit Cap =
+₹0.00Cr ÷ 9.00%" beneath a ₹19.12 Cr terminal value, on the one panel whose job
+is to let an IC member check the working. The kernel now emits `noiAtExit` /
+`terminalValue` / `terminalValuePV` (all three already existed as locals — no
+new maths), and the panel builds a formula only when its operands are present.
+
+**Methodology Explorer documented four formulas the kernel does not use** —
+the surface the deterministic-kernel promise is sold on. Corrected against
+source: discounting is monthly `(1+r)^(1/12)−1` annualised `(1+r_m)^12−1`
+(`kpis.ts:25,76`), not `r/4`; debt interest is geometric quarterly
+`(1+rate)^0.25−1` on the balance INCLUDING that quarter's draw
+(`debtSchedule.ts:72`), not `rate/4` on the prior balance; terminal value is
+cap-rate-only; hospitality exits on the cap rate, not an EBITDA multiple.
+
+**The Debt Schedule panel vanished on levered income deals** — Hopefarm carries
+₹339.54 Cr at 14% with 1.79x DSCR and rendered nothing, silently. Two shape
+mismatches (flat `debtSchedule` bundle vs `{termLoan, lrd}`; `debtPct` vs
+`debtLTV`), both kernel-emitted, so normalising is a rename not an invention.
+
+### Also this session
+
+- **SESSION_LOG was half-invisible.** Both 2026-08-07 entries had been appended
+  to the BOTTOM of a newest-first file, 11,800 lines down. Anyone reading the
+  top would have concluded the last work was 2026-08-06. Reordered; proven a
+  pure move (8,899 non-empty lines before and after, sorted content identical).
+
+### Operator items raised
+
+- **Local dev points at PRODUCTION as `postgres`** — a superuser that bypasses
+  RLS. Two risks: local testing reads/writes live data, and it does not
+  exercise the `redip_app` posture production runs under, which is precisely
+  the "works locally, silently returns nothing in prod" trap that produced
+  several bugs this month. A preview branch already exists. Operator decision.
+- **Scores fall across most live deals** after #1106. Intended: the old numbers
+  were flattering absent data.
+
+### What is left, ranked (from the audit synthesis)
+
+- **PR-B** — nothing leaves the building claiming market or statutory support it
+  lacks. 9 findings, highest per-artifact stakes: the IC-memo prompt's worked
+  EXAMPLE (₹18,500/sqft, a Whitefield range) is being printed as the deal's own
+  assumption; memos and exports are fed the priciest comps in all of Bengaluru
+  captioned "in this submarket". Highest risk too — prompt changes are not
+  unit-testable and must be validated by regenerating memos for three real
+  deals and reading them.
+- **PR-D** — opening a deal assembles the workspace TWICE concurrently
+  (326 SQL round-trips, two ~190 KB payloads 94% identical); parcel edits never
+  invalidate the workspace cache; `/assets/*` served `max-age=0`.
+- **PR-E** — 11 craft findings, zero logic risk.
+- **The sensitivity grid** (deferred out of #1107): a second, simplified model
+  whose base cell disagrees with the headline IRR by ~1.4 points on both live
+  income deals, always optimistic. Needs a per-cell kernel re-run, a base-cell
+  equality test, and a recompute of two live deals whose wrong grids are
+  persisted.
+
+Explicitly NOT done, and why: the `database.js` round-trip fusion (rewrites the
+tenant-context invariant — own PR, own pooler test); modelling the terminal-value
+methods in the kernel; the follow-up-reminder feature (0 of 40 production
+activities ever used the field — fix the word, refuse the feature); any live
+data edits.
+
 ## 2026-08-07 (continued) — the IC memo was telling committees approvals were done when none existed (#1100, #1101)
 
 ### What was worked on
