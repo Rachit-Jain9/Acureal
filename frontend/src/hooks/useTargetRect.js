@@ -10,6 +10,7 @@
 // per step, not twice.
 
 import { useLayoutEffect, useState } from 'react';
+import { scrollIntoView as scrollElementIntoView } from '../utils/motion';
 
 export default function useTargetRect(selector, { scrollIntoView = false } = {}) {
   const [rect, setRect] = useState(null);
@@ -43,7 +44,7 @@ export default function useTargetRect(selector, { scrollIntoView = false } = {})
       const el = document.querySelector(selector);
       if (el && typeof el.scrollIntoView === 'function') {
         try {
-          el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+          scrollElementIntoView(el, { block: 'nearest', inline: 'nearest' });
         } catch (_) {
           // older browsers without smooth-scroll options — ignore.
         }

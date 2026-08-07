@@ -29,6 +29,7 @@
 
 const { query } = require('../config/database');
 const { LIVE_DEAL_STAGES } = require('../constants/domain');
+const log = require('../lib/logger').child({ module: 'attention' });
 
 const LIMIT_OVERDUE_DD = 10;
 const LIMIT_EXPIRING_APPROVALS = 5;
@@ -39,14 +40,40 @@ const EXPIRING_WINDOW_DAYS = 30;
 const NEW_RISK_WINDOW_DAYS = 7;
 const STALE_DEAL_DAYS = 14;
 
-const safeRows = (p) => p.then((r) => r.rows).catch(() => []);
+/**
+ * Degrade one signal to an empty list rather than fail the whole tile — but
+ * NEVER silently.
+ *
+ * This used to be `.catch(() => [])` with no logger anywhere in the file, which
+ * on a surface called "Today's Attention" is the worst available failure mode:
+ * a broken query and a genuinely clear portfolio render as the same thing, and
+ * the message the user reads is "nothing needs your attention". That is the
+ * one sentence this service must never say when it does not know.
+ *
+ * This repo has shipped that class before — a deal audit trail that had been
+ * dead for four months, an invitation loop that never sent — so the rule here
+ * is that a swallowed error still costs a log line. Codes and counts only:
+ * these rows are customer deal data.
+ *
+ * The caller also gets the signal names that failed (see `getAttention`, which
+ * surfaces them as `unavailable`), so the tile can say "I could not check this"
+ * instead of implying an all-clear.
+ */
+const safeRows = (signal, p, failures) =>
+  p
+    .then((r) => r.rows)
+    .catch((err) => {
+      failures.push(signal);
+      log.error('attention_signal_failed', err, { signal, code: err?.code || null });
+      return [];
+    });
 
 /**
  * Overdue required DD items, ordered by most overdue first.
  * Joins deals to filter live + non-archived and to carry deal context.
  */
-const getOverdueDdItems = () =>
-  safeRows(query(
+const getOverdueDdItems = (failures = []) =>
+  safeRows('overdue_dd_items', query(
     `SELECT dd.id,
             dd.deal_id,
             dd.item_name,
@@ -69,15 +96,15 @@ const getOverdueDdItems = () =>
       ORDER BY dd.due_date ASC
       LIMIT $2`,
     [LIVE_DEAL_STAGES, LIMIT_OVERDUE_DD],
-  ));
+  ), failures);
 
 /**
  * Required approvals whose expiry_date is in (now, now + 30 days],
  * ordered by soonest to expire. Excludes already-expired (those already
  * count as a flagged signal on the Risk Radar).
  */
-const getExpiringApprovals = () =>
-  safeRows(query(
+const getExpiringApprovals = (failures = []) =>
+  safeRows('expiring_approvals', query(
     `SELECT ap.id,
             ap.deal_id,
             ap.name,
@@ -101,14 +128,14 @@ const getExpiringApprovals = () =>
       ORDER BY ap.expiry_date ASC
       LIMIT $3`,
     [LIVE_DEAL_STAGES, EXPIRING_WINDOW_DAYS, LIMIT_EXPIRING_APPROVALS],
-  ));
+  ), failures);
 
 /**
  * Newly opened risk flags (in the last 7 days), ordered by severity
  * weight then created_at desc. Excludes resolved flags.
  */
-const getNewRiskFlags = () =>
-  safeRows(query(
+const getNewRiskFlags = (failures = []) =>
+  safeRows('new_risk_flags', query(
     `SELECT rf.id,
             rf.deal_id,
             rf.title,
@@ -137,7 +164,7 @@ const getNewRiskFlags = () =>
                rf.created_at DESC
       LIMIT $3`,
     [LIVE_DEAL_STAGES, NEW_RISK_WINDOW_DAYS, LIMIT_NEW_RISK],
-  ));
+  ), failures);
 
 /**
  * Live deals with no activity rows in the last 14 days. Falls back to
@@ -146,8 +173,8 @@ const getNewRiskFlags = () =>
  * "stale" threshold honest: only deals whose last touch was > 14 days
  * ago are returned.
  */
-const getStaleDeals = () =>
-  safeRows(query(
+const getStaleDeals = (failures = []) =>
+  safeRows('stale_deals', query(
     `SELECT d.id,
             d.name,
             d.stage,
@@ -164,14 +191,14 @@ const getStaleDeals = () =>
       ORDER BY last_activity_at ASC
       LIMIT $3`,
     [LIVE_DEAL_STAGES, STALE_DEAL_DAYS, LIMIT_STALE_DEALS],
-  ));
+  ), failures);
 
 /**
  * Last 10 activity rows across the live portfolio, denormalised with
  * deal name and performer name for one-shot rendering.
  */
-const getRecentActivity = () =>
-  safeRows(query(
+const getRecentActivity = (failures = []) =>
+  safeRows('recent_activity', query(
     `SELECT a.id,
             a.deal_id,
             a.activity_type AS type,
@@ -189,7 +216,7 @@ const getRecentActivity = () =>
       ORDER BY a.created_at DESC
       LIMIT $2`,
     [LIVE_DEAL_STAGES, LIMIT_RECENT_ACTIVITY],
-  ));
+  ), failures);
 
 /**
  * Build the full Today's Attention payload. Returns:
@@ -210,6 +237,10 @@ const getRecentActivity = () =>
  * never blanks the whole tile.
  */
 const getAttention = async () => {
+  // Collects the names of any signal whose query failed, so the response can
+  // say "I could not check this" instead of returning an empty list that reads
+  // as "nothing to worry about".
+  const failures = [];
   const [
     overdueDd,
     expiringApprovals,
@@ -217,11 +248,11 @@ const getAttention = async () => {
     staleDeals,
     recentActivity,
   ] = await Promise.all([
-    getOverdueDdItems(),
-    getExpiringApprovals(),
-    getNewRiskFlags(),
-    getStaleDeals(),
-    getRecentActivity(),
+    getOverdueDdItems(failures),
+    getExpiringApprovals(failures),
+    getNewRiskFlags(failures),
+    getStaleDeals(failures),
+    getRecentActivity(failures),
   ]);
 
   return {
@@ -242,6 +273,10 @@ const getAttention = async () => {
     new_risk_flags: newRiskFlags,
     stale_deals: staleDeals,
     recent_activity: recentActivity,
+    // Empty array = every signal ran. Non-empty = these lists are EMPTY BECAUSE
+    // THEY FAILED, not because there is nothing in them; the tile must not
+    // present that as an all-clear.
+    unavailable: failures.slice().sort(),
     thresholds: {
       stale_deal_days: STALE_DEAL_DAYS,
       new_risk_window_days: NEW_RISK_WINDOW_DAYS,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { parseEvidenceRef } from '../utils/evidenceRef';
+import { scrollIntoView } from '../utils/motion';
 
 /**
  * useEvidenceNavigate — Phase 1 / E1.
@@ -65,7 +66,7 @@ export function useScrollOnMount() {
     const timer = setTimeout(() => {
       const el = document.getElementById(scrollTo);
       if (el && typeof el.scrollIntoView === 'function') {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        scrollIntoView(el, { block: 'center' });
         // Brief flash so the operator sees WHICH element was targeted.
         el.classList.add('evidence-highlight-flash');
         setTimeout(() => el.classList.remove('evidence-highlight-flash'), 1800);

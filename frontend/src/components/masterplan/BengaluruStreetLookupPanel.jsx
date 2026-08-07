@@ -3,6 +3,7 @@ import { Search, MapPin, FileText, AlertTriangle, BookOpen } from 'lucide-react'
 import Badge from '../common/Badge';
 import { Card, ErrorState, SectionHeader, Skeleton, StatTile } from '../../design-system';
 import { useStreetLookup } from '../../hooks/useMasterPlan';
+import { scrollIntoView } from '../../utils/motion';
 
 // 200ms debounce keeps the panel responsive while reducing dead-on-arrival
 // queries the user types past in flight.
@@ -130,7 +131,7 @@ export default function BengaluruStreetLookupPanel() {
       setZoneFilter(zone);
       // requestAnimationFrame so the layout settles before we scroll.
       requestAnimationFrame(() => {
-        rootRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        scrollIntoView(rootRef.current, { block: 'start' });
       });
     };
     window.addEventListener('bbmp:focus-zone', handler);

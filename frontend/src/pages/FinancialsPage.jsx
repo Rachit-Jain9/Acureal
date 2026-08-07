@@ -5,6 +5,7 @@ import ReferenceMenu from '../components/financials/ReferenceMenu';
 import AssetClassInsightBanner from '../components/financials/AssetClassInsightBanner';
 import QuarterlyProformaPanel from '../components/financials/QuarterlyProformaPanel';
 import { useFinancials, useCalculateFinancials } from '../hooks/useFinancials';
+import { scrollIntoView } from '../utils/motion';
 import InputForm from '../components/financials/InputForm';
 import WhatIfSliders from '../components/financials/WhatIfSliders';
 import SensitivityTornado from '../components/financials/SensitivityTornado';
@@ -109,7 +110,7 @@ export default function FinancialsPage() {
 
   const inputsRef = useRef(null);
   const scrollToInputs = () => {
-    inputsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    scrollIntoView(inputsRef.current, { block: 'start' });
   };
   useEffect(() => {
     if (!prefill) return;
