@@ -45,6 +45,8 @@ const riskRadarService = require('./riskRadar.service');
 const modelConfidenceService = require('./modelConfidence.service');
 const promoterProfileService = require('./promoterProfile.service');
 const compRelianceService = require('./compReliance.service');
+const { getCompsNearLocation, assetClassToProjectType } = require('./comps.service');
+const { deriveCompProvenance } = require('../utils/compProvenance');
 const { getRequestContext } = require('../lib/requestContext');
 const { buildVisibleDealCondition } = require('../utils/dealVisibility');
 const { neutralizeMemoRecommendation } = require('../utils/icStanceVerbs');
@@ -70,7 +72,7 @@ A markdown table with: Asset Class, Stage, Land Area, Ask / Negotiated Price, Mo
 2-3 short paragraphs. Why this deal works. Cite specific market benchmarks and comps from the input. No vague language.
 
 ## 4. Underwriting Highlights
-Markdown bullet list. 4-6 bullets. Each bullet is ONE specific assumption with the number AND the basis (\"₹ 18,500/sqft selling rate, in line with the Whitefield Q1 benchmark of ₹ 16,000–19,000\"). Link assumptions to the model_params and benchmarks supplied.
+Markdown bullet list. 4-6 bullets. Each bullet is ONE specific assumption with the number AND the basis, in this SHAPE: \"<rate>/sqft selling rate, against the <micro-market> benchmark of <range> supplied in marketBenchmarks\". The angle brackets are placeholders — substitute values from \`model_assumptions\` and \`marketBenchmarks\`. NEVER reproduce a placeholder, and never invent a figure to fill one: if no assumption is supplied for a driver, write \"Not yet modelled\" instead of a number. You may name a micro-market ONLY if it appears in the supplied \`marketBenchmarks\` array.
 
 ## 5. Risk Register
 Markdown table with columns: Severity, Category, Risk, Mitigation. Pull from the supplied risk_flags. Order by severity (critical → high → medium → low). If empty, write \"No flags surfaced — schedule a manual risk review before IC.\"
@@ -95,6 +97,9 @@ RULES:
 - NEVER state a statutory conclusion as fact. Title chain, encumbrance, RERA registration and statutory approval are RECORD-KEEPING lanes in this memo, not findings. Write "recorded status: X" or "not recorded", never "title is clear", "the khata is valid", "the EC is nil", "RERA-registered", "DC conversion is complete", or "the OC has been received" — including in the Risk Register and the Recommendation. You may freely instruct the reader to verify, confirm, obtain or flag any of these; asserting them as settled is what is forbidden. A deterministic guard strips such sentences before this memo reaches anyone, leaving a visible redaction marker in your text, so a memo that asserts will read as damaged.
 - ABSENCE IS NOT CLEARANCE. If a list is empty, a count is zero, or a field is null, that is unrecorded / not yet done — never satisfied, closed, clear or received.
 - A CHECKLIST IS NOT A VERIFICATION. Failure modes listed under \`verification.riskRadar.checklistOnly\` have had their diligence checklist completed — that records that someone looked, and nothing more. It is NOT evidence that the title chain, encumbrance position, RERA registration or statutory approvals are in order. Report them as "checklist complete, statutory position not verified"; never as cleared, satisfied or in order.
+- EVIDENCE MUST BELONG TO THIS SITE. Cite a micro-market ONLY if it appears in \`marketBenchmarks.items\`, and a comp ONLY if it appears in \`comps.items\`. If \`marketBenchmarks.recorded\` or \`comps.recorded\` is false, state that no comparable evidence is on record for this site and carry that into the recommendation — an empty set is UNRECORDED, never SUPPORTIVE, and never grounds for a clean "Recommend proceeding".
+- EVERY COMP CARRIES ITS PROVENANCE. Quote each comp in this SHAPE: "<project>, <locality>, <distanceKm> km, <ratePerSqft>/sqft (<verified|unverified>, <asOfDate>)" — substituting values from \`comps.items\`, never inventing one to fill a placeholder. A comp with \`verified: false\` or \`assetClassMatch: false\` may be cited as context ONLY, explicitly labelled unverified or different-asset-class — never as support for a rate assumption.
+- ASSUMPTIONS COME FROM \`model_assumptions\`. Every figure in §4 must be one of those values or a stated arithmetic derivation of the supplied data. If \`model_assumptions.recorded\` is false, or a driver is absent, write "Not yet modelled" — never supply a plausible number.
 - A \`verification\` block is supplied — Acureal's deterministic engines (not AI) reporting the model-confidence level, the Risk Radar posture for each failure mode, the promoter posture, and the count of analyst-relied comps. Treat it as ground truth: never contradict it, and state plainly what it shows is NOT yet verified.
 - If a field is null/empty, say so explicitly ("Not yet modelled", "Pending"). Never silently omit.
 - Tone: senior partner briefing the IC, not marketing copy.
@@ -123,6 +128,137 @@ RULES:
  */
 const OPEN_DD_STATUSES = new Set(['pending', 'in_progress', 'flagged']);
 const SETTLED_APPROVAL_STATUSES = new Set(['validated']);
+
+/**
+ * Micro-market benchmarks that actually describe WHERE THIS SITE IS.
+ *
+ * The query behind this used to order every Bengaluru benchmark by price and
+ * take the top six, so a peripheral deal was handed Indiranagar and Koramangala
+ * and invited to present them as its own trajectory. The fabricated example in
+ * the prompt (a Whitefield range) compounded it: the model named a micro-market
+ * that was not even in the payload, and the ceiling it quoted sat ABOVE the
+ * real recorded Whitefield ceiling — so an invented rate read as market-supported.
+ *
+ * Matched against the deal's own locality / micro-market / city area. On no
+ * match this returns `recorded: false` with a reason rather than falling back
+ * to the city top-six: the same absence-is-not-clearance posture shape as
+ * `diligence_posture`, so the prompt can bind a rule to it and an empty set can
+ * never read as supportive.
+ */
+/**
+ * The underwriting drivers §4 is asked to cite, and only those.
+ *
+ * Every value is a stored model input — never derived here, never defaulted.
+ * A driver the model was not given is emitted as null so the prompt rule
+ * ("write 'Not yet modelled' rather than supplying a figure") has something
+ * unambiguous to bind to.
+ */
+const ASSUMPTION_KEYS = [
+  'sellingRatePerSqft', 'baseRentPerSqftMonth', 'adrInr',
+  'constructionCostPerSqft', 'landCostCr',
+  'entryCapRate', 'exitCapRate', 'discountRatePct', 'interestRatePct',
+  'holdPeriodYears', 'projectDurationMonths', 'projectDurationYears',
+  'debtCoverage', 'stabilizedOccPct', 'vacancyPct', 'rentEscalationPct',
+];
+
+const buildAssumptionSlice = (inputs) => {
+  const out = { recorded: true };
+  for (const k of ASSUMPTION_KEYS) {
+    const v = inputs?.[k];
+    const n = v === '' || v === null || v === undefined ? null : Number(v);
+    if (Number.isFinite(n)) out[k] = n;
+  }
+  // Nothing usable in the stored inputs is the same as no model for §4's purposes.
+  if (Object.keys(out).length === 1) {
+    return { recorded: false, reason: 'The stored model carries no underwriting assumptions.' };
+  }
+  return out;
+};
+
+/**
+ * Comparables for THIS site, with the provenance the model needs to caveat them.
+ *
+ * Proximity comps win outright. The city-wide set is offered only when the site
+ * has none in radius, and then it is labelled `city_wide` so the prompt rule and
+ * the reader both know these are not local evidence. Distance, verification
+ * posture and asset-class match ride on every row: without them the model was
+ * structurally incapable of qualifying a comp, however it was instructed.
+ *
+ * Absence stays absence — `recorded: false` with a reason, never an empty array
+ * that reads as "nothing to worry about". Jigani is the live case: zero comps
+ * within 10 km.
+ */
+const buildCompsPosture = (nearby, cityRows, dealProjectType) => {
+  const mapComp = (c, scope) => ({
+    project: c.project_name,
+    locality: c.locality,
+    ratePerSqft: c.rate_per_sqft,
+    bhkConfig: c.bhk_config,
+    totalUnits: c.total_units,
+    projectType: c.project_type || null,
+    assetClassMatch: dealProjectType ? c.project_type === dealProjectType : null,
+    distanceKm: c.distance_km != null ? Math.round(Number(c.distance_km) * 10) / 10 : null,
+    scope,
+    ...deriveCompProvenance(c),
+  });
+
+  if (Array.isArray(nearby) && nearby.length) {
+    const radiusKm = Math.max(...nearby.map((c) => Number(c.distance_km) || 0)) > 5 ? 10 : 5;
+    return {
+      recorded: true,
+      scope: 'nearby',
+      radiusKm,
+      items: nearby.slice(0, 10).map((c) => mapComp(c, 'nearby')),
+    };
+  }
+
+  const city = Array.isArray(cityRows) ? cityRows : [];
+  if (!city.length) {
+    return { recorded: false, reason: 'No comparable transactions are on record for this site.', items: [] };
+  }
+  return {
+    recorded: false,
+    scope: 'city_wide',
+    reason:
+      'No comparable transactions within 10 km of this site. The rows below are city-wide '
+      + 'context only and must not be cited as evidence for this deal’s pricing.',
+    items: city.slice(0, 8).map((c) => mapComp(c, 'city_wide')),
+  };
+};
+
+const buildMarketBenchmarkPosture = (rows, deal) => {
+  const all = Array.isArray(rows) ? rows : [];
+  const haystack = [deal?.micro_market, deal?.locality, deal?.address, deal?.city_area]
+    .filter(Boolean)
+    .map((v) => String(v).toLowerCase());
+
+  const matches = haystack.length
+    ? all.filter((b) => {
+      const names = [b.micro_market, b.anchor_hub].filter(Boolean).map((v) => String(v).toLowerCase());
+      return names.some((n) => haystack.some((h) => h.includes(n) || n.includes(h)));
+    })
+    : [];
+
+  if (!matches.length) {
+    return {
+      recorded: false,
+      reason: haystack.length
+        ? 'No micro-market benchmark is on record for this site’s locality.'
+        : 'This deal has no locality recorded, so no micro-market benchmark can be matched to it.',
+      items: [],
+    };
+  }
+
+  return {
+    recorded: true,
+    items: matches.slice(0, 6).map((b) => ({
+      microMarket: b.micro_market,
+      priceRange: `₹${b.avg_price_min_per_sqft}–${b.avg_price_max_per_sqft}/sqft`,
+      yoyGrowth: `${b.yoy_growth_min_pct}–${b.yoy_growth_max_pct}%`,
+      anchorHub: b.anchor_hub,
+    })),
+  };
+};
 
 const buildDiligencePosture = (ddRows, approvalRows) => {
   const dd = Array.isArray(ddRows) ? ddRows : [];
@@ -275,7 +411,13 @@ const buildIcMemoInput = async (dealId) => {
               d.land_ask_price_cr, d.negotiated_price_cr, d.land_pricing_basis,
               d.land_extent_input_value, d.land_extent_input_unit,
               p.city, p.address, p.property_type, p.land_area_sqft, p.land_area_acres,
-              p.zoning, p.circle_rate_per_sqft, p.permissible_fsi
+              p.zoning, p.circle_rate_per_sqft, p.permissible_fsi,
+              -- Location, for scoping comps and benchmarks to THIS site.
+              -- auto_derived_* are the geocoder's answer when the analyst has
+              -- not pinned coordinates by hand.
+              COALESCE(p.lat, p.auto_derived_lat) AS lat,
+              COALESCE(p.lng, p.auto_derived_lng) AS lng,
+              p.locality
          FROM deals d
          LEFT JOIN properties p ON d.property_id = p.id
         WHERE d.id = $1 AND ${buildVisibleDealCondition('d')}`,
@@ -293,14 +435,30 @@ const buildIcMemoInput = async (dealId) => {
       [dealId],
     ).catch(() => ({ rows: [] })),
     query(
+      // Scoped to THIS deal's micro-market, not the city's priciest.
+      //
+      // Ordering by avg_price_max_per_sqft DESC handed every memo the six most
+      // expensive micro-markets in Bengaluru and invited the model to present
+      // them as the deal's own trajectory — a peripheral site was benchmarked
+      // against Indiranagar. Matching on locality means a memo can only cite a
+      // benchmark that actually describes where the site is; when nothing
+      // matches, the payload says so explicitly rather than substituting the
+      // top of the market (see buildMarketBenchmarkPosture below).
       `SELECT micro_market, avg_price_min_per_sqft, avg_price_max_per_sqft,
               yoy_growth_min_pct, yoy_growth_max_pct, anchor_hub
          FROM micro_market_benchmarks
         WHERE organization_id = current_organization_id() AND LOWER(city) = 'bengaluru'
-        ORDER BY avg_price_max_per_sqft DESC NULLS LAST LIMIT 6`,
+        ORDER BY avg_price_max_per_sqft DESC NULLS LAST LIMIT 40`,
     ).catch(() => ({ rows: [] })),
+    // NOTE: this city-wide query is retained ONLY as the last-resort context
+    // set. It orders by rate DESC, so on its own it handed every memo the eight
+    // priciest projects in Bengaluru — Rajajinagar and Indiranagar quoted as a
+    // peripheral site's comparables, 16–27 km away, with the verification flag
+    // and distance never sent so the model could not have labelled them even if
+    // told to. Proximity comps are fetched separately below and take precedence.
     query(
-      `SELECT project_name, locality, rate_per_sqft, bhk_config, total_units, geocode_quality
+      `SELECT project_name, locality, rate_per_sqft, bhk_config, total_units, geocode_quality,
+              is_verified, source, project_type, launch_year
          FROM comps
         WHERE organization_id = current_organization_id()
           AND LOWER(city) ILIKE '%bengaluru%'
@@ -362,6 +520,21 @@ const buildIcMemoInput = async (dealId) => {
   const fin = finResult.rows[0] || null;
   const kpis = fin?.model_params?.kpis || {};
 
+  // Comps that are actually near this site. Widen 5 km → 10 km before giving
+  // up, and pass projectType as NULL: it is carried per-comp as a LABEL, not
+  // used as a filter. Hopefarm is the case that proves the difference — it is
+  // commercial_office, every comp within 5 km is residential, and a hard
+  // asset-class filter would return zero for the deal with the best local
+  // evidence. getCompsNearLocation THROWS on missing coordinates (every other
+  // caller in the repo wraps it), so the catch is required, not defensive.
+  let nearbyComps = [];
+  if (deal.lat && deal.lng) {
+    nearbyComps = await getCompsNearLocation(deal.lat, deal.lng, 5, null)
+      .then((rows) => (rows.length ? rows : getCompsNearLocation(deal.lat, deal.lng, 10, null)))
+      .catch(() => []);
+  }
+  const dealProjectType = assetClassToProjectType(fin?.asset_class || deal.property_type);
+
   const payload = {
     deal: {
       name: deal.name,
@@ -381,6 +554,16 @@ const buildIcMemoInput = async (dealId) => {
       landPricingBasis: deal.land_pricing_basis,
       notes: deal.notes,
     },
+    // The actual inputs §4 is instructed to cite. Without these the section was
+    // told to state "the number AND the basis" while being handed no basis at
+    // all — which is precisely why the model reached for the figures in the
+    // prompt's own worked example and printed them as this deal's assumptions.
+    // Whitelisted rather than spread: model_params.inputs carries a long tail
+    // of derived and legacy keys, and an unbounded dump invites the model to
+    // narrate fields nobody has validated.
+    model_assumptions: fin?.model_params?.inputs
+      ? buildAssumptionSlice(fin.model_params.inputs)
+      : { recorded: false, reason: 'No financial model has been run for this deal.' },
     financials: fin
       ? {
           assetClass: fin.asset_class,
@@ -400,20 +583,8 @@ const buildIcMemoInput = async (dealId) => {
       totalRevenueCr: s.total_revenue_cr,
       totalCostCr: s.total_cost_cr,
     })),
-    marketBenchmarks: benchmarksResult.rows.map((b) => ({
-      microMarket: b.micro_market,
-      priceRange: `₹${b.avg_price_min_per_sqft}–${b.avg_price_max_per_sqft}/sqft`,
-      yoyGrowth: `${b.yoy_growth_min_pct}–${b.yoy_growth_max_pct}%`,
-      anchorHub: b.anchor_hub,
-    })),
-    comps: compsResult.rows.map((c) => ({
-      project: c.project_name,
-      locality: c.locality,
-      ratePerSqft: c.rate_per_sqft,
-      bhkConfig: c.bhk_config,
-      totalUnits: c.total_units,
-      geocodeQuality: c.geocode_quality,
-    })),
+    marketBenchmarks: buildMarketBenchmarkPosture(benchmarksResult.rows, deal),
+    comps: buildCompsPosture(nearbyComps, compsResult.rows, dealProjectType),
     recentTransactions: txResult.rows.map((t) => ({
       period: `${t.fiscal_year} ${t.quarter}`,
       buyer: t.buyer,
@@ -675,5 +846,8 @@ module.exports = {
   // Internal helpers exported for tests
   SYSTEM_PROMPT,
   composeComputationFooter,
+  buildCompsPosture,
+  buildMarketBenchmarkPosture,
+  buildAssumptionSlice,
   __buildDiligencePostureForTests: buildDiligencePosture,
 };

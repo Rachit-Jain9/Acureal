@@ -60,6 +60,8 @@
 const crypto = require('crypto');
 const { runAI } = require('./ai/aiRouter');
 const { getProviderAvailability } = require('./ai/providerRegistry');
+const { sanitizeAiProse } = require('../utils/aiLegalProseGuard');
+const log = require('../lib/logger').child({ module: 'ai_market_context' });
 
 const SECTION_TIMEOUT_MS = 15000;
 const SYSTEM_PROMPT_VERSION = '2026-05-19.v1';
@@ -372,7 +374,37 @@ const generateSection = async ({
       'AI-GENERATED FROM GENERAL KNOWLEDGE (not a verified Acureal source). Verify every named fact, distance, and trend against primary sources before any IC decision.',
   };
 
-  const trim = (s) => (typeof s === 'string' ? s.trim() : '');
+  // Every string this generator returns passes the legal-four guard here.
+  //
+  // These five sections are printed verbatim into an investor DOCX
+  // (Demographics, Why This Area, Supply & Demand, social infrastructure,
+  // cautions), and nothing downstream re-checks them: the artifact guard at
+  // aiArtifacts.saveArtifact only sees rows that go through ai_artifacts, and
+  // this path does not. So a model sentence like "title in the Whitefield belt
+  // is generally clean" or "RERA registration here is straightforward" reached
+  // the page unaltered — one of the legal four asserted as fact, which
+  // CLAUDE.md forbids outright. Absolute stance verbs were un-neutralised too.
+  //
+  // `trim` is the single funnel for every returned string — paragraph,
+  // paragraphs[], bullets[], summary, caution, and the socialInfrastructure
+  // named_examples / notes — so guarding it covers the whole surface. This
+  // mirrors the one-guard-at-the-generator's-exit design stated in
+  // aiArtifacts.service.js; deliberately NOT also guarding in buildReport.js.
+  // Flagged sentences are logged (lanes only — never the prose, which is the
+  // thing under suspicion) so drift is observable rather than silently
+  // redacted. Logged at the point of detection to avoid threading an
+  // accumulator through this function's five return branches.
+  const trim = (s) => {
+    if (typeof s !== 'string') return '';
+    const result = sanitizeAiProse(s.trim());
+    if (result.flagged) {
+      log.warn('market_context_legal_prose_redacted', {
+        section,
+        legalLanes: [...new Set(result.legalLanes || [])],
+      });
+    }
+    return result.text;
+  };
 
   if (section === 'whyThisArea') {
     const paragraphs = Array.isArray(parsed.paragraphs)
