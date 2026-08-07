@@ -29,6 +29,7 @@
 
 const { query } = require('../config/database');
 const { LIVE_DEAL_STAGES } = require('../constants/domain');
+const dealVisitsService = require('./dealVisits.service');
 const log = require('../lib/logger').child({ module: 'attention' });
 
 const LIMIT_OVERDUE_DD = 10;
@@ -247,12 +248,18 @@ const getAttention = async () => {
     newRiskFlags,
     staleDeals,
     recentActivity,
+    sinceYouLooked,
   ] = await Promise.all([
     getOverdueDdItems(failures),
     getExpiringApprovals(failures),
     getNewRiskFlags(failures),
     getStaleDeals(failures),
     getRecentActivity(failures),
+    // Per-USER, not per-org: the four signals above ask "what crossed an
+    // absolute threshold?", this asks "what changed since *I* last looked?".
+    // Carries its own null-on-failure contract (null ≠ empty), so it is not
+    // routed through safeRows.
+    dealVisitsService.getPortfolioChangesSinceVisit(),
   ]);
 
   return {
@@ -273,6 +280,10 @@ const getAttention = async () => {
     new_risk_flags: newRiskFlags,
     stale_deals: staleDeals,
     recent_activity: recentActivity,
+    // null = could not be computed (query failed, or the visits table is not
+    // migrated yet). The strip renders nothing on null and says "nothing has
+    // moved" only on a real, empty answer — the two must not look alike.
+    since_you_looked: sinceYouLooked,
     // Empty array = every signal ran. Non-empty = these lists are EMPTY BECAUSE
     // THEY FAILED, not because there is nothing in them; the tile must not
     // present that as an all-clear.

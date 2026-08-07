@@ -14,15 +14,21 @@ import MfaCard from '../components/common/MfaCard';
 import OrgBenchmarkCard from '../components/common/OrgBenchmarkCard';
 import ProductTourReplayCard from '../components/onboarding/ProductTourReplayCard';
 
-const CURRENCY_OPTIONS = [
-  { value: 'crores', label: 'Crores (Cr)' },
-  { value: 'lakhs', label: 'Lakhs (L)' },
-  { value: 'millions', label: 'Millions (M)' },
-];
-
 // The multi-currency display feature (USD/AED/EUR/GBP/JPY/SGD conversion
 // at render time) was retired 2026-05-24 — Acureal is India-only and the
 // extra control added friction without earning it.
+//
+// The "Number Format" control (Crores / Lakhs / Millions) went with it on
+// 2026-08-07. It wrote `pref_currency` to localStorage and toasted
+// "Preference saved", and nothing in the application ever read the key back —
+// verified by a repo-wide search returning hits in this file only. Every
+// figure on every surface stayed in crores whatever you picked. A dial that
+// reports success and changes nothing is the exact failure CLAUDE.md names,
+// and it is worse than a missing feature: it quietly teaches the operator that
+// the settings page cannot be trusted. Implementing it properly means routing
+// lakhs/millions through the kernel's formatters, every export, and the DOCX
+// and XLSX prose — a real project, not a dropdown. Removed until that is worth
+// doing. `pref_currency` is swept from localStorage below.
 
 const AREA_UNIT_OPTIONS = [
   { value: 'sqft', label: 'Square Feet (sqft)' },
@@ -30,11 +36,16 @@ const AREA_UNIT_OPTIONS = [
   { value: 'acres', label: 'Acres' },
 ];
 
+// Labels show what `formatDate` ACTUALLY renders, not a pattern it never
+// produces. The formatter pins `month: 'short'`, so no locale here yields
+// slashes — "DD/MM/YYYY (Indian)" displayed `7 Aug 2026`, and the US option
+// promised MM/DD/YYYY while rendering `Aug 7, 2026`. en-GB was also byte-
+// identical to en-IN under that option set, so the menu offered two spellings
+// of one outcome. Dropped it and let each remaining row state its own result.
 const DATE_FORMAT_OPTIONS = [
-  { value: 'en-IN', label: 'DD/MM/YYYY (Indian)' },
-  { value: 'en-US', label: 'MM/DD/YYYY (US)' },
-  { value: 'en-GB', label: 'DD/MM/YYYY (UK)' },
-  { value: 'iso', label: 'YYYY-MM-DD (ISO)' },
+  { value: 'en-IN', label: 'Day first — 7 Aug 2026' },
+  { value: 'en-US', label: 'Month first — Aug 7, 2026' },
+  { value: 'iso', label: 'ISO 8601 — 2026-08-07' },
 ];
 
 export default function SettingsPage() {
@@ -66,9 +77,11 @@ export default function SettingsPage() {
   const [firstPwd, setFirstPwd] = useState({ newPassword: '', confirmPassword: '' });
   const [settingFirstPassword, setSettingFirstPassword] = useState(false);
 
-  // Preferences (localStorage only)
+  // Preferences (localStorage only). Every key here MUST have a reader in
+  // src/utils/format.js — pref_areaUnit drives formatArea, pref_dateFormat
+  // drives formatDate. Adding a control whose key nothing reads is how the
+  // retired "Number Format" dial came to exist.
   const [preferences, setPreferences] = useState({
-    currency: localStorage.getItem('pref_currency') || 'crores',
     areaUnit: localStorage.getItem('pref_areaUnit') || 'sqft',
     dateFormat: localStorage.getItem('pref_dateFormat') || 'en-IN',
   });
@@ -213,13 +226,22 @@ export default function SettingsPage() {
     toast.success('Preference saved');
   };
 
-  // One-shot cleanup: clear any localStorage keys left over from the
-  // retired multi-currency feature so we don't carry orphan rows
-  // forever. Idempotent — fires once per browser then no-ops.
+  // One-shot cleanup: clear localStorage keys left over from retired display
+  // preferences so we don't carry orphan rows forever. Idempotent — fires once
+  // per browser then no-ops. `pref_currency` joined the list on 2026-08-07 when
+  // the Number Format control was removed; `en-GB` was a valid pref_dateFormat
+  // until the same day, and it rendered identically to en-IN, so anyone holding
+  // it is moved to the option that produces the output they were already
+  // seeing rather than being silently switched to a different format.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (localStorage.getItem('pref_currencyCode')) localStorage.removeItem('pref_currencyCode');
     if (localStorage.getItem('pref_fx_rate')) localStorage.removeItem('pref_fx_rate');
+    if (localStorage.getItem('pref_currency')) localStorage.removeItem('pref_currency');
+    if (localStorage.getItem('pref_dateFormat') === 'en-GB') {
+      localStorage.setItem('pref_dateFormat', 'en-IN');
+      setPreferences((prev) => ({ ...prev, dateFormat: 'en-IN' }));
+    }
   }, []);
 
   return (
@@ -430,18 +452,6 @@ export default function SettingsPage() {
           Preferences
         </h3>
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-content-secondary mb-1">Number Format</label>
-            <select
-              value={preferences.currency}
-              onChange={(e) => handlePreferenceChange('currency', e.target.value)}
-              className="w-full px-3 py-2 border border-hairline-strong rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-accent"
-            >
-              {CURRENCY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
           <div>
             <label className="block text-sm font-medium text-content-secondary mb-1">Area Unit</label>
             <select

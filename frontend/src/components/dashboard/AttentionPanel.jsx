@@ -10,6 +10,7 @@ import {
 import { clsx } from 'clsx';
 import { Card, SectionHeader, ErrorState, Skeleton } from '../../design-system';
 import EmptyState from '../common/EmptyState';
+import SinceYouLooked from './SinceYouLooked';
 import { useAttention } from '../../hooks/useDashboard';
 import { usePrefetchDealWorkspace } from '../../hooks/useDeals';
 
@@ -153,6 +154,7 @@ function SignalHeader({ icon: Icon, label, total, tone = 'neutral' }) {
 
 export default function AttentionPanel() {
   const { data, isLoading, isError, refetch } = useAttention();
+  const prefetchWorkspace = usePrefetchDealWorkspace();
 
   if (isLoading) {
     return (
@@ -213,13 +215,19 @@ export default function AttentionPanel() {
     new_risk_flags = [],
     stale_deals = [],
     recent_activity = [],
+    since_you_looked = null,
     thresholds = {},
   } = data || {};
 
   if (!totals.any) {
+    // A quiet day is exactly when "since you last looked" earns its place: no
+    // absolute threshold has been crossed, but your portfolio may still have
+    // moved while you were away. The strip renders ABOVE the all-caught-up
+    // state rather than replacing it — both statements are true at once.
     return (
       <Card elevated className="p-5">
         <SectionHeader eyebrow="Today" title="What needs your attention" className="mb-3" />
+        <SinceYouLooked data={since_you_looked} onPrefetchDeal={prefetchWorkspace} />
         <EmptyState
           size="sm"
           icon={CheckCircle2}
@@ -242,6 +250,8 @@ export default function AttentionPanel() {
         }
         className="mb-4 items-center"
       />
+
+      <SinceYouLooked data={since_you_looked} onPrefetchDeal={prefetchWorkspace} />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-6 gap-y-4">
         {/* Overdue DD */}
