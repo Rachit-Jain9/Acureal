@@ -585,10 +585,33 @@ const RISK_ITEMS = [
     description: 'Composite risk posture across all six failure modes.',
     weight: 3,
     detect: ({ risk }) => {
-      const score = num(risk?.score);
-      const flagged = (risk?.flagged_count) || (risk?.categories || []).filter((c) => c.posture === 'flagged').length;
-      if (score == null && !risk) return { status: 'missing', evidence_label: 'Risk Radar not computed' };
-      if (flagged === 0) return { status: 'verified', source: 'risk_radar', evidence_label: `Risk score ${score ?? '—'} · no flagged categories` };
+      // Two defects lived here. (1) The docstring promises a flat numeric
+      // `risk.score`, but the real caller passes getRiskScore()'s OBJECT, so
+      // `num()` returned null and the shape was never actually read. (2) With
+      // no register at all, `flagged` computes 0 and that fell straight into
+      // the `verified` branch — an untouched risk register scoring green.
+      const raw = risk?.score;
+      const score = num(raw) ?? num(raw?.score);
+      const totalFlags = num(raw?.total);          // every row, incl. resolved
+      const flagged = num(risk?.flagged_count)
+        ?? num(raw?.open_count)
+        ?? (Array.isArray(risk?.categories)
+          ? risk.categories.filter((c) => c.posture === 'flagged').length
+          : null);
+
+      if (score == null || flagged == null) {
+        return { status: 'missing', evidence_label: 'Risk Radar not computed' };
+      }
+      if (totalFlags === 0) {
+        // ABSENCE IS NOT CLEARANCE. `missing` (weight 0) rather than a new
+        // tier, so this routes into `gaps` as work still to do.
+        return {
+          status: 'missing',
+          source: 'risk_radar',
+          evidence_label: 'Risk register empty — no risk assessment recorded',
+        };
+      }
+      if (flagged === 0) return { status: 'verified', source: 'risk_radar', evidence_label: `Risk score ${score} · no flagged categories` };
       if (flagged <= 2) return { status: 'uploaded', source: 'risk_radar', evidence_label: `Risk score ${score} · ${flagged} flagged categor${flagged === 1 ? 'y' : 'ies'}` };
       return { status: 'pending', source: 'risk_radar', evidence_label: `Risk score ${score} · ${flagged} flagged categories — heavy lift for IC` };
     },
@@ -600,6 +623,11 @@ const RISK_ITEMS = [
     description: 'Diagnostic findings rated Critical / Inconsistent / Below benchmark by severity.',
     weight: 3,
     detect: ({ deal_doctor }) => {
+      // "No findings" is only good news if the engine had something to look at.
+      // With zero signals it has diagnosed nothing, which is not a clean bill.
+      if (!deal_doctor || !num(deal_doctor.signal_count)) {
+        return { status: 'missing', evidence_label: 'Deal Doctor has no signals to diagnose yet' };
+      }
       const findings = deal_doctor?.findings || [];
       if (findings.length === 0) {
         return { status: 'verified', source: 'deal_doctor', evidence_label: 'No findings' };
@@ -618,6 +646,11 @@ const RISK_ITEMS = [
     description: 'No open cross-document inconsistency findings on the Deal Doctor.',
     weight: 2,
     detect: ({ deal_doctor }) => {
+      // Cross-document consistency cannot be "resolved" before any documents
+      // have been cross-checked. Same absence-vs-clearance distinction.
+      if (!deal_doctor || !num(deal_doctor.signal_count)) {
+        return { status: 'missing', evidence_label: 'No documents cross-checked yet' };
+      }
       const findings = deal_doctor?.findings || [];
       const inconsistencies = findings.filter((f) =>
         /cross.*document.*inconsisten/i.test(f.label || '') ||

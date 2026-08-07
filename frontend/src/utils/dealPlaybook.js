@@ -27,6 +27,13 @@ const hasActivityType = (deal, type) =>
 const done = (detail) => ({ status: 'done', detail: detail || null });
 const pending = (detail) => ({ status: 'pending', detail: detail || null });
 
+// `pending_deal_breakers === 0` means "none outstanding" ONLY when a required
+// checklist exists to have deal-breakers in. On a deal where no diligence has
+// ever been seeded the count is also 0 — absence, not clearance — and the one
+// checklist row whose job is to stop an unvetted deal reaching IC was being
+// satisfied by having done no diligence at all.
+const hasRequiredDd = (d) => num(readiness(d).required_dd_count) > 0;
+
 // A DD / approvals percentage at or above this counts as "complete" — the
 // margin absorbs not-applicable items the rollup still scores.
 const COMPLETE_PCT = 90;
@@ -151,6 +158,7 @@ const STAGE_PLAYBOOK = {
       id: 'deal_breakers',
       label: 'Resolve deal-breaker DD items',
       evaluate: (d) => {
+        if (!hasRequiredDd(d)) return pending('no diligence checklist yet');
         const db = num(readiness(d).pending_deal_breakers);
         return db === 0 ? done() : pending(`${db} unresolved`);
       },
@@ -192,6 +200,7 @@ const STAGE_PLAYBOOK = {
       id: 'deal_breakers',
       label: 'Clear all deal-breaker items',
       evaluate: (d) => {
+        if (!hasRequiredDd(d)) return pending('no diligence checklist yet');
         const db = num(readiness(d).pending_deal_breakers);
         return db === 0 ? done() : pending(`${db} unresolved`);
       },
@@ -215,6 +224,7 @@ const STAGE_PLAYBOOK = {
       id: 'deal_breakers',
       label: 'Clear all deal-breaker risks',
       evaluate: (d) => {
+        if (!hasRequiredDd(d)) return pending('no diligence checklist yet');
         const db = num(readiness(d).pending_deal_breakers);
         return db === 0 ? done() : pending(`${db} unresolved`);
       },

@@ -87,17 +87,35 @@ describe('getRiskRadar', () => {
     expect(radar.overall_posture).toBe('flagged');
   });
 
-  test('a resolved flag is not counted open but still marks the mode assessed', async () => {
+  // Was: "…still marks the mode assessed" → cleared. A single logged-then-
+  // resolved flag is not an assessment of the failure mode; treating it as one
+  // let one closed ticket clear an entire lane. `assessed` now requires
+  // completed or required diligence, or a required approvals register.
+  test('a resolved flag alone does NOT count as having assessed the mode', async () => {
     wire({ risk: [{ category: 'market', severity: 'high', status: 'resolved' }] });
     const radar = await riskRadar.getRiskRadar(DEAL_ID);
     const market = cat(radar, 'market');
     expect(market.flags.total).toBe(0);
     expect(market.flags.ever).toBe(1);
-    // Assessed (a flag was logged) + no open work + no problem → cleared.
-    expect(market.posture).toBe('cleared');
+    expect(market.posture).toBe('unverified');
   });
 
-  test('completed required diligence clears a category', async () => {
+  // `physical_technical` is where mapDdCategory sends anything not matching
+  // title / statutory / financial — a genuine non-legal-four lane, so a
+  // completed required checklist there is still a real clearance.
+  test('completed required diligence clears a NON-legal-four category', async () => {
+    wire({
+      dd: [
+        { category: 'physical_technical', status: 'completed', is_required: true },
+      ],
+    });
+    const phys = cat(await riskRadar.getRiskRadar(DEAL_ID), 'physical_technical');
+    expect(phys.posture).toBe('cleared');
+  });
+
+  // Title & Ownership is a legal-four lane: a finished checklist records that
+  // someone looked, and must never render as a cleared title position.
+  test('completed title diligence yields `recorded`, never `cleared`', async () => {
     wire({
       dd: [
         { category: 'title_ownership', status: 'completed', is_required: true },
@@ -105,8 +123,33 @@ describe('getRiskRadar', () => {
       ],
     });
     const title = cat(await riskRadar.getRiskRadar(DEAL_ID), 'title_ownership');
-    expect(title.posture).toBe('cleared');
+    expect(title.posture).toBe('recorded');
     expect(title.diligence.completed).toBe(2);
+    expect(title.signals.some((s) => /does not clear title/i.test(s.text))).toBe(true);
+  });
+
+  // Engagement is not assessment: optional items nobody has done leave the
+  // lane unverified. Previously `dd.total > 0` alone satisfied `assessed`, so
+  // merely having rows — none required, none done — read as cleared.
+  test('a lane of only optional, pending items is unverified — not cleared', async () => {
+    wire({
+      dd: [
+        { category: 'physical_technical', status: 'pending', is_required: false },
+        { category: 'physical_technical', status: 'pending', is_required: false },
+      ],
+    });
+    expect(cat(await riskRadar.getRiskRadar(DEAL_ID), 'physical_technical').posture)
+      .toBe('unverified');
+  });
+
+  test('statutory DD rows do not stand in for an approvals register', async () => {
+    wire({
+      dd: [{ category: 'approvals_regulatory', status: 'completed', is_required: true }],
+      approvals: [],
+    });
+    const ap = cat(await riskRadar.getRiskRadar(DEAL_ID), 'approvals_regulatory');
+    expect(ap.posture).toBe('unverified');
+    expect(ap.signals.some((s) => /No approval records on file/i.test(s.text))).toBe(true);
   });
 
   test('pending required diligence leaves a category unverified with a signal', async () => {
@@ -147,14 +190,17 @@ describe('getRiskRadar', () => {
     expect(ap.approvals.expired_required).toBe(1);
   });
 
-  test('all required approvals validated clears Approvals', async () => {
+  // Approvals & Regulatory is the other legal-four lane. A validated register
+  // is `recorded` — Acureal records what the register says; it does not certify
+  // that statutory approval has been granted.
+  test('all required approvals validated yields `recorded`, never `cleared`', async () => {
     wire({
       approvals: [
         { is_required: true, is_validated: true, status: 'approved', expiry_date: '2030-01-01' },
       ],
     });
     expect(cat(await riskRadar.getRiskRadar(DEAL_ID), 'approvals_regulatory').posture).toBe(
-      'cleared'
+      'recorded'
     );
   });
 
@@ -211,7 +257,8 @@ describe('getRiskRadar', () => {
     });
     const title = cat(await riskRadar.getRiskRadar(DEAL_ID), 'title_ownership');
     expect(title.diligence.overdue).toBe(0);
-    expect(title.posture).toBe('cleared');
+    // `recorded` rather than `cleared` — legal-four lane, see above.
+    expect(title.posture).toBe('recorded');
   });
 
   test('an overdue NON-required DD item does NOT count as overdue', async () => {

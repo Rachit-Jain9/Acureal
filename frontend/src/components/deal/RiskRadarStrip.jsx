@@ -24,6 +24,11 @@ const SHORT_LABEL = {
 
 const POSTURE = {
   cleared: { label: 'Cleared', dot: 'bg-data-positive', text: 'text-data-positive' },
+  // Legal-four lane with a complete checklist — recorded, not verified. Muted
+  // by design; see RiskRadarPanel.jsx for the full reasoning. `overall_posture`
+  // never emits this (it folds into unverified), so only the per-category
+  // dots use it.
+  recorded: { label: 'Checklist complete', dot: 'bg-content-muted', text: 'text-content-secondary' },
   unverified: { label: 'Not verified', dot: 'bg-premium', text: 'text-premium' },
   flagged: { label: 'Flagged', dot: 'bg-data-negative', text: 'text-data-negative' },
 };

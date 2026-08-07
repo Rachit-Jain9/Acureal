@@ -6,6 +6,228 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-07 (continued) — the IC memo was telling committees approvals were done when none existed (#1100, #1101)
+
+### What was worked on
+
+Open brief: find and do the highest-impact pending work. An 18-agent audit
+(~2.8M tokens) swept the TODOs, the docs roadmaps, 11.9k lines of session log,
+the code, the frontend against its own guidelines, and the integration seams.
+But the finding that mattered came from **reading production**, which no code
+audit can do.
+
+**Production ground truth first.** 9 users, 11 orgs, 17 "active" deals of which
+~8 are test junk ("ZZ Bridge Verification (temp — delete me)"), 24 documents,
+84 DD items, 81 comps, and — decisively — **0 deal shares and 0 invitations
+ever**. That killed the leading candidate before any code was written: the
+remaining gmail two-shapes work (org invite + duplicate accounts) has **zero
+dotted-gmail users in production** and zero invitation usage. Correct to defer;
+it stays in TODO_MANUAL for when it can complete with its migration.
+
+### #1100 — absence is not clearance
+
+Four IC memos sit in production `ai_artifacts`. Two of them tell an investment
+committee, under **Required Approvals**:
+
+    "All required approvals have been received."
+    "All required approvals are received."
+
+Those deals hold **zero approval rows**. A third lists six named approvals —
+Fire NOC, DC Conversion Order, BESCOM, BWSSB, Environment Clearance, Sanctioned
+Building Plan — under "Received:", against a database where **no approval row
+has ever had that status**; the word is not in the vocabulary (pending /
+in_progress / validated / issue / expired). All 33 approval rows in production
+are pending, and 80 of 84 DD items.
+
+CLAUDE.md's hardest rule failing end to end, in the artifact that goes to an IC
+and gets drawn into the LP-facing tear-sheet PDF. THREE failures had to line up:
+
+1. **The guard had a hole.** `INSTRUCTION_LEAD` carried a bare `require[ds]?`
+   for "title chain REQUIRES verification" — and it also matched the ADJECTIVE
+   in "REQUIRED approvals", so the suppressor read "All required " as diligence
+   guidance and passed the verdict. The tell that it was an accident, not a
+   judgement: `requisite` and `needed` were both caught. Only `required` — the
+   phrasing the memo's own section heading uses — was blind. Narrowed to verb
+   senses (`requires?`, `is/are/was/were required`, `required to be`).
+2. **Nothing called the guard on these artifacts.** icMemo applied the
+   stance-verb neutraliser alone; inconsistencyDetector persisted raw markdown.
+   `sanitizeAiProse` now runs at `aiArtifacts.saveArtifact` — the one door all
+   three artifact types pass — and on `getLatestArtifact`, because ten rows
+   predate the guard and the tear sheet still draws them. Stored rows are NOT
+   rewritten: the table records what the model actually said, and editing it
+   would destroy the evidence of drift. The guard is idempotent.
+3. **The prompt rewarded it.** "If everything closed, say so" over a possibly
+   empty array. Added a deterministic `diligence_posture` block (counted in JS,
+   with an explicit `recorded` boolean), bound prompt rules to it, named the
+   forbidden status words, and mandated the recorded-status register.
+
+Also in #1100: **the debt panel disagreed with the deal own cost line.** The
+browser derived its quarterly rate as `r/100/4` while the kernel and the backend
+engine both use `(1+r)^0.25 − 1`. Simple division compounds — a 12% facility
+accrued at **12.55% effective**, so DebtSchedulePanel showed ~4.4% more Total
+Interest than the financed-cost line derived from the kernel `constFinanceCr`.
+The two mirrors were otherwise line-for-line identical, which is exactly why it
+survived: nothing compared them. Now `debtSchedule.parity.test.js` asserts deep
+equality across every quarter.
+
+### #1101 — silence, motion, and a blocked font
+
+- **`attention.service.js` swallowed all five dashboard queries** with
+  `.catch(() => [])` and had **zero logger references in the file**. A broken
+  query and a clean portfolio rendered identically, and the sentence the user
+  read was "nothing needs your attention" — on the one surface whose job is to
+  stop you missing something. Now: named signals, error logging (code + signal
+  only), and an `unavailable` array so the tile can distinguish clear from
+  unknown. Caught mid-change by the existing suite when the first pass renamed
+  the getters parameter without forwarding it into `safeRows`.
+- **Five imperative `scrollIntoView` calls ignored `prefers-reduced-motion`**
+  while ten components honoured it. New `utils/motion.js` reads the media query
+  at call time; `check-smooth-scroll.cjs` + a vitest guard fail CI on the raw
+  literal.
+- **A CSP-blocked `@import` fired on every production page load** —
+  `rsms.me/inter/inter.css` is not in `style-src`, so it never contributed a
+  glyph (Inter arrives via the allow-listed Google Fonts link) and only added
+  console noise. Deleted rather than allow-listed.
+
+### Method notes worth keeping
+
+- **Read production before picking work.** The audit own top-ranked candidate
+  was right on the merits and wrong on priority; five SQL queries settled it in
+  a minute. Usage data beats code inspection for "what matters now".
+- **Verify the agents.** Three separate claims were wrong or overstated: the
+  Inter font is NOT broken (it loads from Google Fonts — the blocked import is
+  redundant, not fatal); the `far_rules` / `master_plan_zones` production errors
+  are dashboard-side, not app; the kernel fake-elasticity path is NOT
+  unreachable (a kernel test exercises it), so it was left alone and written up
+  in TODO_ARCHITECTURE section 2 instead of deleted.
+- **The guard blind spot was invisible to its own test suite** — 177 tests
+  passing, and the single most common Indian phrasing sailed through. What found
+  it was running the guard against real production text.
+
+### PRs merged
+
+- **#1100** — fix(trust): absence is not clearance, and the interest on screen
+  is the kernel.
+- **#1101** — fix(trust,a11y): stop the dashboard failing silently; honour
+  reduced motion.
+
+### Validation
+
+- backend 291 suites / 4829 tests · frontend 175 files / 1409 tests + production
+  build · kernel 35 suites / 413 tests — all green.
+- CSP fix verified on live production after deploy: the served CSS
+  (`index-CsDI4tU3.css`) contains zero `rsms.me` references, and the console
+  error did not recur across four page loads.
+
+### What's left to do next
+
+- **Operator decisions needed** (see the recap): the dead "Number Format"
+  control in Settings; the two mailbox aliases (`grievance@` / `security@`) that
+  are already printed on live pages; the three names for the breach runbook and
+  grievance officer; and sign-off on the "since you last looked" home design.
+- **Production has ~8 test deals** in the live workspace, four of them literally
+  named "delete me". Cleaning those is destructive and operator-owned — say the
+  word and I will archive them.
+- Org invitations + duplicate accounts remain blocked on one migration
+  (TODO_MANUAL) — best opened as the next block, migration first.
+
+## 2026-08-07 — the two gmail shapes reach /login: dotted-Google accounts could never sign in (#1098)
+
+### What was worked on
+
+`/login` ran express-validator's `normalizeEmail()` and then matched on equality.
+That sanitizer strips gmail dots; the Google sign-in path stores
+`claims.email.toLowerCase()` with dots intact. So every account created with a
+dotted-gmail Google identity was unable to sign in with email + password — at
+all, permanently, behind the generic "Invalid email or password." Same root
+cause as the `/forgot-password` defect fixed in #1094, and it meant that PR's
+recovery flow ended at a door the user cannot open: receive the link, set a
+password, still locked out.
+
+The route now validates without sanitising; `login()` resolves every stored
+shape via `emailLookupCandidates()`, preserving the `requireDefinerPath()` /
+`auth_find_user_for_login` routing.
+
+**The lockout was the hard half.** Dropping the sanitizer with the throttle keyed
+on the address as typed would have been much worse than the bug it fixes: a
+fresh 5-failure budget per dot variant (2^(n-1) spellings of an n-char local
+part) and the per-account lockout ceases to exist. `enforceLoginThrottle` /
+`recordFailedLogin` / `clearLoginAttempts` now canonicalise their OWN argument,
+so the control sits where no future caller can bypass it by passing a raw
+address. Net effect is strictly stronger than before.
+
+**Two further defects surfaced while proving that out**, both fixed:
+
+- The lookup returns every matching shape, not the first. `first.last@gmail.com`
+  and `firstlast@gmail.com` can be two DISTINCT rows (register()'s duplicate
+  guard has never seen across the shapes). First-hit resolution would pick the
+  Google row — unusable random hash — and reject a password valid on the
+  sibling, breaking a sign-in that works today.
+- A successful sign-in no longer clears a lockout row it cannot prove it owns.
+  The canonical key is many-to-one for gmail, so an attacker who registers the
+  canonical sibling of a victim's dotted Google account could loop {4 guesses at
+  the victim, 1 real sign-in to their own} and refund the shared budget forever,
+  leaving only the per-IP limiter. Caught by a test written for the *first*
+  version of the guard, which the attack walked straight through.
+
+Deal sharing had the same defect and is fixed the same way. The workspace
+boundary is untouched — this widens which typed addresses resolve to a member,
+never which members are eligible.
+
+### Method note
+
+An 8-agent adversarial sweep (4 discovery modalities + 4 attack angles) ran
+against the working tree. It was worth it: it produced the throttle-refund
+attack, and it killed a change I had already written. The invitation fix I had
+in hand would have been *inert and harmful* — `assertInvitationUsable` is only
+the friendly pre-check; on the live non-bypass role the authoritative gate is
+inside `public.auth_provision_signup`, which does its own raw
+`lower(v_inv.email) <> lower(p_email)` and raises P0001, a code `errorHandler`
+does not map. Relaxing the JS half alone turns a readable 409 into a 500 on an
+unauthenticated route. Reverted before merge.
+
+Also verified empirically rather than assumed: `normalizeEmail` folds far more
+than gmail — `raj-kumar@yahoo.in` → `raj@yahoo.in` (destructive), `ops@yandex.com`
+→ `ops@yandex.ru`, outlook/hotmail/live/msn and icloud/me `+subaddress`. That
+decided against extending `canonicalEmail`: reproducing validator's 80-domain
+table inside a security-relevant identity function would drift against a
+transitive dependency.
+
+### PRs merged
+
+- #1098 — fix(auth): sign in with the gmail address you actually have. Squashed
+  to master as `6f248c4d`. Includes a separate, clearly-labelled commit bumping
+  js-yaml 3.15.0 → 3.15.1 in the kernel dev tree — GHSA-5p4m-2wfm-xmqj was
+  published after master last went green and was failing the audit gate on every
+  PR repo-wide. Dev-only transitive, lockfile only, 3 lines.
+
+### Validation
+
+- `cd backend && npm test` → 287 suites, 4768 tests, all passing.
+- 30 new regression tests (`auth.emailShapes.test.js`,
+  `collaboration.emailShapes.test.js`) plus `isGoogleMailAddress` coverage. The
+  lockout tests drive a working in-memory `login_attempts` counter rather than
+  asserting on a mocked argument — a call-order mock would pass just as happily
+  against the buggy version, and did.
+- Fresh-worktree note, third session running: no `backend/node_modules`, no
+  `packages/financial-kernel/dist`. 19 suites fail to resolve the kernel and read
+  exactly like regressions until you build it.
+
+### What's left to do next
+
+Two entries added to `TODO_MANUAL.md`, both blocked on the same missing piece:
+
+- **Org invitations** still match one gmail shape, across three call sites
+  (`inviteOrganizationMember`, `assertInvitationUsable`, and `getInvitationPreview`
+  which arrived with #1097). Needs a migration redefining `auth_provision_signup`
+  + a `P0001` branch in `errorHandler.js` + the route change, together. Tests pin
+  the current behaviour so a half-fix fails in CI.
+- **Duplicate accounts** from the two shapes — `register()`'s guard cannot see
+  across them and dotted spellings are combinatorial. Needs a
+  `users.email_canonical` column + backfill, which would also let us find and
+  merge the pairs already in production, retire the dual-candidate lookup, and
+  remove the one residual weakness noted in `auth.service.js`.
+
 ## 2026-08-06 — The login moves to the company address, and account recovery exists for the first time (#1089, #1093, #1094)
 
 Continuation of the 2026-08-05 email session. Three things landed: the operator
@@ -11805,225 +12027,3 @@ check real on the definer route rather than a no-op.
   from selecting a user row and acting on it without passing through
   `hydrateUserAuthContext`. Worth a sweep for direct `FROM users` reads that
   make an authorization decision.
-
-## 2026-08-07 — the two gmail shapes reach /login: dotted-Google accounts could never sign in (#1098)
-
-### What was worked on
-
-`/login` ran express-validator's `normalizeEmail()` and then matched on equality.
-That sanitizer strips gmail dots; the Google sign-in path stores
-`claims.email.toLowerCase()` with dots intact. So every account created with a
-dotted-gmail Google identity was unable to sign in with email + password — at
-all, permanently, behind the generic "Invalid email or password." Same root
-cause as the `/forgot-password` defect fixed in #1094, and it meant that PR's
-recovery flow ended at a door the user cannot open: receive the link, set a
-password, still locked out.
-
-The route now validates without sanitising; `login()` resolves every stored
-shape via `emailLookupCandidates()`, preserving the `requireDefinerPath()` /
-`auth_find_user_for_login` routing.
-
-**The lockout was the hard half.** Dropping the sanitizer with the throttle keyed
-on the address as typed would have been much worse than the bug it fixes: a
-fresh 5-failure budget per dot variant (2^(n-1) spellings of an n-char local
-part) and the per-account lockout ceases to exist. `enforceLoginThrottle` /
-`recordFailedLogin` / `clearLoginAttempts` now canonicalise their OWN argument,
-so the control sits where no future caller can bypass it by passing a raw
-address. Net effect is strictly stronger than before.
-
-**Two further defects surfaced while proving that out**, both fixed:
-
-- The lookup returns every matching shape, not the first. `first.last@gmail.com`
-  and `firstlast@gmail.com` can be two DISTINCT rows (register()'s duplicate
-  guard has never seen across the shapes). First-hit resolution would pick the
-  Google row — unusable random hash — and reject a password valid on the
-  sibling, breaking a sign-in that works today.
-- A successful sign-in no longer clears a lockout row it cannot prove it owns.
-  The canonical key is many-to-one for gmail, so an attacker who registers the
-  canonical sibling of a victim's dotted Google account could loop {4 guesses at
-  the victim, 1 real sign-in to their own} and refund the shared budget forever,
-  leaving only the per-IP limiter. Caught by a test written for the *first*
-  version of the guard, which the attack walked straight through.
-
-Deal sharing had the same defect and is fixed the same way. The workspace
-boundary is untouched — this widens which typed addresses resolve to a member,
-never which members are eligible.
-
-### Method note
-
-An 8-agent adversarial sweep (4 discovery modalities + 4 attack angles) ran
-against the working tree. It was worth it: it produced the throttle-refund
-attack, and it killed a change I had already written. The invitation fix I had
-in hand would have been *inert and harmful* — `assertInvitationUsable` is only
-the friendly pre-check; on the live non-bypass role the authoritative gate is
-inside `public.auth_provision_signup`, which does its own raw
-`lower(v_inv.email) <> lower(p_email)` and raises P0001, a code `errorHandler`
-does not map. Relaxing the JS half alone turns a readable 409 into a 500 on an
-unauthenticated route. Reverted before merge.
-
-Also verified empirically rather than assumed: `normalizeEmail` folds far more
-than gmail — `raj-kumar@yahoo.in` → `raj@yahoo.in` (destructive), `ops@yandex.com`
-→ `ops@yandex.ru`, outlook/hotmail/live/msn and icloud/me `+subaddress`. That
-decided against extending `canonicalEmail`: reproducing validator's 80-domain
-table inside a security-relevant identity function would drift against a
-transitive dependency.
-
-### PRs merged
-
-- #1098 — fix(auth): sign in with the gmail address you actually have. Squashed
-  to master as `6f248c4d`. Includes a separate, clearly-labelled commit bumping
-  js-yaml 3.15.0 → 3.15.1 in the kernel dev tree — GHSA-5p4m-2wfm-xmqj was
-  published after master last went green and was failing the audit gate on every
-  PR repo-wide. Dev-only transitive, lockfile only, 3 lines.
-
-### Validation
-
-- `cd backend && npm test` → 287 suites, 4768 tests, all passing.
-- 30 new regression tests (`auth.emailShapes.test.js`,
-  `collaboration.emailShapes.test.js`) plus `isGoogleMailAddress` coverage. The
-  lockout tests drive a working in-memory `login_attempts` counter rather than
-  asserting on a mocked argument — a call-order mock would pass just as happily
-  against the buggy version, and did.
-- Fresh-worktree note, third session running: no `backend/node_modules`, no
-  `packages/financial-kernel/dist`. 19 suites fail to resolve the kernel and read
-  exactly like regressions until you build it.
-
-### What's left to do next
-
-Two entries added to `TODO_MANUAL.md`, both blocked on the same missing piece:
-
-- **Org invitations** still match one gmail shape, across three call sites
-  (`inviteOrganizationMember`, `assertInvitationUsable`, and `getInvitationPreview`
-  which arrived with #1097). Needs a migration redefining `auth_provision_signup`
-  + a `P0001` branch in `errorHandler.js` + the route change, together. Tests pin
-  the current behaviour so a half-fix fails in CI.
-- **Duplicate accounts** from the two shapes — `register()`'s guard cannot see
-  across them and dotted spellings are combinatorial. Needs a
-  `users.email_canonical` column + backfill, which would also let us find and
-  merge the pairs already in production, retire the dual-candidate lookup, and
-  remove the one residual weakness noted in `auth.service.js`.
-
-## 2026-08-07 (continued) — the IC memo was telling committees approvals were done when none existed (#1100, #1101)
-
-### What was worked on
-
-Open brief: find and do the highest-impact pending work. An 18-agent audit
-(~2.8M tokens) swept the TODOs, the docs roadmaps, 11.9k lines of session log,
-the code, the frontend against its own guidelines, and the integration seams.
-But the finding that mattered came from **reading production**, which no code
-audit can do.
-
-**Production ground truth first.** 9 users, 11 orgs, 17 "active" deals of which
-~8 are test junk ("ZZ Bridge Verification (temp — delete me)"), 24 documents,
-84 DD items, 81 comps, and — decisively — **0 deal shares and 0 invitations
-ever**. That killed the leading candidate before any code was written: the
-remaining gmail two-shapes work (org invite + duplicate accounts) has **zero
-dotted-gmail users in production** and zero invitation usage. Correct to defer;
-it stays in TODO_MANUAL for when it can complete with its migration.
-
-### #1100 — absence is not clearance
-
-Four IC memos sit in production `ai_artifacts`. Two of them tell an investment
-committee, under **Required Approvals**:
-
-    "All required approvals have been received."
-    "All required approvals are received."
-
-Those deals hold **zero approval rows**. A third lists six named approvals —
-Fire NOC, DC Conversion Order, BESCOM, BWSSB, Environment Clearance, Sanctioned
-Building Plan — under "Received:", against a database where **no approval row
-has ever had that status**; the word is not in the vocabulary (pending /
-in_progress / validated / issue / expired). All 33 approval rows in production
-are pending, and 80 of 84 DD items.
-
-CLAUDE.md's hardest rule failing end to end, in the artifact that goes to an IC
-and gets drawn into the LP-facing tear-sheet PDF. THREE failures had to line up:
-
-1. **The guard had a hole.** `INSTRUCTION_LEAD` carried a bare `require[ds]?`
-   for "title chain REQUIRES verification" — and it also matched the ADJECTIVE
-   in "REQUIRED approvals", so the suppressor read "All required " as diligence
-   guidance and passed the verdict. The tell that it was an accident, not a
-   judgement: `requisite` and `needed` were both caught. Only `required` — the
-   phrasing the memo's own section heading uses — was blind. Narrowed to verb
-   senses (`requires?`, `is/are/was/were required`, `required to be`).
-2. **Nothing called the guard on these artifacts.** icMemo applied the
-   stance-verb neutraliser alone; inconsistencyDetector persisted raw markdown.
-   `sanitizeAiProse` now runs at `aiArtifacts.saveArtifact` — the one door all
-   three artifact types pass — and on `getLatestArtifact`, because ten rows
-   predate the guard and the tear sheet still draws them. Stored rows are NOT
-   rewritten: the table records what the model actually said, and editing it
-   would destroy the evidence of drift. The guard is idempotent.
-3. **The prompt rewarded it.** "If everything closed, say so" over a possibly
-   empty array. Added a deterministic `diligence_posture` block (counted in JS,
-   with an explicit `recorded` boolean), bound prompt rules to it, named the
-   forbidden status words, and mandated the recorded-status register.
-
-Also in #1100: **the debt panel disagreed with the deal own cost line.** The
-browser derived its quarterly rate as `r/100/4` while the kernel and the backend
-engine both use `(1+r)^0.25 − 1`. Simple division compounds — a 12% facility
-accrued at **12.55% effective**, so DebtSchedulePanel showed ~4.4% more Total
-Interest than the financed-cost line derived from the kernel `constFinanceCr`.
-The two mirrors were otherwise line-for-line identical, which is exactly why it
-survived: nothing compared them. Now `debtSchedule.parity.test.js` asserts deep
-equality across every quarter.
-
-### #1101 — silence, motion, and a blocked font
-
-- **`attention.service.js` swallowed all five dashboard queries** with
-  `.catch(() => [])` and had **zero logger references in the file**. A broken
-  query and a clean portfolio rendered identically, and the sentence the user
-  read was "nothing needs your attention" — on the one surface whose job is to
-  stop you missing something. Now: named signals, error logging (code + signal
-  only), and an `unavailable` array so the tile can distinguish clear from
-  unknown. Caught mid-change by the existing suite when the first pass renamed
-  the getters parameter without forwarding it into `safeRows`.
-- **Five imperative `scrollIntoView` calls ignored `prefers-reduced-motion`**
-  while ten components honoured it. New `utils/motion.js` reads the media query
-  at call time; `check-smooth-scroll.cjs` + a vitest guard fail CI on the raw
-  literal.
-- **A CSP-blocked `@import` fired on every production page load** —
-  `rsms.me/inter/inter.css` is not in `style-src`, so it never contributed a
-  glyph (Inter arrives via the allow-listed Google Fonts link) and only added
-  console noise. Deleted rather than allow-listed.
-
-### Method notes worth keeping
-
-- **Read production before picking work.** The audit own top-ranked candidate
-  was right on the merits and wrong on priority; five SQL queries settled it in
-  a minute. Usage data beats code inspection for "what matters now".
-- **Verify the agents.** Three separate claims were wrong or overstated: the
-  Inter font is NOT broken (it loads from Google Fonts — the blocked import is
-  redundant, not fatal); the `far_rules` / `master_plan_zones` production errors
-  are dashboard-side, not app; the kernel fake-elasticity path is NOT
-  unreachable (a kernel test exercises it), so it was left alone and written up
-  in TODO_ARCHITECTURE section 2 instead of deleted.
-- **The guard blind spot was invisible to its own test suite** — 177 tests
-  passing, and the single most common Indian phrasing sailed through. What found
-  it was running the guard against real production text.
-
-### PRs merged
-
-- **#1100** — fix(trust): absence is not clearance, and the interest on screen
-  is the kernel.
-- **#1101** — fix(trust,a11y): stop the dashboard failing silently; honour
-  reduced motion.
-
-### Validation
-
-- backend 291 suites / 4829 tests · frontend 175 files / 1409 tests + production
-  build · kernel 35 suites / 413 tests — all green.
-- CSP fix verified on live production after deploy: the served CSS
-  (`index-CsDI4tU3.css`) contains zero `rsms.me` references, and the console
-  error did not recur across four page loads.
-
-### What's left to do next
-
-- **Operator decisions needed** (see the recap): the dead "Number Format"
-  control in Settings; the two mailbox aliases (`grievance@` / `security@`) that
-  are already printed on live pages; the three names for the breach runbook and
-  grievance officer; and sign-off on the "since you last looked" home design.
-- **Production has ~8 test deals** in the live workspace, four of them literally
-  named "delete me". Cleaning those is destructive and operator-owned — say the
-  word and I will archive them.
-- Org invitations + duplicate accounts remain blocked on one migration
-  (TODO_MANUAL) — best opened as the next block, migration first.

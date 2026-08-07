@@ -1,4 +1,4 @@
-import { ShieldAlert, CheckCircle, HelpCircle, AlertTriangle } from 'lucide-react';
+import { ShieldAlert, CheckCircle, HelpCircle, AlertTriangle, ClipboardCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useRiskRadar } from '../../hooks/useRiskFlags';
 import { GuideHelp } from '../../design-system';
@@ -20,6 +20,17 @@ const POSTURE = {
     Icon: CheckCircle,
     color: 'text-data-positive',
     chip: 'bg-pos-soft text-data-positive border-hairline',
+  },
+  // Title & Ownership and Approvals & Regulatory are lanes of the "legal four".
+  // A completed checklist there records that someone looked — it is not
+  // verification of the statutory position, and CLAUDE.md forbids the product
+  // from concluding on it. Deliberately neutral, never green: a green tick is
+  // exactly the misreading this posture exists to prevent.
+  recorded: {
+    label: 'Checklist complete',
+    Icon: ClipboardCheck,
+    color: 'text-content-secondary',
+    chip: 'bg-bg-secondary text-content-secondary border-hairline',
   },
   unverified: {
     label: 'Not verified',

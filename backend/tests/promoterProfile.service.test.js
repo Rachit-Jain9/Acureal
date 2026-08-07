@@ -354,3 +354,41 @@ describe('getProfileWithAssessment — composed read model', () => {
     expect(out.rera.stats.total_projects).toBe(12);
   });
 });
+
+
+/**
+ * ABSENCE IS NOT CLEARANCE — the RERA complaints clause.
+ *
+ * Acureal has no K-RERA complaints feed. A blank `rera_complaints` means
+ * nobody has looked, and the posture used to state "RERA-registered, no
+ * complaints on record" from it — the RERA lane of the legal four asserting a
+ * statutory fact, which CLAUDE.md forbids outright. Invisible to the
+ * sanitizeAiProse guard because the string is deterministic, not AI prose.
+ */
+describe('RERA complaints — unchecked is not zero', () => {
+  test('an unchecked complaints field never claims a clean record', () => {
+    const a = promoterProfile.assessPromoter({
+      promoter_name: 'Acme',
+      delivered_on_time: 9,
+      delivered_delayed: 1,
+      rera_registered: true,
+      total_projects: 12,
+    });
+    expect(a.signals.some((s) => /no complaints on record/i.test(s.text))).toBe(false);
+    expect(a.signals.some((s) => /complaints not yet checked/i.test(s.text))).toBe(true);
+    expect(a.posture).toBe('unverified');
+  });
+
+  test('a recorded zero is reported as what the register says', () => {
+    const a = promoterProfile.assessPromoter({
+      promoter_name: 'Acme',
+      delivered_on_time: 9,
+      delivered_delayed: 1,
+      rera_registered: true,
+      rera_complaints: 0,
+      total_projects: 12,
+    });
+    expect(a.posture).toBe('cleared');
+    expect(a.signals.some((s) => /complaints recorded: 0/i.test(s.text))).toBe(true);
+  });
+});

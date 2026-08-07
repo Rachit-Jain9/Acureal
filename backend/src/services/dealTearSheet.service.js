@@ -265,7 +265,7 @@ const drawKvCard = (page, fonts, { x, y, width, height, title, rows }) => {
 
 // Readiness ribbon below the cards — DD %, approvals %, open risks count,
 // IC recommendation.
-const drawReadinessRibbon = (page, fonts, { x, y, width, ddPct, approvalsPct, openRisks, recommendation }) => {
+const drawReadinessRibbon = (page, fonts, { x, y, width, ddPct, approvalsPct, openRisks, riskRegisterSize, recommendation }) => {
   const h = 52;
   page.drawRectangle({
     x, y: y - h, width, height: h,
@@ -275,7 +275,18 @@ const drawReadinessRibbon = (page, fonts, { x, y, width, ddPct, approvalsPct, op
   const cells = [
     { label: 'DD COMPLETION',   value: `${fmtNum(ddPct, 0)}%`, tone: ddPct >= 80 ? COLORS.green : ddPct >= 50 ? COLORS.amber : COLORS.red },
     { label: 'APPROVALS',       value: `${fmtNum(approvalsPct, 0)}%`, tone: approvalsPct >= 80 ? COLORS.green : approvalsPct >= 50 ? COLORS.amber : COLORS.red },
-    { label: 'OPEN RISK FLAGS', value: `${openRisks}`, tone: openRisks === 0 ? COLORS.green : openRisks <= 3 ? COLORS.amber : COLORS.red },
+    // A green zero here is the most reassuring number on page 1, and it used to
+    // certify registers that had never been opened — an empty register and a
+    // diligenced-clean one both count zero open flags. Amber "Not assessed"
+    // when nothing has ever been recorded; green is reserved for a register
+    // that exists and is clean.
+    {
+      label: 'OPEN RISK FLAGS',
+      value: riskRegisterSize === 0 ? 'Not assessed' : `${openRisks}`,
+      tone: riskRegisterSize === 0
+        ? COLORS.amber
+        : openRisks === 0 ? COLORS.green : openRisks <= 3 ? COLORS.amber : COLORS.red,
+    },
     { label: 'IC RECOMMENDATION', value: recommendation || 'Pending', tone: COLORS.slate900 },
   ];
   const cellW = width / cells.length;
@@ -631,6 +642,10 @@ async function buildDealTearSheet({ dealId, generatedBy = 'Acureal user' } = {})
       : 0,
     openRisks: (risks?.summary?.critical || 0) + (risks?.summary?.high || 0)
       + (risks?.summary?.medium || 0) + (risks?.summary?.low || 0),
+    // total_ever counts resolved rows too, so a register that was worked and
+    // closed still reads as assessed. The ?? keeps this safe if the builder is
+    // ever handed a context assembled before dealExport started emitting it.
+    riskRegisterSize: risks?.summary?.total_ever ?? (risks?.items || []).length,
     recommendation: titleCase(risks?.recommendation?.recommendation || readiness?.label || 'Pending'),
   });
 

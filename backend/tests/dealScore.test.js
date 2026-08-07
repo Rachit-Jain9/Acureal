@@ -37,14 +37,27 @@ describe('utils/scoring/dealScore', () => {
   });
 
   describe('computeDealScore', () => {
-    test('zero inputs → low score with risk-baseline still awarded', () => {
+    // Previously asserted the opposite ("risk-baseline still awarded"): an
+    // empty input object scored ≥25 because zero OPEN risks was indistinguishable
+    // from a register nobody had opened. Absence is not clearance — the baseline
+    // is now earned only by an explicitly populated register, fail-closed.
+    test('zero inputs → no risk baseline, because nothing was ever assessed', () => {
       const result = computeDealScore({});
-      // Risk register baseline (25 pts) is the only thing that scores when
-      // no data is provided — nothing else activates.
-      expect(result.score).toBeGreaterThanOrEqual(25);
-      expect(result.score).toBeLessThanOrEqual(50);
-      expect(result.band).toBeOneOf(['weak', 'below_benchmark', 'in_line']);
+      expect(result.score).toBe(0);
+      expect(result.band).toBe('weak');
       expect(result.breakdown).toHaveLength(6);
+      const risk = result.breakdown.find((b) => /Risk register/.test(b.component));
+      expect(risk.awarded).toBe(0);
+      expect(risk.reason).toMatch(/not populated/i);
+    });
+
+    test('an empty register never scores as well as a populated, clean one', () => {
+      const empty = computeDealScore({ riskRegisterPopulated: false });
+      const clean = computeDealScore({
+        riskRegisterPopulated: true,
+        riskCounts: { critical: 0, high: 0, medium: 0, low: 0 },
+      });
+      expect(empty.score).toBeLessThan(clean.score);
     });
 
     test('strong residential deal scores high', () => {
@@ -55,6 +68,7 @@ describe('utils/scoring/dealScore', () => {
         grossMarginPct: 32,
         ddCompletionPct: 90,
         riskCounts: { critical: 0, high: 0, medium: 1, low: 2 },
+        riskRegisterPopulated: true,
         financialModelPresent: true,
       });
       expect(result.score).toBeGreaterThanOrEqual(80);
@@ -85,6 +99,7 @@ describe('utils/scoring/dealScore', () => {
         grossMarginPct: 0,
         ddCompletionPct: 0,
         riskCounts: {},
+        riskRegisterPopulated: true,
         financialModelPresent: false,
       });
       const comm = computeDealScore({
@@ -94,6 +109,7 @@ describe('utils/scoring/dealScore', () => {
         grossMarginPct: 0,
         ddCompletionPct: 0,
         riskCounts: {},
+        riskRegisterPopulated: true,
         financialModelPresent: false,
       });
       expect(comm.score).toBeGreaterThan(resi.score);

@@ -390,6 +390,9 @@ describe('Risk & Diagnosis detect functions', () => {
     const out = r.composeReadiness({
       deal: { asset_class: 'residential_apartments' },
       deal_doctor: {
+        // An engine that produced findings necessarily had signals to diagnose;
+        // the omission made this fixture a shape production cannot emit.
+        signal_count: 6,
         findings: [
           { label: 'X', severity: 5 },
           { label: 'Y', severity: 4 },
@@ -513,5 +516,77 @@ describe('computeBucketSummary', () => {
   test('all missing → missing', () => {
     const items = [{ weight: 5, evidence: { status: 'missing' } }];
     expect(r.computeBucketSummary(items).bucket_status).toBe('missing');
+  });
+});
+
+/**
+ * ABSENCE IS NOT CLEARANCE — the Risk & Diagnosis bucket.
+ *
+ * Eight of eleven live production deals have zero DD items and zero risk
+ * flags. On every one of them this bucket read 73% with three green "Verified"
+ * chips while every other bucket read 0-11% "Missing" — so the eye landed on
+ * the one bucket that looked worked-through, and it was worked-through only in
+ * the sense that nothing had ever been checked.
+ *
+ * Two distinct defects fed it, and the suite could not see either because its
+ * fixtures used a shape production never emits:
+ *   1. `risk.score` is documented flat but the real caller passes
+ *      getRiskScore()'s OBJECT, so the numeric read produced null and the
+ *      contract went unexercised.
+ *   2. Zero findings / zero flags fell straight into `verified`, whether the
+ *      register was clean or had never been opened.
+ */
+describe('risk bucket — an unassessed register must never read as verified', () => {
+  const itemsById = (ctx) => {
+    const out = {};
+    for (const b of r.composeReadiness(ctx).buckets) {
+      for (const it of b.items) out[it.id] = it;
+    }
+    return out;
+  };
+
+  // The REAL caller shape. This test fails on master.
+  test('empty register in the production shape is not verified', () => {
+    const items = itemsById({
+      deal: { asset_class: 'commercial_office' },
+      risk: { flags: [], score: { score: 100, total: 0, open_count: 0, critical_total: 0 } },
+    });
+    expect(items.risk_radar_posture.evidence.status).not.toBe('verified');
+    expect(items.risk_radar_posture.evidence.status).toBe('missing');
+    expect(items.risk_radar_posture.evidence.evidence_label).toMatch(/empty|no risk assessment/i);
+  });
+
+  test('a populated, genuinely clean register still earns verified', () => {
+    const items = itemsById({
+      deal: { asset_class: 'commercial_office' },
+      risk: { flags: [], score: { score: 92, total: 4, open_count: 0, critical_total: 0 } },
+    });
+    expect(items.risk_radar_posture.evidence.status).toBe('verified');
+  });
+
+  test('Deal Doctor with nothing to diagnose is missing, not verified', () => {
+    const items = itemsById({
+      deal: { asset_class: 'commercial_office' },
+      deal_doctor: { signal_count: 0, findings: [] },
+    });
+    expect(items.deal_doctor_critical.evidence.status).toBe('missing');
+    expect(items.cross_doc_inconsistencies.evidence.status).toBe('missing');
+  });
+
+  test('Deal Doctor that ran and found nothing is verified', () => {
+    const items = itemsById({
+      deal: { asset_class: 'commercial_office' },
+      deal_doctor: { signal_count: 12, findings: [] },
+    });
+    expect(items.deal_doctor_critical.evidence.status).toBe('verified');
+    expect(items.cross_doc_inconsistencies.evidence.status).toBe('verified');
+  });
+
+  test('a wholly untouched deal earns nothing in the risk bucket', () => {
+    const bucket = r
+      .composeReadiness({ deal: { asset_class: 'commercial_office' } })
+      .buckets.find((b) => b.id === 'risk_diagnosis');
+    expect(bucket.bucket_status).toBe('missing');
+    expect(bucket.completeness_pct).toBe(0);
   });
 });

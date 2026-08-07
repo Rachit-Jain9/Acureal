@@ -236,11 +236,27 @@ export default function PortfolioRiskRadarWidget() {
         </div>
         <div className="rounded-md border border-hairline-soft bg-surface px-3 py-2.5">
           <p className="text-eyebrow uppercase text-content-muted text-[10px] font-medium tracking-wider mb-1">Portfolio score</p>
-          <p className={clsx('text-xl font-bold tabular-nums', open_severity.portfolio_score > 60 ? 'text-data-negative' : open_severity.portfolio_score > 30 ? 'text-premium' : 'text-data-positive')}>
+          {/* The score is a severity average, so an unassessed portfolio scores
+              0 — and 0 used to paint green, the most reassuring colour on the
+              dashboard, precisely because nobody had assessed anything. Colour
+              is now gated on coverage: green is reachable only once every live
+              deal has actually been assessed. */}
+          <p className={clsx(
+            'text-xl font-bold tabular-nums',
+            totals.unverified > 0
+              ? 'text-content-secondary'
+              : open_severity.portfolio_score > 60 ? 'text-data-negative'
+                : open_severity.portfolio_score > 30 ? 'text-premium'
+                  : 'text-data-positive',
+          )}>
             {open_severity.portfolio_score}
             <span className="text-xs font-normal text-content-muted ml-0.5">/100</span>
           </p>
-          <p className="text-[11px] text-content-muted mt-0.5">Avg of per-deal severity weights</p>
+          <p className="text-[11px] text-content-muted mt-0.5">
+            {totals.unverified > 0
+              ? `${totals.unverified} of ${totals.deals} deals not yet assessed`
+              : 'Avg of per-deal severity weights'}
+          </p>
         </div>
       </div>
 
@@ -366,14 +382,28 @@ export default function PortfolioRiskRadarWidget() {
         </div>
       )}
 
-      {/* Cleared portfolio — no top deals and no recent flags, but we still
-          render the widget rather than hide it, so the operator gets the
-          positive signal that everything is in order. */}
+      {/* Nothing flagged — but "nothing flagged" has two very different causes,
+          and this banner used to state the flattering one for both. No deals at
+          risk because the portfolio was diligenced and is clean is a positive
+          signal; no deals at risk because nothing has ever been assessed is the
+          opposite, and asserting "required diligence is in place" over it is
+          the absence-is-not-clearance defect in its plainest form. Split on the
+          posture, which already requires totals.cleared === totals.deals. */}
       {top_deals_at_risk.length === 0 && recently_flagged.length === 0 && (
-        <div className="px-3 py-3 rounded-md bg-pos-soft border border-hairline flex items-center gap-2 text-xs text-data-positive">
-          <CheckCircle size={14} className="shrink-0" />
-          <span>No deals need IC attention right now — required diligence is in place across the portfolio.</span>
-        </div>
+        posture === 'cleared' ? (
+          <div className="px-3 py-3 rounded-md bg-pos-soft border border-hairline flex items-center gap-2 text-xs text-data-positive">
+            <CheckCircle size={14} className="shrink-0" />
+            <span>No deals need IC attention right now — required diligence is in place across the portfolio.</span>
+          </div>
+        ) : (
+          <div className="px-3 py-3 rounded-md bg-premium-soft border border-hairline flex items-start gap-2 text-xs text-premium">
+            <HelpCircle size={14} className="shrink-0 mt-px" />
+            <span>
+              {totals.unverified} of {totals.deals} live deals have no risk, DD or approval
+              records yet — nothing has been assessed, so this is not a clean result.
+            </span>
+          </div>
+        )
       )}
     </Card>
   );

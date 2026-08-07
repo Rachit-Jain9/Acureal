@@ -73,6 +73,7 @@ const emptyMode = (cat) => ({
 });
 
 const emptyDealCategory = (cat) => ({
+  key: cat.key,
   flags_total: 0,
   flags_ever: 0,
   flags_critical: 0,
@@ -80,10 +81,12 @@ const emptyDealCategory = (cat) => ({
   flags_medium: 0,
   flags_low: 0,
   dd_total: 0,
+  dd_completed: 0,
   dd_required_total: 0,
   dd_required_open: 0,
   dd_flagged: 0,
   dd_overdue: 0,
+  approvals_total: 0,
   approvals_required_total: 0,
   approvals_required_pending: 0,
   approvals_expired_required: 0,
@@ -91,7 +94,11 @@ const emptyDealCategory = (cat) => ({
 });
 
 // Same posture logic as the per-deal radar (assessCategory) — kept inline so
-// the portfolio rollup matches what each deal's Risk tab shows.
+// the portfolio rollup matches what each deal's Risk tab shows. Both sides
+// must move together; see riskRadar.service.js for the reasoning behind
+// CHECKLIST_ONLY, the tightened `assessed`, and the empty-approvals guard.
+const CHECKLIST_ONLY = new Set(['title_ownership', 'approvals_regulatory']);
+
 const assessCategoryPosture = (c) => {
   const hasProblem =
     c.flags_total > 0
@@ -102,11 +109,13 @@ const assessCategoryPosture = (c) => {
     c.dd_required_open > 0
     || (c.is_approval_cat && c.approvals_required_pending > 0);
   const assessed =
-    c.dd_total > 0
-    || c.flags_ever > 0
+    c.dd_completed > 0
+    || c.dd_required_total > 0
     || (c.is_approval_cat && c.approvals_required_total > 0);
+  const approvalsRegisterEmpty = c.key === 'approvals_regulatory' && !(c.approvals_total > 0);
   if (hasProblem) return 'flagged';
-  if (assessed && !openWork) return 'cleared';
+  if (approvalsRegisterEmpty) return 'unverified';
+  if (assessed && !openWork) return CHECKLIST_ONLY.has(c.key) ? 'recorded' : 'cleared';
   return 'unverified';
 };
 
@@ -271,6 +280,7 @@ const getPortfolioRiskRadar = async () => {
     const status = String(row.status || 'pending').toLowerCase();
     const required = row.is_required !== false;
     c.dd_total += 1;
+    if (status === 'completed') c.dd_completed += 1;
     if (required) c.dd_required_total += 1;
     if (status === 'flagged') c.dd_flagged += 1;
     else if (required && OPEN_DD_STATUSES.has(status)) {
@@ -291,6 +301,9 @@ const getPortfolioRiskRadar = async () => {
     const b = dealBuckets.get(row.deal_id);
     if (!b) continue;
     const c = b.categories.approvals_regulatory;
+    // Counted before the is_required filter: any approval row at all proves an
+    // approvals register exists, which is what the posture guard asks.
+    c.approvals_total += 1;
     if (row.is_required === false) continue;
     c.approvals_required_total += 1;
     if (row.expiry_date && new Date(row.expiry_date).getTime() < nowMs) {
@@ -326,7 +339,10 @@ const getPortfolioRiskRadar = async () => {
         m.open_high += c.flags_high;
         dealPosture = 'flagged';
         if (!worstCategoryFlagged) worstCategoryFlagged = cat.label;
-      } else if (posture === 'unverified') {
+      } else if (posture === 'unverified' || posture === 'recorded') {
+        // `recorded` is a completed checklist on a legal-four lane. It is not
+        // clearance, so it must not inflate cleared_deals or let a deal roll
+        // up as cleared — the dashboard tile reads these totals.
         m.unverified_deals += 1;
         if (dealPosture === 'cleared') dealPosture = 'unverified';
       } else {
