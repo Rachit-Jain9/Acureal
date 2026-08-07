@@ -113,6 +113,24 @@ router.post(
   authenticate,
   requireRole('admin'),
   [
+    // normalizeEmail() is KEPT here, unlike /login and the deal-share route.
+    //
+    // It carries the same gmail-dot defect they had — inviting a colleague at
+    // first.last@gmail.com cannot see their Google-created account, so it mints
+    // a pending invitation that registration is the only thing able to consume,
+    // and someone who already has an account never gets added. But this route's
+    // address is not only a lookup key, it is also the STORAGE key of the
+    // organization_invitations row, and that shape is pinned by SQL we cannot
+    // change from here: public.auth_provision_signup (the live SECURITY DEFINER
+    // signup path under the non-bypass role) redeems an invitation with a raw
+    // `lower(v_inv.email) <> lower(p_email)` comparison against the address
+    // /register normalises. Store any other shape and the invitation becomes
+    // unredeemable — a worse failure than the one being fixed, and one the
+    // invitee cannot work around by typing something different.
+    //
+    // Fixing this properly needs a migration (redefine auth_provision_signup to
+    // fold both sides) plus an error-handler branch for its P0001 raises.
+    // Tracked in TODO_MANUAL.md; deliberately NOT half-fixed here.
     body('email').isEmail().withMessage('A valid email is required.').normalizeEmail(),
     body('role')
       .custom((value) => ['admin', 'editor', 'viewer'].includes(normalizeRole(value)))
