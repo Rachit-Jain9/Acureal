@@ -20,6 +20,19 @@ required one), 4 (two names), and 7 (the lawyer).)_
 
 ## ✅ Already handled — nothing for you to do here
 
+- **✅ DONE (2026-08-07 — you authorised it in chat; I ran it).** The eight test
+  deals are out of your live workspace. They were `E2E Sarjapur Plotted`,
+  `E2E Whitefield Apartments`, `Stale-check test (PR-8)`,
+  `TEST - Hotel Operating Roll (DELETE)`, `TEST - Land-rate flag (Gandhinagar)`,
+  `TEST - Redevelopment Occupants (PR-8)`, `ZZ Bridge Verification (temp — delete
+  me)` and `ZZ Plotted Verification (temp — delete me)`. Every one was checked
+  first and held **nothing** — no documents, diligence items, risks, approvals,
+  activities or reports — so no real work was touched. They were **archived, not
+  deleted**: they still exist, they're just out of the way, and any of them can be
+  brought back. Each archive is recorded in the deal history log with the reason,
+  the same way the app records it when you archive a deal yourself. Your Deals
+  list now shows the nine real ones.
+
 - **✅ DONE (2026-07-17 — operator ran it; verified live).** The Bengaluru
   locality → Planning District lookup (`20260619_district_localities.sql`) is
   applied: **480 localities across all 42 districts**, indexes built, row-level
@@ -259,13 +272,19 @@ overspend, no matter what.
 
 # 🟠 QUICK WINS — a few minutes each
 
-## 4. Two names for the emergency plan
-**Why:** The written "what to do if there's a security problem" plan has two blank
-spots that need real people.
+## 4. ⏸ ON HOLD (your call, 2026-08-07) — Two names for the emergency plan
+**Status: you said "keep it on hold". Nobody should ask you for these again until
+you raise it.** Nothing is broken in the meantime; the security plan simply has
+two "TBD" spots.
 
-Just **reply** with these two names:
+When you want to close it, reply with two names:
 - **Incident Lead** — the person in charge if something goes wrong (probably you).
 - **Legal Liaison** — the person who'd contact the lawyer (probably you, for now).
+
+A third name — the **Grievance Officer** that Indian law requires the privacy page
+to publish — is part of the same decision and is on hold with it. Note that this
+one is a legal obligation, not just paperwork: while it is blank, the privacy page
+names an address (see item 5) but no person.
 
 ## 5. 🔴 Create TWO email addresses on acureal.in — one is required by law
 **Why:** The site tells people to write to two addresses. Neither exists yet, so
@@ -276,33 +295,60 @@ working Grievance Officer contact).
 These need to **receive** mail. That's a different thing from Resend in 6b, which
 only **sends**. You need both.
 
-### Which provider — checked 2026-07-30
-GoDaddy's own email (the "Set up Email" banner on your domain page) is a **paid
-subscription** — it offers Microsoft 365 or Titan, priced per mailbox per month,
-and its setup wizard currently errors out. For two addresses that will receive a
-handful of messages a year, that's poor value.
+### ✏️ REWRITTEN 2026-08-07 — the old Zoho plan below is obsolete, don't follow it
 
-| Option | Cost | Trade-off |
-|---|---|---|
-| **Zoho Mail free plan** ⭐ | Free — 5 users, 1 domain, 5 GB each | Webmail only (no Outlook/Apple Mail app). Fine for low-volume compliance inboxes. |
-| GoDaddy Titan / Microsoft 365 | Paid, per mailbox per month | Simplest, but a recurring bill for two rarely-used addresses |
-| Cloudflare Email Routing | Free, forwards into your Gmail | Requires moving the domain's nameservers to Cloudflare — **don't do this now**, it would disturb the DNS we just got working |
+The earlier advice (sign up for Zoho Mail free) was written on 2026-07-30, before
+you moved acureal.in to **Google Workspace**. I checked the live DNS today:
 
-**Recommendation: Zoho Mail's free plan.** Real mailboxes, no cost, and it works
-alongside the DNS we just set up (it only adds MX records).
+```
+acureal.in    MX preference = 1, mail exchanger = smtp.google.com
+```
 
-⚠️ Whichever you pick, adding its MX records at GoDaddy will ask for a fresh
-6-digit code texted to your phone — same as the domain setup.
+Google is already receiving mail for the domain. So you do **not** need a new
+provider, a new account, a new password, or any DNS change. You need two
+**aliases** on the mailbox you already have — Google gives you up to 30 free, and
+mail sent to them simply lands in your normal `rachit.jain@acureal.in` inbox.
 
-I can't do this part for you: it needs a new account signed up in your name and a
-mailbox password set, and I don't create accounts or enter passwords.
+This is about a two-minute job. It is the only thing standing between the site
+and a legal obligation: `grievance@acureal.in` is printed on your live privacy
+page, and today mail to it bounces.
 
-1. Sign up at `https://www.zoho.com/mail/` → choose the **Forever Free** plan.
-2. Add `acureal.in` as your domain; Zoho gives you DNS records to add at GoDaddy.
-3. Create the two mailboxes: `security@acureal.in` and `grievance@acureal.in`.
-4. Send a test email to each from your Gmail and confirm they arrive.
-5. **Reply:** `mailboxes done` — and tell me if you'd rather I document a
-   different provider instead.
+**I can't do this one for you.** It needs an admin sign-in at Google, and I don't
+enter passwords or sign into accounts — that's a hard line regardless of access
+you offer me. The steps are below and they're all clicking.
+
+🌐 **In your browser:**
+
+1. Go to **https://admin.google.com** and sign in as `rachit.jain@acureal.in`.
+2. In the left menu click **Directory** → **Users**.
+3. Click your own name in the list (**Rachit Jain**).
+4. Click the box titled **User information**, then click **Email aliases**.
+5. Click **Add an alias**. In the box that appears, type: `grievance`
+   — the `@acureal.in` part is already filled in for you.
+6. Click **Add an alias** again and type: `security`
+7. Click the blue **SAVE** button at the bottom.
+8. You'll see the two new addresses listed under "Email aliases".
+
+⏳ Google says aliases can take up to 24 hours to start working; in practice it's
+usually a few minutes.
+
+✅ **How to check it worked:** from your personal Gmail, send a short email to
+`grievance@acureal.in`. It should arrive in your `rachit.jain@acureal.in` inbox.
+Do the same for `security@acureal.in`.
+
+**Reply:** `mailboxes done` — or paste a screenshot if the screen looks different
+from the steps above.
+
+<details>
+<summary>Old advice from 2026-07-30 (obsolete — kept for history)</summary>
+
+GoDaddy's own email was a paid subscription with a broken setup wizard, so the
+recommendation then was Zoho Mail's free plan (5 users, 1 domain, 5 GB each,
+webmail only), with Cloudflare Email Routing ruled out because it would have
+required moving nameservers and disturbing DNS that had just been made to work.
+All of that is moot now that Google Workspace holds the domain's MX.
+
+</details>
 
 ---
 
