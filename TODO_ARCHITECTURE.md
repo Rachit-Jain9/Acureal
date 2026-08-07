@@ -112,6 +112,48 @@ Last reviewed: 2026-04-28.
 
 ---
 
+## 2. Kernel sensitivity: a real re-run, or an honest refusal
+
+**Status: DEFERRED — needs a product decision, not just code.**
+
+`packages/financial-kernel/src/orchestration/orchestrator.ts:247` computes its
+tornado by scaling the base KPI linearly against a hardcoded `const elasticity
+= 0.5`. That number is invented. It is not derived from the model, and a chart
+built on it is presented to the reader as kernel output — which is the
+"never use a fabricated figure" rule in CLAUDE.md, sitting inside the one module
+that exists to be deterministic.
+
+**Why it was not simply deleted during the 2026-08-07 trust sweep.** It was put
+to me as unreachable dead code. It is not: `tests/intelligence/pipeline-insights.test.ts:83`
+sets `sensitivityVariables` and asserts the tornado sorts by swing, and the
+output is consumed by `InvestorPackage` and `excelReport.tornadoSheet`. What is
+true is narrower — **no production caller sets `sensitivityVariables`**, so no
+user has ever seen this number. Deleting a tested kernel capability on a premise
+that turned out to be false is not a change worth making silently.
+
+**The decision to make.** One of:
+
+- **Real re-run.** The honest version: re-run the model per sweep point instead
+  of scaling a single KPI. Correct, and the only version whose output deserves
+  the kernel's name. Costs N× compute per tornado, so it belongs behind the
+  dedicated endpoint the current comment already gestures at ("Full re-run is
+  available in a dedicated endpoint").
+- **Refuse.** Return `sensitivity: null` when a real re-run is unavailable, and
+  let the UI say so. Cheap, honest, and consistent with how the rest of the
+  product handles "we cannot compute this yet".
+
+What is NOT acceptable is the third option — keeping the approximation and
+labelling it — because the tornado's whole purpose is to rank drivers, and a
+uniform elasticity ranks them purely by the size of the input swing.
+
+**Entry criteria:** a production surface actually wants a tornado. Until then
+this is latent, and the note exists so the next person does not re-derive the
+same investigation.
+
+Last reviewed: 2026-08-07.
+
+---
+
 ## How to use this file
 
 - Add an entry here only for architecture that spans modules and cannot land in one PR.
