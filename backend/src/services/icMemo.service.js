@@ -76,21 +76,73 @@ Markdown bullet list. 4-6 bullets. Each bullet is ONE specific assumption with t
 Markdown table with columns: Severity, Category, Risk, Mitigation. Pull from the supplied risk_flags. Order by severity (critical → high → medium → low). If empty, write \"No flags surfaced — schedule a manual risk review before IC.\"
 
 ## 6. DD Status
-Short bullet list of outstanding diligence items. Pull from the supplied dd_items. Mark blockers with **BLOCKER**. If everything closed, say so.
+Short bullet list of outstanding diligence items. Pull from the supplied \`dd_items\` and open with the counts from \`diligence_posture.ddItems\`. Mark required-and-open items with **BLOCKER**.
+- If \`diligence_posture.ddItems.recorded\` is false, write exactly: "No diligence items have been recorded for this deal — the checklist has not been started." Do NOT write that diligence is closed, complete, or clear. An empty list means UNRECORDED, never SATISFIED.
+- Only describe an item as closed when its own \`status\` is "completed". Never generalise from one item to the register.
 
 ## 7. Required Approvals
-Pull from the supplied approval_items. State which are pending vs received. If pending count > 0, this is a yellow light at minimum.
+List the supplied \`approval_items\` with each item's own recorded status verbatim, and open with the counts from \`diligence_posture.approvals\`.
+- If \`diligence_posture.approvals.recorded\` is false, write exactly: "No approvals have been recorded for this deal." Do NOT write that approvals are received, obtained, granted, in place, or complete. An empty list means UNRECORDED, never SATISFIED.
+- The ONLY permitted status words are the ones the record actually uses: pending, in_progress, validated, issue, expired. "Received", "obtained", "granted", "secured" and "in place" are forbidden — they are statutory conclusions, and they are not values this system stores.
+- Write each line in the RECORDED-STATUS register, not the verdict register: "Fire NOC — recorded status: pending", never "Fire NOC has been obtained".
+- If \`outstanding\` > 0, this is a yellow light at minimum.
 
 ## 8. Recommendation
 Single paragraph. Lead with EXACTLY ONE stance from Acureal's closed recommendation vocabulary — and NEVER use the words approve, approval, decline, reject, buy, sell, pass, or clear: "Recommend proceeding", "Recommend proceeding subject to [conditions]", "Hold pending [specific items]", or "Re-examine [specific items]". State the conditions or items explicitly. End with a one-line capital ask: "Capital required: ₹ X Cr equity / ₹ Y Cr debt." Weigh the supplied \`verification\` block: if the financial model is assumption-led, or any Risk Radar category is flagged or unverified, a clean "Recommend proceeding" is not available — name those specific items as explicit conditions, holds, or re-examines.
 
 RULES:
 - Every number in your memo must come from the supplied data — do not invent.
+- NEVER state a statutory conclusion as fact. Title chain, encumbrance, RERA registration and statutory approval are RECORD-KEEPING lanes in this memo, not findings. Write "recorded status: X" or "not recorded", never "title is clear", "the khata is valid", "the EC is nil", "RERA-registered", "DC conversion is complete", or "the OC has been received" — including in the Risk Register and the Recommendation. You may freely instruct the reader to verify, confirm, obtain or flag any of these; asserting them as settled is what is forbidden. A deterministic guard strips such sentences before this memo reaches anyone, leaving a visible redaction marker in your text, so a memo that asserts will read as damaged.
+- ABSENCE IS NOT CLEARANCE. If a list is empty, a count is zero, or a field is null, that is unrecorded / not yet done — never satisfied, closed, clear or received.
 - A \`verification\` block is supplied — Acureal's deterministic engines (not AI) reporting the model-confidence level, the Risk Radar posture for each failure mode, the promoter posture, and the count of analyst-relied comps. Treat it as ground truth: never contradict it, and state plainly what it shows is NOT yet verified.
 - If a field is null/empty, say so explicitly ("Not yet modelled", "Pending"). Never silently omit.
 - Tone: senior partner briefing the IC, not marketing copy.
 - Markdown only — use proper headings, tables, and bullets.
 - 700-1200 words total. Compress aggressively; this is not a prospectus.`;
+
+/**
+ * Deterministic diligence and approval posture — counted in JS, never inferred
+ * by the model from the length of an array.
+ *
+ * WHY THIS EXISTS. The memo used to receive `dd_items: []` / `approval_items: []`
+ * and a prompt that said "if everything closed, say so". An empty list is not
+ * "everything closed" — it is "nothing recorded" — but nothing in the payload
+ * said which, so the model resolved the ambiguity in the most flattering
+ * direction. Live production memos in 2026-08 told an investment committee
+ * "All required approvals have been received" and "All due diligence items have
+ * been closed" for deals whose records held ZERO approval rows and ZERO
+ * completed DD items. One of them listed six named approvals as Received —
+ * against a database in which no approval row has ever held that status
+ * (the vocabulary is pending / in_progress / validated / issue / expired;
+ * "received" does not exist).
+ *
+ * `recorded` is the field that closes it: an explicit boolean the model cannot
+ * misread, with a prompt rule bound to it. Counts come from the same rows the
+ * memo lists, so the narrative and the tally cannot disagree.
+ */
+const OPEN_DD_STATUSES = new Set(['pending', 'in_progress', 'flagged']);
+const SETTLED_APPROVAL_STATUSES = new Set(['validated']);
+
+const buildDiligencePosture = (ddRows, approvalRows) => {
+  const dd = Array.isArray(ddRows) ? ddRows : [];
+  const approvals = Array.isArray(approvalRows) ? approvalRows : [];
+  return {
+    ddItems: {
+      recorded: dd.length > 0,
+      total: dd.length,
+      completed: dd.filter((d) => d.status === 'completed').length,
+      outstanding: dd.filter((d) => OPEN_DD_STATUSES.has(d.status)).length,
+      // A required item that is not yet closed is what the memo marks BLOCKER.
+      blockers: dd.filter((d) => d.is_required && OPEN_DD_STATUSES.has(d.status)).length,
+    },
+    approvals: {
+      recorded: approvals.length > 0,
+      total: approvals.length,
+      validated: approvals.filter((a) => SETTLED_APPROVAL_STATUSES.has(a.status)).length,
+      outstanding: approvals.filter((a) => !SETTLED_APPROVAL_STATUSES.has(a.status)).length,
+    },
+  };
+};
 
 /**
  * Assemble the deterministic trust posture for a deal — Workstreams A, B, C.
@@ -390,6 +442,9 @@ const buildIcMemoInput = async (dealId) => {
     // treats this as ground truth and cannot recommend over what it flags
     // as unverified.
     verification: verificationContext,
+    // Counted, not inferred. `recorded: false` is the state an empty array
+    // used to be silently read as "all clear".
+    diligence_posture: buildDiligencePosture(ddResult.rows, approvalResult.rows),
   };
 
   // computationRef travels ALONGSIDE the payload, never inside it — the model
@@ -612,4 +667,5 @@ module.exports = {
   // Internal helpers exported for tests
   SYSTEM_PROMPT,
   composeComputationFooter,
+  __buildDiligencePostureForTests: buildDiligencePosture,
 };

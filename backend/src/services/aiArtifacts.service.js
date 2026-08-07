@@ -19,6 +19,7 @@
 
 const crypto = require('crypto');
 const { query } = require('../config/database');
+const { sanitizeAiProse } = require('../utils/aiLegalProseGuard');
 const log = require('../lib/logger').child({ module: 'ai.artifacts' });
 
 const SUPPORTED_ARTIFACT_TYPES = new Set([
@@ -26,6 +27,50 @@ const SUPPORTED_ARTIFACT_TYPES = new Set([
   'ic_memo',
   'risk_brief',
 ]);
+
+/**
+ * The legal-four guard, applied HERE — at the one door every AI artifact goes
+ * through — rather than in each generator.
+ *
+ * Placement is the control. Every one of these artifact types is AI narrative
+ * that reaches a customer surface: `ic_memo` and `risk_brief` are both drawn
+ * into the LP-facing tear-sheet PDF (dealTearSheet.fetchAiSynthesis prefers the
+ * memo and falls back to the brief), and `deal_analysis` renders in the
+ * workspace. Yet only some generators sanitised: dealQa, export.insights,
+ * exportNarrative and dealBriefing called sanitizeAiProse, while icMemo applied
+ * the stance-verb neutraliser alone and inconsistencyDetector persisted raw
+ * model markdown. Guarding per-generator means every NEW generator is
+ * unguarded until someone remembers; guarding the door means it cannot be.
+ *
+ * What that miss cost, in production, in 2026-08: IC memos telling an
+ * investment committee "All required approvals have been received" for deals
+ * whose records held ZERO approval rows. The model read an empty list as
+ * all-clear (see the DD/approval instructions in icMemo's prompt) and nothing
+ * downstream disagreed.
+ *
+ * Applied on READ as well as write. Ten artifacts were persisted before this
+ * guard existed and the tear sheet still draws them; sanitising at the point of
+ * use covers that history without rewriting stored rows — the artifact table is
+ * a cache of what the model actually said, and silently editing it would
+ * destroy the record of the drift. sanitizeAiProse is idempotent (the redaction
+ * marker asserts nothing), so double application is safe by construction.
+ */
+const guardArtifactProse = (contentMd, { artifactType, dealId, phase }) => {
+  if (typeof contentMd !== 'string' || contentMd.length === 0) return contentMd;
+  const result = sanitizeAiProse(contentMd);
+  if (result.flagged) {
+    // Codes and counts only — never the offending prose. It is deal content.
+    log.warn('ai_artifact_prose_guarded', {
+      artifactType,
+      dealId: dealId || null,
+      phase,
+      legalRemoved: result.legalRemoved,
+      legalLanes: result.legalLanes,
+      stanceRewritten: result.stanceRewritten,
+    });
+  }
+  return result.text;
+};
 
 // Stable canonical-JSON hash for an arbitrary payload. Used as the
 // `snapshot_hash` cache key. Sorts keys recursively so two semantically
@@ -92,7 +137,11 @@ const getLatestArtifact = async ({ dealId, artifactType, snapshotHash = null }) 
           LIMIT 1`;
     const params = snapshotHash ? [dealId, artifactType, snapshotHash] : [dealId, artifactType];
     const result = await query(sql, params);
-    return result.rows[0] || null;
+    const row = result.rows[0] || null;
+    if (!row) return null;
+    // Re-guard on the way out: rows written before the guard reached this door
+    // are still served to the workspace and drawn into the tear-sheet PDF.
+    return { ...row, content_md: guardArtifactProse(row.content_md, { artifactType, dealId, phase: 'read' }) };
   } catch (err) {
     if (isMissingTableError(err) || isMissingColumnError(err)) {
       // Pre-migration deploy — either the table itself is missing or
@@ -131,6 +180,7 @@ const saveArtifact = async ({
   verifiedAt = undefined,
 }) => {
   if (!organizationId || !SUPPORTED_ARTIFACT_TYPES.has(artifactType) || !contentMd) return null;
+  const guardedMd = guardArtifactProse(contentMd, { artifactType, dealId, phase: 'write' });
   try {
     const result = await query(
       `INSERT INTO public.ai_artifacts (
@@ -144,7 +194,7 @@ const saveArtifact = async ({
         organizationId,
         dealId || null,
         artifactType,
-        contentMd,
+        guardedMd,
         contentJsonb ? JSON.stringify(contentJsonb) : null,
         snapshotHash,
         generatedByCallId,

@@ -322,7 +322,22 @@ export function buildDebtSchedule({
   const constStartQ = Math.max(0, Math.floor(constructionStartMonths / 3));
   const constEndQ = Math.min(totalQ, Math.ceil((constructionEndMonths || projectDurationMonths * 0.85) / 3));
   const constDurQ = Math.max(2, constEndQ - constStartQ);
-  const quarterlyRate = debtRatePct / 100 / 4;
+  // GEOMETRIC, not simple — the quarterly rate that compounds to exactly
+  // `debtRatePct` over four quarters.
+  //
+  // This line used to read `debtRatePct / 100 / 4`. Compounded four times that
+  // is (1 + r/4)^4 - 1, so a 12% facility was accruing at 12.55% effective and
+  // this panel reported ~4.4% more Total Interest than the same deal's own
+  // financed-cost line — two numbers, one screen, disagreeing. The kernel
+  // (packages/financial-kernel/src/debtSchedule.ts) and the backend engine
+  // (backend/src/engines/waterfall.engine.js) both use the geometric form, and
+  // the kernel's figure is not cosmetic: it feeds constFinanceCr into total
+  // project cost. The kernel is authoritative for all financial math
+  // (CLAUDE.md), so the browser mirror moves to it — not the other way round.
+  //
+  // Parity with the backend mirror is pinned by
+  // backend/tests/debtSchedule.parity.test.js.
+  const quarterlyRate = Math.pow(1 + debtRatePct / 100, 0.25) - 1;
 
   // S-curve weights for draw schedule
   const weights = Array.from({ length: constDurQ }, (_, q) => {

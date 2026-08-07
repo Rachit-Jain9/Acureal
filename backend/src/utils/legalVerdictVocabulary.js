@@ -76,8 +76,36 @@ const CLAUSE_BREAK =
 // stateless and safe to call from a hot path.
 const governingClause = (prefix) => prefix.split(CLAUSE_BREAK).pop();
 
+// ── "required" is an ADJECTIVE far more often than an instruction ───────────
+//
+// This list used to carry a bare `require[ds]?`, intended for the instruction
+// sense ("title chain REQUIRES verification"). It also matched the adjective in
+// "REQUIRED approvals" — and that one word held the door open for the single
+// most common statutory sentence in Indian real-estate prose:
+//
+//     "All required approvals have been received."
+//
+// The pattern matched it. The suppressor then read the governing clause
+// ("All required "), saw `required`, and classified an unqualified statutory
+// verdict as diligence guidance. Every surface that calls this guard waved it
+// through. Found in FOUR live production IC memos in 2026-08, on deals whose
+// records held ZERO approval rows — the model read an empty list as "all
+// clear" and the guard read "required" as "asking, not asserting".
+//
+// The tell that it was an accident, not a judgement: `requisite approvals are
+// in place` and `the needed approvals have been received` were both caught.
+// Only `required` — the phrasing the product's own section heading uses
+// ("## 7. Required Approvals") — was blind.
+//
+// So `require` now suppresses in its VERB senses only. "require"/"requires"
+// cannot be adjectival; "is/are/was/were required" and "required to be" are
+// unambiguously instructions. Bare adjectival "required <noun>" no longer
+// licenses whatever follows it. The narrowing is deliberately asymmetric: a
+// rare stilted false positive ("it is required that the title is clear") costs
+// a redaction marker, while the false negative it replaces shipped a fabricated
+// statutory fact into an investment committee's decision document.
 const INSTRUCTION_LEAD =
-  /\b(?:verify|verif(?:y|ied|ication)|confirm(?:ed|ation)?|check(?:ed)?|review(?:ed)?|examine[ds]?|inspect(?:ed)?|obtain(?:ed|ing)?|procure[ds]?|secure[ds]?|request(?:ed)?|seek|ensure|establish(?:ed)?|determine[ds]?|ascertain(?:ed)?|validate[ds]?|reconcile[ds]?|assess(?:ed)?|whether|if|unless|until|before|prior\s+to|subject\s+to|conditional\s+(?:on|upon)|contingent\s+(?:on|upon)|pending|awaited?|awaiting|require[ds]?|need(?:s|ed)?\s+to\s+be|must\s+be|should\s+be|to\s+be\s+(?:confirmed|verified|established|obtained)|not\s+yet|unverified|unconfirmed|no\s+evidence|without\s+evidence|unable\s+to|cannot|could\s+not|missing|absent|unknown|unclear|assum(?:e|ed|ption)|recommend(?:ed|s)?|consider|re-?examine|flag(?:ged)?|stress-?test|diligence|request|query|question)\b/i;
+  /\b(?:verify|verif(?:y|ied|ication)|confirm(?:ed|ation)?|check(?:ed)?|review(?:ed)?|examine[ds]?|inspect(?:ed)?|obtain(?:ed|ing)?|procure[ds]?|secure[ds]?|request(?:ed)?|seek|ensure|establish(?:ed)?|determine[ds]?|ascertain(?:ed)?|validate[ds]?|reconcile[ds]?|assess(?:ed)?|whether|if|unless|until|before|prior\s+to|subject\s+to|conditional\s+(?:on|upon)|contingent\s+(?:on|upon)|pending|awaited?|awaiting|requires?|(?:is|are|was|were)\s+required|required\s+to\s+be|need(?:s|ed)?\s+to\s+be|must\s+be|should\s+be|to\s+be\s+(?:confirmed|verified|established|obtained)|not\s+yet|unverified|unconfirmed|no\s+evidence|without\s+evidence|unable\s+to|cannot|could\s+not|missing|absent|unknown|unclear|assum(?:e|ed|ption)|recommend(?:ed|s)?|consider|re-?examine|flag(?:ged)?|stress-?test|diligence|request|query|question)\b/i;
 
 /**
  * Every rule is `{ id, lane, pattern }`.
