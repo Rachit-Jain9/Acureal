@@ -6,6 +6,7 @@ import {
   useDeleteDeal,
   useUpdateDeal,
   useDealPeek,
+  useDealVisit,
 } from '../hooks/useDeals';
 import { DealContextProvider, useDealWorkspaceWithLite } from '../hooks/useDealContext';
 import { useCanEdit } from '../hooks/useCanEdit';
@@ -188,6 +189,19 @@ export default function DealDetailPage() {
   // Warm when the user clicked through from the deals list; null on a cold
   // deep-link (page then shows its full skeleton). Never fires a request.
   const peek = useDealPeek(id);
+  // Stamp the visit at the SHELL, not on the Overview tab.
+  //
+  // The watermark is what "since you last looked" measures against, on this
+  // page and on the dashboard strip. Stamping it inside OverviewTab meant
+  // arriving straight on Risk or DD — which is exactly what the dashboard strip
+  // invites you to do — never counted as looking, so the deal kept reappearing
+  // as unread and the banner kept replaying news you had already read.
+  //
+  // Same guardrail as before: this is an explicit mount-time call on the real
+  // page, never a hover/prefetch path. SinceLastVisit calls the same hook and
+  // gets the cached result (staleTime: Infinity, one key per deal), so this
+  // adds no second request.
+  useDealVisit(id);
   const deal = workspace?.deal;
 
   // Drop the freshly-visited deal into the Cmd-K palette's "Recent deals"

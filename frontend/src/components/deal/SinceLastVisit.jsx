@@ -2,6 +2,7 @@ import { History } from 'lucide-react';
 import { useDealContext } from '../../hooks/useDealContext';
 import { useDealVisit } from '../../hooks/useDeals';
 import Badge from '../common/Badge';
+import { chipsFor, relativeTime } from './sinceLastVisitChips';
 
 /**
  * "Since your last visit" — the watermark strip on the deal Overview.
@@ -15,39 +16,13 @@ import Badge from '../common/Badge';
  * the only danger-toned news; everything else is quiet.
  */
 
-const relativeTime = (iso) => {
-  const then = new Date(iso).getTime();
-  if (!Number.isFinite(then)) return null;
-  const s = Math.max(0, Math.floor((Date.now() - then) / 1000));
-  if (s < 3600) return `${Math.max(1, Math.floor(s / 60))}m ago`;
-  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  if (s < 86400 * 30) return `${Math.floor(s / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
-};
-
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-
-// Order = narrative priority: evidence first, then risk, then process.
-const CHIP_DEFS = [
-  { key: 'documents_added', tone: 'info', label: (n) => `+${plural(n, 'document', 'documents')}` },
-  { key: 'extractions_completed', tone: 'info', label: (n) => `${plural(n, 'file', 'files')} read` },
-  { key: 'risks_added', tone: 'danger', label: (n) => `+${plural(n, 'risk', 'risks')}` },
-  { key: 'risks_updated', tone: 'warn', label: (n) => `${plural(n, 'risk', 'risks')} updated` },
-  { key: 'dd_updated', tone: 'neutral', label: (n) => `${plural(n, 'DD item', 'DD items')} updated` },
-  { key: 'approvals_updated', tone: 'neutral', label: (n) => `${plural(n, 'approval', 'approvals')} updated` },
-  { key: 'financials_updated', tone: 'info', label: () => 'model updated' },
-  { key: 'activities_added', tone: 'neutral', label: (n) => `+${plural(n, 'activity', 'activities')}` },
-];
-
 export default function SinceLastVisit() {
   const { dealId } = useDealContext();
   const { data } = useDealVisit(dealId);
 
   if (!data?.since || !(data.total > 0) || !data.changes) return null;
 
-  const chips = CHIP_DEFS
-    .map((def) => ({ ...def, n: Number(data.changes[def.key]) || 0 }))
-    .filter((c) => c.n > 0);
+  const chips = chipsFor(data.changes);
   if (chips.length === 0) return null;
 
   const when = relativeTime(data.since);

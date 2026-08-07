@@ -1,6 +1,36 @@
-# Cross-deal home — "Since you last looked" (PROPOSED · awaiting operator sign-off)
+# Cross-deal home — "Since you last looked" (BUILT)
 
-_Status: design only, 2026-08-04. Nothing here is built. Product backlog §1._
+_Status: **shipped 2026-08-07**. Designed 2026-08-04; operator delegated the
+call ("do what is best for website") and the design was taken as written._
+
+**What landed, against the plan below:** the strip, the shared slice
+definition, the shared chip vocabulary, and both flagged design decisions.
+
+| Piece | Where |
+|---|---|
+| `since_you_looked` slice on `GET /dashboard/attention` | `attention.service.js` |
+| Portfolio rollup, one statement | `dealVisits.service.js` `getPortfolioChangesSinceVisit` |
+| One definition of the eight slices, shared with the per-deal banner | `dealVisits.service.js` `CHANGE_SLICES` |
+| One definition of the chips (labels + tones), shared both ways | `frontend/src/components/deal/sinceLastVisitChips.js` |
+| The strip | `frontend/src/components/dashboard/SinceYouLooked.jsx` |
+| Visit stamp moved to the workspace shell (decision 1) | `DealDetailPage.jsx` |
+| Anchored on `last_visited_at` (decision 2) | pinned by test |
+
+**Two things the build added to the plan.** The strip renders above the
+"all caught up" empty state as well as above the signal grid — a quiet day is
+exactly when "what changed while I was away" is the only question left, and the
+original plan would have hidden it precisely then. And the rollup returns
+`null` (not an empty list) when it cannot be computed, so "could not check" and
+"nothing moved" are different states on screen; an empty strip is a claim about
+the user's portfolio and must not be rendered on a failed query.
+
+**Known cold start, by design:** `deal_user_visits` held 2 rows on the day this
+shipped, so most deals report as "not yet opened" until people browse. That is
+the honest reading, and it self-populates.
+
+_Original design below, unchanged._
+
+---
 
 ## The shape, in one sentence
 
