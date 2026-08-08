@@ -707,13 +707,16 @@ STRICT RULES:
 - Reference only the numbers provided in the payload. Never invent driver impacts or stress-test outcomes.
 - Be quantitatively precise: cite specific bps (basis points) of IRR swing per driver.
 - Indian real estate context: sell rate per sqft, construction cost per sqft, exit cap rate, debt rate, LTV are standard sensitivity drivers.
+- The drivers VARY BY ASSET CLASS. Name each one using the payload's own \`rows_axis_label\`, \`cols_axis_label\` and \`driver_ranges[*].driver\` — never assume the grid is selling rate against construction cost. An income deal's rows are exit cap rates and a hotel's are occupancy; describing those as rupees per sqft is a factual error.
+- Grid values carry the UNITS named in those labels. A row axis reading 6.5 to 8.5 under an "Exit Cap Rate (%)" label is percent, not rupees.
+- \`sensitivity_grid.base_cell\` indexes the deal as underwritten; that cell's IRR is the base case every swing is measured from.
 - Both paragraphs are tight: max 90 words each.
 
 SCHEMA:
 {
   "driver_decomposition_paragraph": "1 paragraph (3-5 sentences, max 90 words) ranking the top 2-3 drivers by IRR swing magnitude. Cite specific bps deltas. Name which driver dominates and by what margin.",
   "stress_test_paragraph": "1 paragraph (3-5 sentences, max 90 words) recommending 2-3 specific stress-test scenarios the deal must pass before IC. Frame each as a concrete what-if with expected IRR impact.",
-  "dominant_driver": "Short label naming the #1 driver (e.g., 'Sell Rate' or 'Construction Cost')",
+  "dominant_driver": "Short label naming the #1 driver, taken from the payload's axis labels for THIS asset class",
   "confidence": "high" | "medium" | "low"
 }
 
@@ -729,7 +732,25 @@ const buildSensitivityPayload = ({ deal, sensitivityMatrix, financials }) => {
   }
   const midRow = Math.floor(constructionCosts.length / 2);
   const midCol = Math.floor(sellingRates.length / 2);
+  // The kernel centres every grid on the deal, so the middle cell IS the
+  // headline IRR. (It did not used to be for income and hospitality —
+  // those grids ran their own simplified model and the centre read up to
+  // 3.5 points high, which is the number that reached this prompt.)
   const baseIrr = num(irrGrid[midRow]?.[midCol]);
+
+  // The axis labels below were hardcoded to the residential shape. For a
+  // commercial-office deal the rows are EXIT CAP RATES (6.5 … 8.5) and
+  // the columns are RENT PER SQFT PER MONTH; for a hotel they are
+  // OCCUPANCY and ADR. The model was told those were rupees per sqft of
+  // construction cost, instructed to "reference only the numbers
+  // provided", and its narrative went into the DOCX IC memo. The kernel
+  // has always shipped the real labels on `axis` — use them.
+  const axis = Array.isArray(sensitivityMatrix.axis) && sensitivityMatrix.axis.length === 2
+    ? sensitivityMatrix.axis
+    : null;
+  const rowsAxisLabel = axis ? axis[0] : 'Construction cost per sqft (INR)';
+  const colsAxisLabel = axis ? axis[1] : 'Selling rate per sqft (INR)';
+
   return {
     deal: {
       name: deal?.name,
@@ -745,20 +766,27 @@ const buildSensitivityPayload = ({ deal, sensitivityMatrix, financials }) => {
       equity_multiple: num(financials?.equity_multiple),
     },
     sensitivity_grid: {
-      rows_axis_label: 'Construction cost per sqft (INR)',
-      cols_axis_label: 'Selling rate per sqft (INR)',
+      rows_axis_label: rowsAxisLabel,
+      cols_axis_label: colsAxisLabel,
       rows: constructionCosts,
       cols: sellingRates,
       irr_grid: irrGrid,
+      base_cell: { row_index: midRow, col_index: midCol },
     },
     driver_ranges: {
+      // Keys stay `sell_rate` / `construction_cost` — they are the
+      // structural slots the prompt contract knows — but each range now
+      // carries the driver it actually varies, so the model names the
+      // dominant driver correctly on an income or hospitality deal.
       sell_rate: {
+        driver: colsAxisLabel,
         low_irr: num(irrGrid[midRow]?.[0]),
         high_irr: num(irrGrid[midRow]?.[sellingRates.length - 1]),
         low_input: sellingRates[0],
         high_input: sellingRates[sellingRates.length - 1],
       },
       construction_cost: {
+        driver: rowsAxisLabel,
         low_irr: num(irrGrid[irrGrid.length - 1]?.[midCol]),
         high_irr: num(irrGrid[0]?.[midCol]),
         low_input: constructionCosts[constructionCosts.length - 1],

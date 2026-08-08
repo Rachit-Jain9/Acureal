@@ -302,7 +302,11 @@ export default function FinancialsPage() {
             <CashFlowChart cashFlows={normalizedFinancials.cashFlows} yearlyCashFlows={normalizedFinancials.yearlyCashFlows} assetClass={normalizedFinancials.assetClass} />
           </Suspense>
           <QuarterlyProformaPanel proforma={normalizedFinancials.proforma} />
-          <SensitivityTable sensitivity={normalizedFinancials.sensitivity} assetClass={normalizedFinancials.assetClass} />
+          <SensitivityTable
+            sensitivity={normalizedFinancials.sensitivity}
+            assetClass={normalizedFinancials.assetClass}
+            headlineIrr={normalizedFinancials.kpis?.irr ?? null}
+          />
 
           {/* Structure waterfall panels */}
           <JDAWaterfallPanel financials={normalizedFinancials} deal={deal} />
