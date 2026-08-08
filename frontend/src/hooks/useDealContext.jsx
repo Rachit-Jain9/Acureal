@@ -47,6 +47,19 @@ const DealContext = createContext(null);
  *   - isAiPending — deterministic content is shown but the AI prose is still
  *                   generating; panels show a quiet "refining…" hint.
  */
+// KNOWN, MEASURED, DELIBERATELY NOT FIXED HERE — see TODO_ARCHITECTURE.
+//
+// These two fire concurrently and both miss the server-side workspace cache
+// (neither has written it yet), so the backend assembles the entire deal
+// workspace TWICE per open: 326 SQL round-trips and two ~190 KB responses that
+// are 94% identical.
+//
+// The obvious fix — gating the full request on `lite.data` — is WRONG ON ITS
+// OWN and was reverted after being written: it serialises ~4.2 s + ~3.6 s and
+// makes the page slower than the waste it removes. It is only a win alongside
+// a backend change letting full mode read the same cache and re-run only what
+// lite genuinely omits (activity, deal events, the two narration passes).
+// Both halves, one PR, with a before/after query-count probe.
 export function useDealWorkspaceWithLite(dealId) {
   const full = useDealWorkspace(dealId);
   const lite = useDealWorkspaceLite(dealId);

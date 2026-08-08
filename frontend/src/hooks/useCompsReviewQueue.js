@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { compsReviewQueueAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
+import { invalidateCompsDependents } from './compsQueries';
 
 const QUEUE_KEY = 'comps-review-queue';
 
@@ -96,7 +97,7 @@ export function useApproveQueueRow() {
       qc.invalidateQueries({ queryKey: [QUEUE_KEY] });
       qc.invalidateQueries({ queryKey: [QUEUE_KEY, 'row', id] });
       // Comps changed — refresh the comps page too.
-      qc.invalidateQueries({ queryKey: ['comps'] });
+      invalidateCompsDependents(qc);
       const msg =
         data?.skipped_count > 0
           ? `Committed ${data.committed_count} of ${data.committed_count + data.skipped_count} comps (${data.skipped_count} skipped — see details)`
@@ -129,7 +130,7 @@ export function useBulkApproveQueue() {
     mutationFn: (ids) => compsReviewQueueAPI.bulkApprove(ids).then((r) => r.data.data),
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: [QUEUE_KEY] });
-      qc.invalidateQueries({ queryKey: ['comps'] });
+      invalidateCompsDependents(qc);
       const { succeeded_count = 0, failed_count = 0 } = data || {};
       if (failed_count === 0) {
         toast.success(`Approved ${succeeded_count} item${succeeded_count === 1 ? '' : 's'}`);

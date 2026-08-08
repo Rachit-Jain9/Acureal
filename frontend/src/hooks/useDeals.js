@@ -79,12 +79,16 @@ export function useDealPeek(id) {
 // revisits within a working session now reuse the warm cache.
 const WORKSPACE_STALE_TIME = 5 * 60_000;
 
-export function useDealWorkspace(id) {
+export function useDealWorkspace(id, options = {}) {
   return useQuery({
     queryKey: ['deal-workspace', id],
     queryFn: () => dealsAPI.getWorkspace(id).then((r) => r.data.data),
     enabled: !!id,
     staleTime: WORKSPACE_STALE_TIME,
+    // Callers may narrow further — notably the deal page, which gates the full
+    // request on the lite payload having landed so the two do not assemble the
+    // same workspace concurrently. Spread last so the caller's `enabled` wins.
+    ...options,
   });
 }
 
