@@ -12169,3 +12169,84 @@ check real on the definer route rather than a no-op.
   from selecting a user row and acting on it without passing through
   `hydrateUserAuthContext`. Worth a sweep for direct `FROM users` reads that
   make an authorization decision.
+
+## 2026-08-08 — the legal-four guard knew one way to say it (#1110)
+
+### What was worked on
+
+The guard that stops AI prose asserting a statutory fact on the legal four
+recognised the CANONICAL phrasing of each verdict and missed its natural
+variants. Measured by running `sanitizeAiProse` against the live rules:
+
+```
+CAUGHT  "Title is clear."                        MISSED  "Title in this belt is generally clean."
+CAUGHT  "The title is clean."                    MISSED  "Titles in this micro-market are typically clean."
+CAUGHT  "The encumbrance certificate is nil."    MISSED  "The land has a clear title."
+CAUGHT  "Khata is valid."
+```
+
+Three shapes: an **adverb** between copula and adjective, a **plural** subject
+held apart from its copula by a prepositional phrase, and the **attributive**
+form (adjective before noun). Urgent because the guard was wired into
+`aiMarketContext.service.js` this week and that output prints verbatim into
+investor DOCX sections — a missed sentence would have asserted a statutory fact
+in an LP-facing document.
+
+Same class as the `required` blind spot in #1100. The structural cause: every
+rule hand-wrote its own `(?:not\s+)?` slot and copula alternation, so closing a
+shape meant editing ~25 regexes identically. The shapes are now grammar declared
+once — `ADVERB`, `copula()` (adverb slot on both sides of a passive `been`),
+`QUALIFIER`, and `HELD`/`NOT_MODAL`/`DET` for the attributive form. Every slot is
+a closed list; a `.{0,40}` catch-all would have closed all three shapes in one
+line and been the worse bug, because over-redaction shreds diligence prose and a
+marker appearing in reasonable text stops meaning anything.
+
+Also now caught: `"the developer has obtained all required approvals"` — the
+active-voice twin of the exact #1100 production sentence.
+
+### Validation against real text
+
+New committed read-only script
+`backend/scripts/audit-legal-guard-against-artifacts.js` diffs old-vs-new
+redactions against a `--baseline` git ref.
+
+| Corpus | Size | Newly redacted | Regressions |
+|---|---|---|---|
+| production `ai_artifacts` | 10 rows, ~3.8k words | 0 | 0 |
+| repo's unguarded human prose (`--corpus`) | 127 files, ~154k words | 0 | 0 |
+| adversarial false-positive list | 31 sentences | 0 | — |
+
+The sweep surfaced one real false positive — `"the BUSINESS plan for the quarter
+is approved"`, created by the new qualifier slot — fixed by naming the
+non-statutory senses of `plan` rather than dropping the slot.
+
+**Recorded for next time:** the `ai_artifacts` corpus alone is NOT sufficient
+evidence. Rows are sanitised on write and on read, so by construction they hold
+almost no verdicts and an over-redacting change barely registers. The unguarded
+repo corpus is the load-bearing half of the check, and it is what caught the FP.
+
+Tests: +45 in `tests/legalVerdictVocabulary.test.js` — a 4-shape × 4-lane matrix
+plus 30 explicit negatives proving instructional prose survives, and a structural
+test that inserting any closed-list adverb never un-catches a verdict in any lane.
+`cd backend && npm test` → 4917 passed, 1 unrelated flake
+(`documentTextExtractor` DOCX-table test, 5s timeout under full-suite load;
+27/27 in isolation, zero references to this guard).
+
+### PRs opened
+
+- #1110 — fix(trust): a verdict is a verdict in every grammatical shape, not
+  just the canonical one. **Not merged — CI red on an unrelated gate (below).**
+
+### What's left to do next
+
+- **Blocker, repo-wide, not caused by #1110:** the `Audit & migration lint` job
+  now fails at `Backend npm audit (fail on high/critical)`. Master was green on
+  2026-08-07; the advisories were published since. Three high findings:
+  `js-yaml` (CVE-2026-59870) and `nanoid` are fixable non-breaking via
+  `npm audit fix`, but `image-size` (via **pptxgenjs**) is only resolvable by
+  downgrading to `pptxgenjs@1.1.5` — a breaking change to a shipped export
+  feature. This reddens every PR and will redden master on its next run. Needs
+  an operator decision on whether to downgrade, pin, or wait for upstream; it is
+  deliberately NOT folded into #1110.
+- Once that gate is resolved, #1110 merges as-is (Backend, Frontend, Financial
+  kernel and Vercel all pass on it today).
