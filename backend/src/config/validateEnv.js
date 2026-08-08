@@ -85,6 +85,67 @@ const productionRefLeaks = (env = process.env) => {
   return leaks;
 };
 
+/**
+ * A DEVELOPER'S MACHINE pointed at the production database.
+ *
+ * `productionRefLeaks` above guards deployments, and returns nothing when
+ * VERCEL is unset — so a laptop running `npm run dev` against live data has
+ * always been completely unguarded. Two distinct hazards, reported separately
+ * because they have different consequences:
+ *
+ *   TARGET   — every read and write on this machine hits real customer data.
+ *              A test that creates, edits or deletes does it for real.
+ *   IDENTITY — production runs as `redip_app`, which is NOBYPASSRLS, so every
+ *              query is filtered by row-level security. Connecting as the
+ *              `postgres` superuser bypasses all of it. Code then behaves
+ *              differently on the laptop than in production, and the direction
+ *              of the difference is the dangerous one: queries that work
+ *              locally return ZERO rows live, silently. That is the exact
+ *              shape of several defects found in this codebase (the org-scoped
+ *              user picker, the geocode-cache writes, the email-verification
+ *              context stamp) — each one passed locally and did nothing in
+ *              production.
+ *
+ * Reported as WARNINGS, not errors, and deliberately so: running a one-off
+ * read against production from a laptop is a legitimate operator task, and a
+ * fatal check would break that workflow the first time it fired. The point is
+ * that it can never again be INVISIBLE.
+ */
+const localProductionExposure = (env = process.env) => {
+  if (env.VERCEL || env.NODE_ENV === 'production' || env.NODE_ENV === 'test') return [];
+  const url = String(env.DATABASE_URL || '');
+  if (!url) return [];
+
+  const warnings = [];
+  const pointsAtProduction = url.includes(PRODUCTION_SUPABASE_REF)
+    || jwtPayload(env.SUPABASE_SERVICE_ROLE_KEY).includes(PRODUCTION_SUPABASE_REF);
+
+  if (pointsAtProduction) {
+    warnings.push(
+      'LOCAL DEV IS POINTED AT THE PRODUCTION DATABASE. Every read and write from '
+      + 'this machine hits real customer data — a test that creates, edits or deletes '
+      + 'does it for real, with no undo. Point DATABASE_URL at the "preview" Supabase '
+      + 'branch instead; see TODO_OPERATOR.md.',
+    );
+  }
+
+  // Username shape: the app role is `redip_app`; Supabase superusers are
+  // `postgres` / `postgres.<project-ref>`.
+  let username = '';
+  try { username = decodeURIComponent(new URL(url).username || ''); } catch { /* unparseable */ }
+  if (/^postgres(\.|$)/.test(username)) {
+    warnings.push(
+      `LOCAL DEV CONNECTS AS "${username.split('.')[0]}", A SUPERUSER THAT BYPASSES ROW-LEVEL `
+      + 'SECURITY. Production connects as redip_app (NOBYPASSRLS), so local runs do NOT '
+      + 'exercise the security posture that is actually live. Queries that work here can '
+      + 'silently return zero rows in production — that class of bug has shipped from this '
+      + 'repo more than once. Use the redip_app credentials locally.',
+    );
+  }
+
+  return warnings;
+};
+
 // Production OR any Vercel deployment (preview included) is held to the
 // strict standard — a preview missing a signing secret is just as broken.
 const isStrict = () => process.env.NODE_ENV === 'production' || !!process.env.VERCEL;
@@ -114,6 +175,10 @@ const validateEnv = ({ exitOnFailure = true } = {}) => {
       + '(the "preview" branch database).',
     );
   }
+
+  // The laptop-against-production hazards. Warnings, not errors — see the
+  // reasoning on localProductionExposure.
+  warnings.push(...localProductionExposure(process.env));
 
   for (const { key, why } of RECOMMENDED) {
     if (isPlaceholder(process.env[key])) {
@@ -235,6 +300,7 @@ module.exports = {
   validateEnv,
   isPlaceholder,
   productionRefLeaks,
+  localProductionExposure,
   PRODUCTION_SUPABASE_REF,
   CRITICAL,
   RECOMMENDED,

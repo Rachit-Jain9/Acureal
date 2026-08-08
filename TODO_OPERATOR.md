@@ -73,6 +73,58 @@ required one), 4 (two names), and 7 (the lawyer).)_
 
 # 🔴 DO FIRST — protects your data and money (this week)
 
+## 0e. Point your own laptop away from the live database (added 2026-08-08 · ~3 minutes)
+
+**What's wrong.** When you run Acureal on your own computer, it connects to the
+**real, live database** — the one with your actual deals in it. Two separate
+problems come from that:
+
+1. **Anything you do while testing is real.** Create a deal to try something
+   out, and it's a real deal. Delete something, and it's really gone. There is
+   no undo.
+2. **It hides bugs until they reach customers.** The live site runs with strict
+   permission rules that decide which rows each person is allowed to see. Your
+   laptop connects as an administrator that **skips those rules entirely**. So
+   code can work perfectly on your machine and then show *nothing at all* on
+   the live site. That has genuinely happened here several times this month.
+
+You already have a second, separate database (the "preview" one) built for
+exactly this.
+
+**The code now warns you.** From today, starting the app on your machine prints
+a loud warning naming both problems. Nothing is blocked — it just can't be
+invisible any more.
+
+**How to fix it properly:**
+
+1. 🖥 In VS Code, open the file `backend/.env` (it's hidden from the file list;
+   use **File → Open** and type the name if you can't see it).
+2. Find the line that starts with `DATABASE_URL=`.
+3. Put a `#` at the very start of that line, so it reads `#DATABASE_URL=...`.
+   That keeps the old value safely there in case you ever need it back.
+4. 🌐 Open <https://supabase.com/dashboard/project/aphgtgyuuycorhqhjxqx/settings/database>
+   — this is your **preview** database, not the live one. Check the top of the
+   page says the project is **preview**, not **Acureal**.
+5. Find the box called **Connection string**, choose the **Transaction pooler**
+   tab, and click the copy icon.
+6. Back in `backend/.env`, add a new line underneath:
+   `DATABASE_URL=` and paste what you copied straight after the `=`.
+7. Replace the word `[YOUR-PASSWORD]` in that pasted line with the preview
+   database password. If you don't have it, click **Reset database password**
+   on that same Supabase page and use the new one.
+8. Save the file.
+
+**Success signal:** start the app and the two warnings about "PRODUCTION
+DATABASE" and "BYPASSES ROW-LEVEL SECURITY" are gone.
+
+**Send back:** "laptop switched" — or paste the warning if it's still showing.
+
+⚠️ If anything looks different from these steps, stop and send me a screenshot
+rather than guessing. Getting this wrong points your laptop at nothing at all,
+which is harmless but confusing.
+
+---
+
 ## 0c. Stop test copies of the site from touching the real database (added 2026-08-04)
 
 **What this is.** Every time code changes, Vercel builds a "preview" — a test
