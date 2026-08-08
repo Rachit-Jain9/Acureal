@@ -6,6 +6,132 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-08 (continued) — the safety nets that only fired on a date, the query that kept 5 of 1,194, and a deploy I broke (#1112–#1114)
+
+Continuation of the audit block above. Three clusters shipped, one deliberately
+not shipped, and one self-inflicted production-deploy failure worth recording
+in full because the lesson is procedural, not technical.
+
+### #1112 — controls with blind spots
+
+Two safety nets had the same shape of hole: each fired only on a DATE, or only
+on a DEPLOYMENT, and so did nothing in between.
+
+**The advisory waiver now re-checks its own premise.** #1111 gave the audit gate
+an expiring waiver for the two unfixable `image-size` advisories. But an expiry
+is a calendar reminder — it does nothing for the three months before it, and its
+natural failure mode is someone pushing the date out to get green. `npm audit`
+already reports `fixAvailable` per advisory, so the claim "no patched version
+exists" can be re-verified every run for free. Each waiver now records the
+remediation state that justified it (`noFixState`); a real fix — in-place, or
+landing ON the waived package, or a non-major parent bump — FAILS the build
+saying *pin it and delete the waiver*, explicitly not *extend the date*.
+
+Re-verified 2026-08-08 against the live registry: `image-size` is still 2.0.2,
+unchanged since 2025-04-02, advisories cover `<=2.0.2`, `pptxgenjs` still 4.0.1.
+The premise holds; no date was moved.
+
+The gate also had **no tests** — the one place in CI allowed to say "ship
+anyway", and its waiver path had never been proven to FAIL when it should. 12
+tests now cover it, including the case the mechanism exists for (image-size
+publishing 2.0.3), and it was verified against the live report that the gate
+sees both advisories and drops neither.
+
+**A laptop pointed at production was completely unguarded.** `productionRefLeaks`
+returns early unless `VERCEL` is set, so it has only ever protected deployments.
+Local dev against live data as the `postgres` superuser was silent. New
+`localProductionExposure` warns on two hazards separately: the TARGET (real
+data, no undo) and the IDENTITY (superuser bypasses RLS, so local runs do not
+exercise the posture that is live — the direction that shipped three defects
+from this repo this month). Warnings not errors, deliberately: a one-off read
+against production is a legitimate operator task and a fatal check would break
+it unasked. Operator step 0e added.
+
+**Upstream report drafted, NOT filed** — `docs/UPSTREAM_PPTXGENJS_IMAGE_SIZE.md`.
+Every pptxgenjs consumer inherits two unfixable HIGH advisories for a dependency
+the library appears never to load; upstream can clear it for everyone at once.
+Filing is outward-facing under the operator's identity, so it waits for a
+go-ahead, and carries a re-verify step because advisory state moves.
+
+### #1113 — stop paying for work already done
+
+Four wins, plus a non-determinism bug found while proving one of them safe.
+
+Content-hashed `/assets` were served `max-age=0, must-revalidate`, so every
+repeat load paid a revalidation round-trip per chunk already in disk cache.
+The guidance-value query scored and joined **1,194 rows** before `LIMIT 5`
+discarded 1,189 — now scores and limits first, joining only the survivors:
+2,447 buffers to 69, and it runs twice per deal open. Parcel edits never
+invalidated the workspace cache, so the deal page repainted PRE-EDIT
+intelligence for up to the 120s TTL and Deal Q&A answered from it. And all four
+comp mutations invalidated exactly `['comps']`, so verifying a comp left the
+sell-rate warning on the old band and the IC-readiness bucket on the old
+evidence.
+
+**The non-determinism.** Diffing old-vs-new top-5 on four live localities showed
+3 of 4 DIFFERING — at positions 4-5. Not the rewrite: two Whitefield rows tie at
+score 0.041667 with the same org flag and `effective_from`, so rank 5 was
+decided by scan order in the OLD query too. Added `gv.id` as a final tiebreaker;
+with both sides deterministic the top-5 is identical on all four. A
+deterministic engine should not answer the same question two ways.
+
+**Deliberately not shipped:** the deal page assembles its workspace TWICE
+concurrently (326 SQL round-trips, two ~190 KB payloads 94% identical). The
+frontend half was written, reasoned through, and REVERTED — gating the full
+request on `lite.data` serialises ~4.2s + ~3.6s and makes the page SLOWER than
+the waste it removes. Only correct alongside a backend change letting full mode
+read the same cache. `useDealWorkspace(id, options)` now accepts and spreads
+options so that PR needs no change here, and the reasoning sits above the hook
+so nobody re-attempts the half-fix.
+
+### #1114 — a deploy I broke, and why it took a hotfix
+
+#1113 added an explanatory `_comment` key inside a `headers` entry in
+`vercel.json`. **`vercel.json` is strict JSON with a CLOSED schema**: an unknown
+key fails the deployment at configuration validation, BEFORE the build runs.
+That is why it produced no build log at all — only a link to the
+project-configuration docs. Master's production deploy sat in ERROR from
+52232a4e until the hotfix. The live site was never down (Vercel keeps the last
+good deployment serving), but nothing could ship.
+
+**The procedural lesson, which matters more than the fix.** I validated the file
+with `JSON.parse` and it passed — *valid JSON is not a valid Vercel config*. The
+preview deploys for #1113 had ALREADY failed for exactly this reason before the
+merge, and I read "Vercel fail" in the checks list and merged anyway because the
+required GitHub checks were green. Vercel's status is not a required check on
+this repo so it cannot block a merge; it should still be read as one. The
+rationale for the `/assets` rule now lives in `docs/PLATFORM_OPERATIONS_PLAN.md`
+with an explicit note that it cannot live in `vercel.json`, so the next person
+does not re-add a comment key and re-break the deploy.
+
+Verified live after deploy: `/assets/index-*.js` gets
+`max-age=31536000, immutable`; `/login`, `/favicon.svg` and `/site.webmanifest`
+keep their unchanged `max-age=0, must-revalidate`.
+
+### Also this session
+
+- **#1110 closed the legal-guard blind spot filed from here earlier** — the
+  guard caught "title is clear" but missed "title is generally clean",
+  "titles are typically clean" and "the land has a clear title"
+  (adverb-modified, plural, and attributive forms). Found while wiring the
+  guard into `aiMarketContext` in #1109; fixed in a parallel session.
+- A backtick inside a SQL comment nested in a JS template literal terminated the
+  string — caught by the property suite mid-change, not by review.
+
+### What is left
+
+- **The double workspace assembly** (filed, with the measurement plan). Both
+  halves, one PR, before/after query-count probe.
+- **The sensitivity grid** — a second simplified model whose base cell disagrees
+  with the headline IRR by ~1.4 points on both live income deals, always
+  optimistic. Needs a per-cell kernel re-run, a base-cell equality test, and a
+  recompute of two live deals whose wrong grids are persisted.
+- **Eleven craft findings** — copy, CSS and small components; zero logic risk.
+- **Operator:** regenerate an IC memo for Hopefarm / Commercial Retail / Jigani
+  and READ it (prompt behaviour is not unit-testable — this is the real
+  acceptance check for #1109); point local dev at the preview database (0e);
+  decide whether to file the pptxgenjs upstream issue.
+
 ## 2026-08-08 — an eight-lens audit, and the two clusters worth shipping first (#1106, #1107)
 
 Open brief: find and finish everything pending, highest-impact first. Three
