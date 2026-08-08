@@ -67,16 +67,24 @@ const WAIVERS = new Map([
         + "npm's only offered remedy is downgrading pptxgenjs 4.0.1 -> 1.1.5, four major "
         + 'versions back, which would destroy PPTX export.',
       evidence:
-        'THE VULNERABLE CODE CANNOT EXECUTE. image-size reaches production solely as a '
-        + 'declared dependency of pptxgenjs@4.0.1, which never requires it: the only '
-        + "reference to it in pptxgenjs's shipped bundles is inside a commented-out "
-        + "`getSizeFromImage()` block annotated `FIXME: TODO: currently unused`, which "
-        + "even names a non-existent package (`require('sizeof')`). Verified empirically "
-        + 'by hooking Module.prototype.require and generating a full PPTX WITH an '
-        + 'embedded image: image-size is never loaded. Independently, every image byte '
-        + 'the backend hands to pptxgenjs is server-generated (an SVG score gauge it '
-        + 'composes itself, and a PNG from a hardcoded Google Static Maps host with '
-        + 'clamped lat/lng) — no uploaded document, photo or user-supplied URL reaches it.',
+        'THE VULNERABLE CODE CANNOT EXECUTE. Four independent checks, any one sufficient:\n'
+        + '  (1) NOTHING IN THE INSTALLED TREE LOADS IT. Ripgrepping backend/node_modules '
+        + "for require('image-size') / from 'image-size' / import('image-size') matches "
+        + "exactly one file — image-size's own README. pptxgenjs@4.0.1 is the sole "
+        + "declarant, and its own package.json `browser` map stubs it to false.\n"
+        + '  (2) THE CALL SITE IS COMMENTED OUT. The only `sizeOf` reference in pptxgenjs\'s '
+        + 'shipped CJS/ESM bundles sits inside a `getSizeFromImage()` block annotated '
+        + "`FIXME: TODO: currently unused`, which even names a package that does not exist "
+        + "(`require('sizeof')`, not `image-size`). The minified bundles strip it entirely.\n"
+        + '  (3) VERIFIED EMPIRICALLY, NOT BY READING. Hooking Module.prototype.require and '
+        + 'generating a full PPTX WITH an embedded image loads 90+ modules; image-size is '
+        + 'not among them.\n'
+        + '  (4) THE I/O BRANCHES ARE NEVER TAKEN ANYWAY. Every image the backend passes is '
+        + "a `data:` base64 URI, never a `path:`; pptxgenjs's candidate filter excludes any "
+        + 'rel carrying `data` before its fs.readFileSync and https.get branches. And every '
+        + 'byte is server-generated — an SVG score gauge the server composes itself, and a '
+        + 'PNG from a hardcoded Google Static Maps host with clamped lat/lng. No uploaded '
+        + 'document, photo or user-supplied URL reaches the deck builder at all.',
     },
   ],
   [
