@@ -130,3 +130,33 @@ deployment, not generic advice._
    (§2). The secret is kept for a manual `workflow_dispatch` against a specific preview URL. To rotate:
    regenerate at https://vercel.com/rachitjain348-4262s-projects/acureal/settings/deployment-protection and
    update the GitHub secret. Nothing more needed from the operator here.
+
+## Why `/assets/*` is cached `immutable` (2026-08-08)
+
+`vercel.json` carries a `headers` rule setting `Cache-Control: public,
+max-age=31536000, immutable` on `/assets/(.*)`. The rationale cannot live in
+the file itself — `vercel.json` is strict JSON with a **closed schema**, and an
+unknown key (even a `_comment`) fails the deployment at configuration
+validation, *before the build starts*, with no build log. That is exactly how
+it failed once: PR #1113's first production deploy errored on a `_comment` key
+and had to be hotfixed. Do not add comment keys to `vercel.json`.
+
+**Why the rule is safe.** Vite emits all 136 files under `/assets` with an
+8-char content hash, so a changed file is always a changed URL — a year-long
+cache can never serve stale code. Without the rule they inherit the platform
+default (`max-age=0, must-revalidate`) and every repeat page load pays a
+revalidation round-trip per chunk already sitting in the browser's disk cache.
+
+**Why it is scoped to `/assets` only.** `frontend/public` ships `favicon.svg`,
+`apple-touch-icon.png`, `site.webmanifest`, `icons/` and `leaflet/` to the site
+ROOT with **no** content hash, and `index.html` is what makes a new deploy
+visible at all. Pinning any of those for a year would be a bug, not a cache.
+Never broaden the `source`.
+
+Verify after a deploy:
+
+```bash
+curl -sI https://acureal.in/assets/vendor-react-*.js | grep -i cache-control  # immutable
+curl -sI https://acureal.in/login                    | grep -i cache-control  # max-age=0
+curl -sI https://acureal.in/favicon.svg              | grep -i cache-control  # max-age=0
+```
