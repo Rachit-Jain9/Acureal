@@ -209,3 +209,54 @@ describe('validateEnv', () => {
     });
   });
 });
+
+/**
+ * LOCAL DEV POINTED AT PRODUCTION.
+ *
+ * `productionRefLeaks` guards Vercel deployments and returns nothing when
+ * VERCEL is unset — so a developer machine running against live data has
+ * always been silent. Two hazards, warned about separately: the TARGET (real
+ * customer data, no undo) and the IDENTITY (superuser bypasses RLS, so local
+ * runs do not exercise the posture that is actually live — the direction that
+ * has repeatedly shipped bugs from this repo).
+ */
+describe('localProductionExposure', () => {
+  const { localProductionExposure, PRODUCTION_SUPABASE_REF } = require('../src/config/validateEnv');
+  const PROD = `postgresql://postgres.${PRODUCTION_SUPABASE_REF}:pw@aws-1-ap-south-1.pooler.supabase.com:6543/postgres`;
+  const PREVIEW_APP = 'postgresql://redip_app.aphgtgyuuycorhqhjxqx:pw@aws-0-ap-south-1.pooler.supabase.com:6543/postgres';
+
+  test('flags BOTH the production target and the superuser identity', () => {
+    const out = localProductionExposure({ DATABASE_URL: PROD });
+    expect(out).toHaveLength(2);
+    expect(out.join(' ')).toMatch(/POINTED AT THE PRODUCTION DATABASE/);
+    expect(out.join(' ')).toMatch(/BYPASSES ROW-LEVEL SECURITY/);
+  });
+
+  test('the preview branch on the app role is clean', () => {
+    expect(localProductionExposure({ DATABASE_URL: PREVIEW_APP })).toEqual([]);
+  });
+
+  // The superuser hazard is independent of WHICH database — connecting as
+  // postgres to preview still fails to exercise RLS.
+  test('superuser against a non-production database is still flagged', () => {
+    const out = localProductionExposure({
+      DATABASE_URL: 'postgresql://postgres.aphgtgyuuycorhqhjxqx:pw@aws-0-ap-south-1.pooler.supabase.com:6543/postgres',
+    });
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatch(/BYPASSES ROW-LEVEL SECURITY/);
+  });
+
+  test('never fires on Vercel — productionRefLeaks owns deployments', () => {
+    expect(localProductionExposure({ VERCEL: '1', DATABASE_URL: PROD })).toEqual([]);
+  });
+
+  test('never fires in production or under jest', () => {
+    expect(localProductionExposure({ NODE_ENV: 'production', DATABASE_URL: PROD })).toEqual([]);
+    expect(localProductionExposure({ NODE_ENV: 'test', DATABASE_URL: PROD })).toEqual([]);
+  });
+
+  test('an absent or unparseable DATABASE_URL never throws', () => {
+    expect(localProductionExposure({})).toEqual([]);
+    expect(() => localProductionExposure({ DATABASE_URL: 'not a url' })).not.toThrow();
+  });
+});
