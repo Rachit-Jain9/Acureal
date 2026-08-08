@@ -12235,18 +12235,54 @@ test that inserting any closed-list adverb never un-catches a verdict in any lan
 ### PRs opened
 
 - #1110 — fix(trust): a verdict is a verdict in every grammatical shape, not
-  just the canonical one. **Not merged — CI red on an unrelated gate (below).**
+  just the canonical one.
+- #1111 — ci: the audit gate had no way to say "no fix exists" (see below).
+
+### The repo-wide CI block that surfaced while shipping #1110 (#1111)
+
+`npm audit` queries the LIVE advisory database, so the gate reddened every
+branch overnight with no dependency change on our side — the second time
+(brace-expansion did it on 2026-07-27). Master was green on 2026-08-07.
+
+**The first diagnosis was wrong and worth recording as a trap.** Reading raw
+`npm audit` output suggested three high findings and that the only remedy for
+one was downgrading `pptxgenjs` four major versions. Running the gate's ACTUAL
+command — `--omit=dev`, which the local default omits — cut it to two, because
+`js-yaml` is dev-only and never gated. **Always audit with the exact CI flags
+before scoping the problem.**
+
+- `nanoid` (GHSA-28wg-ghj8-5hjv) — FIXABLE. Transitive via `docx`, which
+  declares `^5.1.3`, so 5.1.16 already satisfies it. Pure lockfile refresh:
+  three lines, `package.json` byte-identical. An `overrides` pin was drafted
+  and then removed as unnecessary — that precedent existed only because the
+  parent's range *excluded* the patched version.
+- `image-size` (GHSA-w3rx-r6r6-pgpr, GHSA-5p2g-fcmc-qvqq) — NOT FIXABLE. The
+  advisories cover `<=2.0.2` and 2.0.2 IS the latest published version.
+  `npm audit`'s `fixAvailable` proposes `pptxgenjs@1.1.5` — a four-major
+  downgrade that would destroy PPTX export and doesn't fix anything.
+
+That left raw `npm audit` offering only "block every merge forever" or "delete
+the gate". The gate now runs `scripts/check-npm-advisories.js` (same three
+workspaces, same scopes) which can hold a GHSA-keyed, evidence-backed,
+**expiring** waiver. The waiver is backed by proof the code cannot execute, not
+by reassurance: nothing in the entire installed tree requires image-size (only
+its own README matches); pptxgenjs's sole call site is inside a commented-out
+block annotated `FIXME: TODO: currently unused` that even names a non-existent
+package; a real PPTX generated WITH an embedded image loads 90+ modules and
+image-size is not one; and every image byte is server-generated anyway. Three
+adversarial reviewers (upload lens, remote-fetch lens, indirect lens) each tried
+to refute it and none could.
+
+Falsification-tested, because a gate that cannot fail is worthless: waiver
+removed → fails; waiver expired → fails; waiver matching nothing → flagged for
+deletion. The "prints clean while failing" bug in the first draft was caught by
+that pass.
 
 ### What's left to do next
 
-- **Blocker, repo-wide, not caused by #1110:** the `Audit & migration lint` job
-  now fails at `Backend npm audit (fail on high/critical)`. Master was green on
-  2026-08-07; the advisories were published since. Three high findings:
-  `js-yaml` (CVE-2026-59870) and `nanoid` are fixable non-breaking via
-  `npm audit fix`, but `image-size` (via **pptxgenjs**) is only resolvable by
-  downgrading to `pptxgenjs@1.1.5` — a breaking change to a shipped export
-  feature. This reddens every PR and will redden master on its next run. Needs
-  an operator decision on whether to downgrade, pin, or wait for upstream; it is
-  deliberately NOT folded into #1110.
-- Once that gate is resolved, #1110 merges as-is (Backend, Frontend, Financial
-  kernel and Vercel all pass on it today).
+- **Dated commitment:** the image-size waiver expires **2026-11-06** and will
+  fail the build. At that point check whether image-size has published a fix
+  (pin it and delete the waiver) rather than reflexively extending the date.
+- Worth reporting upstream to pptxgenjs: it declares `image-size` as a runtime
+  dependency but never requires it, so every consumer inherits an unfixable
+  advisory for dead code. Dropping the declaration would fix this for everyone.
