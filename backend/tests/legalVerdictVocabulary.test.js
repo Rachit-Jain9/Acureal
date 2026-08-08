@@ -216,6 +216,145 @@ describe('diligence guidance survives — the product depends on it', () => {
   });
 });
 
+// ── The 2026-08-08 shape audit ──────────────────────────────────────────────
+//
+// The guard caught the CANONICAL phrasing of each verdict and missed its
+// natural variants. Measured by running sanitizeAiProse against the live rules:
+//
+//     CAUGHT  "Title is clear."          MISSED  "Title in this belt is generally clean."
+//     CAUGHT  "The title is clean."      MISSED  "Titles in this micro-market are typically clean."
+//     CAUGHT  "Khata is valid."          MISSED  "The land has a clear title."
+//
+// Same class as the `required` blind spot in #1100. The lane patterns are now
+// built from shared ADVERB / QUALIFIER / copula / possession slots, so this
+// matrix pins ALL FOUR shapes across ALL FOUR lanes: a shape closed in one lane
+// and left open in another is precisely how the hole reopens.
+
+describe('a verdict is caught in every grammatical shape, not only the canonical one', () => {
+  test.each([
+    // lane          shape           sentence                                              expected rule
+    ['title', 'predicative', 'The title is clear.', 'title_status'],
+    ['title', 'adverb-modified', 'Title in this belt is generally clean.', 'title_status'],
+    ['title', 'plural', 'Titles in this micro-market are typically clean.', 'title_status'],
+    ['title', 'attributive', 'The land has a clear title.', 'title_attributive'],
+
+    ['title', 'predicative', 'Khata is valid.', 'khata_valid'],
+    ['title', 'adverb-modified', 'Khata in this layout is generally valid.', 'khata_valid'],
+    ['title', 'plural', 'The khatas for both parcels are valid.', 'khata_valid'],
+    ['title', 'attributive', 'The land has a valid A-khata.', 'khata_valid_attributive'],
+
+    ['encumbrance', 'predicative', 'The encumbrance certificate is nil.', 'ec_nil'],
+    ['encumbrance', 'adverb-modified', 'The EC is entirely clear.', 'ec_nil'],
+    ['encumbrance', 'plural', 'The ECs for both parcels are clear.', 'ec_nil'],
+    ['encumbrance', 'attributive', 'The file shows a nil EC.', 'ec_clear_attributive'],
+
+    ['rera', 'predicative', 'The RERA registration is valid.', 'rera_registration_valid'],
+    ['rera', 'adverb-modified', 'The RERA registration is currently valid.', 'rera_registration_valid'],
+    ['rera', 'plural', 'The RERA registrations for both towers are valid.', 'rera_registration_valid'],
+    ['rera', 'attributive', 'The project has a valid RERA registration.', 'rera_registration_attributive'],
+
+    // The predicative row is the exact sentence #1100 found in four live IC
+    // memos on deals holding zero approval rows.
+    ['approval', 'predicative', 'All required approvals have been received.', 'approval_granted'],
+    ['approval', 'adverb-modified', 'All required approvals have already been received.', 'approval_granted'],
+    ['approval', 'plural', 'The sanctions for both blocks have been granted.', 'approval_granted'],
+    ['approval', 'attributive', 'The developer holds all requisite approvals.', 'approval_attributive'],
+    ['approval', 'attributive', 'The project has a sanctioned building plan.', 'approval_attributive'],
+    // Active-voice twin of the #1100 sentence.
+    ['approval', 'possessive', 'The developer has obtained all required approvals.', 'approval_in_hand'],
+  ])('%s / %s — %s', (lane, _shape, sentence, expectedId) => {
+    const found = findLegalAssertion(sentence);
+    expect(found).not.toBeNull();
+    expect(found.lane).toBe(lane);
+    expect(found.id).toBe(expectedId);
+  });
+
+  test('every shape survives the scrubber end-to-end, not just the matcher', () => {
+    // findLegalAssertion is the unit; sanitizeAiProse is what actually reaches
+    // the investor DOCX. Pin both — the market-context service prints the
+    // scrubber's output verbatim into LP-facing sections.
+    const prose = [
+      'Titles in this micro-market are typically clean.',
+      'The land has a clear title.',
+      'Absorption is 2.15x the comp median.',
+    ].join(' ');
+    const r = sanitizeAiProse(prose);
+    expect(r.legalRemoved).toBe(2);
+    expect(r.legalLanes).toEqual(['title']);
+    expect(r.text).not.toMatch(/typically clean/i);
+    expect(r.text).not.toMatch(/a clear title/i);
+    expect(r.text).toContain('2.15x the comp median');
+    expect(r.text).toContain(LEGAL_REDACTION_MARKER);
+  });
+});
+
+describe('the widened slots do not swallow legitimate prose', () => {
+  // Every entry here was a live false-positive risk created by one of the new
+  // slots. Over-redaction is not the safe failure: it shreds the diligence
+  // guidance the product exists to give, and a marker that shows up in
+  // reasonable prose stops meaning anything — which is the whole legal-four
+  // defence.
+  test.each([
+    // The three instructional forms named in the audit brief.
+    'Verify the title chain against the mother deed.',
+    'Obtain the EC for the full 30-year period.',
+    'Confirm RERA registration before the IC meeting.',
+
+    // ADVERB must not swallow a genuine hedge. "not yet" means unresolved.
+    'The title is not yet clear.',
+    'Titles in this belt are not yet confirmed.',
+    'Title in this micro-market is still under review.',
+    'RERA registration is still awaited.',
+    'DC conversion is still pending with the Deputy Commissioner.',
+
+    // Attributive needs a possession verb. Generic advice is not a verdict
+    // about this asset.
+    'A clear title is a precondition for disbursement.',
+    'Buyers in this belt pay a premium for clear title.',
+    'Underwriting assumes a clear title; that assumption is untested.',
+
+    // A modal in front of the possession verb makes it an instruction.
+    'The buyer must have a clear title before disbursement.',
+    'The buyer should hold a valid A-khata at closing.',
+    'We need to obtain a clear title from the vendor.',
+    'The objective is to secure a sanctioned building plan.',
+    'The developer must have obtained all required approvals before we fund.',
+    'The lender should have received the occupancy certificate by then.',
+
+    // Instruction leads still govern the widened shapes.
+    'Verify that title in this belt is generally clean before pricing it in.',
+    'Confirm whether titles in this micro-market are typically clean.',
+    'Check that the land has a clear title.',
+    'Ascertain whether the EC for the last 30 years is nil.',
+    'Review whether the developer holds all requisite approvals.',
+    'Obtain the OC and confirm the layout has already been approved.',
+
+    // QUALIFIER must not drag a non-statutory head noun into the approval lane.
+    'The business plan for the quarter is approved by the board.',
+    'The execution plan for phase two is approved.',
+    'The survey of buyers in Whitefield is complete.',
+
+    // Ordinary institutional prose in the same adverb + qualifier grammar.
+    'Absorption in this micro-market is typically 24 units per quarter.',
+    'Pricing in this belt is generally 8% below the Sarjapur median.',
+    'Exit assumptions in this corridor are typically conservative.',
+    'Land cost is 28% of GDV, above the 25% Bengaluru target.',
+  ])('survives: %s', (sentence) => {
+    expect(findLegalAssertion(sentence)).toBeNull();
+  });
+
+  test('a paragraph of widened-shape diligence guidance is left byte-identical', () => {
+    const prose =
+      'Verify that title in this belt is generally clean. '
+      + 'Confirm whether titles in this micro-market are typically clean. '
+      + 'Check that the land has a clear title before disbursement.';
+    const r = sanitizeAiProse(prose);
+    expect(r.legalRemoved).toBe(0);
+    expect(r.flagged).toBe(false);
+    expect(r.text).toBe(prose);
+  });
+});
+
 // ── Integration through the two real consumers ──────────────────────────────
 
 describe('the prose scrubber redacts and reports the lane', () => {
@@ -293,6 +432,28 @@ describe('the rule set is well formed', () => {
     const covered = new Set(LEGAL_ASSERTION_RULES.map((r) => r.lane));
     for (const lane of ['title', 'encumbrance', 'rera', 'approval']) {
       expect(covered.has(lane)).toBe(true);
+    }
+  });
+
+  test('an inserted adverb never un-catches a verdict, in any lane', () => {
+    // The property the shared ADVERB slot buys: a lane cannot quietly go blind
+    // to "is GENERALLY clean" while its neighbours stay closed. If a future
+    // edit hand-writes a copula back into one rule, this fails there first.
+    const frames = [
+      ['title', 'The title is <ADV>clear.'],
+      ['title', 'The khata is <ADV>valid.'],
+      ['encumbrance', 'The EC is <ADV>nil.'],
+      ['rera', 'The RERA registration is <ADV>valid.'],
+      ['approval', 'The building plan is <ADV>sanctioned.'],
+      ['approval', 'DC conversion is <ADV>complete.'],
+    ];
+    const adverbs = ['', 'generally ', 'typically ', 'largely ', 'duly ', 'apparently ', 'now ', 'not '];
+    for (const [lane, frame] of frames) {
+      for (const adverb of adverbs) {
+        const sentence = frame.replace('<ADV>', adverb);
+        const found = findLegalAssertion(sentence);
+        expect(found ? found.lane : `UNCAUGHT: ${sentence}`).toBe(lane);
+      }
     }
   });
 
