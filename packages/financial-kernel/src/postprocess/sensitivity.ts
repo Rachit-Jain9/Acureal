@@ -1,31 +1,50 @@
 /**
- * Sensitivity-matrix post-processors — kernel-native port of the four
- * legacy variants in `backend/src/engines/financial.engine.js`:
+ * Sensitivity-matrix post-processors.
  *
- *   - buildResidentialSensitivity (line 1557) — 9×9, full engine re-run
- *   - buildPlottedSensitivity     (line 1583) — 9×9, full engine re-run
- *   - buildIncomeSensitivity      (line 1609) — 5×5, lightweight quick-CF
- *   - buildHospSensitivity        (line 2479) — multi-grid, quick-IRR
+ * ── THE INVARIANT ────────────────────────────────────────────────────
+ * Every grid is CENTRED ON THE DEAL. For any matrix this module emits,
  *
- * For residential and plotted we re-run `computeDeal` per cell so the
- * matrix reflects the kernel's canonical math (deeper than legacy's
- * shortcut of stubbing just `skipSensitivity`). For income and
- * hospitality the legacy lightweight projections are faithful enough —
- * porting them verbatim keeps the cells directionally honest without
- * re-running USALI per cell.
+ *     irrGrid[floor(rows / 2)][floor(cols / 2)] === headline IRR
  *
- * Output shape matches legacy field-for-field: frontend
- * `SensitivityMatrix.jsx` reads `{ sellingRates, constructionCosts,
- * irrGrid, axis, variations }`. Hospitality additionally returns
- * `occAdr`, `hardCost`, `interestRate`, `capRate` sub-objects.
+ * exactly — same number the KPI tile, the IC memo and the exports show.
+ * Four consumers already assume this and label that cell "Base IRR"
+ * (`export.insights.service.js`, `docx/buildReport.js`, `pptx/slides.js`,
+ * `reportPack/composePack.js`); the one-dimensional hospitality strips
+ * apply the same rule at index 2.
+ *
+ * This is enforced by construction:
+ *
+ *   1. EVERY cell re-runs `computeDeal` with the varied inputs, so no
+ *      cell can drift from the canonical model. Income and hospitality
+ *      used to run their own simplified projections instead — no debt,
+ *      a hardcoded occupancy ramp, quarterly rather than monthly
+ *      discounting, a flat 28% NOI margin for hotels — and their centre
+ *      cells read 1.2 to 3.5 points ABOVE the headline IRR on
+ *      representative deals, always optimistic. An IC reading the grid
+ *      centre was reading a different, rosier model than the one on the
+ *      KPI tile.
+ *
+ *   2. Every axis is built around the deal's own value, and the centre
+ *      tick is the UNROUNDED input (`exactAt`), so a rate of ₹9,487.50
+ *      does not become ₹9,488 in the centre cell and quietly break the
+ *      equality. The income exit-cap axis in particular used to be the
+ *      absolute ladder 5/6/7/8/9% — a 7.5% deal had no cell of its own
+ *      anywhere in the grid, and "Base IRR" resolved to the 7% row.
+ *
+ * Cost: one `computeDeal` per cell. Measured — income 5×5 ≈ 73 ms,
+ * hospitality 5×5 + three strips ≈ 262 ms, residential 9×9 ≈ 83 ms.
+ * Only the explicit recompute and `POST /deals/:id/sensitivity` paths
+ * build matrices; every read path passes `skipSensitivity`.
+ *
+ * Output shape is unchanged field-for-field: `{ sellingRates,
+ * constructionCosts, irrGrid, axis, variations }`, plus `occAdr`,
+ * `hardCost`, `interestRate`, `capRate` for hospitality.
  */
 
 import type { AssetClass, DealInputs } from '../types';
 import { computeDeal } from '../registry';
-import { hospOccRamp } from './usaliPnl';
-
-const round4 = (n: number | null | undefined): number | null =>
-  n != null && Number.isFinite(n) ? Math.round(n * 10000) / 10000 : null;
+import { INDIA_HOSPITALITY_PRESETS } from './usaliPnl';
+import type { IndianHospitalityPresetKey } from './usaliPnl';
 
 const asNum = (v: unknown, fallback = 0): number => {
   if (v == null) return fallback;
@@ -38,60 +57,17 @@ const pctLabel = (v: number): string =>
 const bpsLabel = (v: number): string =>
   `${v >= 0 ? '+' : ''}${v} bps`;
 
-// ─── Quarterly IRR — legacy-compatible Newton + bisection ────────────
-// Legacy `calculateIRR` treats the series as quarterly and returns
-// annual percent. Kernel's public `irrAnnualPct` is monthly, so we keep
-// a local helper here for the lightweight paths below.
-
-function irrAnnualPctQuarterly(cashFlows: readonly number[]): number | null {
-  if (!cashFlows || cashFlows.length < 2) return null;
-  if (!cashFlows.some((c) => c < 0) || !cashFlows.some((c) => c > 0)) return null;
-
-  const MAX_ITER = 1000;
-  const PREC = 1e-10;
-  const npv = (r: number) =>
-    cashFlows.reduce((s, c, t) => s + c / Math.pow(1 + r, t), 0);
-  const dnpv = (r: number) =>
-    cashFlows.reduce(
-      (s, c, t) => (t === 0 ? s : s - (t * c) / Math.pow(1 + r, t + 1)),
-      0,
-    );
-
-  for (const r0 of [0.05, 0.02, 0.10, 0.15, 0.01, 0.20]) {
-    let r = r0;
-    for (let i = 0; i < MAX_ITER; i++) {
-      const d = dnpv(r);
-      if (Math.abs(d) < 1e-15) break;
-      const rNew = r - npv(r) / d;
-      if (!Number.isFinite(rNew) || rNew <= -1) break;
-      if (Math.abs(rNew - r) < PREC) {
-        if (Math.abs(npv(rNew)) < 0.001) {
-          return Math.round((Math.pow(1 + rNew, 4) - 1) * 1e8) / 1e6;
-        }
-      }
-      r = rNew;
-    }
-  }
-
-  // Bisection fallback
-  let lo = -0.9999;
-  let hi = 10;
-  for (let h = 0.5; h <= 50; h += 0.5) {
-    if (npv(-0.9999) * npv(h) < 0) { hi = h; break; }
-  }
-  for (let i = 0; i < MAX_ITER * 2; i++) {
-    const mid = (lo + hi) / 2;
-    if (Math.abs(npv(mid)) < PREC || (hi - lo) / 2 < PREC) {
-      return Math.round((Math.pow(1 + mid, 4) - 1) * 1e8) / 1e6;
-    }
-    if (npv(lo) * npv(mid) < 0) hi = mid;
-    else lo = mid;
-  }
-  return null;
-}
-
-const safeCfs = (cfs: readonly number[]): number[] =>
-  cfs.map((v) => (Number.isFinite(v) ? v : 0));
+/**
+ * Build an axis tick, but return the base value UNTOUCHED at the centre.
+ *
+ * Rounding a tick is cosmetic everywhere except the centre, where it
+ * silently breaks `centre cell === headline`: `Math.round(9487.5)` is a
+ * different deal from the one the KPI tile priced. Callers pass the
+ * rounding they want for the off-centre ticks and get exactness where
+ * it is load-bearing.
+ */
+const exactAt = (isCentre: boolean, base: number, varied: number): number =>
+  (isCentre ? base : varied);
 
 // ─── Shared output shapes ────────────────────────────────────────────
 
@@ -153,8 +129,8 @@ export function buildResidentialSensitivity(args: BuildSensitivityArgs): Sensiti
     return emptyGrid(RES_AXIS);
   }
 
-  const sellingRates = RES_VARS.map((v) => Math.round(baseSelling * (1 + v)));
-  const constructionCosts = RES_VARS.map((v) => Math.round(baseConstruction * (1 + v)));
+  const sellingRates = RES_VARS.map((v) => exactAt(v === 0, baseSelling, Math.round(baseSelling * (1 + v))));
+  const constructionCosts = RES_VARS.map((v) => exactAt(v === 0, baseConstruction, Math.round(baseConstruction * (1 + v))));
   const irrGrid = constructionCosts.map((cc) =>
     sellingRates.map((sr) =>
       tryComputeIrr(
@@ -184,8 +160,8 @@ export function buildPlottedSensitivity(args: BuildSensitivityArgs): Sensitivity
     return emptyGrid(PLOT_AXIS);
   }
 
-  const sellingRates = RES_VARS.map((v) => Math.round(baseSelling * (1 + v)));
-  const devCosts = RES_VARS.map((v) => Math.round(baseDev * (1 + v)));
+  const sellingRates = RES_VARS.map((v) => exactAt(v === 0, baseSelling, Math.round(baseSelling * (1 + v))));
+  const devCosts = RES_VARS.map((v) => exactAt(v === 0, baseDev, Math.round(baseDev * (1 + v))));
   const irrGrid = devCosts.map((dc) =>
     sellingRates.map((sr) =>
       tryComputeIrr(
@@ -203,222 +179,145 @@ export function buildPlottedSensitivity(args: BuildSensitivityArgs): Sensitivity
   };
 }
 
-// ─── Income (office / retail / industrial / mixed_use) — 5×5 lightweight
+// ─── Income (office / retail / industrial) — 5×5 full re-run ─────────
 
 const INCOME_RENT_VARS = [-0.20, -0.10, 0, 0.10, 0.20] as const;
-const INCOME_CAP_VARS = [5, 6, 7, 8, 9] as const;
+
+/**
+ * Exit-cap ticks, in basis points RELATIVE to the deal's own exit cap.
+ *
+ * This axis used to be the absolute ladder 5/6/7/8/9%. Two things were
+ * wrong with that. A deal at 7.5% — the single most common exit cap in
+ * Bengaluru office underwriting — had no cell of its own anywhere in
+ * the grid, so there was nothing to compare the headline IRR against.
+ * And because "Base IRR" is read off the middle row, every downstream
+ * consumer silently attributed the 7% row to the deal.
+ *
+ * ±100 bps in 50 bps steps is also the band an IC actually argues over;
+ * a 400 bps sweep centred on nothing was mostly noise.
+ */
+const INCOME_CAP_BPS = [-100, -50, 0, 50, 100] as const;
 const INCOME_AXIS: readonly [string, string] = ['Exit Cap Rate (%)', 'Base Rent/sqft/mo'];
 
-interface IncomeQuickParams {
-  readonly leasableAreaSqft: number;
-  readonly baseRentMonth: number;
-  readonly exitCapRate: number;
-  readonly rentEscalationPct: number;
-  readonly vacancyPct: number;
-  readonly opexPct: number;
-  readonly holdPeriodYears: number;
-  readonly constructionMonths: number;
-  readonly constructionCostSqft: number;
-  readonly landCostCr: number;
-  readonly stampDutyCr: number;
-  readonly approvalCostCr: number;
-  readonly tiCostCr: number;
-  readonly lcCostCr: number;
-}
-
-function buildIncomeQuickCFs(p: IncomeQuickParams): number[] {
-  const constQ = Math.ceil(p.constructionMonths / 3);
-  const opQ = p.holdPeriodYears * 4;
-  const totalQ = constQ + opQ;
-  const cfs = new Array(totalQ + 1).fill(0);
-  const totalCost =
-    p.landCostCr
-    + (p.leasableAreaSqft * p.constructionCostSqft) / 1e7
-    + p.stampDutyCr
-    + p.approvalCostCr
-    + (p.tiCostCr || 0)
-    + (p.lcCostCr || 0);
-  cfs[0] = -totalCost;
-  for (let q = 1; q <= opQ; q++) {
-    const yearIdx = Math.ceil(q / 4);
-    const occ = q <= 2 ? 0.70 : 1 - p.vacancyPct / 100;
-    const esc = Math.pow(1 + p.rentEscalationPct / 100, yearIdx - 1);
-    const qNOI =
-      (p.leasableAreaSqft * p.baseRentMonth * 3 * esc * occ * (1 - p.opexPct / 100)) / 1e7;
-    if (constQ + q <= totalQ) cfs[constQ + q] += qNOI;
-  }
-  const noiExit =
-    ((p.leasableAreaSqft * p.baseRentMonth * 12 * (1 - p.vacancyPct / 100) * (1 - p.opexPct / 100))
-      / 1e7)
-    * Math.pow(1 + p.rentEscalationPct / 100, p.holdPeriodYears);
-  cfs[totalQ] += noiExit / (p.exitCapRate / 100);
-  return safeCfs(cfs);
-}
-
 export function buildIncomeSensitivity(args: BuildSensitivityArgs): SensitivityMatrix {
-  const { raw } = args;
-  const baseRentMonth = asNum(raw.baseRentPerSqftMonth ?? raw.baseRentMonth);
-  const leasableAreaSqft = asNum(raw.leasableAreaSqft ?? raw.saleableAreaSqft);
-  if (baseRentMonth <= 0 || leasableAreaSqft <= 0) {
+  const { raw, assetClass } = args;
+  const baseRentMonth = asNum(raw.baseRentPerSqftMonth);
+  const leasableAreaSqft = asNum(raw.leasableAreaSqft);
+  const baseCap = asNum(raw.exitCapRate, 7);
+  if (baseRentMonth <= 0 || leasableAreaSqft <= 0 || baseCap <= 0) {
     return emptyGrid(INCOME_AXIS);
   }
 
-  const baseParams: IncomeQuickParams = {
-    leasableAreaSqft,
-    baseRentMonth,
-    exitCapRate: asNum(raw.exitCapRate, 7.5),
-    rentEscalationPct: asNum(raw.rentEscalationPct, 5),
-    vacancyPct: asNum(raw.vacancyPct, 10),
-    opexPct: asNum(raw.opexPct, 20),
-    holdPeriodYears: asNum(raw.holdPeriodYears, 5),
-    constructionMonths: asNum(raw.constructionMonths ?? raw.projectDurationMonths, 36),
-    constructionCostSqft: asNum(raw.constructionCostPerSqft ?? raw.constructionCostSqft),
-    landCostCr: asNum(raw.landCostCr),
-    stampDutyCr: asNum(raw.stampDutyCr),
-    approvalCostCr: asNum(raw.approvalCostCr),
-    tiCostCr: asNum(raw.tiCostCr),
-    lcCostCr: asNum(raw.lcCostCr),
-  };
+  const rents = INCOME_RENT_VARS.map((v) =>
+    exactAt(v === 0, baseRentMonth, Math.round(baseRentMonth * (1 + v) * 100) / 100),
+  );
+  // Off-centre ticks below zero are left as-is rather than clamped: the
+  // kernel rejects a non-positive cap, `tryComputeIrr` turns that into
+  // null, and a blank cell is honest. Clamping would instead duplicate a
+  // neighbouring column under a label claiming to be a different one.
+  const capRates = INCOME_CAP_BPS.map((bps) =>
+    exactAt(bps === 0, baseCap, Math.round((baseCap + bps / 100) * 100) / 100),
+  );
 
-  const rents = INCOME_RENT_VARS.map((v) => Math.round(baseRentMonth * (1 + v) * 100) / 100);
-  const capRates = [...INCOME_CAP_VARS];
   const irrGrid = capRates.map((cap) =>
-    rents.map((rent) => {
-      try {
-        return irrAnnualPctQuarterly(
-          buildIncomeQuickCFs({ ...baseParams, baseRentMonth: rent, exitCapRate: cap }),
-        );
-      } catch {
-        return null;
-      }
-    }),
+    rents.map((rent) =>
+      tryComputeIrr(
+        { ...raw, baseRentPerSqftMonth: rent, exitCapRate: cap, skipSensitivity: true },
+        assetClass,
+      ),
+    ),
   );
   return {
     sellingRates: rents,
     constructionCosts: capRates,
     irrGrid,
     axis: INCOME_AXIS,
-    variations: INCOME_CAP_VARS.map((c) => `${c}%`),
+    variations: capRates.map((c) => `${c}%`),
   };
 }
 
-// ─── Hospitality — multi-grid lightweight ────────────────────────────
-
-const HOSP_DEFAULT_SQFT_PER_KEY = 550;
-const HOSP_DAYS_PER_YEAR = 365;
-
-interface HospQuickParams {
-  readonly keys: number;
-  readonly sqftPerKey: number;
-  readonly adr: number;
-  readonly stabilizedOccPct: number;
-  readonly exitCapRate: number;
-  readonly constLoanRatePct: number;
-  readonly hardCostPerSqft: number;
-  readonly landCostCr: number;
-  readonly ffePerKey: number;
-  readonly osePerKey: number;
-  readonly preOpeningPerKey: number;
-  readonly holdPeriodYears: number;
-  readonly constQ: number;
-  readonly noiMarginPct: number;
-}
-
-function hospQuickIRR(p: HospQuickParams): number | null {
-  const bua = p.keys * (p.sqftPerKey || HOSP_DEFAULT_SQFT_PER_KEY);
-  const hard = (bua * p.hardCostPerSqft) / 1e7;
-  const gst = hard * 0.18;
-  const ffe = (p.keys * p.ffePerKey) / 1e7;
-  const ose = (p.keys * p.osePerKey) / 1e7;
-  const pre = (p.keys * p.preOpeningPerKey) / 1e7;
-  const soft = hard * 0.115;
-  const appr = hard * 0.02;
-  const base = hard + soft + appr + ffe + ose;
-  const cont = base * 0.05;
-  const idc =
-    (p.landCostCr * 1.066 + base + cont) * 0.55 * 0.5 * (p.constLoanRatePct / 100) * (p.constQ / 4)
-    + (p.landCostCr * 1.066 + base + cont) * 0.55 * 0.01;
-  const total = p.landCostCr * 1.066 + base + gst + cont + pre + idc;
-
-  const opQ = p.holdPeriodYears * 4;
-  const totalQ = p.constQ + opQ;
-  const cfs = new Array(totalQ + 1).fill(0);
-  cfs[0] = -total;
-
-  const ramp = hospOccRamp({
-    initialOccPct: 45,
-    stabilizedOccPct: p.stabilizedOccPct,
-    stabilizationYear: 4,
-    years: p.holdPeriodYears,
-  });
-  for (let y = 1; y <= p.holdPeriodYears; y++) {
-    const occ = ramp[y - 1] / 100;
-    const adrY = p.adr * Math.pow(1.05, y - 1);
-    const roomsRev = (p.keys * adrY * occ * HOSP_DAYS_PER_YEAR) / 1e7;
-    const totalRev = roomsRev * 1.39;
-    const noi = totalRev * (p.noiMarginPct / 100);
-    for (let q = 1; q <= 4; q++) {
-      if (p.constQ + (y - 1) * 4 + q <= totalQ) cfs[p.constQ + (y - 1) * 4 + q] += noi / 4;
-    }
-  }
-  const exitOcc = p.stabilizedOccPct / 100;
-  const exitADR = p.adr * Math.pow(1.05, p.holdPeriodYears - 1);
-  const exitRooms = ((p.keys * exitADR * exitOcc * HOSP_DAYS_PER_YEAR) / 1e7) * 1.39;
-  const exitNoi = exitRooms * (p.noiMarginPct / 100);
-  cfs[totalQ] += (exitNoi / (p.exitCapRate / 100)) * 0.96;
-
-  try {
-    return irrAnnualPctQuarterly(safeCfs(cfs));
-  } catch {
-    return null;
-  }
-}
+// ─── Hospitality — occupancy × ADR grid + three strips, full re-run ──
 
 const HOSP_AXIS: readonly [string, string] = ['Occupancy (%)', 'ADR (₹)'];
 
+/**
+ * Resolve the value the HOSPITALITY KERNEL will actually use for a raw
+ * field, through the same `{ ...presetDefaults, ...raw }` merge that
+ * `assets/hospitality.ts` applies to its revenue inputs.
+ *
+ * To be clear about what this does today: `INDIA_HOSPITALITY_PRESETS`
+ * defines only USALI cost lines, none of the fields read below, so the
+ * merge is currently a no-op and this fixes no live bug. It exists so
+ * the axis stays pinned to the kernel's resolution rather than to a
+ * duplicate of it — the day a preset gains an `adr`, a deal that sets
+ * `hotelTierPreset` and omits ADR would otherwise centre its grid on a
+ * fallback the kernel never priced, and the centre cell would silently
+ * stop being the deal.
+ */
+function hospBase(raw: Readonly<Record<string, unknown>>, field: string, fallback: number): number {
+  const tierPreset = typeof raw.hotelTierPreset === 'string'
+    ? (raw.hotelTierPreset as IndianHospitalityPresetKey)
+    : null;
+  const presetDefaults: Record<string, unknown> =
+    tierPreset && INDIA_HOSPITALITY_PRESETS[tierPreset]
+      ? (INDIA_HOSPITALITY_PRESETS[tierPreset] as Record<string, unknown>)
+      : {};
+  const merged = { ...presetDefaults, ...raw };
+  return asNum(merged[field], fallback);
+}
+
 export function buildHospSensitivity(args: BuildSensitivityArgs): HospSensitivity {
-  const { raw } = args;
-  const keys = Math.round(asNum(raw.keys, 200));
-  const sqftPerKey = asNum(raw.sqftPerKey, HOSP_DEFAULT_SQFT_PER_KEY);
-  const adr = asNum(raw.adr, 8500);
-  const stabilizedOccPct = asNum(raw.stabilizedOccPct, 70);
-  const exitCapRate = asNum(raw.exitCapRate, 7.5);
-  const constLoanRatePct = asNum(raw.constLoanRatePct, 10.5);
+  const { raw, assetClass } = args;
 
-  const baseParams: HospQuickParams = {
-    keys,
-    sqftPerKey,
-    adr,
-    stabilizedOccPct,
-    exitCapRate,
-    constLoanRatePct,
-    hardCostPerSqft: asNum(raw.hardCostPerSqft, 11000),
-    landCostCr: asNum(raw.landCostCr),
-    ffePerKey: asNum(raw.ffePerKey, 2500000),
-    osePerKey: asNum(raw.osePerKey, 400000),
-    preOpeningPerKey: asNum(raw.preOpeningPerKey, 350000),
-    holdPeriodYears: Math.max(5, Math.min(15, asNum(raw.holdPeriodYears, 10))),
-    constQ: 12,
-    noiMarginPct: 28,
-  };
+  // Defaults mirror `assets/hospitality.ts` exactly — a different
+  // fallback here would centre the grid on a deal the kernel never priced.
+  const adr = hospBase(raw, 'adr', 6000);
+  const stabilizedOccPct = hospBase(raw, 'stabilizedOccPct', 65);
+  const exitCapRate = hospBase(raw, 'exitCapRate', 9);
+  const constLoanRatePct = hospBase(raw, 'constLoanRatePct', 10.5);
 
-  const occVars = [-15, -10, 0, 10, 15].map((d) => Math.max(40, Math.min(90, stabilizedOccPct + d)));
-  const adrVars = [-0.20, -0.10, 0, 0.10, 0.20].map((v) => Math.round(adr * (1 + v)));
+  // Hard cost mirrors the kernel's per-key → per-sqft resolution
+  // (`assets/hospitality.ts`, which proves the two are the same number):
+  // hotels are budgeted per key, so most deals carry only
+  // `constructionCostPerKey`. Resolving it here lets the strip vary a
+  // single field and still reproduce the deal exactly at 0%.
+  const sqftPerKey = hospBase(raw, 'sqftPerKey', 550);
+  const ccpk = hospBase(raw, 'constructionCostPerKey', 0);
+  const explicitHardCost = hospBase(raw, 'hardCostPerSqft', 0);
+  const hardCostPerSqft = explicitHardCost > 0
+    ? explicitHardCost
+    : ccpk > 0 && sqftPerKey > 0
+      ? ccpk / sqftPerKey
+      : 11_000;
+
+  const irrAt = (overrides: Record<string, unknown>): number | null =>
+    tryComputeIrr({ ...raw, ...overrides, skipSensitivity: true }, assetClass);
+
+  // Occupancy stays inside 40–90% off-centre — outside that band the
+  // ramp stops describing a hotel anyone would underwrite — but the
+  // centre tick is the deal's own occupancy, uncapped, so the invariant
+  // survives a 95% stabilised assumption.
+  const occVars = [-15, -10, 0, 10, 15].map((d) =>
+    exactAt(d === 0, stabilizedOccPct, Math.max(40, Math.min(90, stabilizedOccPct + d))),
+  );
+  const adrVars = [-0.20, -0.10, 0, 0.10, 0.20].map((v) =>
+    exactAt(v === 0, adr, Math.round(adr * (1 + v))),
+  );
   const occAdrIrrGrid = occVars.map((o) =>
-    adrVars.map((a) => hospQuickIRR({ ...baseParams, adr: a, stabilizedOccPct: o })),
+    adrVars.map((a) => irrAt({ adr: a, stabilizedOccPct: o })),
   );
 
   const hcVars = [-15, -10, 0, 10, 15];
   const irVars = [-150, -75, 0, 75, 150];
   const crVars = [-100, -50, 0, 50, 100];
   const hardCostIrr = hcVars.map((pct) =>
-    hospQuickIRR({ ...baseParams, hardCostPerSqft: baseParams.hardCostPerSqft * (1 + pct / 100) }),
+    irrAt({ hardCostPerSqft: hardCostPerSqft * (1 + pct / 100) }),
   );
   const interestIrr = irVars.map((bps) =>
-    hospQuickIRR({ ...baseParams, constLoanRatePct: baseParams.constLoanRatePct + bps / 100 }),
+    irrAt({ constLoanRatePct: constLoanRatePct + bps / 100 }),
   );
   const capRateIrr = crVars.map((bps) =>
-    hospQuickIRR({ ...baseParams, exitCapRate: baseParams.exitCapRate + bps / 100 }),
+    irrAt({ exitCapRate: exitCapRate + bps / 100 }),
   );
 
   return {
@@ -436,15 +335,15 @@ export function buildHospSensitivity(args: BuildSensitivityArgs): HospSensitivit
     },
     hardCost: {
       variations: hcVars.map((v) => `${v >= 0 ? '+' : ''}${v}%`),
-      irr: hardCostIrr.map((n) => round4(n)),
+      irr: hardCostIrr,
     },
     interestRate: {
       variations: irVars.map(bpsLabel),
-      irr: interestIrr.map((n) => round4(n)),
+      irr: interestIrr,
     },
     capRate: {
       variations: crVars.map(bpsLabel),
-      irr: capRateIrr.map((n) => round4(n)),
+      irr: capRateIrr,
     },
   };
 }

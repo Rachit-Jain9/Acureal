@@ -168,3 +168,81 @@ describe('PR-NX44 — generateSensitivityNarrative', () => {
     });
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────
+// The payload has to describe the grid it is actually carrying.
+//
+// `buildSensitivityPayload` hardcoded the residential axis labels:
+// "Construction cost per sqft (INR)" down the rows and "Selling rate per
+// sqft (INR)" across the columns. For a commercial-office deal the rows
+// are EXIT CAP RATES and the columns are RENT PER SQFT PER MONTH; for a
+// hotel they are OCCUPANCY and ADR. The prompt tells the model to
+// "reference only the numbers provided in the payload", so it faithfully
+// narrated cap rates of 6.5–8.5 as rupees per sqft of construction cost,
+// and that narrative went into the DOCX IC memo.
+// ─────────────────────────────────────────────────────────────────────
+describe('buildSensitivityPayload — axis labels follow the asset class', () => {
+  const { buildSensitivityPayload } = require('../src/services/export.insights.service');
+
+  const incomeMatrix = {
+    // Exactly what the kernel emits for an income deal: cap-rate rows
+    // centred on the deal's 7.5%, rent columns centred on ₹95/sqft/mo.
+    sellingRates: [76, 85.5, 95, 104.5, 114],
+    constructionCosts: [6.5, 7, 7.5, 8, 8.5],
+    irrGrid: [
+      [11.1, 12.6, 14.1, 15.5, 16.8],
+      [10.5, 12.0, 13.4, 14.8, 16.1],
+      [9.9, 11.4, 12.7, 14.1, 15.4],
+      [9.4, 10.8, 12.1, 13.5, 14.7],
+      [8.9, 10.3, 11.6, 12.9, 14.1],
+    ],
+    axis: ['Exit Cap Rate (%)', 'Base Rent/sqft/mo'],
+  };
+
+  const args = (matrix) => ({
+    deal: { name: 'Test', asset_class: 'commercial_office', deal_structure: 'outright_purchase', city: 'Bengaluru' },
+    sensitivityMatrix: matrix,
+    financials: { total_cost_cr: 100, total_revenue_cr: 140, gross_margin_pct: 28, equity_multiple: 1.85 },
+  });
+
+  test('an income grid is not described as rupees per sqft', () => {
+    const payload = buildSensitivityPayload(args(incomeMatrix));
+    expect(payload.sensitivity_grid.rows_axis_label).toBe('Exit Cap Rate (%)');
+    expect(payload.sensitivity_grid.cols_axis_label).toBe('Base Rent/sqft/mo');
+    // The regression, stated directly: cap-rate rows must never be
+    // labelled as construction cost.
+    expect(payload.sensitivity_grid.rows_axis_label).not.toMatch(/construction cost/i);
+  });
+
+  test('each driver range names the driver it varies', () => {
+    const payload = buildSensitivityPayload(args(incomeMatrix));
+    expect(payload.driver_ranges.construction_cost.driver).toBe('Exit Cap Rate (%)');
+    expect(payload.driver_ranges.sell_rate.driver).toBe('Base Rent/sqft/mo');
+  });
+
+  test('base_cell points at the middle of the grid — the deal as underwritten', () => {
+    const payload = buildSensitivityPayload(args(incomeMatrix));
+    const { row_index: r, col_index: c } = payload.sensitivity_grid.base_cell;
+    expect([r, c]).toEqual([2, 2]);
+    expect(payload.sensitivity_grid.irr_grid[r][c]).toBe(12.7);
+    expect(payload.base_kpis.base_irr_pct).toBe(12.7);
+  });
+
+  test('a hospitality grid carries occupancy and ADR', () => {
+    const hosp = { ...incomeMatrix, axis: ['Occupancy (%)', 'ADR (₹)'] };
+    const payload = buildSensitivityPayload(args(hosp));
+    expect(payload.sensitivity_grid.rows_axis_label).toBe('Occupancy (%)');
+    expect(payload.sensitivity_grid.cols_axis_label).toBe('ADR (₹)');
+  });
+
+  test('falls back to the residential labels when a matrix carries no axis', () => {
+    // Older persisted matrices predate the `axis` field; they are all
+    // residential-shaped, so the previous hardcoded labels were right
+    // for them and stay as the fallback.
+    const { axis, ...noAxis } = incomeMatrix;
+    void axis;
+    const payload = buildSensitivityPayload(args(noAxis));
+    expect(payload.sensitivity_grid.rows_axis_label).toBe('Construction cost per sqft (INR)');
+    expect(payload.sensitivity_grid.cols_axis_label).toBe('Selling rate per sqft (INR)');
+  });
+});

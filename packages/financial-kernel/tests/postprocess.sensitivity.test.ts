@@ -14,7 +14,18 @@ import {
   buildIncomeSensitivity,
   buildHospSensitivity,
 } from '../src/postprocess/sensitivity';
+import { computeDeal } from '../src/registry';
+import type { AssetClass } from '../src/types';
 import { allFixtures } from './fixtures';
+
+const headlineIrr = (assetClass: AssetClass, raw: Readonly<Record<string, unknown>>): number | null =>
+  computeDeal({ assetClass, raw: { ...raw, skipSensitivity: true } }).kpis.irr;
+
+const centre = (grid: readonly (readonly (number | null)[])[]): number | null => {
+  const r = Math.floor(grid.length / 2);
+  const row = grid[r] ?? [];
+  return row[Math.floor(row.length / 2)] ?? null;
+};
 
 describe('buildResidentialSensitivity', () => {
   const out = buildResidentialSensitivity({
@@ -75,7 +86,10 @@ describe('buildIncomeSensitivity', () => {
     expect(out.axis).toEqual(['Exit Cap Rate (%)', 'Base Rent/sqft/mo']);
     expect(out.sellingRates).toHaveLength(5); // rents
     expect(out.constructionCosts).toHaveLength(5); // cap rates
-    expect(out.variations).toEqual(['5%', '6%', '7%', '8%', '9%']);
+    // Was the absolute ladder ['5%','6%','7%','8%','9%'], on which this
+    // 7.5% deal had no row of its own. Now ±100 bps around the deal.
+    expect(out.variations).toEqual(['6.5%', '7%', '7.5%', '8%', '8.5%']);
+    expect(out.constructionCosts[2]).toBe(allFixtures.commercial_office.raw.exitCapRate);
   });
 
   it('IRR decreases as cap rate widens (row 0 ≥ row 4 on same column)', () => {
@@ -149,6 +163,128 @@ describe('buildSensitivityMatrix dispatcher', () => {
       assetClass: 'land_parcel',
     });
     expect(out).toBeNull();
+  });
+});
+
+/**
+ * The load-bearing property of every grid this module emits.
+ *
+ * `export.insights.service.js`, `docx/buildReport.js`, `pptx/slides.js`
+ * and `reportPack/composePack.js` all read `irrGrid[mid][mid]` and print
+ * it as "Base IRR". If that cell is not the deal, an IC reads one number
+ * on the KPI tile and a different, rosier one at the centre of the grid
+ * beside it — which is exactly what income and hospitality did before
+ * they were moved onto the kernel: +1.2 to +3.5 points, always
+ * optimistic, because they ran their own simplified projections.
+ */
+describe('INVARIANT: the centre of the grid is the deal', () => {
+  const MATRIX_CLASSES = [
+    'residential_apartments',
+    'villas',
+    'redevelopment',
+    'mixed_use',
+    'plotted_development',
+    'commercial_office',
+    'retail',
+    'industrial_warehousing',
+    'hospitality',
+  ] as const;
+
+  it.each(MATRIX_CLASSES)('%s — centre cell === headline IRR', (assetClass) => {
+    const { raw } = allFixtures[assetClass];
+    const headline = headlineIrr(assetClass, raw);
+    const out = buildSensitivityMatrix({ raw, assetClass });
+
+    expect(out).not.toBeNull();
+    // Exact, not approximate: the grid re-runs the same kernel on the
+    // same inputs, so anything other than equality means a cell is
+    // pricing a different deal.
+    expect(centre(out!.irrGrid)).toBe(headline);
+  });
+
+  it('is not passing vacuously — the fixtures really do produce IRRs', () => {
+    // `null === null` satisfies the assertion above, so a fixture set
+    // that stopped computing would turn the whole suite green and
+    // meaningless. The `villas` fixture is a known exception: it pairs
+    // the flagship ₹155 Cr Jigani land cost with an FSI of 0.8, which
+    // yields ₹28 Cr of revenue against ₹254 Cr of cost. Every cash flow
+    // is negative, there is no sign change, and the IRR is legitimately
+    // null. That fixture is worth revisiting on its own — it means the
+    // villas golden tests exercise a deal no one would underwrite — but
+    // it is not this module's bug to fix.
+    const withIrr = MATRIX_CLASSES.filter(
+      (ac) => headlineIrr(ac, allFixtures[ac].raw) != null,
+    );
+    expect(withIrr).toEqual(MATRIX_CLASSES.filter((ac) => ac !== 'villas'));
+  });
+
+  it('holds for non-integer inputs (the axis must not round the centre tick)', () => {
+    // Off-centre ticks are rounded for legibility. Rounding the CENTRE
+    // tick would price ₹9,488/sqft against a deal underwritten at
+    // ₹9,487.50 — close enough to look right, wrong enough to be a
+    // different number from the KPI tile.
+    const raw = {
+      ...allFixtures.residential_apartments.raw,
+      sellingRatePerSqft: 9487.5,
+      constructionCostPerSqft: 2612.25,
+    };
+    const out = buildResidentialSensitivity({ raw, assetClass: 'residential_apartments' });
+
+    expect(out.sellingRates[4]).toBe(9487.5);
+    expect(out.constructionCosts[4]).toBe(2612.25);
+    expect(centre(out.irrGrid)).toBe(headlineIrr('residential_apartments', raw));
+  });
+
+  it('holds for a non-integer income cap rate', () => {
+    const raw = {
+      ...allFixtures.commercial_office.raw,
+      exitCapRate: 7.35,
+      baseRentPerSqftMonth: 94.75,
+    };
+    const out = buildIncomeSensitivity({ raw, assetClass: 'commercial_office' });
+
+    expect(out.constructionCosts[2]).toBe(7.35);
+    expect(out.sellingRates[2]).toBe(94.75);
+    expect(centre(out.irrGrid)).toBe(headlineIrr('commercial_office', raw));
+  });
+
+  it('holds for each hospitality strip, not just the occupancy × ADR grid', () => {
+    const { raw } = allFixtures.hospitality;
+    const headline = headlineIrr('hospitality', raw);
+    const out = buildHospSensitivity({ raw, assetClass: 'hospitality' });
+
+    // Index 2 is the 0% / 0 bps tick on all three — the deal, unvaried.
+    expect(out.hardCost.irr[2]).toBe(headline);
+    expect(out.interestRate.irr[2]).toBe(headline);
+    expect(out.capRate.irr[2]).toBe(headline);
+    expect(centre(out.occAdr.irrGrid)).toBe(headline);
+  });
+
+  it('holds when hard cost is expressed per key rather than per sqft', () => {
+    // Hotels are budgeted per key, so most deals carry only
+    // `constructionCostPerKey`. The hard-cost strip varies
+    // `hardCostPerSqft`, so it has to reproduce the kernel's per-key →
+    // per-sqft conversion or its 0% tick prices a different hotel.
+    const { raw } = allFixtures.hospitality;
+    expect(raw.constructionCostPerKey).toBeGreaterThan(0);
+    expect(raw.hardCostPerSqft).toBeUndefined();
+
+    const out = buildHospSensitivity({ raw, assetClass: 'hospitality' });
+    expect(out.hardCost.irr[2]).toBe(headlineIrr('hospitality', raw));
+    // …and the strip still bites in both directions.
+    expect(out.hardCost.irr[0]).not.toBe(out.hardCost.irr[2]);
+    expect(out.hardCost.irr[4]).not.toBe(out.hardCost.irr[2]);
+  });
+
+  it('keeps the deal on the axis even at an unusually high occupancy', () => {
+    // Off-centre occupancy ticks clamp to 40–90%. The centre tick must
+    // not: a hotel underwritten at 95% stabilised occupancy would
+    // otherwise have its own grid centred on a 90% hotel.
+    const raw = { ...allFixtures.hospitality.raw, stabilizedOccPct: 95 };
+    const out = buildHospSensitivity({ raw, assetClass: 'hospitality' });
+
+    expect(out.occAdr.rows[2]).toBe(95);
+    expect(centre(out.occAdr.irrGrid)).toBe(headlineIrr('hospitality', raw));
   });
 });
 
