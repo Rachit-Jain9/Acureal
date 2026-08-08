@@ -6,6 +6,117 @@ _Note: entries dated before 2026-07-30 refer to the product as **REDIP**. That w
 
 ---
 
+## 2026-08-08 (late) — the "what if" grid was showing a different, rosier deal than the KPI above it (#1116)
+
+The last of the three items carried over from the audit block. Worse on
+inspection than the ~1.4 points recorded when it was first spotted.
+
+### What was actually wrong
+
+Four export paths read `irrGrid[mid][mid]` and print it as **"Base IRR"**
+(`export.insights.service.js`, `docx/buildReport.js`, `pptx/slides.js`,
+`reportPack/composePack.js`), and the XLSX workbook bolds the same cell.
+For income and hospitality deals that cell was not the deal.
+
+Residential and plotted grids re-run `computeDeal` per cell, so their
+centre has always matched the headline exactly. Income and hospitality
+ran their own simplified projections instead — no debt, a hardcoded 70%
+occupancy for the first two quarters, quarterly rather than monthly
+discounting, a flat 28% NOI margin for hotels. Measured:
+
+    commercial_office   14.558% headline   15.756% centre   +1.198
+    retail              12.742% headline   15.540% centre   +2.797
+    industrial           7.376% headline   10.504% centre   +3.129
+    hospitality          1.643% headline    5.168% centre   +3.525
+
+Always optimistic. Never flagged. And the income exit-cap axis was the
+absolute ladder 5/6/7/8/9%, so a 7.5% deal — the most common exit cap in
+Bengaluru office underwriting — had **no cell of its own anywhere in the
+grid**, and "Base IRR" silently resolved to the 7% row.
+
+Not only a display problem: `buildSensitivityPayload` hands that centre
+cell to the sensitivity-narrative model as `base_irr_pct`, and the
+narrative goes into the DOCX IC memo.
+
+### The shape of the fix
+
+Every cell re-runs the kernel; every axis is centred on the deal. One
+invariant now covers all nine matrix-emitting asset classes:
+
+    irrGrid[floor(rows/2)][floor(cols/2)] === headline IRR
+
+Tested exactly, not approximately — same kernel, same inputs, so
+anything but equality means a cell is pricing a different deal.
+
+Two things that are easy to get wrong, both separately tested:
+
+- **Axis ticks are exact at the centre** (`exactAt`). Rounding is
+  cosmetic everywhere else; at the centre it prices ₹9,488/sqft against a
+  deal underwritten at ₹9,487.50. Mutation-checked — removing `exactAt`
+  fails the two tests written for it and nothing else.
+- **The exit-cap axis is ±100 bps in 50 bps steps around the deal's own
+  cap**, which is also the band an IC argues over. Off-centre ticks below
+  zero stay unclamped so an invalid cell reads blank rather than
+  duplicating a neighbour under a label claiming to be different.
+
+The suite carries an explicit guard against passing vacuously —
+`null === null` satisfies the assertion. It caught that the **`villas`
+fixture has no IRR at all**: it pairs the flagship ₹155 Cr Jigani land
+cost with an FSI of 0.8, giving ₹28 Cr of revenue against ₹254 Cr of
+cost, so every cash flow is negative and there is no sign change. The
+villas golden tests therefore exercise a deal nobody would underwrite.
+Documented in the test, left alone — changing a golden fixture inside a
+correctness PR is the wrong coupling.
+
+### The second defect in the same function
+
+The narrative payload's axis labels were hardcoded to the residential
+shape. An income deal's cap-rate rows (6.5 … 8.5) were handed to the
+model as `"Construction cost per sqft (INR)"` under a system prompt
+telling it to *"reference only the numbers provided in the payload"*. A
+hotel's occupancy and ADR got the same treatment. Labels now come from
+the matrix's own `axis`, each driver range names what it varies, the
+payload points at the base cell, and the prompt is told the drivers vary
+by asset class. Pre-`axis` persisted matrices are all residential-shaped,
+so the old labels stay as the fallback — tested.
+
+### Cost, and what was left alone
+
+Measured, not estimated: income 3.9 ms → 73 ms, hospitality 6.5 ms →
+262 ms. Residential already paid 83 ms for the same guarantee. Only the
+explicit recompute and `POST /deals/:id/sensitivity` build matrices;
+every read path passes `skipSensitivity`.
+
+**No live rows were touched.** Grids saved under the old model keep their
+old centre until recalculated, so rather than outline a cell that
+contradicts the KPI tile above it, the table compares the two and says
+so, pointing at Calculate — self-clearing, and mirroring the legacy
+loading-factor banner already on that page. Recomputing a live deal's
+model is a material change to the deal; that stays the operator's call.
+
+Verified: kernel 35 suites / 428 tests; backend export suites 31 / 684;
+backend full 293 / 4,941 (one pre-existing concurrency timeout in
+`documentTextExtractor`, 27/27 in isolation); frontend 178 files / 1,435
+tests; production build green; production deploy READY.
+
+Not verified by eye: rendering the marked cell needs a deal with a stored
+grid, and local dev still points at production. The component test
+asserts exactly one marked cell carrying the right value, and the four
+outline utilities were confirmed present in the emitted CSS.
+
+### What is left after this
+
+- **The double workspace assembly** — 326 round-trips, two ~190 KB
+  payloads 94% identical. Both halves in one PR; the frontend half alone
+  makes the page slower.
+- **Eleven craft findings** — copy, CSS and small components; zero logic
+  risk.
+- **The villas fixture** above.
+- **Operator:** regenerate an IC memo for Hopefarm / Commercial Retail /
+  Jigani and READ it; press Calculate on the two live income deals to
+  rebuild their sensitivity grids; point local dev at the preview
+  database (0e); decide whether to file the pptxgenjs upstream issue.
+
 ## 2026-08-08 (continued) — the safety nets that only fired on a date, the query that kept 5 of 1,194, and a deploy I broke (#1112–#1114)
 
 Continuation of the audit block above. Three clusters shipped, one deliberately
