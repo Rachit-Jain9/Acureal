@@ -270,8 +270,24 @@ async function callExtractionWithFallback({ prompt, base64Data, mimeType, attach
     geminiError = error;
   }
 
-  // Gemini exhausted (router-level retries already happened) — try Claude.
-  if (getProviderAvailability().claude) {
+  // Gemini exhausted (router-level retries already happened) — try the fallback.
+  //
+  // Which provider can actually serve it depends on the SHAPE of the input, and
+  // the two shapes do NOT share a provider:
+  //   • base64 (native PDF / image) → runClaudeWithDocument, which forces claude.
+  //   • text (parseable tier, transcript carried inside the prompt) →
+  //     runClaudeReasoning, whose router runs `constrainReasoningRouting`: the
+  //     routed provider for `document_extraction` is 'gemini', and anything that
+  //     is not explicitly 'claude' is mapped to OPENAI. So the text leg normally
+  //     dispatches to OpenAI despite this function's name.
+  // Gating both shapes on `claude` — as this did until 2026-08-08 — admitted a
+  // parseable-tier fallback on an Anthropic key and then dispatched it to
+  // OpenAI, failing on a missing OpenAI key instead of skipping cleanly.
+  const availability = getProviderAvailability();
+  const canFallback = base64Data
+    ? availability.claude
+    : (availability.gpt_compatible || availability.claude);
+  if (canFallback) {
     try {
       const fallbackMetadata = metadata ? { ...metadata, fallback_from: 'gemini' } : { fallback_from: 'gemini' };
       // Two shapes reach this fallback. A 'native'-tier file (PDF / image)
@@ -293,8 +309,20 @@ async function callExtractionWithFallback({ prompt, base64Data, mimeType, attach
         : await runClaudeReasoning({
           task: 'document_extraction',
           attach,
-          prompt,
+          // `payload`, NOT `prompt`. Both providerRegistry.runClaudeReasoning
+          // and runOpenAIReasoning read `payload`; a `prompt` key falls into
+          // the router's `...passthrough`, is forwarded, and is then ignored —
+          // so the SDK received `content: undefined` and returned a 400 every
+          // single time. This leg could therefore NEVER succeed. It stayed
+          // invisible because it only fires when Gemini fails on a
+          // spreadsheet / CSV / doc, and extractionFallback.test.js only
+          // exercises the base64 leg.
+          payload: prompt,
           systemPrompt: EXTRACTION_SYSTEM_PROMPT,
+          // The reasoning default is 700 tokens — fine for a narrative
+          // paragraph, nowhere near a full extraction JSON. Match the document
+          // leg's budget so a rescued extraction isn't truncated instead.
+          maxTokens: 4000,
           metadata: fallbackMetadata,
           cache,
         });

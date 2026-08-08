@@ -112,14 +112,70 @@ const getOpenAIClient = () => {
   return openaiClient;
 };
 
+// ── Gemini generation config ────────────────────────────────────────────────
+//
+// Gemini's API default temperature is 1.0 — the model SAMPLES. Until
+// 2026-08-08 no Acureal call passed a `generationConfig` at all, so every
+// document extraction and every doc-type classification ran at temperature
+// 1.0: the same sale deed, read twice, could return a different owner name, a
+// different area, or a different doc_type, with nothing in the logs to explain
+// the change. That is not model quality — it is a missing parameter, and it is
+// the single largest source of "the extracted data keeps changing".
+//
+// Extraction and classification are READING tasks with exactly one correct
+// answer, so temperature 0 is the only defensible setting. `topP` is pinned
+// for the same reason: at temperature 0 the sampler should be degenerate.
+//
+// `maxOutputTokens` is explicit because the multilingual contract makes
+// replies far longer than they look — every transliterated proper noun carries
+// an `_original` sibling. Silently hitting the implicit cap truncates the JSON
+// mid-object, which then surfaces downstream as "JSON parse failed": an error
+// that blames the parser for a budget problem.
+const GEMINI_READING_CONFIG = Object.freeze({
+  temperature: 0,
+  topP: 1,
+  maxOutputTokens: 8192,
+});
+
+// Why a Gemini response can carry no usable text. The SDK's `response.text()`
+// throws one generic error for all of these, which is how a safety block and a
+// truncated reply both reached the reviewer as "JSON parse failed".
+const GEMINI_EMPTY_RESPONSE_REASONS = Object.freeze({
+  MAX_TOKENS: 'the reply hit the output token limit and was cut off mid-answer',
+  SAFETY: 'the reply was blocked by Gemini safety filters',
+  RECITATION: 'the reply was blocked as suspected recitation of training data',
+  PROHIBITED_CONTENT: 'the reply was blocked as prohibited content',
+  SPII: 'the reply was blocked for containing sensitive personal information',
+  BLOCKLIST: 'the reply was blocked by a term blocklist',
+});
+
+// `response.text()` throws when no candidate carries text. We want to DIAGNOSE
+// that case rather than propagate the SDK's generic message, so read defensively
+// and let the caller decide what the absence means.
+const readGeminiText = (response) => {
+  try {
+    const text = response?.text?.();
+    return typeof text === 'string' ? text : null;
+  } catch {
+    return null;
+  }
+};
+
 const runGeminiInline = async ({
   prompt,
   base64Data,
   mimeType,
   model = process.env.GEMINI_MODEL || DEFAULT_GEMINI_MODEL,
+  generationConfig = null,
 }) => {
   const client = getGeminiClient();
-  const geminiModel = client.getGenerativeModel({ model });
+  const geminiModel = client.getGenerativeModel({
+    model,
+    // Caller overrides ride ON TOP of the deterministic base so a future
+    // creative caller can opt out explicitly, but no caller can silently
+    // inherit temperature 1.0 by forgetting to pass anything.
+    generationConfig: { ...GEMINI_READING_CONFIG, ...(generationConfig || {}) },
+  });
 
   // The inline-document part is only valid when a document is actually
   // attached. Text-only callers (e.g. recommendation narration) used to get
@@ -137,8 +193,45 @@ const runGeminiInline = async ({
     });
   }
   const result = await geminiModel.generateContent(parts);
+  const response = result?.response;
 
-  return result.response.text().trim();
+  // A prompt-level block produces no candidate at all — diagnose it separately
+  // so "Gemini rejected the document" never reads as "Gemini returned nothing".
+  const promptBlock = response?.promptFeedback?.blockReason;
+  if (promptBlock) {
+    throw new Error(`Gemini refused the request before generating (blockReason=${promptBlock}).`);
+  }
+
+  const finishReason = response?.candidates?.[0]?.finishReason || null;
+  const text = readGeminiText(response);
+
+  if (text === null || text.trim() === '') {
+    const why = GEMINI_EMPTY_RESPONSE_REASONS[finishReason]
+      || (finishReason
+        ? `Gemini stopped with finishReason=${finishReason}`
+        : 'Gemini returned no text and gave no reason');
+    throw new Error(`Gemini returned no usable text: ${why}.`);
+  }
+
+  // Text present but truncated. Failing loudly is deliberate: a cut-off JSON
+  // body almost never parses, so the old behaviour turned every truncation
+  // into a 'partial' extraction whose missing fields were indistinguishable
+  // from fields the document genuinely lacked. Throwing here also routes the
+  // document to the Claude fallback, which has its own token budget.
+  if (finishReason === 'MAX_TOKENS') {
+    throw new Error(
+      'Gemini truncated the reply at the output token limit — the returned JSON is incomplete. '
+      + 'Raise maxOutputTokens or split the document.',
+    );
+  }
+
+  // Return the SDK envelope alongside the text so the router can lift
+  // `usageMetadata` into ai_call_logs. Before this, runGeminiInline returned a
+  // bare string, so `extractTokenUsage` never saw the Gemini shape it already
+  // knew how to read: all 2,570 logged Gemini calls carried NULL tokens and
+  // $0.00 cost, which also made the per-org daily cost cap blind to Acureal's
+  // highest-volume provider.
+  return { result: text.trim(), raw: response };
 };
 
 // Build the system field for Anthropic. When `cachePrompt` is true, the
@@ -506,6 +599,12 @@ module.exports = {
   getGeminiClient,
   getAnthropicClient,
   getOpenAIClient,
+  // Exported so the handful of callers that must drive the Gemini SDK
+  // directly (text-only generations `runGeminiInline` does not cover) apply
+  // the SAME deterministic config instead of silently inheriting Google's
+  // temperature-1.0 default. A duplicated literal here is exactly the failure
+  // mode the model-name registry guard exists to prevent.
+  GEMINI_READING_CONFIG,
   runGeminiInline,
   runClaudeReasoning,
   runClaudeReasoningStream,

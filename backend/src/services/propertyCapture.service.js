@@ -290,7 +290,15 @@ const extractFreeText = async (text, stepLog) => {
       metadata: { prompt_kind: 'property_capture_freetext' },
       run: async ({ providers, model }) => {
         const client = providers.getGeminiClient();
-        const geminiModel = client.getGenerativeModel({ model });
+        // Free-text property capture is an EXTRACTION task — same address,
+        // pasted twice, must yield the same parcel. This call drives the SDK
+        // directly (text-only, so runGeminiInline's document path doesn't
+        // apply) and therefore has to opt into the deterministic config
+        // explicitly; without it Google's temperature-1.0 default applies.
+        const geminiModel = client.getGenerativeModel({
+          model,
+          generationConfig: providers.GEMINI_READING_CONFIG,
+        });
         const out = await geminiModel.generateContent([
           FREE_TEXT_SYSTEM_PROMPT,
           `\n\nInput text:\n${text}`,

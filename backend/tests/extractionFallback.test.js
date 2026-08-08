@@ -106,3 +106,84 @@ describe('callExtractionWithFallback', () => {
     );
   });
 });
+
+// ── The 'parseable' tier (spreadsheet / doc / deck / CSV / KML) ──────────────
+//
+// These files are transcribed to text upstream, so the fallback carries the
+// transcript INSIDE the prompt and there is no base64 to attach. That routes it
+// to runClaudeReasoning instead of runClaudeWithDocument — a leg the tests above
+// never exercised, which is how it stayed broken from the day it was written:
+//
+//   • it passed `prompt`, but providerRegistry.runClaudeReasoning and
+//     runOpenAIReasoning both read `payload`. The stray key was swallowed by the
+//     router's passthrough and the SDK received `content: undefined` → 400,
+//     every time. The leg could never succeed.
+//   • it was gated on `claude` availability, but the router's
+//     constrainReasoningRouting maps `document_extraction` (routed provider
+//     'gemini') onto OPENAI — so it was admitted on the wrong key.
+//   • it inherited the reasoning default of 700 max tokens, far too small for a
+//     full extraction JSON.
+describe('callExtractionWithFallback — parseable tier (text, no base64)', () => {
+  const textArgs = {
+    prompt: 'Transcribed sheet follows…\nExtract the rent roll as JSON.',
+    base64Data: null,
+    mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    attach: { documentId: 'doc-2' },
+  };
+
+  beforeEach(() => {
+    aiRouter.runGeminiInline.mockReset();
+    aiRouter.runClaudeReasoning.mockReset();
+    aiRouter.runClaudeWithDocument.mockReset();
+    providerRegistry.getProviderAvailability.mockReturnValue({
+      gemini: true, claude: false, gpt_compatible: true,
+    });
+  });
+
+  test('sends the prompt as `payload` — the key the provider helpers actually read', async () => {
+    aiRouter.runGeminiInline.mockRejectedValueOnce(new Error('503 high demand'));
+    aiRouter.runClaudeReasoning.mockResolvedValueOnce('{"units":[]}');
+
+    const result = await callExtractionWithFallback(textArgs);
+
+    expect(result.provider).toBe('claude_fallback');
+    const call = aiRouter.runClaudeReasoning.mock.calls[0][0];
+    expect(call.payload).toBe(textArgs.prompt);
+    // A `prompt` key here would be silently dropped — assert it is not how the
+    // text is carried, so the bug cannot be reintroduced by a "tidy-up".
+    expect(call.prompt).toBeUndefined();
+    // Never route a text-tier extraction through the document API.
+    expect(aiRouter.runClaudeWithDocument).not.toHaveBeenCalled();
+  });
+
+  test('raises the token budget above the 700-token reasoning default', async () => {
+    aiRouter.runGeminiInline.mockRejectedValueOnce(new Error('503'));
+    aiRouter.runClaudeReasoning.mockResolvedValueOnce('{"units":[]}');
+
+    await callExtractionWithFallback(textArgs);
+
+    expect(aiRouter.runClaudeReasoning.mock.calls[0][0].maxTokens).toBeGreaterThanOrEqual(4000);
+  });
+
+  test('runs on an OpenAI key alone — the router constrains this task to OpenAI', async () => {
+    // claude:false, gpt_compatible:true. The pre-fix guard checked `claude` and
+    // would have skipped the fallback entirely here, re-throwing the Gemini error.
+    aiRouter.runGeminiInline.mockRejectedValueOnce(new Error('503'));
+    aiRouter.runClaudeReasoning.mockResolvedValueOnce('{"ok":true}');
+
+    await expect(callExtractionWithFallback(textArgs)).resolves.toMatchObject({
+      provider: 'claude_fallback',
+    });
+    expect(aiRouter.runClaudeReasoning).toHaveBeenCalledTimes(1);
+  });
+
+  test('skips the fallback cleanly when neither reasoning provider is configured', async () => {
+    providerRegistry.getProviderAvailability.mockReturnValue({
+      gemini: true, claude: false, gpt_compatible: false,
+    });
+    aiRouter.runGeminiInline.mockRejectedValueOnce(new Error('503 high demand'));
+
+    await expect(callExtractionWithFallback(textArgs)).rejects.toThrow(/503 high demand/);
+    expect(aiRouter.runClaudeReasoning).not.toHaveBeenCalled();
+  });
+});
