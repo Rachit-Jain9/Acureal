@@ -107,16 +107,20 @@ jobs:
         # closed it; this stops a new migration reopening it. The live half is
         # the hourly api_exposure canary in healthCheck.service.js.
         run: node scripts/check-postgrest-exposure.js
-      - name: Backend npm audit (fail on high/critical)
-        run: npm audit --audit-level=high --omit=dev --prefix backend
-      - name: Frontend npm audit (fail on high/critical)
-        # --omit=dev to match the Backend step above: this gate is for vulns in
-        # what SHIPS to users (production deps), not build/test tooling (vite,
-        # esbuild, vitest) which never reaches the browser. Dev-tooling advisories
-        # are still surfaced by the informational moderate snapshot step below.
-        run: npm audit --audit-level=high --omit=dev --prefix frontend
-      - name: Kernel npm audit (fail on high/critical)
-        run: npm audit --audit-level=high --prefix packages/financial-kernel
+      - name: Dependency advisories (fail on high/critical)
+        # Audits all three workspaces at the same scopes as before: backend and
+        # frontend with --omit=dev (the gate is for vulns in what SHIPS to
+        # users, not build/test tooling like vite/esbuild/vitest that never
+        # reaches a browser or a serverless function), the kernel in full.
+        #
+        # Wrapped in a script so the gate can hold a small, documented, EXPIRING
+        # waiver. `npm audit` queries the live advisory DB, so it can redden a
+        # branch that changed no dependency — and when the advisory has no
+        # patched version to pin to (image-size, Aug 2026), raw `npm audit` left
+        # only two options: block every merge indefinitely, or delete the gate.
+        # A keyed, evidence-backed, expiring waiver is the honest third. See the
+        # header of the script for the rules on when one is allowed.
+        run: node scripts/check-npm-advisories.js
       - name: Moderate advisory snapshot (informational)
         if: always()
         continue-on-error: true
