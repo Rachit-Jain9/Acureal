@@ -38,7 +38,10 @@ describe('providerRegistry.runGeminiInline content parts', () => {
 
   test('text-only calls send a single prompt part — no empty inlineData', async () => {
     const out = await providerRegistry.runGeminiInline({ prompt: 'narrate this card' });
-    expect(out).toBe('{"ok":true}');
+    // Envelope since 2026-08-08 — the bare string it used to return meant
+    // aiRouter.extractTokenUsage never saw Gemini's `usageMetadata`, so every
+    // Gemini call logged NULL tokens and $0 cost. See gemini.provider.test.js.
+    expect(out.result).toBe('{"ok":true}');
     expect(mockGenerateContent).toHaveBeenCalledTimes(1);
     const parts = mockGenerateContent.mock.calls[0][0];
     expect(parts).toEqual(['narrate this card']);
@@ -58,6 +61,12 @@ describe('providerRegistry.runGeminiInline content parts', () => {
 
   test('text-only calls use the registry default model (env override preserved)', async () => {
     await providerRegistry.runGeminiInline({ prompt: 'x' });
-    expect(mockGetGenerativeModel).toHaveBeenCalledWith({ model: providerRegistry.DEFAULT_GEMINI_MODEL });
+    // Asserted on the model KEY only: the same call now also carries the
+    // deterministic generationConfig, which is this test's neighbour's job to
+    // pin (gemini.provider.test.js). An exact-object match here would couple
+    // the model-resolution guard to the sampling policy.
+    expect(mockGetGenerativeModel).toHaveBeenCalledWith(
+      expect.objectContaining({ model: providerRegistry.DEFAULT_GEMINI_MODEL }),
+    );
   });
 });

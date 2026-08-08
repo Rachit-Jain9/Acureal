@@ -219,7 +219,15 @@ const callGemini = async ({ prompt, dealId, organizationId, cacheArgs }) => {
       // existing `runGeminiInline` helper requires base64Data which we don't
       // have here.
       if (!client) throw new Error('Gemini client unavailable');
-      const generative = client.getGenerativeModel({ model });
+      // Narrative, not extraction — some variation is acceptable here. But it
+      // must be a CHOSEN temperature, not Google's 1.0 default: the OpenAI and
+      // Claude legs of this same cascade run at 0.4, so a document rescued by
+      // the Gemini leg was measurably looser in tone than the identical
+      // document served by either sibling. Match them.
+      const generative = client.getGenerativeModel({
+        model,
+        generationConfig: { temperature: 0.4, topP: 1 },
+      });
       const result = await generative.generateContent([
         { text: SYSTEM_PROMPT },
         { text: prompt },
