@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { compsAPI } from '../services/api';
 import { toast } from '../components/common/Toast';
+import { invalidateCompsDependents } from './compsQueries';
 
 export function useComps(params = {}) {
   return useQuery({
@@ -14,7 +15,7 @@ export function useCreateComp() {
   return useMutation({
     mutationFn: (data) => compsAPI.create(data).then((r) => r.data),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['comps'] });
+      invalidateCompsDependents(qc);
       toast.success('Comparable added');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to add comparable'),
@@ -26,7 +27,7 @@ export function useDeleteComp() {
   return useMutation({
     mutationFn: (id) => compsAPI.delete(id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['comps'] });
+      invalidateCompsDependents(qc);
       toast.success('Comparable deleted');
     },
     onError: (err) => toast.error(err.response?.data?.message || 'Failed to delete comparable'),

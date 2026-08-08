@@ -36,6 +36,13 @@
   ],
   "headers": [
     {
+      "_comment": "Vite emits every file in /assets with an 8-char content hash, so a changed file is always a changed URL and can never be served stale. Without this rule they inherit the platform default (max-age=0, must-revalidate) and every repeat page load pays a revalidation round-trip per chunk that is already sitting in disk cache. Deliberately scoped to /assets ONLY: frontend/public ships favicon.svg, apple-touch-icon.png, site.webmanifest, icons/ and leaflet/ to the site ROOT with no hash, and index.html is what makes a new deploy visible at all — pinning any of those for a year would be a bug, not a cache.",
+      "source": "/assets/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },

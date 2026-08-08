@@ -5,6 +5,36 @@ const { buildVisiblePropertyCondition } = require('../utils/dealVisibility');
 const { geocodeAddress } = require('../utils/geocode');
 const { normalizeAreaSqft, normalizeAreaUnit, round } = require('../utils/landPricing');
 
+/**
+ * Invalidate the deterministic workspace cache after a parcel edit.
+ *
+ * `dealWorkspaceCache` fingerprints `deals.updated_at` (among other per-deal
+ * tables) to decide whether a cached payload is still current. `properties` is
+ * NOT in that fingerprint — deliberately, because adding a join to the hot
+ * per-request path for a twice-a-month event is the wrong trade. The
+ * consequence, though, was that editing a parcel changed nothing the cache
+ * could see: micro-market, nearby comps, best-use and IC readiness are all
+ * keyed on the parcel's coordinates and area, and the deal page kept repainting
+ * the PRE-EDIT intelligence for up to the 120-second TTL. Deal Q&A answered
+ * from it too.
+ *
+ * Touching the parent deal's `updated_at` moves the fingerprint the cache
+ * already reads, so the next request rebuilds. Mirrors the `bumpDeal`
+ * convention in signoff.service.js.
+ *
+ * Best-effort by design: cache invalidation must never fail the write it
+ * follows. A missed bump costs at most one stale TTL window; a thrown error
+ * would lose the user's edit.
+ */
+const bumpParentDeal = async (propertyId) => {
+  if (!propertyId) return;
+  try {
+    await query('UPDATE deals SET updated_at = NOW() WHERE property_id = $1', [propertyId]);
+  } catch {
+    /* intentionally swallowed — see above */
+  }
+};
+
 const buildDisplayNameSql = () =>
   `COALESCE(
     NULLIF(p.name, ''),
@@ -449,6 +479,7 @@ const updateProperty = async (id, data, userId = null) => {
     throw createError('Property not found.', 404);
   }
 
+  await bumpParentDeal(id);
   return result.rows[0];
 };
 
@@ -522,6 +553,7 @@ const geocodePropertyAddress = async (propertyId) => {
     [coords.lat, coords.lng, coords.status, coords.confidence, coords.message, propertyId]
   );
 
+  await bumpParentDeal(propertyId);
   return result.rows[0];
 };
 
@@ -643,6 +675,7 @@ const applyAutoDerivedContext = async (id, { picks = {}, derivedSource = null },
     throw createError('Property not found.', 404);
   }
 
+  await bumpParentDeal(id);
   return result.rows[0];
 };
 
